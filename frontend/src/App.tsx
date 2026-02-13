@@ -1,5 +1,4 @@
 import { useState } from "react";
-import logo from "./assets/images/logo-universal.png";
 import "./App.css";
 import { Greet } from "../wailsjs/go/main/App";
 
@@ -17,7 +16,7 @@ function App() {
 
   return (
     <div id="App">
-      <div id="result" className="result">
+      <div id="result" className="result bg-red-600 font-inter font-semibold">
         {resultText}
       </div>
       <div id="input" className="input-box">
