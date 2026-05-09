@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -50,6 +51,9 @@ func (a *App) startup(ctx context.Context) {
 
 // initConfig loads config.json from %AppData%/AmonHen/
 func (a *App) initConfig() {
+	// Try to load .env first for dev/global vars
+	godotenv.Load() // ignore error if .env doesn't exist
+
 	base, err := os.UserConfigDir()
 	if err != nil {
 		base = os.TempDir()
@@ -59,10 +63,23 @@ func (a *App) initConfig() {
 	a.configPath = filepath.Join(dir, "config.json")
 
 	data, err := os.ReadFile(a.configPath)
-	if err != nil {
-		return // first run, no config yet
+	if err == nil {
+		json.Unmarshal(data, &a.config)
 	}
-	json.Unmarshal(data, &a.config)
+
+	// Fallback to .env if config.json is missing these
+	if a.config.YouTubeClientID == "" {
+		a.config.YouTubeClientID = os.Getenv("client_id")
+		if a.config.YouTubeClientID != "" {
+			fmt.Println("YouTube Client ID loaded from .env")
+		}
+	}
+	if a.config.YouTubeClientSecret == "" {
+		a.config.YouTubeClientSecret = os.Getenv("client_secret")
+		if a.config.YouTubeClientSecret != "" {
+			fmt.Println("YouTube Client Secret loaded from .env")
+		}
+	}
 }
 
 // saveConfig persists the current config to disk

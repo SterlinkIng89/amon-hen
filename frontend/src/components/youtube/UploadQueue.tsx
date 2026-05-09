@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import { UploadToYouTube } from "../../wailsjs/go/main/App";
+import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
+import { UploadToYouTube } from "../../../wailsjs/go/main/App";
+import { formatName } from "../../utils/videoUtils";
 
 export interface QueueItem {
   id: string;
@@ -24,9 +25,7 @@ interface Props {
   onSetRunning: (r: boolean) => void;
 }
 
-function formatName(name: string) {
-  return name.replace(/\.[^/.]+$/, "");
-}
+
 
 const statusIcon = {
   pending: (

@@ -16,6 +16,8 @@ export function GetVideos(arg1:string):Promise<Array<main.VideoFile>>;
 
 export function GetVideosFromFolders(arg1:Array<string>):Promise<Array<main.VideoFile>>;
 
+export function ImportYouTubeJSON():Promise<void>;
+
 export function IsYouTubeAuthed():Promise<boolean>;
 
 export function LoadConfig():Promise<main.Config>;

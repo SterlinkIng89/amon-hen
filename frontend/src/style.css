@@ -986,3 +986,99 @@ html, body {
 .settings-input:focus { border-color: var(--accent); }
 .settings-error { font-size: 11px; color: #f87171; }
 .settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.settings-import-box {
+  margin: 5px 0;
+}
+
+.settings-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.settings-divider::before,
+.settings-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.w-full { width: 100%; }
+
+/* YouTube connect cards */
+.yt-connect-card,
+.yt-connected-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.yt-connect-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.yt-connected-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.yt-connected-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4ade80;
+}
+
+.yt-connected-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* YouTube-branded button */
+.btn-yt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: #ff0000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  width: 100%;
+}
+.btn-yt:hover { background: #cc0000; }
+.btn-yt:active { transform: scale(0.98); }
+.btn-yt:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.settings-error-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: var(--radius-sm);
+  color: #f87171;
+  font-size: 11px;
+  margin-bottom: 10px;
+}

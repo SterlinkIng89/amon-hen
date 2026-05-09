@@ -1,11 +1,11 @@
 import "./App.css";
 
-import VideoList from "./components/VideoList";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
     <div id="App">
-      <VideoList />
+      <Dashboard />
     </div>
   );
 }

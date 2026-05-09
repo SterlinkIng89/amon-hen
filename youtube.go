@@ -39,6 +39,52 @@ func (a *App) SaveYouTubeCredentials(clientID, clientSecret string) error {
 	return a.saveConfig()
 }
 
+// ImportYouTubeJSON opens a file dialog to select the Google OAuth JSON and parses it
+func (a *App) ImportYouTubeJSON() error {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select YouTube OAuth JSON",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "JSON Files", Pattern: "*.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var secret struct {
+		Installed struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		} `json:"installed"`
+		Web struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		} `json:"web"`
+	}
+
+	if err := json.Unmarshal(data, &secret); err != nil {
+		return fmt.Errorf("invalid JSON format: %w", err)
+	}
+
+	id := secret.Installed.ClientID
+	key := secret.Installed.ClientSecret
+	if id == "" {
+		id = secret.Web.ClientID
+		key = secret.Web.ClientSecret
+	}
+
+	if id == "" || key == "" {
+		return fmt.Errorf("could not find client_id or client_secret in JSON")
+	}
+
+	return a.SaveYouTubeCredentials(id, key)
+}
+
 // IsYouTubeAuthed returns true if a valid refresh token is stored
 func (a *App) IsYouTubeAuthed() bool {
 	if a.config.YouTubeTokenJSON == "" {

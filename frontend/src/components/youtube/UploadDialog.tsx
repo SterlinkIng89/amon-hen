@@ -1,12 +1,6 @@
 import { useState } from "react";
-
-interface VideoFile {
-  name: string;
-  path: string;
-  size: number;
-  modTime: number;
-  folder: string;
-}
+import { VideoFile } from "../../types";
+import { formatName } from "../../utils/videoUtils";
 
 export interface UploadOptions {
   title: string;
@@ -19,10 +13,6 @@ interface Props {
   onClose: () => void;
   onUploadNow: (opts: UploadOptions) => void;
   onAddToQueue: (opts: UploadOptions) => void;
-}
-
-function formatName(name: string) {
-  return name.replace(/\.[^/.]+$/, "");
 }
 
 export default function UploadDialog({ video, onClose, onUploadNow, onAddToQueue }: Props) {

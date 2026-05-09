@@ -30,6 +30,10 @@ export function GetVideosFromFolders(arg1) {
   return window['go']['main']['App']['GetVideosFromFolders'](arg1);
 }
 
+export function ImportYouTubeJSON() {
+  return window['go']['main']['App']['ImportYouTubeJSON']();
+}
+
 export function IsYouTubeAuthed() {
   return window['go']['main']['App']['IsYouTubeAuthed']();
 }
