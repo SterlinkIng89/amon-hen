@@ -77,6 +77,18 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Clear selection on Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedPaths.length > 0) {
+        setSelectedPaths([]);
+        setLastSelectedIdx(-1);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [selectedPaths.length]);
+
   const scanFolders = useCallback(async (foldersToScan: string[]) => {
     if (foldersToScan.length === 0) return;
     setScanning(true);
@@ -124,26 +136,39 @@ export default function Dashboard() {
   // Unified click handler used in BOTH grid and player views
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
-    if (e.shiftKey && lastSelectedIdx !== -1) {
-      const start = Math.min(lastSelectedIdx, sortedIdx);
-      const end = Math.max(lastSelectedIdx, sortedIdx);
-      const newPaths = [...selectedPaths];
+    
+    // Auto-include the currently playing video if we are in player view and starting a multi-selection
+    let currentPaths = [...selectedPaths];
+    if (view === "player" && currentPaths.length === 0 && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      if (selectedIndex !== -1) {
+        const currentPlaying = sortedVideos[selectedIndex].path;
+        currentPaths.push(currentPlaying);
+      }
+    }
+
+    if (e.shiftKey) {
+      const anchorIdx = lastSelectedIdx !== -1 ? lastSelectedIdx : (selectedIndex !== -1 ? selectedIndex : 0);
+      const start = Math.min(anchorIdx, sortedIdx);
+      const end = Math.max(anchorIdx, sortedIdx);
+      
       for (let i = start; i <= end; i++) {
         const p = sortedVideos[i].path;
-        if (!newPaths.includes(p)) newPaths.push(p);
+        if (!currentPaths.includes(p)) currentPaths.push(p);
       }
-      setSelectedPaths(newPaths);
+      setSelectedPaths(currentPaths);
     } else if (e.ctrlKey || e.metaKey) {
-      if (selectedPaths.includes(video.path)) {
-        setSelectedPaths(selectedPaths.filter(p => p !== video.path));
+      if (currentPaths.includes(video.path)) {
+        currentPaths = currentPaths.filter(p => p !== video.path);
       } else {
-        setSelectedPaths([...selectedPaths, video.path]);
+        currentPaths.push(video.path);
       }
+      setSelectedPaths(currentPaths);
       setLastSelectedIdx(sortedIdx);
     } else {
       // Plain click: clear selection, open player
       setSelectedPaths([]);
       setSelectedIndex(sortedIdx);
+      setLastSelectedIdx(sortedIdx);
       setView("player");
     }
   };
@@ -192,7 +217,7 @@ export default function Dashboard() {
   };
 
   const pendingCount = queue.filter(i => i.status === "pending").length;
-  const isSelecting = selectedPaths.length > 0;
+  const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
