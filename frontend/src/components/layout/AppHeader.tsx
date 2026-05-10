@@ -1,7 +1,7 @@
 import React from "react";
 import { ViewMode } from "../../types";
 
-import logo from "../../assets/images/appIcon.png";
+
 
 interface AppHeaderProps {
   view: ViewMode;
@@ -37,10 +37,7 @@ export default function AppHeader({
     </button>
   ) : (
     <div className="flex items-center gap-2 shrink-0">
-      <div className="w-[30px] h-[30px] rounded-sm bg-accent-dim border border-border-accent flex items-center justify-center overflow-hidden">
-        <img src={logo} alt="Amon Hen" className="w-full h-full object-contain" />
-      </div>
-      <span className="text-sm font-semibold text-text-primary">Amon Hen</span>
+      <span className="text-sm font-bold text-text-primary tracking-tight">Library</span>
     </div>
   );
 
