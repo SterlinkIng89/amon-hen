@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { SetVideoGames, LoadConfig, DeleteFiles } from "../../../wailsjs/go/main/App";
+import React, { useState } from "react";
+import { SetVideoGames, DeleteFiles } from "../../../wailsjs/go/main/App";
+import { useRecentTags } from "../../hooks/useRecentTags";
+import TagInput from "../ui/TagInput";
 
 interface Props {
   selectedPaths: string[];
@@ -18,16 +20,8 @@ export default function BulkActionBar({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-
-  useEffect(() => {
-    LoadConfig().then((cfg) => {
-      if (cfg.video_games) {
-        const unique = Array.from(new Set(Object.values(cfg.video_games))).filter(Boolean) as string[];
-        setSuggestions(unique.sort());
-      }
-    });
-  }, []);
+  
+  const { suggestions, addRecentTag } = useRecentTags();
 
   if (selectedPaths.length === 0) return null;
 
@@ -35,6 +29,7 @@ export default function BulkActionBar({
     setSaving(true);
     try {
       await SetVideoGames(selectedPaths, game);
+      if (game) addRecentTag(game);
       setGame("");
       onTagsSaved();
     } catch (e) {
@@ -53,7 +48,8 @@ export default function BulkActionBar({
     try {
       await DeleteFiles(selectedPaths);
       onFilesDeleted();
-    } catch (e) {
+    } catch (e: any) {
+      alert(e?.message || e || "Failed to delete files");
       console.error("Failed to delete files", e);
     } finally {
       setDeleting(false);
@@ -89,19 +85,13 @@ export default function BulkActionBar({
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.6, flexShrink: 0 }}>
             <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z" />
           </svg>
-          <input
-            type="text"
-            className="w-[180px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
-            placeholder="Game tag..."
+          <TagInput
             value={game}
-            onChange={(e) => setGame(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={setGame}
+            onEnter={handleSave}
             disabled={saving}
-            list="bulk-game-suggestions"
+            className="w-[180px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
           />
-          <datalist id="bulk-game-suggestions">
-            {suggestions.map((s) => <option key={s} value={s} />)}
-          </datalist>
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !game.trim()}>
             {saving ? "Saving..." : "Apply Tag"}
           </button>

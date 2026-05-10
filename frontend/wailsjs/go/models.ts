@@ -1,11 +1,28 @@
 export namespace main {
 	
+	export class VideoMeta {
+	    youtube_title: string;
+	    description: string;
+	    privacy: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VideoMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.youtube_title = source["youtube_title"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	    }
+	}
 	export class Config {
 	    folders: string[];
 	    youtube_client_id: string;
 	    youtube_client_secret: string;
 	    youtube_token_json?: string;
 	    video_games: Record<string, string>;
+	    video_metadata: Record<string, VideoMeta>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -18,7 +35,26 @@ export namespace main {
 	        this.youtube_client_secret = source["youtube_client_secret"];
 	        this.youtube_token_json = source["youtube_token_json"];
 	        this.video_games = source["video_games"];
+	        this.video_metadata = this.convertValues(source["video_metadata"], VideoMeta, true);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class VideoFile {
 	    name: string;
@@ -27,6 +63,9 @@ export namespace main {
 	    modTime: number;
 	    folder: string;
 	    game: string;
+	    youtubeTitle: string;
+	    description: string;
+	    privacy: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -40,8 +79,12 @@ export namespace main {
 	        this.modTime = source["modTime"];
 	        this.folder = source["folder"];
 	        this.game = source["game"];
+	        this.youtubeTitle = source["youtubeTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
 	    }
 	}
+	
 	export class YouTubeChannel {
 	    id: string;
 	    title: string;

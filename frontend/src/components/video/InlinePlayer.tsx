@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { SetVideoGames, UploadToYouTube } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles } from "../../../wailsjs/go/main/App";
 import { QueueItem } from "../youtube/UploadQueue";
+import { useRecentTags } from "../../hooks/useRecentTags";
+import TagInput from "../ui/TagInput";
 
 interface InlinePlayerProps {
   video: VideoFile;
@@ -11,9 +13,10 @@ interface InlinePlayerProps {
   onNext: (() => void) | null;
   onAddToQueue: (item: QueueItem) => void;
   onTagSaved?: () => void;
+  onDelete?: () => void;
 }
 
-export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddToQueue, onTagSaved }: InlinePlayerProps) {
+export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddToQueue, onTagSaved, onDelete }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
 
@@ -54,43 +57,72 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   }, [onPrev, onNext]);
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(generateYouTubeTitle(video.name, video.game));
+  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
   const [tagInput, setTagInput] = useState(video.game || "");
-  const [description, setDescription] = useState("");
-  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("unlisted");
-  const [savingTag, setSavingTag] = useState(false);
-  const [tagSaved, setTagSaved] = useState(false);
+  const [description, setDescription] = useState(video.description || "");
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
+    (video.privacy as "public" | "unlisted" | "private") || "unlisted"
+  );
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [infoSaved, setInfoSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const { addRecentTag } = useRecentTags();
 
   // Reset when video changes
   useEffect(() => {
-    setYtTitle(generateYouTubeTitle(video.name, video.game));
+    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
     setTagInput(video.game || "");
-    setDescription("");
-    setTagSaved(false);
-  }, [video.path]);
+    setDescription(video.description || "");
+    setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
+    setInfoSaved(false);
+    setConfirmDelete(false);
+    setDeleting(false);
+  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy]);
 
-  // Auto-update YT title when tag changes
+  // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
     setTagInput(val);
-    setYtTitle(generateYouTubeTitle(video.name, val));
+    if (!video.youtubeTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, val));
+    }
   };
 
-  const handleSaveTag = async () => {
-    setSavingTag(true);
+  const handleSaveInfo = async () => {
+    setSavingInfo(true);
     try {
-      await SetVideoGames([video.path], tagInput);
-      setTagSaved(true);
+      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy);
+      if (tagInput) addRecentTag(tagInput);
+      setInfoSaved(true);
       onTagSaved?.();
-      setTimeout(() => setTagSaved(false), 2000);
+      setTimeout(() => setInfoSaved(false), 2000);
     } catch (e) {
       console.error(e);
     } finally {
-      setSavingTag(false);
+      setSavingInfo(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await DeleteFiles([video.path]);
+      onDelete?.();
+    } catch (e: any) {
+      alert(e?.message || e || "Failed to delete file");
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
   const handleUploadNow = () => {
+    if (tagInput) addRecentTag(tagInput);
     setUploading(true);
     const item: QueueItem = {
       id: crypto.randomUUID(),
@@ -108,6 +140,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   };
 
   const handleAddToQueue = () => {
+    if (tagInput) addRecentTag(tagInput);
     const item: QueueItem = {
       id: crypto.randomUUID(),
       videoPath: video.path,
@@ -125,7 +158,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     <div className="flex flex-col h-full overflow-hidden bg-base">
       {/* Video */}
       <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[300px]">
-        <video ref={videoRef} key={video.path} src={src} controls className="w-full h-full object-contain outline-none max-h-[65vh]" autoPlay />
+        {!deleting ? (
+          <video ref={videoRef} key={video.path} src={src} controls className="w-full h-full object-contain outline-none max-h-[65vh]" autoPlay />
+        ) : (
+          <div className="text-text-muted">Deleting...</div>
+        )}
       </div>
 
       {/* Nav */}
@@ -159,23 +196,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
           {/* Game tag */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Game Tag</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                placeholder="e.g. Hollow Knight"
-                value={tagInput}
-                onChange={e => handleTagChange(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSaveTag()}
-              />
-              <button
-                className={`btn btn-sm ${tagSaved ? "btn-success" : "btn-ghost"}`}
-                onClick={handleSaveTag}
-                disabled={savingTag}
-              >
-                {tagSaved ? "Saved!" : savingTag ? "..." : "Save"}
-              </button>
-            </div>
+            <TagInput
+              value={tagInput}
+              onChange={handleTagChange}
+              onEnter={handleSaveInfo}
+            />
           </div>
 
           {/* YouTube title */}
@@ -186,6 +211,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
               className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
               value={ytTitle}
               onChange={e => setYtTitle(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSaveInfo()}
               maxLength={100}
             />
           </div>
@@ -221,20 +247,49 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
         <div className="h-px bg-border-subtle w-full" />
 
-        {/* Upload actions */}
-        <div className="flex items-center justify-end gap-3 mt-2">
-          <button className="btn btn-ghost btn-sm" onClick={handleAddToQueue}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
-            </svg>
-            Add to Queue
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
-            </svg>
-            {uploading ? "Starting..." : "Upload Now"}
-          </button>
+        {/* Upload & Save actions */}
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <div className="flex items-center gap-2">
+            <button 
+              className={`btn ${confirmDelete ? "btn-danger" : "btn-ghost"} btn-sm hover:!text-red-400`} 
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+              {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete?") : "Delete Video"}
+            </button>
+            {confirmDelete && !deleting && (
+              <button className="text-[10px] text-text-muted hover:text-text-primary underline" onClick={() => setConfirmDelete(false)}>Cancel</button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              className={`btn ${infoSaved ? "btn-success" : "btn-ghost"} btn-sm`} 
+              onClick={handleSaveInfo} 
+              disabled={savingInfo || deleting}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+              </svg>
+              {infoSaved ? "Saved!" : savingInfo ? "Saving..." : "Save Info"}
+            </button>
+            <div className="w-px h-4 bg-border-medium" />
+            <button className="btn btn-ghost btn-sm" onClick={handleAddToQueue} disabled={deleting}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
+              </svg>
+              Add to Queue
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim() || deleting}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
+              </svg>
+              {uploading ? "Starting..." : "Upload Now"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

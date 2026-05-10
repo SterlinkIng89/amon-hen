@@ -66,6 +66,10 @@ export function SaveFolders(arg1) {
   return window['go']['main']['App']['SaveFolders'](arg1);
 }
 
+export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['main']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }

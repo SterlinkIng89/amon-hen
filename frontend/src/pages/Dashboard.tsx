@@ -253,6 +253,7 @@ export default function Dashboard() {
             onVideoClick={handleVideoClick}
             onUploadTarget={setUploadTarget}
             onTagSaved={handleRescan}
+            onFilesDeleted={() => { setSelectedIndex(-1); handleRescan(); }}
             onAddToQueue={handleAddToQueue}
           />
         )}

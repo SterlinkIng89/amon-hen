@@ -19,13 +19,20 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type VideoMeta struct {
+	YouTubeTitle string `json:"youtube_title"`
+	Description  string `json:"description"`
+	Privacy      string `json:"privacy"`
+}
+
 // Config holds persistent application settings
 type Config struct {
-	Folders             []string `json:"folders"`
-	YouTubeClientID     string   `json:"youtube_client_id"`
-	YouTubeClientSecret string            `json:"youtube_client_secret"`
-	YouTubeTokenJSON    string            `json:"youtube_token_json,omitempty"`
-	VideoGames          map[string]string `json:"video_games"` // Maps path to game tag
+	Folders             []string             `json:"folders"`
+	YouTubeClientID     string               `json:"youtube_client_id"`
+	YouTubeClientSecret string               `json:"youtube_client_secret"`
+	YouTubeTokenJSON    string               `json:"youtube_token_json,omitempty"`
+	VideoGames          map[string]string    `json:"video_games"`    // Maps path to game tag
+	VideoMetadata       map[string]VideoMeta `json:"video_metadata"` // Maps path to metadata
 }
 
 // App struct
@@ -151,13 +158,48 @@ func (a *App) SetVideoGames(paths []string, game string) error {
 	return a.saveConfig()
 }
 
-// DeleteFiles removes the given file paths from disk and from the VideoGames config
-func (a *App) DeleteFiles(paths []string) error {
-	for _, p := range paths {
-		os.Remove(p)
-		delete(a.config.VideoGames, p)
+// SaveVideoMetadata updates all metadata for a specific video and saves the config
+func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string) error {
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
 	}
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+
+	if game == "" {
+		delete(a.config.VideoGames, path)
+	} else {
+		a.config.VideoGames[path] = game
+	}
+
+	a.config.VideoMetadata[path] = VideoMeta{
+		YouTubeTitle: ytTitle,
+		Description:  desc,
+		Privacy:      privacy,
+	}
+
 	return a.saveConfig()
+}
+
+// DeleteFiles removes the given file paths from disk and from the config
+func (a *App) DeleteFiles(paths []string) error {
+	var errs []string
+	for _, p := range paths {
+		err := os.Remove(p)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				errs = append(errs, fmt.Sprintf("failed to delete %s: %v", filepath.Base(p), err))
+			}
+		}
+		delete(a.config.VideoGames, p)
+		delete(a.config.VideoMetadata, p)
+	}
+	a.saveConfig()
+	if len(errs) > 0 {
+		return fmt.Errorf("some files could not be deleted: %s", strings.Join(errs, ", "))
+	}
+	return nil
 }
 
 // initCache sets up the on-disk cache directory
@@ -251,12 +293,15 @@ func (a *App) OpenFolderDialog() (string, error) {
 
 // VideoFile represents a video file found during scanning
 type VideoFile struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Size    int64  `json:"size"`
-	ModTime int64  `json:"modTime"` // Unix timestamp in milliseconds
-	Folder  string `json:"folder"`  // Source folder path
-	Game    string `json:"game"`    // Game tag from config
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Size         int64  `json:"size"`
+	ModTime      int64  `json:"modTime"` // Unix timestamp in milliseconds
+	Folder       string `json:"folder"`  // Source folder path
+	Game         string `json:"game"`    // Game tag from config
+	YouTubeTitle string `json:"youtubeTitle"`
+	Description  string `json:"description"`
+	Privacy      string `json:"privacy"`
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -280,14 +325,22 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			}
 			ext := strings.ToLower(filepath.Ext(entry.Name()))
 			if supported[ext] {
-				info, _ := entry.Info()
+				path := filepath.Join(dir, entry.Name())
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+				meta := a.config.VideoMetadata[path]
 				videos = append(videos, VideoFile{
-					Name:    entry.Name(),
-					Path:    filepath.Join(dir, entry.Name()),
-					Size:    info.Size(),
-					ModTime: info.ModTime().UnixMilli(),
-					Folder:  dir,
-					Game:    a.config.VideoGames[filepath.Join(dir, entry.Name())],
+					Name:         entry.Name(),
+					Path:         path,
+					Size:         info.Size(),
+					ModTime:      info.ModTime().UnixMilli(),
+					Folder:       dir,
+					Game:         a.config.VideoGames[path],
+					YouTubeTitle: meta.YouTubeTitle,
+					Description:  meta.Description,
+					Privacy:      meta.Privacy,
 				})
 			}
 		}

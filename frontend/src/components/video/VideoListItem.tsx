@@ -38,6 +38,13 @@ export default function VideoListItem({
       .catch(() => {});
   }, [inView, video.path]);
 
+  // Scroll into view when selected
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selected]);
+
   const ytTitle = generateYouTubeTitle(video.name, video.game);
 
   return (

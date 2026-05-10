@@ -16,6 +16,7 @@ interface PlayerViewProps {
   onVideoClick: (sortedIdx: number, e: React.MouseEvent) => void;
   onUploadTarget: (video: VideoFile) => void;
   onTagSaved?: () => void;
+  onFilesDeleted?: () => void;
   onAddToQueue: (item: QueueItem) => void;
 }
 
@@ -30,6 +31,7 @@ export default function PlayerView({
   onGoTo,
   onVideoClick,
   onTagSaved,
+  onFilesDeleted,
   onAddToQueue,
 }: PlayerViewProps) {
   return (
@@ -64,6 +66,7 @@ export default function PlayerView({
             onNext={selectedIndex < sortedVideos.length - 1 ? () => onGoTo(selectedIndex + 1) : null}
             onAddToQueue={onAddToQueue}
             onTagSaved={onTagSaved}
+            onDelete={onFilesDeleted}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">

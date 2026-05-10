@@ -4,7 +4,10 @@ export interface VideoFile {
   size: number;
   modTime: number;
   folder: string;
-  game?: string;
+  game: string;
+  youtubeTitle?: string;
+  description?: string;
+  privacy?: string;
 }
 
 export interface VideoGroup {

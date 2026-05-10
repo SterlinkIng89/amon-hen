@@ -34,6 +34,8 @@ export function RemoveFolder(arg1:string):Promise<void>;
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;
 
+export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
