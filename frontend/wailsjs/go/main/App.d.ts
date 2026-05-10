@@ -4,11 +4,15 @@ import {main} from '../models';
 
 export function AddFolder():Promise<string>;
 
+export function DeleteFiles(arg1:Array<string>):Promise<void>;
+
 export function GetCacheDir():Promise<string>;
 
 export function GetStreamPort():Promise<number>;
 
 export function GetThumbnail(arg1:string):Promise<string>;
+
+export function GetVideoDuration(arg1:string):Promise<number>;
 
 export function GetVideoPreview(arg1:string):Promise<string>;
 

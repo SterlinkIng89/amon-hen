@@ -121,6 +121,7 @@ export default function Dashboard() {
     );
   };
 
+  // Unified click handler used in BOTH grid and player views
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
     if (e.shiftKey && lastSelectedIdx !== -1) {
@@ -140,6 +141,7 @@ export default function Dashboard() {
       }
       setLastSelectedIdx(sortedIdx);
     } else {
+      // Plain click: clear selection, open player
       setSelectedPaths([]);
       setSelectedIndex(sortedIdx);
       setView("player");
@@ -150,8 +152,20 @@ export default function Dashboard() {
     if (i >= 0 && i < sortedVideos.length) setSelectedIndex(i);
   };
 
+  const handleAddToQueue = (item: QueueItem) => {
+    if (item.status === "uploading") {
+      setQueue(q => [item, ...q]);
+      setQueueOpen(true);
+      setQueueRunning(true);
+    } else {
+      setQueue(q => [...q, item]);
+      setQueueOpen(true);
+    }
+  };
+
+  // Legacy modal path (used from grid card hover button)
   const handleUploadNow = (video: VideoFile, opts: UploadOptions) => {
-    const item: QueueItem = {
+    handleAddToQueue({
       id: crypto.randomUUID(),
       videoPath: video.path,
       videoName: video.name,
@@ -160,15 +174,12 @@ export default function Dashboard() {
       privacy: opts.privacy,
       status: "uploading",
       progress: 0,
-    };
-    setQueue(q => [item, ...q]);
-    setQueueOpen(true);
-    setQueueRunning(true);
+    });
     UploadToYouTube(video.path, opts.title, opts.description, opts.privacy).catch(() => {});
   };
 
-  const handleAddToQueue = (video: VideoFile, opts: UploadOptions) => {
-    const item: QueueItem = {
+  const handleAddToQueueModal = (video: VideoFile, opts: UploadOptions) => {
+    handleAddToQueue({
       id: crypto.randomUUID(),
       videoPath: video.path,
       videoName: video.name,
@@ -177,15 +188,14 @@ export default function Dashboard() {
       privacy: opts.privacy,
       status: "pending",
       progress: 0,
-    };
-    setQueue(q => [...q, item]);
-    setQueueOpen(true);
+    });
   };
 
   const pendingCount = queue.filter(i => i.status === "pending").length;
+  const isSelecting = selectedPaths.length > 0;
 
   return (
-    <div className="app-shell">
+    <div className="flex flex-col h-screen overflow-hidden">
       <AppHeader
         view={view}
         foldersCount={folders.length}
@@ -199,7 +209,17 @@ export default function Dashboard() {
         onAddFolder={handleAddFolder}
       />
 
-      <div className="app-body">
+      {/* Bulk action bar — shown in BOTH views when items are selected */}
+      {isSelecting && (
+        <BulkActionBar
+          selectedPaths={selectedPaths}
+          onClearSelection={() => { setSelectedPaths([]); setLastSelectedIdx(-1); }}
+          onTagsSaved={() => { setSelectedPaths([]); handleRescan(); }}
+          onFilesDeleted={() => { setSelectedPaths([]); setSelectedIndex(-1); handleRescan(); }}
+        />
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
         {error && (
           <div style={{ padding: "16px", color: "#f87171", background: "rgba(248,113,113,0.1)", textAlign: "center" }}>
             {error}
@@ -228,8 +248,12 @@ export default function Dashboard() {
             streamPort={streamPort}
             listRef={listRef}
             listRoot={listRoot}
+            selectedPaths={selectedPaths}
             onGoTo={goTo}
+            onVideoClick={handleVideoClick}
             onUploadTarget={setUploadTarget}
+            onTagSaved={handleRescan}
+            onAddToQueue={handleAddToQueue}
           />
         )}
       </div>
@@ -239,7 +263,7 @@ export default function Dashboard() {
           video={uploadTarget}
           onClose={() => setUploadTarget(null)}
           onUploadNow={opts => handleUploadNow(uploadTarget, opts)}
-          onAddToQueue={opts => handleAddToQueue(uploadTarget, opts)}
+          onAddToQueue={opts => handleAddToQueueModal(uploadTarget, opts)}
         />
       )}
 
@@ -251,17 +275,6 @@ export default function Dashboard() {
           onClose={() => setQueueOpen(false)}
           onUpdateQueue={setQueue}
           onSetRunning={setQueueRunning}
-        />
-      )}
-
-      {selectedPaths.length > 0 && view === "grid" && (
-        <BulkActionBar
-          selectedPaths={selectedPaths}
-          onClearSelection={() => setSelectedPaths([])}
-          onTagsSaved={() => {
-            setSelectedPaths([]);
-            handleRescan();
-          }}
         />
       )}
 

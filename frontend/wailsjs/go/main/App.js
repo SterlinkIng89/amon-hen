@@ -6,6 +6,10 @@ export function AddFolder() {
   return window['go']['main']['App']['AddFolder']();
 }
 
+export function DeleteFiles(arg1) {
+  return window['go']['main']['App']['DeleteFiles'](arg1);
+}
+
 export function GetCacheDir() {
   return window['go']['main']['App']['GetCacheDir']();
 }
@@ -16,6 +20,10 @@ export function GetStreamPort() {
 
 export function GetThumbnail(arg1) {
   return window['go']['main']['App']['GetThumbnail'](arg1);
+}
+
+export function GetVideoDuration(arg1) {
+  return window['go']['main']['App']['GetVideoDuration'](arg1);
 }
 
 export function GetVideoPreview(arg1) {

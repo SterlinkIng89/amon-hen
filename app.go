@@ -151,6 +151,15 @@ func (a *App) SetVideoGames(paths []string, game string) error {
 	return a.saveConfig()
 }
 
+// DeleteFiles removes the given file paths from disk and from the VideoGames config
+func (a *App) DeleteFiles(paths []string) error {
+	for _, p := range paths {
+		os.Remove(p)
+		delete(a.config.VideoGames, p)
+	}
+	return a.saveConfig()
+}
+
 // initCache sets up the on-disk cache directory
 func (a *App) initCache() {
 	base, err := os.UserCacheDir()
@@ -374,4 +383,17 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 	writeCached(cachePath, raw)
 	encoded := base64.StdEncoding.EncodeToString(raw)
 	return "data:image/jpeg;base64," + encoded, nil
+}
+
+// GetVideoDuration returns the duration of the video in seconds using ffprobe
+func (a *App) GetVideoDuration(path string) (float64, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return 0, err
+	}
+	var duration float64
+	fmt.Sscanf(strings.TrimSpace(out.String()), "%f", &duration)
+	return duration, nil
 }
