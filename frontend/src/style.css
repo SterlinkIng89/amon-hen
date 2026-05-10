@@ -48,3 +48,19 @@
   }
 }
 
+
+/* Fullscreen video fix for Wails/WebView2 */
+video:fullscreen {
+  max-height: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: contain;
+  background-color: black;
+}
+video:-webkit-full-screen {
+  max-height: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: contain;
+  background-color: black;
+}

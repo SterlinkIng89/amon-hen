@@ -47,6 +47,27 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     return () => el.removeEventListener("volumechange", onVolumeChange);
   }, []);
 
+  // Handle true fullscreen
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onFSChange = () => {
+      if (document.fullscreenElement === el) {
+        // @ts-ignore
+        window.runtime?.WindowFullscreen();
+      } else {
+        // @ts-ignore
+        window.runtime?.WindowUnfullscreen();
+      }
+    };
+    el.addEventListener("fullscreenchange", onFSChange);
+    el.addEventListener("webkitfullscreenchange", onFSChange);
+    return () => {
+      el.removeEventListener("fullscreenchange", onFSChange);
+      el.removeEventListener("webkitfullscreenchange", onFSChange);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" && onPrev) onPrev();
