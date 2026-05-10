@@ -186,12 +186,25 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 func (a *App) DeleteFiles(paths []string) error {
 	var errs []string
 	for _, p := range paths {
+		// Get info before deleting to calculate cache keys
+		info, statErr := os.Stat(p)
+
 		err := os.Remove(p)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				errs = append(errs, fmt.Sprintf("failed to delete %s: %v", filepath.Base(p), err))
 			}
 		}
+
+		// Clean up cache if stat was successful
+		if statErr == nil {
+			key := cacheKey(p, info.ModTime())
+			thumbPath := filepath.Join(a.cacheDir, "thumbs", key+".png")
+			previewPath := filepath.Join(a.cacheDir, "previews", key+".jpg")
+			os.Remove(thumbPath)
+			os.Remove(previewPath)
+		}
+
 		delete(a.config.VideoGames, p)
 		delete(a.config.VideoMetadata, p)
 	}
