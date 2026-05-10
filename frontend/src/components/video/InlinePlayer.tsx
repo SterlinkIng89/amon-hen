@@ -70,6 +70,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      // Do not navigate if user is interacting with an input, textarea, or the video element
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "VIDEO") {
+        return;
+      }
       if (e.key === "ArrowLeft" && onPrev) onPrev();
       if (e.key === "ArrowRight" && onNext) onNext();
     };
@@ -89,6 +94,24 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
+    return localStorage.getItem("player_info_expanded") !== "false";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("player_info_expanded", String(isInfoExpanded));
+  }, [isInfoExpanded]);
+
+  const [aspectRatio, setAspectRatio] = useState(window.innerWidth / window.innerHeight);
+
+  useEffect(() => {
+    const handleResize = () => setAspectRatio(window.innerWidth / window.innerHeight);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const isWide = aspectRatio >= 2.0;
 
   const { addRecentTag } = useRecentTags();
 
@@ -175,144 +198,198 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     onAddToQueue(item);
   };
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden bg-base">
-      {/* Video */}
-      <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[300px]">
-        {!deleting ? (
-          <video ref={videoRef} key={video.path} src={src} controls className="w-full h-full object-contain outline-none max-h-[65vh]" autoPlay />
-        ) : (
-          <div className="text-text-muted">Deleting...</div>
-        )}
-      </div>
+  const isDirty = 
+    tagInput !== (video.game || "") ||
+    ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game)) ||
+    description !== (video.description || "") ||
+    privacy !== (video.privacy || "unlisted");
 
-      {/* Nav */}
-      <div className="flex items-center justify-center gap-2 py-3 bg-surface border-y border-border-subtle shrink-0">
-        <button className="btn btn-ghost w-32 justify-center" onClick={onPrev ?? undefined} disabled={!onPrev} title="Previous (←)">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
-          Previous
-        </button>
-        <button className="btn btn-ghost w-32 justify-center" onClick={onNext ?? undefined} disabled={!onNext} title="Next (→)">
-          Next
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
-        </button>
+  return (
+    <div className={`flex h-full overflow-hidden bg-base ${isWide ? "flex-row" : "flex-col"}`}>
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Video */}
+        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[200px]">
+          {!deleting ? (
+            <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay />
+          ) : (
+            <div className="text-text-muted">Deleting...</div>
+          )}
+        </div>
+
+        {/* Nav */}
+        <div className={`flex items-center px-6 py-2.5 bg-surface border-t border-border-subtle shrink-0 shadow-sm z-10 relative ${isWide ? "justify-center" : "justify-between"}`}>
+          {/* Left: File Info (Only for standard mode) */}
+          {!isWide && (
+            <div className="flex-1 flex items-center gap-2 overflow-hidden mr-4">
+              <span className="font-mono text-xs text-text-muted truncate" title={video.path}>{video.name}</span>
+              <span className="text-text-secondary/40 shrink-0 text-xs">•</span>
+              <span className="text-text-secondary text-xs shrink-0">{formatSize(video.size)}</span>
+            </div>
+          )}
+
+          {/* Center: Controls */}
+          <div className="flex items-center gap-2">
+            <button 
+              className="btn btn-ghost px-5 py-2 hover:bg-elevated rounded-md transition-colors flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-30" 
+              onClick={onPrev ?? undefined} 
+              disabled={!onPrev} 
+              title="Previous (←)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
+              Previous
+            </button>
+            <button 
+              className="btn btn-ghost px-5 py-2 hover:bg-elevated rounded-md transition-colors flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-30" 
+              onClick={onNext ?? undefined} 
+              disabled={!onNext} 
+              title="Next (→)"
+            >
+              Next
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
+            </button>
+          </div>
+
+          {/* Right: Toggle (Only for standard mode) */}
+          {!isWide && (
+            <div className="flex-1 flex justify-end ml-4">
+              <button 
+                className="flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-all px-3 py-1.5 rounded-md hover:bg-elevated border border-border-subtle shadow-sm"
+                onClick={() => setIsInfoExpanded(!isInfoExpanded)}
+              >
+                {isInfoExpanded ? "Hide Details" : "Show Details"}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isInfoExpanded ? "rotate-180" : ""}`}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Info & Edit panel */}
-      <div className="bg-surface border-t border-border-subtle p-5 overflow-y-auto shrink-0 flex flex-col gap-4 min-h-[250px]">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">File</span>
-            <span className="font-mono text-xs text-text-muted truncate" title={video.path}>{video.name}</span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Size</span>
-            <span className="text-sm text-text-primary">{formatSize(video.size)}</span>
-          </div>
-        </div>
-
-        <div className="h-px bg-border-subtle w-full" />
-
-        <div className="flex flex-col gap-3">
-          {/* Game tag */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Game Tag</label>
-            <TagInput
-              value={tagInput}
-              onChange={handleTagChange}
-              onEnter={handleSaveInfo}
-            />
-          </div>
-
-          {/* YouTube title */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">YouTube Title</label>
-            <input
-              type="text"
-              className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-              value={ytTitle}
-              onChange={e => setYtTitle(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSaveInfo()}
-              maxLength={100}
-            />
-          </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Description</label>
-            <textarea
-              className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] resize-y min-h-[60px] font-sans"
-              placeholder="Optional description..."
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={2}
-            />
-          </div>
-
-          {/* Privacy */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Privacy</label>
-            <div className="flex gap-2">
-              {(["public", "unlisted", "private"] as const).map(p => (
-                <button
-                  key={p}
-                  className={`flex-1 py-1.5 rounded-sm text-xs font-medium cursor-pointer transition-colors ${privacy === p ? "bg-accent text-white border-accent" : "bg-elevated border border-border-subtle text-text-secondary hover:bg-card hover:text-text-primary"}`}
-                  onClick={() => setPrivacy(p)}
+      {isWide ? (
+        <div className={`bg-surface border-l border-border-subtle shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded ? "w-[400px] 2xl:w-[480px]" : "w-12 items-center py-4"}`}>
+          {isInfoExpanded ? (
+            <div className="flex flex-col h-full w-full p-6 gap-5 animate-in fade-in duration-300">
+              {/* Panel Header (Sidebar mode) */}
+              <div className="flex items-center gap-4 pb-5 border-b border-border-subtle shrink-0">
+                <button 
+                  className="flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text-primary transition-colors px-2 py-1 rounded hover:bg-elevated shrink-0"
+                  onClick={() => setIsInfoExpanded(false)}
                 >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="rotate-90">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                  Hide
                 </button>
-              ))}
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <span className="font-mono text-xs text-text-muted truncate" title={video.path}>{video.name}</span>
+                  <span className="text-text-secondary/40 shrink-0 text-xs">•</span>
+                  <span className="text-text-secondary text-xs shrink-0">{formatSize(video.size)}</span>
+                </div>
+              </div>
+
+              {/* Form Content - Scrollable Middle */}
+              <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pr-1 custom-scrollbar">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-secondary">Game Tag</label>
+                  <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-secondary">YouTube Title</label>
+                  <input type="text" className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-secondary">Description</label>
+                  <textarea className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent resize-y min-h-[120px]" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-text-secondary">Privacy</label>
+                  <div className="flex gap-2">
+                    {(["public", "unlisted", "private"] as const).map(p => (
+                      <button key={p} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${privacy === p ? "bg-accent/10 text-accent border-accent/50 border" : "bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-px bg-border-subtle w-full shrink-0" />
+
+              {/* Upload & Save actions - Fixed Bottom */}
+              <div className="flex flex-col items-stretch gap-3 shrink-0">
+                <button 
+                  className={`btn ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"} transition-colors py-2 text-xs font-bold`} 
+                  onClick={handleDelete} 
+                  disabled={deleting}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete?") : "Delete Video"}
+                </button>
+                <div className="flex flex-col gap-2.5">
+                  <button 
+                    className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} 
+                    onClick={handleSaveInfo} 
+                    disabled={savingInfo || (!isDirty && !infoSaved)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                    </svg>
+                    {infoSaved ? "Saved!" : savingInfo ? "Saving..." : "Save Info"}
+                  </button>
+                  <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
+                  <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button 
+              className="p-3 hover:bg-elevated rounded-md transition-colors text-text-secondary hover:text-text-primary group"
+              onClick={() => setIsInfoExpanded(true)}
+              title="Show Details"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-90 group-hover:scale-110 transition-transform">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+          )}
+        </div>
+      ) : (
+        isInfoExpanded && (
+          <div className="bg-surface border-t border-border-subtle p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Game Tag</label>
+                <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">YouTube Title</label>
+                <input type="text" className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-secondary">Description</label>
+                <textarea className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent resize-y min-h-[80px]" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-text-secondary">Privacy</label>
+                <div className="flex gap-2">
+                  {(["public", "unlisted", "private"] as const).map(p => (
+                    <button key={p} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${privacy === p ? "bg-accent/10 text-accent border-accent/50 border" : "bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="h-px bg-border-subtle w-full my-1" />
+            <div className="flex items-center justify-between gap-4 mt-1">
+              <button className={`btn transition-colors py-2 text-xs font-bold ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"}`} onClick={handleDelete} disabled={deleting}>{confirmDelete ? "Confirm Delete?" : "Delete Video"}</button>
+              <div className="flex items-center gap-3">
+                <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>{infoSaved ? "Saved!" : "Save Info"}</button>
+                <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
+                <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="h-px bg-border-subtle w-full" />
-
-        {/* Upload & Save actions */}
-        <div className="flex items-center justify-between gap-3 mt-2">
-          <div className="flex items-center gap-2">
-            <button 
-              className={`btn ${confirmDelete ? "btn-danger" : "btn-ghost"} btn-sm hover:!text-red-400`} 
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-              </svg>
-              {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete?") : "Delete Video"}
-            </button>
-            {confirmDelete && !deleting && (
-              <button className="text-[10px] text-text-muted hover:text-text-primary underline" onClick={() => setConfirmDelete(false)}>Cancel</button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button 
-              className={`btn ${infoSaved ? "btn-success" : "btn-ghost"} btn-sm`} 
-              onClick={handleSaveInfo} 
-              disabled={savingInfo || deleting}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-              </svg>
-              {infoSaved ? "Saved!" : savingInfo ? "Saving..." : "Save Info"}
-            </button>
-            <div className="w-px h-4 bg-border-medium" />
-            <button className="btn btn-ghost btn-sm" onClick={handleAddToQueue} disabled={deleting}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
-              </svg>
-              Add to Queue
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim() || deleting}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
-              </svg>
-              {uploading ? "Starting..." : "Upload Now"}
-            </button>
-          </div>
-        </div>
-      </div>
+        )
+      )}
     </div>
   );
 }
