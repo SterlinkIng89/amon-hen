@@ -5,6 +5,7 @@ export namespace main {
 	    youtube_client_id: string;
 	    youtube_client_secret: string;
 	    youtube_token_json?: string;
+	    video_games: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -16,6 +17,7 @@ export namespace main {
 	        this.youtube_client_id = source["youtube_client_id"];
 	        this.youtube_client_secret = source["youtube_client_secret"];
 	        this.youtube_token_json = source["youtube_token_json"];
+	        this.video_games = source["video_games"];
 	    }
 	}
 	export class VideoFile {
@@ -24,6 +26,7 @@ export namespace main {
 	    size: number;
 	    modTime: number;
 	    folder: string;
+	    game: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -36,6 +39,23 @@ export namespace main {
 	        this.size = source["size"];
 	        this.modTime = source["modTime"];
 	        this.folder = source["folder"];
+	        this.game = source["game"];
+	    }
+	}
+	export class YouTubeChannel {
+	    id: string;
+	    title: string;
+	    thumbnail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new YouTubeChannel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.thumbnail = source["thumbnail"];
 	    }
 	}
 

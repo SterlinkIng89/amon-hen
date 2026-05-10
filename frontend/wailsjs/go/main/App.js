@@ -30,6 +30,10 @@ export function GetVideosFromFolders(arg1) {
   return window['go']['main']['App']['GetVideosFromFolders'](arg1);
 }
 
+export function GetYouTubeChannelInfo() {
+  return window['go']['main']['App']['GetYouTubeChannelInfo']();
+}
+
 export function ImportYouTubeJSON() {
   return window['go']['main']['App']['ImportYouTubeJSON']();
 }
@@ -56,6 +60,10 @@ export function SaveFolders(arg1) {
 
 export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['main']['App']['SaveYouTubeCredentials'](arg1, arg2);
+}
+
+export function SetVideoGames(arg1, arg2) {
+  return window['go']['main']['App']['SetVideoGames'](arg1, arg2);
 }
 
 export function StartYouTubeAuth() {

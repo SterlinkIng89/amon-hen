@@ -7,9 +7,10 @@ interface VideoGridProps {
   activeFolders: string[];
   groups: VideoGroup[];
   sortedVideos: VideoFile[];
+  selectedPaths: string[];
   onToggleFolder: (path: string) => void;
   onRemoveFolder: (path: string) => void;
-  onOpenVideo: (sortedIdx: number) => void;
+  onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onUploadTarget: (video: VideoFile) => void;
 }
 
@@ -18,6 +19,7 @@ export default function VideoGrid({
   activeFolders,
   groups,
   sortedVideos,
+  selectedPaths,
   onToggleFolder,
   onRemoveFolder,
   onOpenVideo,
@@ -27,12 +29,12 @@ export default function VideoGrid({
     <div className="grid-view">
       {/* Folder Filters */}
       {folders.length > 0 && (
-        <div className="folder-filter-bar">
-          <span className="folder-filter-label">Library:</span>
+        <div className="folder-bar">
+          <span className="folder-label">Library:</span>
           {folders.map(f => {
             const active = activeFolders.includes(f);
             return (
-              <div key={f} className={`folder-chip ${active ? "active" : ""}`}>
+              <div key={f} className={`folder-chip ${active ? "folder-chip--active" : ""}`}>
                 <button className="folder-chip-btn" onClick={() => onToggleFolder(f)}>
                   {active && (
                     <svg className="folder-chip-check" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -68,7 +70,7 @@ export default function VideoGrid({
           )}
         </div>
       ) : (
-        <div className="grid-content">
+        <div className="grid-scroll">
           {groups.map(group => (
             <section key={group.dateKey} className="day-group">
               <div className="day-header">
@@ -81,11 +83,13 @@ export default function VideoGrid({
               <div className="video-grid">
                 {group.videos.map(video => {
                   const sortedIdx = sortedVideos.findIndex(v => v.path === video.path);
+                  const selected = selectedPaths.includes(video.path);
                   return (
                     <VideoCard
                       key={video.path}
                       video={video}
-                      onClick={() => onOpenVideo(sortedIdx)}
+                      selected={selected}
+                      onClick={(e) => onOpenVideo(sortedIdx, e)}
                       onUpload={() => onUploadTarget(video)}
                     />
                   );

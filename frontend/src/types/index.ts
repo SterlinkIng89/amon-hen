@@ -4,6 +4,7 @@ export interface VideoFile {
   size: number;
   modTime: number;
   folder: string;
+  game?: string;
 }
 
 export interface VideoGroup {

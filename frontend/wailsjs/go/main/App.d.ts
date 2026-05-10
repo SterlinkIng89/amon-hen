@@ -16,6 +16,8 @@ export function GetVideos(arg1:string):Promise<Array<main.VideoFile>>;
 
 export function GetVideosFromFolders(arg1:Array<string>):Promise<Array<main.VideoFile>>;
 
+export function GetYouTubeChannelInfo():Promise<main.YouTubeChannel>;
+
 export function ImportYouTubeJSON():Promise<void>;
 
 export function IsYouTubeAuthed():Promise<boolean>;
@@ -29,6 +31,8 @@ export function RemoveFolder(arg1:string):Promise<void>;
 export function SaveFolders(arg1:Array<string>):Promise<void>;
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
+
+export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function StartYouTubeAuth():Promise<void>;
 

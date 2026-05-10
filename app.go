@@ -23,8 +23,9 @@ import (
 type Config struct {
 	Folders             []string `json:"folders"`
 	YouTubeClientID     string   `json:"youtube_client_id"`
-	YouTubeClientSecret string   `json:"youtube_client_secret"`
-	YouTubeTokenJSON    string   `json:"youtube_token_json,omitempty"`
+	YouTubeClientSecret string            `json:"youtube_client_secret"`
+	YouTubeTokenJSON    string            `json:"youtube_token_json,omitempty"`
+	VideoGames          map[string]string `json:"video_games"` // Maps path to game tag
 }
 
 // App struct
@@ -65,6 +66,10 @@ func (a *App) initConfig() {
 	data, err := os.ReadFile(a.configPath)
 	if err == nil {
 		json.Unmarshal(data, &a.config)
+	}
+
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
 	}
 
 	// Fallback to .env if config.json is missing these
@@ -128,6 +133,21 @@ func (a *App) RemoveFolder(path string) error {
 		}
 	}
 	a.config.Folders = updated
+	return a.saveConfig()
+}
+
+// SetVideoGames updates the game tag for multiple video paths and saves the config
+func (a *App) SetVideoGames(paths []string, game string) error {
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
+	}
+	for _, p := range paths {
+		if game == "" {
+			delete(a.config.VideoGames, p)
+		} else {
+			a.config.VideoGames[p] = game
+		}
+	}
 	return a.saveConfig()
 }
 
@@ -227,6 +247,7 @@ type VideoFile struct {
 	Size    int64  `json:"size"`
 	ModTime int64  `json:"modTime"` // Unix timestamp in milliseconds
 	Folder  string `json:"folder"`  // Source folder path
+	Game    string `json:"game"`    // Game tag from config
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -257,6 +278,7 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					Size:    info.Size(),
 					ModTime: info.ModTime().UnixMilli(),
 					Folder:  dir,
+					Game:    a.config.VideoGames[filepath.Join(dir, entry.Name())],
 				})
 			}
 		}

@@ -104,7 +104,7 @@ func (a *App) StartYouTubeAuth() error {
 	}
 
 	cfg := a.oauthConfig()
-	authURL := cfg.AuthCodeURL("amon-hen", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+	authURL := cfg.AuthCodeURL("amon-hen", oauth2.AccessTypeOffline, oauth2.ApprovalForce, oauth2.SetAuthURLParam("prompt", "select_account"))
 
 	// Open browser to Google consent page
 	runtime.BrowserOpenURL(a.ctx, authURL)
@@ -210,6 +210,39 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 		}
 	}
 	return n, err
+}
+
+// YouTubeChannel represents basic info about a YT channel
+type YouTubeChannel struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Thumbnail string `json:"thumbnail"`
+}
+
+// GetYouTubeChannelInfo fetches the current authenticated user's channel info
+func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	call := svc.Channels.List([]string{"snippet"}).Mine(true)
+	resp, err := call.Do()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.Items) == 0 {
+		return nil, fmt.Errorf("no channel found")
+	}
+
+	channel := resp.Items[0]
+	return &YouTubeChannel{
+		ID:        channel.Id,
+		Title:     channel.Snippet.Title,
+		Thumbnail: channel.Snippet.Thumbnails.Default.Url,
+	}, nil
 }
 
 // UploadToYouTube uploads a single video to YouTube and emits progress events

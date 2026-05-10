@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { VideoFile } from "../../types";
-import { formatName } from "../../utils/videoUtils";
+import { generateYouTubeTitle } from "../../utils/videoUtils";
 
 export interface UploadOptions {
   title: string;
@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default function UploadDialog({ video, onClose, onUploadNow, onAddToQueue }: Props) {
-  const [title, setTitle] = useState(formatName(video.name));
+  const [title, setTitle] = useState(generateYouTubeTitle(video.name, video.game));
   const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("unlisted");
 
@@ -48,6 +48,7 @@ export default function UploadDialog({ video, onClose, onUploadNow, onAddToQueue
               maxLength={100}
             />
             <span className="form-char-count">{title.length}/100</span>
+            <span className="form-hint">Pattern: <em>Game - YYYY MM DD - Ep#</em></span>
           </div>
 
           <div className="form-field">

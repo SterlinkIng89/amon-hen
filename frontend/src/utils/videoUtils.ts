@@ -8,6 +8,23 @@ export function formatName(n: string) {
   return n.replace(/\.[^/.]+$/, "");
 }
 
+// Detects OBS-style filenames: "YYYY-MM-DD HH-MM-SS.ext"
+// Returns a YouTube title template: "[game] - YYYY MM DD - [ep]"
+// The game slot and episode number are left blank for the user to fill in.
+export function generateYouTubeTitle(filename: string, game?: string): string {
+  // Match: starts with YYYY-MM-DD (optional time part)
+  const obsPattern = /^(\d{4})-(\d{2})-(\d{2})/;
+  const stem = filename.replace(/\.[^/.]+$/, ""); // strip extension
+  const match = stem.match(obsPattern);
+  if (!match) return stem;
+  const [, year, month, day] = match;
+  // Build date string with spaces instead of dashes
+  const datePart = `${year} ${month} ${day}`;
+  // Template: "<game> - YYYY MM DD - <ep>"
+  const gamePrefix = game ? `${game} ` : "";
+  return `${gamePrefix}- ${datePart} - `;
+}
+
 export function toLocalDateKey(ms: number) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

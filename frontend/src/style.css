@@ -467,6 +467,51 @@ html, body {
 
 .video-meta { font-size: 11px; color: var(--text-muted); }
 
+.video-card--selected {
+  outline: 2px solid var(--accent);
+  background: var(--bg-hover);
+}
+
+.bulk-action-bar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  z-index: 100;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.bulk-action-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bulk-action-count {
+  font-weight: 500;
+  color: var(--text-base);
+  font-size: 14px;
+}
+
+.bulk-action-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-action-input {
+  width: 240px;
+}
 /* ========================
    Split layout (player view)
    ======================== */
@@ -737,6 +782,13 @@ html, body {
   background: var(--bg-surface);
 }
 
+.folder-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
 .folder-chip {
   display: inline-flex;
   align-items: center;
@@ -870,6 +922,7 @@ html, body {
 }
 .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
 .form-char-count { position: absolute; right: 8px; bottom: 8px; font-size: 9px; color: var(--text-muted); }
+.form-hint { font-size: 10px; color: var(--text-muted); opacity: 0.75; font-style: italic; }
 
 .privacy-options { display: flex; gap: 6px; }
 .privacy-btn {
@@ -926,6 +979,7 @@ html, body {
 .queue-item-icon { flex-shrink: 0; display: flex; align-items: center; }
 .queue-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .queue-item-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue-item-filename { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.7; }
 .queue-item-meta { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-muted); }
 .queue-privacy-badge { background: var(--bg-card-hover); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 5px; font-size: 9px; }
 .queue-progress-text { color: var(--accent); }
@@ -1040,6 +1094,19 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   color: #4ade80;
+}
+
+.yt-channel-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.yt-channel-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
 }
 
 .yt-connected-sub {

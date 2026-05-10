@@ -170,9 +170,10 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
               <div className="queue-item-icon">{statusIcon[item.status]}</div>
 
               <div className="queue-item-info">
-                <span className="queue-item-name" title={item.videoName}>
-                  {formatName(item.videoName)}
+                <span className="queue-item-name" title={item.title}>
+                  {item.title || formatName(item.videoName)}
                 </span>
+                <span className="queue-item-filename" title={item.videoName}>{item.videoName}</span>
                 <div className="queue-item-meta">
                   <span className="queue-privacy-badge">{item.privacy}</span>
                   {item.status === "uploading" && (

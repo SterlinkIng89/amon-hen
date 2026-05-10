@@ -21,6 +21,7 @@ import PlayerView from "../components/video/PlayerView";
 import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 import SettingsPanel from "../components/layout/SettingsPanel";
+import BulkActionBar from "../components/video/BulkActionBar";
 
 export default function Dashboard() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
@@ -37,6 +38,8 @@ export default function Dashboard() {
   const [queueRunning, setQueueRunning] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ytAuthed, setYtAuthed] = useState(false);
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
@@ -118,9 +121,29 @@ export default function Dashboard() {
     );
   };
 
-  const openVideo = (sortedIdx: number) => {
-    setSelectedIndex(sortedIdx);
-    setView("player");
+  const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
+    const video = sortedVideos[sortedIdx];
+    if (e.shiftKey && lastSelectedIdx !== -1) {
+      const start = Math.min(lastSelectedIdx, sortedIdx);
+      const end = Math.max(lastSelectedIdx, sortedIdx);
+      const newPaths = [...selectedPaths];
+      for (let i = start; i <= end; i++) {
+        const p = sortedVideos[i].path;
+        if (!newPaths.includes(p)) newPaths.push(p);
+      }
+      setSelectedPaths(newPaths);
+    } else if (e.ctrlKey || e.metaKey) {
+      if (selectedPaths.includes(video.path)) {
+        setSelectedPaths(selectedPaths.filter(p => p !== video.path));
+      } else {
+        setSelectedPaths([...selectedPaths, video.path]);
+      }
+      setLastSelectedIdx(sortedIdx);
+    } else {
+      setSelectedPaths([]);
+      setSelectedIndex(sortedIdx);
+      setView("player");
+    }
   };
 
   const goTo = (i: number) => {
@@ -128,6 +151,19 @@ export default function Dashboard() {
   };
 
   const handleUploadNow = (video: VideoFile, opts: UploadOptions) => {
+    const item: QueueItem = {
+      id: crypto.randomUUID(),
+      videoPath: video.path,
+      videoName: video.name,
+      title: opts.title,
+      description: opts.description,
+      privacy: opts.privacy,
+      status: "uploading",
+      progress: 0,
+    };
+    setQueue(q => [item, ...q]);
+    setQueueOpen(true);
+    setQueueRunning(true);
     UploadToYouTube(video.path, opts.title, opts.description, opts.privacy).catch(() => {});
   };
 
@@ -176,9 +212,10 @@ export default function Dashboard() {
             activeFolders={activeFolders}
             groups={groups}
             sortedVideos={sortedVideos}
+            selectedPaths={selectedPaths}
             onToggleFolder={toggleFolder}
             onRemoveFolder={handleRemoveFolder}
-            onOpenVideo={openVideo}
+            onOpenVideo={handleVideoClick}
             onUploadTarget={setUploadTarget}
           />
         )}
@@ -214,6 +251,17 @@ export default function Dashboard() {
           onClose={() => setQueueOpen(false)}
           onUpdateQueue={setQueue}
           onSetRunning={setQueueRunning}
+        />
+      )}
+
+      {selectedPaths.length > 0 && view === "grid" && (
+        <BulkActionBar
+          selectedPaths={selectedPaths}
+          onClearSelection={() => setSelectedPaths([])}
+          onTagsSaved={() => {
+            setSelectedPaths([]);
+            handleRescan();
+          }}
         />
       )}
 

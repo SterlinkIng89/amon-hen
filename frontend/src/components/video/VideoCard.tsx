@@ -6,11 +6,12 @@ import { GetThumbnail, GetVideoPreview } from "../../../wailsjs/go/main/App";
 
 interface VideoCardProps {
   video: VideoFile;
-  onClick: () => void;
+  selected?: boolean;
+  onClick: (e: React.MouseEvent) => void;
   onUpload: () => void;
 }
 
-export default function VideoCard({ video, onClick, onUpload }: VideoCardProps) {
+export default function VideoCard({ video, selected, onClick, onUpload }: VideoCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
   const [sprite, setSprite] = useState("");
@@ -45,7 +46,7 @@ export default function VideoCard({ video, onClick, onUpload }: VideoCardProps) 
   return (
     <div
       ref={ref}
-      className="video-card"
+      className={`video-card ${selected ? "video-card--selected" : ""}`}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setBgPos("0% 0%"); }}
@@ -83,10 +84,15 @@ export default function VideoCard({ video, onClick, onUpload }: VideoCardProps) 
         )}
       </div>
       <div className="video-card-info">
-        <p className="video-title" title={formatName(video.name)}>
-          {formatName(video.name)}
-        </p>
-        <p className="video-meta">{formatSize(video.size)}</p>
+        <div className="video-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <p className="video-title" title={formatName(video.name)} style={{ margin: 0 }}>
+            {formatName(video.name)}
+          </p>
+        </div>
+        <div className="video-meta" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
+          <span>{formatSize(video.size)}</span>
+          {video.game && <span className="video-game-badge" style={{ fontSize: "10px", background: "rgba(255,255,255,0.1)", padding: "2px 6px", borderRadius: "4px" }}>{video.game}</span>}
+        </div>
       </div>
     </div>
   );

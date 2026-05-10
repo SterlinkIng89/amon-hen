@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
-import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig } from "../../../wailsjs/go/main/App";
+import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo } from "../../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
+
+interface YouTubeChannel {
+  id: string;
+  title: string;
+  thumbnail: string;
+}
 
 interface Props {
   open: boolean;
@@ -12,10 +18,21 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [connecting, setConnecting] = useState(false);
   const [credsLoaded, setCredsLoaded] = useState(true); // Assume loaded by default
   const [error, setError] = useState("");
+  const [channel, setChannel] = useState<YouTubeChannel | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    IsYouTubeAuthed().then(setAuthed).catch(() => {});
+    IsYouTubeAuthed().then(async isAuthed => {
+      setAuthed(isAuthed);
+      if (isAuthed) {
+        try {
+          const info = await GetYouTubeChannelInfo();
+          setChannel(info);
+        } catch (e) {
+          console.error("Failed to get channel info:", e);
+        }
+      }
+    }).catch(() => {});
     // Check if client_id exists in config
     LoadConfig().then(cfg => {
       setCredsLoaded(!!cfg.youtube_client_id);
@@ -23,9 +40,13 @@ export default function SettingsPanel({ open, onClose }: Props) {
   }, [open]);
 
   useEffect(() => {
-    EventsOn("youtube:auth-complete", () => {
+    EventsOn("youtube:auth-complete", async () => {
       setAuthed(true);
       setConnecting(false);
+      try {
+        const info = await GetYouTubeChannelInfo();
+        setChannel(info);
+      } catch {}
     });
     return () => { EventsOff("youtube:auth-complete"); };
   }, []);
@@ -80,9 +101,14 @@ export default function SettingsPanel({ open, onClose }: Props) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ color: "#4ade80", flexShrink: 0 }}>
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                   </svg>
-                  <div>
-                    <p className="yt-connected-label">Connected</p>
-                    <p className="yt-connected-sub">Your YouTube account is linked.</p>
+                  <div className="yt-channel-info">
+                    {channel?.thumbnail && (
+                      <img src={channel.thumbnail} alt={channel.title} className="yt-channel-thumb" />
+                    )}
+                    <div>
+                      <p className="yt-connected-label">{channel?.title || "Connected"}</p>
+                      <p className="yt-connected-sub">Your YouTube account is linked.</p>
+                    </div>
                   </div>
                 </div>
                 <button
