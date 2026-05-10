@@ -1,6 +1,8 @@
 import React from "react";
 import { ViewMode } from "../../types";
 
+import logo from "../../assets/images/appIcon.png";
+
 interface AppHeaderProps {
   view: ViewMode;
   foldersCount: number;
@@ -35,10 +37,8 @@ export default function AppHeader({
     </button>
   ) : (
     <div className="flex items-center gap-2 shrink-0">
-      <div className="w-[30px] h-[30px] rounded-sm bg-accent-dim border border-border-accent flex items-center justify-center text-accent">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
-        </svg>
+      <div className="w-[30px] h-[30px] rounded-sm bg-accent-dim border border-border-accent flex items-center justify-center overflow-hidden">
+        <img src={logo} alt="Amon Hen" className="w-full h-full object-contain" />
       </div>
       <span className="text-sm font-semibold text-text-primary">Amon Hen</span>
     </div>
