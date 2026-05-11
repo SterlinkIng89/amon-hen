@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../types";
 import {
   GetChannelVideos,
@@ -27,6 +27,7 @@ export default function ChannelPage() {
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [autoplay, setAutoplay] = useState(true);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Reset selection and player when changing tabs
@@ -45,6 +46,17 @@ export default function ChannelPage() {
     loadData();
   }, [activeTab, playlistSort, videoSort, selectedPlaylist, selectedVideo]);
 
+  useEffect(() => {
+    if (viewType === "player" && selectedVideo && sidebarRef.current) {
+      setTimeout(() => {
+        const activeEl = sidebarRef.current?.querySelector('[data-selected="true"]');
+        if (activeEl) {
+          activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }, 100);
+    }
+  }, [selectedVideo, viewType]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -61,17 +73,17 @@ export default function ChannelPage() {
         setPlaylistVideos(sorted);
       } else {
         // Cargar siempre los videos generales si no hay playlist, para que el player tenga datos
-        const res: any = await GetChannelVideos(1, 100);
+        const res: any = await GetChannelVideos(1, 10000);
         // Sort Videos
-      let sortedVideos = [...(res.videos || [])];
-      if (videoSort === "title") {
-        sortedVideos.sort((a, b) => a.title.localeCompare(b.title));
-      } else if (videoSort === "views") {
-        sortedVideos.sort((a, b) => b.viewCount - a.viewCount);
-      } else {
-        sortedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-      }
-      setVideos(sortedVideos);
+        let sortedVideos = [...(res.videos || [])];
+        if (videoSort === "title") {
+          sortedVideos.sort((a, b) => a.title.localeCompare(b.title));
+        } else if (videoSort === "views") {
+          sortedVideos.sort((a, b) => b.viewCount - a.viewCount);
+        } else {
+          sortedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+        }
+        setVideos(sortedVideos);
         
         if (activeTab === "playlists") {
           console.log("Fetching playlists with sort:", playlistSort);
@@ -317,17 +329,21 @@ export default function ChannelPage() {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-3 custom-scrollbar">
+            <div 
+              ref={sidebarRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-3 custom-scrollbar"
+            >
               {playerVideos.map((v) => (
-                <VideoPill
-                  key={v.id}
-                  video={v}
-                  selected={selectedVideo.id === v.id}
-                  onUpdate={loadData}
-                  viewMode="list"
-                  compact={true}
-                  onClick={() => setSelectedVideo(v)}
-                />
+                <div key={v.id} data-selected={selectedVideo?.id === v.id}>
+                  <VideoPill
+                    video={v}
+                    selected={selectedVideo?.id === v.id}
+                    onUpdate={loadData}
+                    viewMode="list"
+                    compact={true}
+                    onClick={() => setSelectedVideo(v)}
+                  />
+                </div>
               ))}
             </div>
           </aside>

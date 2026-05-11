@@ -126,14 +126,14 @@ export default function VideoPill({
         setHovered(false);
         setBgPos("0% 0%");
       }}
-      className={`group flex bg-card rounded-xl border overflow-hidden transition-all cursor-pointer shrink-0 ${
+      className={`group flex bg-card rounded-xl border overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected
           ? "ring-2 ring-accent/30 border-accent bg-accent/5 shadow-accent/20"
           : selected
             ? "ring-2 ring-accent border-accent bg-accent/5 shadow-accent/20"
-            : "border-border-subtle hover:border-border-medium"
+            : "border-border-subtle hover:border-border-medium hover:bg-elevated/30"
       }`}
     >
       {/* Thumbnail Area */}
