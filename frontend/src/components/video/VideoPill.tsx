@@ -188,16 +188,19 @@ export default function VideoPill({
         {/* Badges (Local, YT) */}
         {isYT && video.localFile && (
           <div
-            className={`absolute top-1.5 left-1.5 bg-green-500/90 backdrop-blur-md text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-green-400/50 z-10 ${isList ? "scale-75 origin-top-left" : ""}`}
+            className={`absolute top-2 left-2 bg-green-500/90 backdrop-blur-md text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-green-400/50 z-10 shadow-lg ${isList ? "scale-75 origin-top-left" : ""}`}
           >
             LOCAL
           </div>
         )}
         {isLocal && video.youtubeId && (
           <div
-            className={`absolute top-1.5 left-1.5 bg-red-600/90 backdrop-blur-md text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-red-500/50 z-10 ${isList ? "scale-75 origin-top-left" : ""}`}
+            className={`absolute top-2 left-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white border border-white/20 z-10 shadow-lg shadow-green-500/20 ${isList ? "scale-75 origin-top-left" : ""}`}
+            title="Uploaded to YouTube"
           >
-            YT
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </div>
         )}
 
