@@ -133,7 +133,9 @@ export default function ChannelPage() {
     }
   };
 
-  const filteredVideos = (selectedPlaylist ? playlistVideos : videos);
+  const filteredVideos = selectedPlaylist 
+    ? playlistVideos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : videos;
 
   // For player view, we want chronological order (Oldest to Newest)
   const playerVideos = [...filteredVideos].reverse();
@@ -399,7 +401,7 @@ export default function ChannelPage() {
               <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
             </div>
           ) : selectedPlaylist ? (
-            playlistVideos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+            filteredVideos.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-text-muted mt-20">
                 <div className="w-12 h-12 rounded-full bg-elevated/50 flex items-center justify-center mb-4">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
@@ -411,17 +413,15 @@ export default function ChannelPage() {
               </div>
             ) : (
               <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,213px)] justify-center gap-6" : "flex flex-col gap-3"}>
-                {playlistVideos
-                  .filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((v) => (
-                    <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
-                      <VideoPill
-                        video={v}
-                        onUpdate={loadData}
-                        viewMode={viewMode}
-                      />
-                    </div>
-                  ))}
+                {filteredVideos.map((v) => (
+                  <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
+                    <VideoPill
+                      video={v}
+                      onUpdate={loadData}
+                      viewMode={viewMode}
+                    />
+                  </div>
+                ))}
               </div>
             )
           ) : activeTab === "videos" ? (
