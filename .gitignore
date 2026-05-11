@@ -1,5 +1,40 @@
-build/bin
-node_modules
-frontend/dist
+# Wails / Go
+build/bin/
+build/windows/
+build/darwin/
+build/linux/
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.prof
+
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+frontend/package.json.md5
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.history/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Specific
 .env
 config.json
+*.log
+*.db
+*.heapsnapshot
+test.exe
