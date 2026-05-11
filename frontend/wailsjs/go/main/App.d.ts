@@ -10,7 +10,7 @@ export function GetCacheDir():Promise<string>;
 
 export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>;
 
-export function GetChannelVideos(arg1:number,arg2:number):Promise<Record<string, any>>;
+export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
 
 export function GetPlaylistVideos(arg1:string):Promise<Array<main.YTVideo>>;
 

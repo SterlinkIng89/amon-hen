@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../types";
 import {
-  GetChannelVideos,
+  GetChannelVideosPaginated,
   GetChannelPlaylists,
   SyncChannelData,
   GetPlaylistVideos,
@@ -15,7 +15,7 @@ export default function ChannelPage() {
   const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
   const [videos, setVideos] = useState<YTVideo[]>([]);
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [playlistSort, setPlaylistSort] = useState<
     "recent" | "title" | "videos"
   >("recent");
@@ -26,8 +26,15 @@ export default function ChannelPage() {
   const [selectedVideo, setSelectedVideo] = useState<YTVideo | null>(null);
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [autoplay, setAutoplay] = useState(true);
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Reset selection and player when changing tabs
@@ -43,8 +50,28 @@ export default function ChannelPage() {
   }, [selectedPlaylist]);
 
   useEffect(() => {
-    loadData();
-  }, [activeTab, playlistSort, videoSort, selectedPlaylist, selectedVideo]);
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    loadData(true);
+  }, [activeTab, videoSort, playlistSort, debouncedSearch, selectedPlaylist]);
+
+  useEffect(() => {
+    // Infinite scroll observer
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore && activeTab === "videos" && !selectedPlaylist) {
+          loadData(false);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) obs.observe(loadMoreRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loading, loadingMore, activeTab, selectedPlaylist]);
 
   useEffect(() => {
     if (viewType === "player" && selectedVideo && sidebarRef.current) {
@@ -57,8 +84,17 @@ export default function ChannelPage() {
     }
   }, [selectedVideo, viewType]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (reset = false) => {
+    if (loading || (loadingMore && !reset)) return;
+
+    if (reset) {
+      setLoading(true);
+      setPage(1);
+      setHasMore(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       if (selectedPlaylist) {
         const res = await GetPlaylistVideos(selectedPlaylist.id);
@@ -71,38 +107,33 @@ export default function ChannelPage() {
           sorted.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
         }
         setPlaylistVideos(sorted);
-      } else {
-        // Cargar siempre los videos generales si no hay playlist, para que el player tenga datos
-        const res: any = await GetChannelVideos(1, 10000);
-        // Sort Videos
-        let sortedVideos = [...(res.videos || [])];
-        if (videoSort === "title") {
-          sortedVideos.sort((a, b) => a.title.localeCompare(b.title));
-        } else if (videoSort === "views") {
-          sortedVideos.sort((a, b) => b.viewCount - a.viewCount);
-        } else {
-          sortedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-        }
-        setVideos(sortedVideos);
+      } else if (activeTab === "videos") {
+        const pageToLoad = reset ? 1 : page;
+        const res: any = await GetChannelVideosPaginated(pageToLoad, 40, videoSort, debouncedSearch);
         
-        if (activeTab === "playlists") {
-          console.log("Fetching playlists with sort:", playlistSort);
-          const pRes: any = await GetChannelPlaylists(
-            String(playlistSort || "recent"),
-          );
-          setPlaylists(pRes || []);
+        const newVideos = res.videos || [];
+        if (reset) {
+          setVideos(newVideos);
+          setPage(2);
+          setHasMore(newVideos.length < res.total);
+        } else {
+          setVideos(prev => [...prev, ...newVideos]);
+          setPage(prev => prev + 1);
+          setHasMore(videos.length + newVideos.length < res.total);
         }
+      } else if (activeTab === "playlists") {
+        const pRes: any = await GetChannelPlaylists(String(playlistSort || "recent"));
+        setPlaylists(pRes || []);
       }
     } catch (e) {
       console.error("Failed to load channel data", e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const filteredVideos = (selectedPlaylist ? playlistVideos : videos).filter(v =>
-    v.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredVideos = (selectedPlaylist ? playlistVideos : videos);
 
   // For player view, we want chronological order (Oldest to Newest)
   const playerVideos = [...filteredVideos].reverse();
@@ -422,16 +453,22 @@ export default function ChannelPage() {
                 }
               >
                 {videos
-                  .filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((v) => (
                     <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
                       <VideoPill
                         video={v}
-                        onUpdate={loadData}
+                        onUpdate={() => loadData(true)}
                         viewMode={viewMode}
                       />
                     </div>
                   ))}
+                
+                {/* Sentinel for infinite scroll */}
+                <div ref={loadMoreRef} className="col-span-full h-20 flex items-center justify-center">
+                  {loadingMore && (
+                    <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
               </div>
             )
           ) : playlists.length === 0 ? (

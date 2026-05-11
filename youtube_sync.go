@@ -280,16 +280,36 @@ func isInsufficientPermissions(err error) bool {
 }
 
 // GetChannelVideos returns a paginated list of videos from SQLite
-func (a *App) GetChannelVideos(page, limit int) (map[string]interface{}, error) {
+func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) (map[string]interface{}, error) {
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
 	offset := (page - 1) * limit
-	rows, err := a.db.conn.Query(`
+
+	orderBy := "published_at DESC"
+	if sortBy == "title" {
+		orderBy = "title ASC"
+	} else if sortBy == "views" {
+		orderBy = "view_count DESC"
+	}
+
+	where := "1=1"
+	args := []interface{}{}
+	if search != "" {
+		where = "title LIKE ?"
+		args = append(args, "%"+search+"%")
+	}
+
+	query := fmt.Sprintf(`
 		SELECT id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, local_file
 		FROM yt_videos
-		ORDER BY published_at DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		WHERE %s
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, where, orderBy)
+
+	args = append(args, limit, offset)
+
+	rows, err := a.db.conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +329,12 @@ func (a *App) GetChannelVideos(page, limit int) (map[string]interface{}, error) 
 	}
 
 	var total int
-	a.db.conn.QueryRow("SELECT COUNT(*) FROM yt_videos").Scan(&total)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM yt_videos WHERE %s", where)
+	countArgs := []interface{}{}
+	if search != "" {
+		countArgs = append(countArgs, "%"+search+"%")
+	}
+	a.db.conn.QueryRow(countQuery, countArgs...).Scan(&total)
 
 	return map[string]interface{}{
 		"videos": videos,
