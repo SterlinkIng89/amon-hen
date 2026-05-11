@@ -50,44 +50,66 @@ export default function VideoListItem({
   return (
     <div
       ref={ref}
-      className={`flex gap-3 p-2 rounded-md cursor-pointer transition-colors select-none border ${multiSelected ? "ring-2 ring-accent border-accent bg-card-hover" : selected ? "bg-card border-border-medium shadow-sm" : "bg-transparent border-transparent hover:bg-black/20"}`}
+      className={`group relative flex gap-3.5 p-2.5 rounded-xl cursor-pointer transition-all duration-200 select-none border-2 ${
+        multiSelected 
+          ? "ring-2 ring-accent/30 border-accent bg-accent/5" 
+          : selected 
+            ? "bg-elevated border-accent shadow-[0_4px_12px_rgba(0,0,0,0.1)]" 
+            : "bg-transparent border-transparent hover:bg-white/5 hover:border-white/10"
+      }`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={e => e.key === "Enter" && onClick(e as any)}
     >
-      {/* Thumbnail */}
-      <div className="relative w-28 aspect-video bg-black rounded shrink-0 overflow-hidden">
+      {/* Thumbnail Container */}
+      <div className="relative w-32 aspect-video bg-black/40 rounded-lg shrink-0 overflow-hidden shadow-inner group-hover:shadow-lg transition-shadow duration-300">
         {thumbLoaded && thumb ? (
-          <img src={thumb} alt={video.name} className="w-full h-full object-cover" />
+          <img src={thumb} alt={video.name} className="w-full h-full object-cover transition-transform duration-500" />
         ) : (
           <div className={`absolute inset-0 bg-elevated bg-[length:200%_100%] animate-shimmer bg-gradient-to-r from-elevated via-card to-elevated ${thumbLoaded ? "hidden" : ""}`} />
         )}
-        {selected && !multiSelected && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-accent">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+        
+        {/* Hover Play Icon */}
+        {!selected && (
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            <div className="w-8 h-8 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center border border-white/30 scale-75 group-hover:scale-100 transition-transform duration-300">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
           </div>
         )}
+
         {duration !== null && (
-          <span className="absolute bottom-1 right-1 bg-black/80 text-text-primary text-[9px] font-medium py-[1px] px-1 rounded-[3px] tracking-wide border border-white/10 z-10">{formatDuration(duration)}</span>
+          <span className="absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-sm text-text-primary text-[10px] font-bold py-[2px] px-1.5 rounded-[4px] tracking-wide border border-white/10 z-10">
+            {formatDuration(duration)}
+          </span>
         )}
       </div>
 
-      {/* Info */}
-      <div className="flex flex-col flex-1 min-w-0 justify-center gap-1">
-        <span className="text-xs font-semibold text-text-primary truncate" title={ytTitle}>{ytTitle}</span>
-        <span className="text-[10px] text-text-muted font-mono truncate" title={video.name}>{video.name}</span>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-secondary">
-          <span>{formatSize(video.size)}</span>
+      {/* Info Container */}
+      <div className="flex flex-col flex-1 min-w-0 justify-center gap-0.5 py-0.5">
+        <div className="flex flex-col">
+          <span className={`text-[13px] font-bold leading-tight truncate transition-colors ${selected ? "text-accent" : "text-text-primary group-hover:text-accent/90"}`} title={ytTitle}>
+            {ytTitle}
+          </span>
+          <span className="text-[10px] text-text-muted font-medium truncate opacity-60 group-hover:opacity-100 transition-opacity" title={video.name}>
+            {video.name}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[10px] text-text-secondary font-medium">
+            {formatSize(video.size)}
+          </span>
           {video.game && (
-            <span className="flex items-center gap-1 bg-accent-dim text-accent font-semibold py-[1px] px-1.5 rounded-[3px]">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z" />
-              </svg>
-              {video.game}
-            </span>
+            <>
+              <span className="text-text-secondary/20 text-[10px] mx-0.5">/</span>
+              <span className="flex items-center bg-accent/10 text-accent text-[9px] font-extrabold py-0.5 px-2 rounded-full border border-accent/20 hover:bg-accent/20 transition-colors">
+                {video.game}
+              </span>
+            </>
           )}
         </div>
       </div>
