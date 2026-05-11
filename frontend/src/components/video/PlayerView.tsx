@@ -1,6 +1,6 @@
 import React from "react";
 import { VideoFile } from "../../types";
-import VideoListItem from "./VideoListItem";
+import VideoPill from "./VideoPill";
 import InlinePlayer from "./InlinePlayer";
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -30,13 +30,14 @@ export default function PlayerView({
   selectedPaths,
   onGoTo,
   onVideoClick,
+  onUploadTarget,
   onTagSaved,
   onFilesDeleted,
   onAddToQueue,
 }: PlayerViewProps) {
   return (
     <div className="flex-1 flex overflow-hidden">
-      <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10 shadow-[8px_0_24px_rgba(0,0,0,0.2)]">
+      <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
         <div className="flex items-center justify-between p-4 border-b border-border-subtle bg-surface/50 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-accent/10 rounded-lg text-accent">
@@ -58,14 +59,15 @@ export default function PlayerView({
         
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-2.5 custom-scrollbar" ref={listRef}>
           {sortedVideos.map((video, i) => (
-            <VideoListItem
+            <VideoPill
               key={video.path}
               video={video}
-              index={i}
               selected={i === selectedIndex && selectedPaths.length === 0}
               multiSelected={selectedPaths.includes(video.path)}
-              scrollRoot={listRoot}
+              viewMode="list"
+              compact={true}
               onClick={(e) => onVideoClick(i, e)}
+              onUpload={() => onUploadTarget(video)}
             />
           ))}
         </div>

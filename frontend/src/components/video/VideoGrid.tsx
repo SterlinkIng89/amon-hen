@@ -1,6 +1,6 @@
 import React from "react";
 import { VideoFile, VideoGroup } from "../../types";
-import VideoCard from "./VideoCard";
+import VideoPill from "./VideoPill";
 
 interface VideoGridProps {
   folders: string[];
@@ -80,12 +80,12 @@ export default function VideoGrid({
                 </span>
                 <div className="flex-1 h-px bg-border-subtle" />
               </div>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
                 {group.videos.map(video => {
                   const sortedIdx = sortedVideos.findIndex(v => v.path === video.path);
                   const selected = selectedPaths.includes(video.path);
                   return (
-                    <VideoCard
+                    <VideoPill
                       key={video.path}
                       video={video}
                       selected={selected}

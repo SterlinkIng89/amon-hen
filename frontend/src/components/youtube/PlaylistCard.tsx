@@ -12,20 +12,22 @@ export default function PlaylistCard({
   onClick,
 }: PlaylistCardProps) {
   const isList = viewMode === "list";
+  const heightClass = isList ? "h-[120px]" : "h-fit w-[213px]";
+  const thumbHeightClass = isList ? "h-full" : "h-[120px]";
 
   return (
     <div
-      className={`flex bg-card rounded-xl border border-border-subtle overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group ${isList ? "flex-row h-[80px]" : "flex-col"}`}
+      className={`flex bg-card rounded-xl border border-border-subtle overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group ${isList ? "flex-row" : "flex-col"} ${heightClass}`}
       onClick={onClick}
     >
       <div
-        className={`relative bg-black/50 overflow-hidden shrink-0 ${isList ? "w-[120px] h-full" : "aspect-video"}`}
+        className={`relative bg-black/50 overflow-hidden shrink-0 ${isList ? "w-[213px]" : "w-full"} ${thumbHeightClass}`}
       >
         {playlist.thumbnailUrl ? (
           <img
             src={playlist.thumbnailUrl}
             alt={playlist.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-elevated text-text-muted">
@@ -48,7 +50,7 @@ export default function PlaylistCard({
 
         {/* Playlist Overlay */}
         <div
-          className={`absolute right-0 top-0 bottom-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-1 transition-all group-hover:bg-accent/80 ${isList ? "w-8" : "w-1/3 gap-1.5"}`}
+          className={`absolute right-0 top-0 bottom-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-1 transition-all ${isList ? "w-8" : "w-1/3 gap-1.5"}`}
         >
           <span
             className={`text-white font-bold ${isList ? "text-[10px]" : "text-sm"}`}
@@ -76,22 +78,14 @@ export default function PlaylistCard({
       </div>
 
       <div
-        className={`flex flex-col flex-1 justify-center min-w-0 ${isList ? "px-3" : "p-3.5"}`}
+        className={`flex flex-col flex-1 justify-start min-w-0 ${isList ? "px-3 py-2" : "p-3.5"}`}
       >
         <h3
-          className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm"}`}
+          className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm h-10"}`}
           title={playlist.title}
         >
           {playlist.title}
         </h3>
-        {!isList && (
-          <p className="text-xs text-text-secondary mt-1.5 font-medium flex items-center gap-1.5">
-            <span className="bg-elevated px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider text-text-muted border border-border-subtle">
-              Playlist
-            </span>
-            View full playlist
-          </p>
-        )}
       </div>
     </div>
   );

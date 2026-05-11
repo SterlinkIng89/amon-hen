@@ -110,6 +110,10 @@ export function UnlinkLocalVideo(arg1) {
   return window['go']['main']['App']['UnlinkLocalVideo'](arg1);
 }
 
+export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
+}
+
 export function UploadToYouTube(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4);
 }

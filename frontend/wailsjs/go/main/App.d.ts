@@ -56,4 +56,6 @@ export function SyncChannelData():Promise<void>;
 
 export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
+export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

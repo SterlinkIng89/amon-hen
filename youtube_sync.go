@@ -89,6 +89,7 @@ func (a *App) SyncChannelData() error {
 }
 
 func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
+	var playlistIDs []string
 	pageToken := ""
 	for {
 		call := svc.Playlists.List([]string{"snippet", "contentDetails"}).Mine(true).MaxResults(50)
@@ -103,6 +104,7 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		a.db.mu.Lock()
 		tx, _ := a.db.conn.Begin()
 		for _, item := range resp.Items {
+			playlistIDs = append(playlistIDs, item.Id)
 			thumb := ""
 			if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
 				thumb = item.Snippet.Thumbnails.Medium.Url
@@ -114,9 +116,6 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
 				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at`,
 				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime)
-			
-			// Sync items for this playlist
-			a.syncPlaylistItems(svc, item.Id)
 		}
 		tx.Commit()
 		a.db.mu.Unlock()
@@ -126,10 +125,60 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		}
 		pageToken = resp.NextPageToken
 	}
+
+	// Sincronizar items de cada playlist después de cerrar la transacción principal
+	for _, id := range playlistIDs {
+		a.syncPlaylistItems(svc, id, syncTime)
+	}
 	return nil
 }
 
-func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
+func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy string) error {
+	if !a.IsYouTubeAuthed() {
+		return fmt.Errorf("not authenticated")
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 1. Fetch current video to preserve other snippet fields (like category, tags, etc)
+	listCall := svc.Videos.List([]string{"snippet", "status"}).Id(videoID)
+	listResp, err := listCall.Do()
+	if err != nil {
+		return err
+	}
+	if len(listResp.Items) == 0 {
+		return fmt.Errorf("video not found on YouTube")
+	}
+
+	video := listResp.Items[0]
+	video.Snippet.Title = title
+	video.Snippet.Description = description
+	video.Status.PrivacyStatus = privacy
+
+	// 2. Perform the update
+	updateCall := svc.Videos.Update([]string{"snippet", "status"}, video)
+	_, err = updateCall.Do()
+	if err != nil {
+		return err
+	}
+
+	// 3. Update local database
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+	_, err = a.db.conn.Exec(`
+		UPDATE yt_videos 
+		SET title = ?, description = ?, privacy = ? 
+		WHERE id = ?`,
+		title, description, privacy, videoID)
+
+	return err
+}
+
+func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string, syncTime int64) error {
 	pageToken := ""
 	for {
 		call := svc.PlaylistItems.List([]string{"snippet", "contentDetails"}).PlaylistId(playlistID).MaxResults(50)
@@ -141,14 +190,12 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
 			return err
 		}
 
-		tx, _ := a.db.conn.Begin()
 		for _, item := range resp.Items {
-			tx.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position)
+			a.db.conn.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position)
 				VALUES (?, ?, ?)
 				ON CONFLICT(playlist_id, video_id) DO UPDATE SET position=excluded.position`,
 				playlistID, item.ContentDetails.VideoId, item.Snippet.Position)
 		}
-		tx.Commit()
 
 		if resp.NextPageToken == "" {
 			break
