@@ -8,6 +8,29 @@ export interface VideoFile {
   youtubeTitle?: string;
   description?: string;
   privacy?: string;
+  youtubeId?: string;
+}
+
+export interface YTVideo {
+  id: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  thumbnailUrl: string;
+  viewCount: number;
+  likeCount: number;
+  duration: string;
+  privacy: string;
+  localFile?: string;
+}
+
+export interface YTPlaylist {
+  id: string;
+  title: string;
+  description: string;
+  videoCount: number;
+  thumbnailUrl: string;
+  publishedAt: string;
 }
 
 export interface VideoGroup {
@@ -16,4 +39,4 @@ export interface VideoGroup {
   videos: VideoFile[];
 }
 
-export type ViewMode = "grid" | "player";
+export type ViewMode = "grid" | "player" | "channel";

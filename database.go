@@ -1,0 +1,77 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
+	_ "modernc.org/sqlite"
+)
+
+type DB struct {
+	conn *sql.DB
+	mu   sync.Mutex
+}
+
+func (a *App) initDB() error {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	dir := filepath.Join(base, "AmonHen")
+	os.MkdirAll(dir, 0755)
+
+	dbPath := filepath.Join(dir, "amonhen.db")
+	conn, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	a.db = &DB{conn: conn}
+	return a.db.migrate()
+}
+
+func (db *DB) migrate() error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS yt_videos (
+			id TEXT PRIMARY KEY,
+			title TEXT,
+			description TEXT,
+			published_at TEXT,
+			thumbnail_url TEXT,
+			view_count INTEGER,
+			like_count INTEGER,
+			duration TEXT,
+			privacy TEXT,
+			local_file TEXT,
+			synced_at INTEGER
+		)`,
+		`CREATE TABLE IF NOT EXISTS yt_playlists (
+			id TEXT PRIMARY KEY,
+			title TEXT,
+			description TEXT,
+			video_count INTEGER,
+			thumbnail_url TEXT,
+			published_at TEXT,
+			synced_at INTEGER
+		)`,
+		`CREATE TABLE IF NOT EXISTS yt_playlist_items (
+			playlist_id TEXT,
+			video_id TEXT,
+			position INTEGER,
+			PRIMARY KEY (playlist_id, video_id)
+		)`,
+	}
+	
+	// Migración manual para añadir published_at si no existe (ignorar error si ya existe)
+	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN published_at TEXT")
+
+	for _, q := range queries {
+		if _, err := db.conn.Exec(q); err != nil {
+			return fmt.Errorf("failed to execute migration: %v - error: %w", q, err)
+		}
+	}
+	return nil
+}

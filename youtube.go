@@ -20,6 +20,7 @@ import (
 
 var youtubeScopes = []string{
 	"https://www.googleapis.com/auth/youtube.upload",
+	"https://www.googleapis.com/auth/youtube",
 }
 
 func (a *App) oauthConfig() *oauth2.Config {
@@ -296,6 +297,9 @@ func (a *App) UploadToYouTube(path, title, description, privacy string) error {
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
 		return err
 	}
+
+	// Save YouTube ID locally
+	a.LinkLocalToYouTube(path, result.Id)
 
 	runtime.EventsEmit(a.ctx, "youtube:done", map[string]string{
 		"path": path,

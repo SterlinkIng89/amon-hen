@@ -384,7 +384,17 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
               <div className="flex items-center gap-3">
                 <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>{infoSaved ? "Saved!" : "Save Info"}</button>
                 <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
-                <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
+                {video.youtubeId && (
+                  <a href={`https://youtu.be/${video.youtubeId}`} target="_blank" rel="noreferrer" className="btn bg-red-600/10 text-red-500 border border-red-500/20 hover:bg-red-600/20 py-2.5 text-xs font-bold flex items-center gap-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
+                    </svg>
+                    View on YouTube
+                  </a>
+                )}
+                <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>
+                  {video.youtubeId ? "Re-upload" : "Upload Now"}
+                </button>
               </div>
             </div>
           </div>

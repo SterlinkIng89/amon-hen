@@ -33,11 +33,27 @@ export default function AppHeader({
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
         <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
       </svg>
-      <span className="leading-none">Library</span>
+      <span className="leading-none">Back to Library</span>
     </button>
   ) : (
-    <div className="flex items-center gap-2 shrink-0">
-      <span className="text-sm font-bold text-text-primary tracking-tight">Library</span>
+    <div className="flex items-center gap-6 shrink-0 h-full border-r border-border-subtle pr-4">
+      <button 
+        className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 ${view === "grid" ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
+        onClick={() => onSetView("grid")}
+      >
+        Library
+      </button>
+      {ytAuthed && (
+        <button 
+          className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-1.5 ${view === "channel" ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
+          onClick={() => onSetView("channel")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={view === "channel" ? "text-accent" : ""}>
+            <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
+          </svg>
+          Channel
+        </button>
+      )}
     </div>
   );
 

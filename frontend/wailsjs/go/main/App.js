@@ -14,8 +14,24 @@ export function GetCacheDir() {
   return window['go']['main']['App']['GetCacheDir']();
 }
 
+export function GetChannelPlaylists(arg1) {
+  return window['go']['main']['App']['GetChannelPlaylists'](arg1);
+}
+
+export function GetChannelVideos(arg1, arg2) {
+  return window['go']['main']['App']['GetChannelVideos'](arg1, arg2);
+}
+
+export function GetPlaylistVideos(arg1) {
+  return window['go']['main']['App']['GetPlaylistVideos'](arg1);
+}
+
 export function GetStreamPort() {
   return window['go']['main']['App']['GetStreamPort']();
+}
+
+export function GetSyncStatus() {
+  return window['go']['main']['App']['GetSyncStatus']();
 }
 
 export function GetThumbnail(arg1) {
@@ -50,6 +66,10 @@ export function IsYouTubeAuthed() {
   return window['go']['main']['App']['IsYouTubeAuthed']();
 }
 
+export function LinkLocalToYouTube(arg1, arg2) {
+  return window['go']['main']['App']['LinkLocalToYouTube'](arg1, arg2);
+}
+
 export function LoadConfig() {
   return window['go']['main']['App']['LoadConfig']();
 }
@@ -80,6 +100,14 @@ export function SetVideoGames(arg1, arg2) {
 
 export function StartYouTubeAuth() {
   return window['go']['main']['App']['StartYouTubeAuth']();
+}
+
+export function SyncChannelData() {
+  return window['go']['main']['App']['SyncChannelData']();
+}
+
+export function UnlinkLocalVideo(arg1) {
+  return window['go']['main']['App']['UnlinkLocalVideo'](arg1);
 }
 
 export function UploadToYouTube(arg1, arg2, arg3, arg4) {

@@ -23,6 +23,7 @@ type VideoMeta struct {
 	YouTubeTitle string `json:"youtube_title"`
 	Description  string `json:"description"`
 	Privacy      string `json:"privacy"`
+	YouTubeID    string `json:"youtube_id,omitempty"`
 }
 
 // Config holds persistent application settings
@@ -42,6 +43,7 @@ type App struct {
 	cacheDir   string
 	configPath string
 	config     Config
+	db         *DB
 }
 
 // NewApp creates a new App application struct
@@ -53,8 +55,20 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.initConfig()
+	if err := a.initDB(); err != nil {
+		fmt.Println("Failed to init database:", err)
+	}
 	a.initCache()
 	a.startStreamServer()
+
+	// Intentar sincronización en background
+	go func() {
+		// Wait a bit to not block startup
+		time.Sleep(2 * time.Second)
+		if a.IsYouTubeAuthed() {
+			a.SyncChannelData()
+		}
+	}()
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -315,6 +329,7 @@ type VideoFile struct {
 	YouTubeTitle string `json:"youtubeTitle"`
 	Description  string `json:"description"`
 	Privacy      string `json:"privacy"`
+	YouTubeID    string `json:"youtubeId,omitempty"`
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -354,6 +369,7 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					YouTubeTitle: meta.YouTubeTitle,
 					Description:  meta.Description,
 					Privacy:      meta.Privacy,
+					YouTubeID:    meta.YouTubeID,
 				})
 			}
 		}

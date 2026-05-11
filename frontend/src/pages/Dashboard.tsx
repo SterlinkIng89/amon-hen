@@ -14,10 +14,10 @@ import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { VideoFile, ViewMode } from "../types";
 import { groupByDay } from "../utils/videoUtils";
 
-// Sub-components
 import AppHeader from "../components/layout/AppHeader";
 import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
+import ChannelPage from "./ChannelPage";
 import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 import SettingsPanel from "../components/layout/SettingsPanel";
@@ -282,6 +282,8 @@ export default function Dashboard() {
             onAddToQueue={handleAddToQueue}
           />
         )}
+
+        {view === "channel" && <ChannelPage />}
       </div>
 
       {uploadTarget && (

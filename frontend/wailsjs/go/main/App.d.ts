@@ -8,7 +8,15 @@ export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function GetCacheDir():Promise<string>;
 
+export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>;
+
+export function GetChannelVideos(arg1:number,arg2:number):Promise<Record<string, any>>;
+
+export function GetPlaylistVideos(arg1:string):Promise<Array<main.YTVideo>>;
+
 export function GetStreamPort():Promise<number>;
+
+export function GetSyncStatus():Promise<Record<string, any>>;
 
 export function GetThumbnail(arg1:string):Promise<string>;
 
@@ -26,6 +34,8 @@ export function ImportYouTubeJSON():Promise<void>;
 
 export function IsYouTubeAuthed():Promise<boolean>;
 
+export function LinkLocalToYouTube(arg1:string,arg2:string):Promise<void>;
+
 export function LoadConfig():Promise<main.Config>;
 
 export function OpenFolderDialog():Promise<string>;
@@ -41,5 +51,9 @@ export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function StartYouTubeAuth():Promise<void>;
+
+export function SyncChannelData():Promise<void>;
+
+export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
 export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

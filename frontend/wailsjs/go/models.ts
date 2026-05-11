@@ -4,6 +4,7 @@ export namespace main {
 	    youtube_title: string;
 	    description: string;
 	    privacy: string;
+	    youtube_id?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -14,6 +15,7 @@ export namespace main {
 	        this.youtube_title = source["youtube_title"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
+	        this.youtube_id = source["youtube_id"];
 	    }
 	}
 	export class Config {
@@ -66,6 +68,7 @@ export namespace main {
 	    youtubeTitle: string;
 	    description: string;
 	    privacy: string;
+	    youtubeId?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -82,9 +85,62 @@ export namespace main {
 	        this.youtubeTitle = source["youtubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
+	        this.youtubeId = source["youtubeId"];
 	    }
 	}
 	
+	export class YTPlaylist {
+	    id: string;
+	    title: string;
+	    description: string;
+	    videoCount: number;
+	    thumbnailUrl: string;
+	    publishedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new YTPlaylist(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.videoCount = source["videoCount"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.publishedAt = source["publishedAt"];
+	    }
+	}
+	export class YTVideo {
+	    id: string;
+	    title: string;
+	    description: string;
+	    publishedAt: string;
+	    thumbnailUrl: string;
+	    viewCount: number;
+	    likeCount: number;
+	    duration: string;
+	    privacy: string;
+	    localFile?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new YTVideo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.publishedAt = source["publishedAt"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.viewCount = source["viewCount"];
+	        this.likeCount = source["likeCount"];
+	        this.duration = source["duration"];
+	        this.privacy = source["privacy"];
+	        this.localFile = source["localFile"];
+	    }
+	}
 	export class YouTubeChannel {
 	    id: string;
 	    title: string;
