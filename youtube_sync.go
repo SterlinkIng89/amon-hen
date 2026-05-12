@@ -22,6 +22,7 @@ type YTVideo struct {
 	Duration     string `json:"duration"`
 	Privacy      string `json:"privacy"`
 	LocalFile    string `json:"localFile,omitempty"`
+	PlaylistTitle string `json:"playlistTitle,omitempty"`
 }
 
 type YTPlaylist struct {
@@ -301,8 +302,9 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, local_file
-		FROM yt_videos
+		SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
+		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
+		FROM yt_videos v
 		WHERE %s
 		ORDER BY %s
 		LIMIT ? OFFSET ?`, where, orderBy)
@@ -319,11 +321,16 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 	for rows.Next() {
 		var v YTVideo
 		var localFile sql.NullString
-		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile); err != nil {
+		var playlistTitle sql.NullString
+		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle); err != nil {
+			fmt.Println("Error scanning video row:", err)
 			continue
 		}
 		if localFile.Valid {
 			v.LocalFile = localFile.String
+		}
+		if playlistTitle.Valid {
+			v.PlaylistTitle = playlistTitle.String
 		}
 		videos = append(videos, v)
 	}
@@ -403,6 +410,10 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 		if localFile.Valid {
 			v.LocalFile = localFile.String
 		}
+		// In a specific playlist view, we can optionally fetch the playlist title too if needed,
+		// but usually the frontend already knows which playlist it's looking at.
+		// For consistency, let's add it if it's easy.
+		v.PlaylistTitle = "" // Will be handled if needed elsewhere
 		videos = append(videos, v)
 	}
 	return videos, nil

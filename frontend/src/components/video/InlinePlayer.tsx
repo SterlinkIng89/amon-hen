@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { VideoFile } from "../../types";
+import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist } from "../../../wailsjs/go/main/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import TagInput from "../ui/TagInput";
@@ -89,6 +89,42 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
     (video.privacy as "public" | "unlisted" | "private") || "unlisted"
   );
+  const [playlistId, setPlaylistId] = useState(video.playlistId || "");
+  const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
+  const [playlistSearch, setPlaylistSearch] = useState(video.playlistTitle || "");
+  const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (playlistId && playlists.length > 0) {
+      const p = playlists.find(p => p.id === playlistId);
+      if (p) setPlaylistSearch(p.title);
+    }
+  }, [playlists, playlistId]);
+  
+  const refreshPlaylists = () => {
+    GetChannelPlaylists("recent")
+      .then(setPlaylists)
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshPlaylists();
+  }, []);
+
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistTitle.trim()) return;
+    try {
+      const id = await CreatePlaylist(newPlaylistTitle, "", privacy);
+      setNewPlaylistTitle("");
+      setIsCreatingPlaylist(false);
+      refreshPlaylists();
+      setPlaylistId(id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -121,10 +157,12 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setTagInput(video.game || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
+    setPlaylistId(video.playlistId || "");
+    setPlaylistSearch(video.playlistTitle || ""); 
     setInfoSaved(false);
     setConfirmDelete(false);
     setDeleting(false);
-  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy]);
+  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId]);
 
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
@@ -137,7 +175,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const handleSaveInfo = async () => {
     setSavingInfo(true);
     try {
-      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy);
+      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId);
       if (tagInput) addRecentTag(tagInput);
       setInfoSaved(true);
       onTagSaved?.();
@@ -165,9 +203,14 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     }
   };
 
-  const handleUploadNow = () => {
+  const handleUploadNow = async () => {
     if (tagInput) addRecentTag(tagInput);
     setUploading(true);
+    
+    // Save metadata to local database first
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId).catch(console.error);
+    onTagSaved?.(); // Refresh UI in dashboard
+
     const item: QueueItem = {
       id: crypto.randomUUID(),
       videoPath: video.path,
@@ -177,14 +220,20 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       privacy,
       status: "uploading",
       progress: 0,
+      playlistId,
     };
     onAddToQueue(item);
-    UploadToYouTube(video.path, ytTitle, description, privacy).catch(() => {});
+    UploadToYouTube(video.path, ytTitle, description, privacy, playlistId || "").catch(() => {});
     setTimeout(() => setUploading(false), 1000);
   };
 
-  const handleAddToQueue = () => {
+  const handleAddToQueue = async () => {
     if (tagInput) addRecentTag(tagInput);
+    
+    // Save metadata to local database first
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId).catch(console.error);
+    onTagSaved?.(); // Refresh UI in dashboard
+
     const item: QueueItem = {
       id: crypto.randomUUID(),
       videoPath: video.path,
@@ -194,6 +243,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       privacy,
       status: "pending",
       progress: 0,
+      playlistId,
     };
     onAddToQueue(item);
   };
@@ -311,6 +361,54 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     ))}
                   </div>
                 </div>
+
+                <div className="flex flex-col gap-1.5 relative">
+                   <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-text-secondary">Playlist (Optional)</label>
+                      {video.playlistTitle && (
+                        <span className="text-[10px] bg-accent/10 text-accent px-1.5 py-0.5 rounded flex items-center gap-1 font-bold">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+                          Linked: {video.playlistTitle}
+                        </span>
+                      )}
+                    </div>
+                    <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}>
+                      {isCreatingPlaylist ? "CANCEL" : "+ CREATE"}
+                    </button>
+                  </div>
+
+                  {isCreatingPlaylist ? (
+                    <div className="flex gap-2">
+                      <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="New playlist title..." autoFocus onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                      <button className="btn btn-primary btn-sm px-3" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim()}>OK</button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input className="w-full bg-elevated border border-border-subtle rounded-md pl-9 pr-3 py-2 text-xs text-text-primary outline-none hover:border-border-medium focus:border-accent" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Search or select playlist..."} />
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      </div>
+                      {playlistId && (
+                        <button className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary" onClick={() => { setPlaylistId(""); setPlaylistSearch(""); }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        </button>
+                      )}
+                      
+                      {isPlaylistDropdownOpen && (
+                        <div className="absolute left-0 right-0 bottom-full mb-1 bg-card border border-border-medium rounded-md shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
+                          {playlists.filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase())).map(p => (
+                            <button key={p.id} className={`w-full text-left px-3 py-2 hover:bg-accent/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-accent/5 text-accent" : "text-text-primary"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
+                              <span className="text-xs font-bold truncate flex-1">{p.title}</span>
+                              {playlistId === p.id && <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-accent"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isPlaylistDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsPlaylistDropdownOpen(false)} />}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="h-px bg-border-subtle w-full shrink-0" />
@@ -376,6 +474,37 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     <button key={p} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${privacy === p ? "bg-accent/10 text-accent border-accent/50 border" : "bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
                   ))}
                 </div>
+              </div>
+              <div className="flex flex-col gap-1.5 relative">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-text-secondary">Playlist</label>
+                  <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}>
+                    {isCreatingPlaylist ? "CANCEL" : "+ CREATE"}
+                  </button>
+                </div>
+                {isCreatingPlaylist ? (
+                  <div className="flex gap-2">
+                    <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="New title..." autoFocus onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                    <button className="btn btn-primary btn-sm px-3" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim()}>OK</button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input className="w-full bg-elevated border border-border-subtle rounded-md pl-9 pr-3 py-2 text-xs text-text-primary outline-none focus:border-accent" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </div>
+                    {isPlaylistDropdownOpen && (
+                      <div className="absolute left-0 right-0 bottom-full mb-1 bg-card border border-border-medium rounded-md shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
+                        {playlists.filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase())).map(p => (
+                          <button key={p.id} className={`w-full text-left px-3 py-2 hover:bg-accent/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-accent/5 text-accent" : "text-text-primary"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
+                            <span className="text-xs font-bold truncate flex-1">{p.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {isPlaylistDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsPlaylistDropdownOpen(false)} />}
+                  </div>
+                )}
               </div>
             </div>
             <div className="h-px bg-border-subtle w-full my-1" />

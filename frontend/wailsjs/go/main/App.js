@@ -6,6 +6,14 @@ export function AddFolder() {
   return window['go']['main']['App']['AddFolder']();
 }
 
+export function AddVideoToPlaylist(arg1, arg2) {
+  return window['go']['main']['App']['AddVideoToPlaylist'](arg1, arg2);
+}
+
+export function CreatePlaylist(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreatePlaylist'](arg1, arg2, arg3);
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['main']['App']['DeleteFiles'](arg1);
 }
@@ -86,8 +94,8 @@ export function SaveFolders(arg1) {
   return window['go']['main']['App']['SaveFolders'](arg1);
 }
 
-export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5);
+export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SaveYouTubeCredentials(arg1, arg2) {
@@ -114,6 +122,6 @@ export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
 }
 
-export function UploadToYouTube(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4);
+export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5);
 }

@@ -9,6 +9,8 @@ export interface VideoFile {
   description?: string;
   privacy?: string;
   youtubeId?: string;
+  playlistId?: string;
+  playlistTitle?: string;
 }
 
 export interface YTVideo {
@@ -22,6 +24,7 @@ export interface YTVideo {
   duration: string;
   privacy: string;
   localFile?: string;
+  playlistTitle?: string;
 }
 
 export interface YTPlaylist {

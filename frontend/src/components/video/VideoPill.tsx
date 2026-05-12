@@ -51,7 +51,7 @@ export default function VideoPill({
   // Data normalization
   const title = isYT
     ? video.title
-    : generateYouTubeTitle(video.name, video.game);
+    : video.youtubeTitle || generateYouTubeTitle(video.name, video.game);
   const subtitle = isLocal ? video.name : "";
   const thumbnail = isYT ? video.thumbnailUrl : thumb;
   const publishedAt = isYT
@@ -159,7 +159,7 @@ export default function VideoPill({
           <img
             src={thumbnail || "/placeholder-thumb.jpg"}
             alt={title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500"
           />
         )}
 
@@ -186,19 +186,22 @@ export default function VideoPill({
         )}
 
         {/* Badges (Local, YT) */}
-        {isYT && video.localFile && (
-          <div
-            className={`absolute top-2 left-2 bg-green-500/90 backdrop-blur-md text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-green-400/50 z-10 shadow-lg ${isList ? "scale-75 origin-top-left" : ""}`}
-          >
-            LOCAL
-          </div>
-        )}
+
         {isLocal && video.youtubeId && (
           <div
             className={`absolute top-2 left-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white border border-white/20 z-10 shadow-lg shadow-green-500/20 ${isList ? "scale-75 origin-top-left" : ""}`}
             title="Uploaded to YouTube"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </div>
@@ -325,8 +328,7 @@ export default function VideoPill({
           )}
 
           {isLocal && video.game && (
-            <div className="flex items-center gap-1.5 bg-accent/10 text-accent text-[9px] font-bold uppercase tracking-wider py-0.5 px-2 rounded-full border border-accent/20">
-              <span className="w-1 h-1 bg-accent rounded-full animate-pulse" />
+            <div className="flex items-center gap-1.5 bg-accent/10 text-accent text-[9px] font-bold py-0.5 px-2 rounded-full border border-accent/20">
               <span className="truncate max-w-[80px]">{video.game}</span>
             </div>
           )}

@@ -12,6 +12,7 @@ export interface QueueItem {
   privacy: "public" | "unlisted" | "private";
   status: "pending" | "uploading" | "done" | "error";
   progress: number;
+  playlistId?: string;
   url?: string;
   error?: string;
 }
@@ -93,14 +94,14 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       onSetRunning(false);
       return;
     }
-    UploadToYouTube(next.videoPath, next.title, next.description, next.privacy).catch(() => {});
+    UploadToYouTube(next.videoPath, next.title, next.description, next.privacy, next.playlistId || "").catch(() => {});
   };
 
   const handleStart = () => {
     const first = queue.find((i) => i.status === "pending");
     if (!first) return;
     onSetRunning(true);
-    UploadToYouTube(first.videoPath, first.title, first.description, first.privacy).catch(() => {});
+    UploadToYouTube(first.videoPath, first.title, first.description, first.privacy, first.playlistId || "").catch(() => {});
   };
 
   const handleRemove = (id: string) => {
@@ -125,7 +126,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           <span className="text-sm font-bold flex items-center gap-2">
             Upload Queue
             {queue.length > 0 && (
-              <span className="bg-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[10px] tracking-wide">{queue.length}</span>
+              <span className="bg-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[10px]">{queue.length}</span>
             )}
           </span>
           {doneCount > 0 && (
@@ -175,7 +176,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
                 </span>
                 <span className="text-[10px] font-mono text-text-muted truncate" title={item.videoName}>{item.videoName}</span>
                 <div className="flex items-center gap-2 flex-wrap text-[10px] mt-0.5">
-                  <span className="uppercase tracking-wider font-bold text-text-secondary">{item.privacy}</span>
+                  <span className="font-bold text-text-secondary">{item.privacy}</span>
                   {item.status === "uploading" && (
                     <span className="text-accent font-semibold">{item.progress}%</span>
                   )}

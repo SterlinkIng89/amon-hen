@@ -246,8 +246,61 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 	}, nil
 }
 
+// CreatePlaylist creates a new YouTube playlist
+func (a *App) CreatePlaylist(title, description, privacy string) (string, error) {
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	playlist := &youtube.Playlist{
+		Snippet: &youtube.PlaylistSnippet{
+			Title:       title,
+			Description: description,
+		},
+		Status: &youtube.PlaylistStatus{
+			PrivacyStatus: privacy,
+		},
+	}
+
+	res, err := svc.Playlists.Insert([]string{"snippet", "status"}, playlist).Do()
+	if err != nil {
+		fmt.Printf("Error creating playlist: %v\n", err)
+		return "", err
+	}
+
+	return res.Id, nil
+}
+
+// AddVideoToPlaylist adds an existing video to a YouTube playlist
+func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	item := &youtube.PlaylistItem{
+		Snippet: &youtube.PlaylistItemSnippet{
+			PlaylistId: playlistID,
+			ResourceId: &youtube.ResourceId{
+				Kind:    "youtube#video",
+				VideoId: videoID,
+			},
+		},
+	}
+
+	_, err = svc.PlaylistItems.Insert([]string{"snippet"}, item).Do()
+	if err != nil {
+		fmt.Printf("Error adding video %s to playlist %s: %v\n", videoID, playlistID, err)
+		return err
+	}
+	return nil
+}
+
 // UploadToYouTube uploads a single video to YouTube and emits progress events
-func (a *App) UploadToYouTube(path, title, description, privacy string) error {
+func (a *App) UploadToYouTube(path, title, description, privacy, playlistID string) error {
 	ctx := context.Background()
 
 	svc, err := a.youtubeClient(ctx)
@@ -300,6 +353,11 @@ func (a *App) UploadToYouTube(path, title, description, privacy string) error {
 
 	// Save YouTube ID locally
 	a.LinkLocalToYouTube(path, result.Id)
+
+	// Add to playlist if specified
+	if playlistID != "" {
+		a.AddVideoToPlaylist(playlistID, result.Id)
+	}
 
 	runtime.EventsEmit(a.ctx, "youtube:done", map[string]string{
 		"path": path,

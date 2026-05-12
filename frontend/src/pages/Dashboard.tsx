@@ -7,6 +7,7 @@ import {
   LoadConfig,
   IsYouTubeAuthed,
   UploadToYouTube,
+  SaveVideoMetadata,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
@@ -18,7 +19,9 @@ import AppHeader from "../components/layout/AppHeader";
 import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
 import ChannelPage from "./ChannelPage";
-import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
+import UploadDialog, {
+  UploadOptions,
+} from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
@@ -53,16 +56,18 @@ export default function Dashboard() {
   const filteredVideos =
     activeFolders.length === 0
       ? sortedVideos
-      : sortedVideos.filter(v => activeFolders.includes(v.folder));
+      : sortedVideos.filter((v) => activeFolders.includes(v.folder));
   const groups = groupByDay(filteredVideos);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
   // Load config on mount
   useEffect(() => {
     GetStreamPort().then(setStreamPort).catch(console.error);
-    IsYouTubeAuthed().then(setYtAuthed).catch(() => {});
+    IsYouTubeAuthed()
+      .then(setYtAuthed)
+      .catch(() => {});
     LoadConfig()
-      .then(cfg => {
+      .then((cfg) => {
         const savedFolders = cfg.folders ?? [];
         if (savedFolders.length > 0) {
           setFolders(savedFolders);
@@ -97,7 +102,8 @@ export default function Dashboard() {
       const result = await GetVideosFromFolders(foldersToScan);
       const list = result ?? [];
       setVideos(list);
-      if (list.length === 0) setError("No videos found in the selected folders.");
+      if (list.length === 0)
+        setError("No videos found in the selected folders.");
     } catch (e: any) {
       setError(`Scan failed: ${e?.message ?? e}`);
     } finally {
@@ -119,27 +125,31 @@ export default function Dashboard() {
 
   const handleRemoveFolder = async (path: string) => {
     await RemoveFolder(path);
-    const updated = folders.filter(f => f !== path);
+    const updated = folders.filter((f) => f !== path);
     setFolders(updated);
-    setActiveFolders(a => a.filter(f => f !== path));
+    setActiveFolders((a) => a.filter((f) => f !== path));
     await scanFolders(updated);
   };
 
   const handleRescan = () => scanFolders(folders);
 
   const toggleFolder = (path: string) => {
-    setActiveFolders(prev =>
-      prev.includes(path) ? prev.filter(f => f !== path) : [...prev, path]
+    setActiveFolders((prev) =>
+      prev.includes(path) ? prev.filter((f) => f !== path) : [...prev, path],
     );
   };
 
   // Unified click handler used in BOTH grid and player views
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
-    
+
     // Auto-include the currently playing video if we are in player view and starting a multi-selection
     let currentPaths = [...selectedPaths];
-    if (view === "player" && currentPaths.length === 0 && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    if (
+      view === "player" &&
+      currentPaths.length === 0 &&
+      (e.shiftKey || e.ctrlKey || e.metaKey)
+    ) {
       if (selectedIndex !== -1) {
         const currentPlaying = sortedVideos[selectedIndex].path;
         currentPaths.push(currentPlaying);
@@ -147,10 +157,15 @@ export default function Dashboard() {
     }
 
     if (e.shiftKey) {
-      const anchorIdx = lastSelectedIdx !== -1 ? lastSelectedIdx : (selectedIndex !== -1 ? selectedIndex : 0);
+      const anchorIdx =
+        lastSelectedIdx !== -1
+          ? lastSelectedIdx
+          : selectedIndex !== -1
+            ? selectedIndex
+            : 0;
       const start = Math.min(anchorIdx, sortedIdx);
       const end = Math.max(anchorIdx, sortedIdx);
-      
+
       for (let i = start; i <= end; i++) {
         const p = sortedVideos[i].path;
         if (!currentPaths.includes(p)) currentPaths.push(p);
@@ -158,7 +173,7 @@ export default function Dashboard() {
       setSelectedPaths(currentPaths);
     } else if (e.ctrlKey || e.metaKey) {
       if (currentPaths.includes(video.path)) {
-        currentPaths = currentPaths.filter(p => p !== video.path);
+        currentPaths = currentPaths.filter((p) => p !== video.path);
       } else {
         currentPaths.push(video.path);
       }
@@ -179,17 +194,27 @@ export default function Dashboard() {
 
   const handleAddToQueue = (item: QueueItem) => {
     if (item.status === "uploading") {
-      setQueue(q => [item, ...q]);
+      setQueue((q) => [item, ...q]);
       setQueueOpen(true);
       setQueueRunning(true);
     } else {
-      setQueue(q => [...q, item]);
+      setQueue((q) => [...q, item]);
       setQueueOpen(true);
     }
   };
 
   // Legacy modal path (used from grid card hover button)
-  const handleUploadNow = (video: VideoFile, opts: UploadOptions) => {
+  const handleUploadNow = async (video: VideoFile, opts: UploadOptions) => {
+    // Save metadata to local database first
+    await SaveVideoMetadata(
+      video.path,
+      video.game || "",
+      opts.title,
+      opts.description,
+      opts.privacy,
+      opts.playlistId || "",
+    ).catch(console.error);
+
     handleAddToQueue({
       id: crypto.randomUUID(),
       videoPath: video.path,
@@ -199,11 +224,32 @@ export default function Dashboard() {
       privacy: opts.privacy,
       status: "uploading",
       progress: 0,
+      playlistId: opts.playlistId,
     });
-    UploadToYouTube(video.path, opts.title, opts.description, opts.privacy).catch(() => {});
+    
+    UploadToYouTube(
+      video.path,
+      opts.title,
+      opts.description,
+      opts.privacy,
+      opts.playlistId || "",
+    ).catch(() => {});
+
+    // Refresh UI to show updated title
+    handleRescan();
   };
 
-  const handleAddToQueueModal = (video: VideoFile, opts: UploadOptions) => {
+  const handleAddToQueueModal = async (video: VideoFile, opts: UploadOptions) => {
+    // Save metadata to local database first
+    await SaveVideoMetadata(
+      video.path,
+      video.game || "",
+      opts.title,
+      opts.description,
+      opts.privacy,
+      opts.playlistId || "",
+    ).catch(console.error);
+
     handleAddToQueue({
       id: crypto.randomUUID(),
       videoPath: video.path,
@@ -213,10 +259,14 @@ export default function Dashboard() {
       privacy: opts.privacy,
       status: "pending",
       progress: 0,
+      playlistId: opts.playlistId,
     });
+
+    // Refresh UI to show updated title
+    handleRescan();
   };
 
-  const pendingCount = queue.filter(i => i.status === "pending").length;
+  const pendingCount = queue.filter((i) => i.status === "pending").length;
   const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
 
   return (
@@ -229,7 +279,7 @@ export default function Dashboard() {
         ytAuthed={ytAuthed}
         onSetView={setView}
         onRescan={handleRescan}
-        onToggleQueue={() => setQueueOpen(o => !o)}
+        onToggleQueue={() => setQueueOpen((o) => !o)}
         onOpenSettings={() => setSettingsOpen(true)}
         onAddFolder={handleAddFolder}
       />
@@ -238,15 +288,32 @@ export default function Dashboard() {
       {isSelecting && (
         <BulkActionBar
           selectedPaths={selectedPaths}
-          onClearSelection={() => { setSelectedPaths([]); setLastSelectedIdx(-1); }}
-          onTagsSaved={() => { setSelectedPaths([]); handleRescan(); }}
-          onFilesDeleted={() => { setSelectedPaths([]); setSelectedIndex(-1); handleRescan(); }}
+          onClearSelection={() => {
+            setSelectedPaths([]);
+            setLastSelectedIdx(-1);
+          }}
+          onTagsSaved={() => {
+            setSelectedPaths([]);
+            handleRescan();
+          }}
+          onFilesDeleted={() => {
+            setSelectedPaths([]);
+            setSelectedIndex(-1);
+            handleRescan();
+          }}
         />
       )}
 
       <div className="flex-1 flex overflow-hidden">
         {error && (
-          <div style={{ padding: "16px", color: "#f87171", background: "rgba(248,113,113,0.1)", textAlign: "center" }}>
+          <div
+            style={{
+              padding: "16px",
+              color: "#f87171",
+              background: "rgba(248,113,113,0.1)",
+              textAlign: "center",
+            }}
+          >
             {error}
           </div>
         )}
@@ -278,7 +345,10 @@ export default function Dashboard() {
             onVideoClick={handleVideoClick}
             onUploadTarget={setUploadTarget}
             onTagSaved={handleRescan}
-            onFilesDeleted={() => { setSelectedIndex(-1); handleRescan(); }}
+            onFilesDeleted={() => {
+              setSelectedIndex(-1);
+              handleRescan();
+            }}
             onAddToQueue={handleAddToQueue}
           />
         )}
@@ -290,8 +360,8 @@ export default function Dashboard() {
         <UploadDialog
           video={uploadTarget}
           onClose={() => setUploadTarget(null)}
-          onUploadNow={opts => handleUploadNow(uploadTarget, opts)}
-          onAddToQueue={opts => handleAddToQueueModal(uploadTarget, opts)}
+          onUploadNow={(opts) => handleUploadNow(uploadTarget, opts)}
+          onAddToQueue={(opts) => handleAddToQueueModal(uploadTarget, opts)}
         />
       )}
 
@@ -306,7 +376,10 @@ export default function Dashboard() {
         />
       )}
 
-      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

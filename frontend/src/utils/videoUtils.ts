@@ -27,13 +27,20 @@ export function generateYouTubeTitle(filename: string, game?: string): string {
   const obsPattern = /^(\d{4})-(\d{2})-(\d{2})/;
   const stem = filename.replace(/\.[^/.]+$/, ""); // strip extension
   const match = stem.match(obsPattern);
-  if (!match) return stem;
+  
+  const gamePart = game ? `${game} ` : "";
+
+  if (!match) return `${gamePart}- ${stem}`;
+  
   const [, year, month, day] = match;
-  // Build date string with spaces instead of dashes
-  const datePart = `${year} ${month} ${day}`;
-  // Template: "<game> - YYYY MM DD - <ep>"
-  const gamePrefix = game ? `${game} ` : "";
-  return `${gamePrefix}- ${datePart} - `;
+  // Format: D/MM/YY
+  const d = parseInt(day).toString();
+  const m = month;
+  const y = year.slice(-2);
+  const datePart = `${d}/${m}/${y}`;
+  
+  // Format: "Game - D/MM/YY - "
+  return `${gamePart}- ${datePart} - `;
 }
 
 export function toLocalDateKey(ms: number) {

@@ -4,6 +4,10 @@ import {main} from '../models';
 
 export function AddFolder():Promise<string>;
 
+export function AddVideoToPlaylist(arg1:string,arg2:string):Promise<void>;
+
+export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function GetCacheDir():Promise<string>;
@@ -44,7 +48,7 @@ export function RemoveFolder(arg1:string):Promise<void>;
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;
 
-export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
@@ -58,4 +62,4 @@ export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;

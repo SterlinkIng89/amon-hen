@@ -24,6 +24,7 @@ type VideoMeta struct {
 	Description  string `json:"description"`
 	Privacy      string `json:"privacy"`
 	YouTubeID    string `json:"youtube_id,omitempty"`
+	PlaylistID   string `json:"playlist_id,omitempty"`
 }
 
 // Config holds persistent application settings
@@ -173,7 +174,7 @@ func (a *App) SetVideoGames(paths []string, game string) error {
 }
 
 // SaveVideoMetadata updates all metadata for a specific video and saves the config
-func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string) error {
+func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string, playlistId string) error {
 	if a.config.VideoGames == nil {
 		a.config.VideoGames = make(map[string]string)
 	}
@@ -191,6 +192,7 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		YouTubeTitle: ytTitle,
 		Description:  desc,
 		Privacy:      privacy,
+		PlaylistID:   playlistId,
 	}
 
 	return a.saveConfig()
@@ -330,6 +332,8 @@ type VideoFile struct {
 	Description  string `json:"description"`
 	Privacy      string `json:"privacy"`
 	YouTubeID    string `json:"youtubeId,omitempty"`
+	PlaylistID   string `json:"playlistId,omitempty"`
+	PlaylistTitle string `json:"playlistTitle,omitempty"`
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -342,6 +346,44 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		".avi":  true,
 	}
 	var videos []VideoFile
+	
+	// Pre-load playlist info from DB for efficient lookup
+	a.db.mu.Lock()
+	pMap := make(map[string]string)      // yt_id -> playlist_id
+	pTitleMap := make(map[string]string) // yt_id -> playlist_title
+	linkedFiles := make(map[string]string) // filename -> yt_id (fallback matching)
+	pathMap := make(map[string]string)   // full_path -> yt_id
+
+	rows, err := a.db.conn.Query(`
+		SELECT pi.video_id, pi.playlist_id, p.title 
+		FROM yt_playlist_items pi
+		JOIN yt_playlists p ON pi.playlist_id = p.id
+	`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var vid, pid, ptitle string
+			if err := rows.Scan(&vid, &pid, &ptitle); err == nil {
+				pMap[vid] = pid
+				pTitleMap[vid] = ptitle
+			}
+		}
+	}
+
+	// Fetch all linked videos to match by filename if path changes
+	vRows, err := a.db.conn.Query(`SELECT id, local_file FROM yt_videos WHERE local_file IS NOT NULL`)
+	if err == nil {
+		defer vRows.Close()
+		for vRows.Next() {
+			var id, lpath string
+			if err := vRows.Scan(&id, &lpath); err == nil {
+				pathMap[lpath] = id
+				linkedFiles[filepath.Base(lpath)] = id
+			}
+		}
+	}
+	a.db.mu.Unlock()
+
 	for _, dir := range folders {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -370,7 +412,29 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					Description:  meta.Description,
 					Privacy:      meta.Privacy,
 					YouTubeID:    meta.YouTubeID,
+					PlaylistID:   meta.PlaylistID,
+					PlaylistTitle: pTitleMap[meta.YouTubeID],
 				})
+				
+				vIdx := len(videos) - 1
+				// Fallback 1: Match by full path in DB
+				if videos[vIdx].YouTubeID == "" {
+					if id, ok := pathMap[path]; ok {
+						videos[vIdx].YouTubeID = id
+					}
+				}
+				// Fallback 2: Match by filename in DB (useful if file was moved)
+				if videos[vIdx].YouTubeID == "" {
+					if id, ok := linkedFiles[entry.Name()]; ok {
+						videos[vIdx].YouTubeID = id
+					}
+				}
+				
+				// Fallback playlist ID if missing in config but found in DB
+				if videos[vIdx].PlaylistID == "" && videos[vIdx].YouTubeID != "" {
+					videos[vIdx].PlaylistID = pMap[videos[vIdx].YouTubeID]
+					videos[vIdx].PlaylistTitle = pTitleMap[videos[vIdx].YouTubeID]
+				}
 			}
 		}
 	}

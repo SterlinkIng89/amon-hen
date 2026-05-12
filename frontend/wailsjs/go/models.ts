@@ -5,6 +5,7 @@ export namespace main {
 	    description: string;
 	    privacy: string;
 	    youtube_id?: string;
+	    playlist_id?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -16,6 +17,7 @@ export namespace main {
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
 	        this.youtube_id = source["youtube_id"];
+	        this.playlist_id = source["playlist_id"];
 	    }
 	}
 	export class Config {
@@ -69,6 +71,8 @@ export namespace main {
 	    description: string;
 	    privacy: string;
 	    youtubeId?: string;
+	    playlistId?: string;
+	    playlistTitle?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -86,6 +90,8 @@ export namespace main {
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
 	        this.youtubeId = source["youtubeId"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
 	    }
 	}
 	
@@ -122,6 +128,7 @@ export namespace main {
 	    duration: string;
 	    privacy: string;
 	    localFile?: string;
+	    playlistTitle?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new YTVideo(source);
@@ -139,6 +146,7 @@ export namespace main {
 	        this.duration = source["duration"];
 	        this.privacy = source["privacy"];
 	        this.localFile = source["localFile"];
+	        this.playlistTitle = source["playlistTitle"];
 	    }
 	}
 	export class YouTubeChannel {
