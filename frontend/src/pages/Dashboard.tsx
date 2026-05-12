@@ -213,6 +213,7 @@ export default function Dashboard() {
       opts.description,
       opts.privacy,
       opts.playlistId || "",
+      video.episode || 0,
     ).catch(console.error);
 
     handleAddToQueue({
@@ -225,6 +226,8 @@ export default function Dashboard() {
       status: "uploading",
       progress: 0,
       playlistId: opts.playlistId,
+      gameTag: video.game,
+      episode: video.episode,
     });
     
     UploadToYouTube(
@@ -233,6 +236,8 @@ export default function Dashboard() {
       opts.description,
       opts.privacy,
       opts.playlistId || "",
+      video.game || "",
+      video.episode || 0,
     ).catch(() => {});
 
     // Refresh UI to show updated title
@@ -248,21 +253,25 @@ export default function Dashboard() {
       opts.description,
       opts.privacy,
       opts.playlistId || "",
+      video.episode || 0,
     ).catch(console.error);
 
-    handleAddToQueue({
-      id: crypto.randomUUID(),
-      videoPath: video.path,
-      videoName: video.name,
-      title: opts.title,
-      description: opts.description,
-      privacy: opts.privacy,
-      status: "pending",
-      progress: 0,
-      playlistId: opts.playlistId,
-    });
-
-    // Refresh UI to show updated title
+    setQueue((q) => [
+      ...q,
+      {
+        id: crypto.randomUUID(),
+        videoPath: video.path,
+        videoName: video.name,
+        title: opts.title,
+        description: opts.description,
+        privacy: opts.privacy,
+        status: "pending",
+        progress: 0,
+        playlistId: opts.playlistId,
+        gameTag: video.game,
+        episode: video.episode,
+      },
+    ]);// Refresh UI to show updated title
     handleRescan();
   };
 

@@ -74,8 +74,8 @@ export function IsYouTubeAuthed() {
   return window['go']['main']['App']['IsYouTubeAuthed']();
 }
 
-export function LinkLocalToYouTube(arg1, arg2) {
-  return window['go']['main']['App']['LinkLocalToYouTube'](arg1, arg2);
+export function LinkLocalToYouTube(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['LinkLocalToYouTube'](arg1, arg2, arg3, arg4);
 }
 
 export function LoadConfig() {
@@ -94,8 +94,8 @@ export function SaveFolders(arg1) {
   return window['go']['main']['App']['SaveFolders'](arg1);
 }
 
-export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function SaveYouTubeCredentials(arg1, arg2) {
@@ -104,6 +104,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
 
 export function SetVideoGames(arg1, arg2) {
   return window['go']['main']['App']['SetVideoGames'](arg1, arg2);
+}
+
+export function SetVideosPlaylist(arg1, arg2) {
+  return window['go']['main']['App']['SetVideosPlaylist'](arg1, arg2);
 }
 
 export function StartYouTubeAuth() {
@@ -122,6 +126,6 @@ export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
 }
 
-export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5);
+export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }

@@ -22,25 +22,25 @@ export function formatDuration(seconds: number): string {
 // Detects OBS-style filenames: "YYYY-MM-DD HH-MM-SS.ext"
 // Returns a YouTube title template: "[game] - YYYY MM DD - [ep]"
 // The game slot and episode number are left blank for the user to fill in.
-export function generateYouTubeTitle(filename: string, game?: string): string {
-  // Match: starts with YYYY-MM-DD (optional time part)
+export function generateYouTubeTitle(filename: string, game?: string, episode?: number): string {
   const obsPattern = /^(\d{4})-(\d{2})-(\d{2})/;
-  const stem = filename.replace(/\.[^/.]+$/, ""); // strip extension
+  const stem = filename.replace(/\.[^/.]+$/, "");
   const match = stem.match(obsPattern);
   
-  const gamePart = game ? `${game} ` : "";
-
-  if (!match) return `${gamePart}- ${stem}`;
+  let datePart = "";
+  if (match) {
+    const [, year, month, day] = match;
+    datePart = `${parseInt(day)}/${month}/${year.slice(-2)}`;
+  } else {
+    const now = new Date();
+    datePart = `${now.getDate()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)}`;
+  }
   
-  const [, year, month, day] = match;
-  // Format: D/MM/YY
-  const d = parseInt(day).toString();
-  const m = month;
-  const y = year.slice(-2);
-  const datePart = `${d}/${m}/${y}`;
+  if (!game) return datePart;
   
-  // Format: "Game - D/MM/YY - "
-  return `${gamePart}- ${datePart} - `;
+  const epSuffix = (episode && episode > 0) ? ` - ${episode}` : "";
+  
+  return `${game} - ${datePart}${epSuffix}`;
 }
 
 export function toLocalDateKey(ms: number) {

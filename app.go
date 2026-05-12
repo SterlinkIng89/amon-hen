@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,11 +23,13 @@ import (
 )
 
 type VideoMeta struct {
-	YouTubeTitle string `json:"youtube_title"`
+	Game         string `json:"game"`
+	YouTubeTitle string `json:"youtubeTitle"`
 	Description  string `json:"description"`
 	Privacy      string `json:"privacy"`
-	YouTubeID    string `json:"youtube_id,omitempty"`
-	PlaylistID   string `json:"playlist_id,omitempty"`
+	YouTubeID    string `json:"youtubeId,omitempty"`
+	PlaylistID   string `json:"playlistId,omitempty"`
+	Episode      int    `json:"episode"`
 }
 
 // Config holds persistent application settings
@@ -158,23 +163,51 @@ func (a *App) RemoveFolder(path string) error {
 	return a.saveConfig()
 }
 
+// SetVideosPlaylist updates the playlist for multiple video paths
+func (a *App) SetVideosPlaylist(paths []string, playlistId string) error {
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+	for _, p := range paths {
+		meta := a.config.VideoMetadata[p]
+		meta.PlaylistID = playlistId
+		a.config.VideoMetadata[p] = meta
+	}
+	return a.saveConfig()
+}
+
 // SetVideoGames updates the game tag for multiple video paths and saves the config
 func (a *App) SetVideoGames(paths []string, game string) error {
 	if a.config.VideoGames == nil {
 		a.config.VideoGames = make(map[string]string)
 	}
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+
 	for _, p := range paths {
 		if game == "" {
 			delete(a.config.VideoGames, p)
+			// Also update metadata if exists
+			if meta, ok := a.config.VideoMetadata[p]; ok {
+				meta.Game = ""
+				meta.YouTubeTitle = "" // Force re-generation
+				a.config.VideoMetadata[p] = meta
+			}
 		} else {
 			a.config.VideoGames[p] = game
+			// Sync with metadata
+			meta := a.config.VideoMetadata[p]
+			meta.Game = game
+			meta.YouTubeTitle = "" // Force re-generation so it gets the new tag + episode
+			a.config.VideoMetadata[p] = meta
 		}
 	}
 	return a.saveConfig()
 }
 
 // SaveVideoMetadata updates all metadata for a specific video and saves the config
-func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string, playlistId string) error {
+func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string, playlistId string, episode int) error {
 	if a.config.VideoGames == nil {
 		a.config.VideoGames = make(map[string]string)
 	}
@@ -189,10 +222,12 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 	}
 
 	a.config.VideoMetadata[path] = VideoMeta{
+		Game:         game,
 		YouTubeTitle: ytTitle,
 		Description:  desc,
 		Privacy:      privacy,
 		PlaylistID:   playlistId,
+		Episode:      episode,
 	}
 
 	return a.saveConfig()
@@ -321,6 +356,39 @@ func (a *App) OpenFolderDialog() (string, error) {
 }
 
 // VideoFile represents a video file found during scanning
+// generateYouTubeTitle replicates the frontend logic to create a suggested title
+func generateYouTubeTitle(filename string, game string, episode int) string {
+	// Pattern: YYYY-MM-DD
+	re := regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})`)
+	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
+	match := re.FindStringSubmatch(stem)
+
+	dateStr := ""
+	if match != nil {
+		year, month, day := match[1], match[2], match[3]
+		d := strings.TrimLeft(day, "0")
+		if d == "" {
+			d = "0"
+		}
+		y := year[len(year)-2:]
+		dateStr = fmt.Sprintf("%s/%s/%s", d, month, y)
+	} else {
+		now := time.Now()
+		dateStr = fmt.Sprintf("%d/%02d/%s", now.Day(), now.Month(), now.Format("06"))
+	}
+
+	if game == "" {
+		return dateStr
+	}
+
+	epSuffix := ""
+	if episode > 0 {
+		epSuffix = fmt.Sprintf(" - %d", episode)
+	}
+
+	return fmt.Sprintf("%s - %s%s", game, dateStr, epSuffix)
+}
+
 type VideoFile struct {
 	Name         string `json:"name"`
 	Path         string `json:"path"`
@@ -334,6 +402,7 @@ type VideoFile struct {
 	YouTubeID    string `json:"youtubeId,omitempty"`
 	PlaylistID   string `json:"playlistId,omitempty"`
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
+	Episode      int    `json:"episode"`
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -347,12 +416,13 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	}
 	var videos []VideoFile
 	
-	// Pre-load playlist info from DB for efficient lookup
+	// Pre-load playlist info and linked files from DB
 	a.db.mu.Lock()
-	pMap := make(map[string]string)      // yt_id -> playlist_id
-	pTitleMap := make(map[string]string) // yt_id -> playlist_title
+	pMap := make(map[string]string)        // yt_id -> playlist_id
+	pTitleMap := make(map[string]string)   // yt_id -> playlist_title
 	linkedFiles := make(map[string]string) // filename -> yt_id (fallback matching)
-	pathMap := make(map[string]string)   // full_path -> yt_id
+	pathMap := make(map[string]string)     // full_path -> yt_id
+	gameCounts := make(map[string]int)     // game_tag -> count of uploaded videos
 
 	rows, err := a.db.conn.Query(`
 		SELECT pi.video_id, pi.playlist_id, p.title 
@@ -370,20 +440,30 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 	}
 
-	// Fetch all linked videos to match by filename if path changes
-	vRows, err := a.db.conn.Query(`SELECT id, local_file FROM yt_videos WHERE local_file IS NOT NULL`)
+	// Fetch all linked videos to match by filename and get game counts/max episodes
+	vRows, err := a.db.conn.Query(`SELECT id, local_file, game_tag, episode FROM yt_videos`)
 	if err == nil {
 		defer vRows.Close()
 		for vRows.Next() {
-			var id, lpath string
-			if err := vRows.Scan(&id, &lpath); err == nil {
-				pathMap[lpath] = id
-				linkedFiles[filepath.Base(lpath)] = id
+			var id string
+			var lpath, gtag sql.NullString
+			var ep sql.NullInt64
+			if err := vRows.Scan(&id, &lpath, &gtag, &ep); err == nil {
+				if lpath.Valid && lpath.String != "" {
+					pathMap[lpath.String] = id
+					linkedFiles[filepath.Base(lpath.String)] = id
+				}
+				if gtag.Valid && gtag.String != "" {
+					if ep.Valid && int(ep.Int64) > gameCounts[gtag.String] {
+						gameCounts[gtag.String] = int(ep.Int64)
+					}
+				}
 			}
 		}
 	}
 	a.db.mu.Unlock()
 
+	// 1. First pass: scan all files and load metadata
 	for _, dir := range folders {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -407,13 +487,14 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					Size:         info.Size(),
 					ModTime:      info.ModTime().UnixMilli(),
 					Folder:       dir,
-					Game:         a.config.VideoGames[path],
+					Game:         meta.Game,
 					YouTubeTitle: meta.YouTubeTitle,
 					Description:  meta.Description,
 					Privacy:      meta.Privacy,
 					YouTubeID:    meta.YouTubeID,
 					PlaylistID:   meta.PlaylistID,
 					PlaylistTitle: pTitleMap[meta.YouTubeID],
+					Episode:      meta.Episode,
 				})
 				
 				vIdx := len(videos) - 1
@@ -438,6 +519,41 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			}
 		}
 	}
+
+	// 2. Second pass: Sort by ModTime (ascending) and assign episode numbers to local files
+	sort.Slice(videos, func(i, j int) bool {
+		return videos[i].ModTime < videos[j].ModTime
+	})
+
+	// Use gameCounts (from DB) as the starting point for each game
+	localCounters := make(map[string]int)
+	for game, count := range gameCounts {
+		localCounters[game] = count
+	}
+
+	for i := range videos {
+		game := videos[i].Game
+		if game == "" {
+			continue // Don't auto-number videos without a tag
+		}
+		
+		// Only assign new episode number if it's 0 (new/tagged but not yet numbered)
+		if videos[i].Episode == 0 {
+			localCounters[game]++
+			videos[i].Episode = localCounters[game]
+		} else {
+			// Update counter to the max known episode for this game
+			if videos[i].Episode > localCounters[game] {
+				localCounters[game] = videos[i].Episode
+			}
+		}
+		
+		// AUTO-UPDATE: If the video has no title yet, or it's a default one, set it
+		if videos[i].YouTubeTitle == "" {
+			videos[i].YouTubeTitle = generateYouTubeTitle(videos[i].Name, videos[i].Game, videos[i].Episode)
+		}
+	}
+
 	return videos, nil
 }
 

@@ -13,6 +13,8 @@ export interface QueueItem {
   status: "pending" | "uploading" | "done" | "error";
   progress: number;
   playlistId?: string;
+  gameTag?: string;
+  episode?: number;
   url?: string;
   error?: string;
 }
@@ -94,14 +96,14 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       onSetRunning(false);
       return;
     }
-    UploadToYouTube(next.videoPath, next.title, next.description, next.privacy, next.playlistId || "").catch(() => {});
+    UploadToYouTube(next.videoPath, next.title, next.description, next.privacy, next.playlistId || "", next.gameTag || "", next.episode || 0).catch(() => {});
   };
 
   const handleStart = () => {
     const first = queue.find((i) => i.status === "pending");
     if (!first) return;
     onSetRunning(true);
-    UploadToYouTube(first.videoPath, first.title, first.description, first.privacy, first.playlistId || "").catch(() => {});
+    UploadToYouTube(first.videoPath, first.title, first.description, first.privacy, first.playlistId || "", first.gameTag || "", first.episode || 0).catch(() => {});
   };
 
   const handleRemove = (id: string) => {
@@ -181,12 +183,12 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
                     <span className="text-accent font-semibold">{item.progress}%</span>
                   )}
                   {item.status === "done" && item.url && (
-                    <a className="text-accent hover:underline truncate max-w-[150px]" href={item.url} target="_blank" rel="noreferrer">
+                    <a className="text-accent hover:underline truncate max-w-[150px]" href={item.url} target="_blank" rel="noreferrer" title={item.url}>
                       {item.url}
                     </a>
                   )}
                   {item.status === "error" && (
-                    <span className="text-red-400 truncate max-w-[150px]">{item.error}</span>
+                    <span className="text-red-400 truncate max-w-[150px]" title={item.error}>{item.error}</span>
                   )}
                 </div>
 

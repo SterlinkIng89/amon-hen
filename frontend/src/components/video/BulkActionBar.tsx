@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { SetVideoGames, DeleteFiles } from "../../../wailsjs/go/main/App";
+import React, { useState, useEffect } from "react";
+import { SetVideoGames, DeleteFiles, GetChannelPlaylists, SetVideosPlaylist } from "../../../wailsjs/go/main/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
+import { YTPlaylist } from "../../types";
 import TagInput from "../ui/TagInput";
 
 interface Props {
@@ -21,11 +22,22 @@ export default function BulkActionBar({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   
+  const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
+  const [playlistId, setPlaylistId] = useState("");
+  const [playlistSearch, setPlaylistSearch] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [savingPlaylist, setSavingPlaylist] = useState(false);
+  
+  useEffect(() => {
+    GetChannelPlaylists("recent").then(setPlaylists).catch(console.error);
+  }, []);
+  
   const { suggestions, addRecentTag } = useRecentTags();
 
   if (selectedPaths.length === 0) return null;
 
   const handleSave = async () => {
+    if (!game.trim()) return;
     setSaving(true);
     try {
       await SetVideoGames(selectedPaths, game);
@@ -36,6 +48,21 @@ export default function BulkActionBar({
       console.error("Failed to save tags", e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePlaylist = async (pId: string, pTitle: string) => {
+    setSavingPlaylist(true);
+    try {
+      await SetVideosPlaylist(selectedPaths, pId);
+      setPlaylistId(pId);
+      setPlaylistSearch(pTitle);
+      setIsDropdownOpen(false);
+      onTagsSaved();
+    } catch (e) {
+      console.error("Failed to save playlist bulk", e);
+    } finally {
+      setSavingPlaylist(false);
     }
   };
 
@@ -95,6 +122,52 @@ export default function BulkActionBar({
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !game.trim()}>
             {saving ? "Saving..." : "Apply Tag"}
           </button>
+        </div>
+
+        <div className="w-px h-5 bg-white/10" />
+
+        {/* Playlist Action */}
+        <div className="flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.6, flexShrink: 0 }}>
+            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+          </svg>
+          <div className="relative">
+            <input
+              type="text"
+              className="w-[180px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
+              placeholder={savingPlaylist ? "Applying..." : "Add to playlist..."}
+              value={playlistSearch}
+              onChange={(e) => {
+                setPlaylistSearch(e.target.value);
+                setIsDropdownOpen(true);
+              }}
+              onFocus={() => setIsDropdownOpen(true)}
+              disabled={savingPlaylist}
+            />
+            
+            {isDropdownOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-elevated border border-border-medium rounded-md shadow-2xl z-[60] max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
+                {playlists
+                  .filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase()))
+                  .map(p => (
+                    <button
+                      key={p.id}
+                      className="w-full text-left px-3 py-2 text-[11px] text-text-primary hover:bg-accent/10 transition-colors border-none bg-transparent cursor-pointer flex items-center justify-between"
+                      onClick={() => handleSavePlaylist(p.id, p.title)}
+                    >
+                      <span className="truncate">{p.title}</span>
+                      <span className="text-[9px] text-text-muted">{p.videoCount}</span>
+                    </button>
+                  ))}
+                {playlists.length === 0 && (
+                  <div className="p-3 text-center text-[10px] text-text-muted">No playlists found</div>
+                )}
+              </div>
+            )}
+            {isDropdownOpen && (
+              <div className="fixed inset-0 z-[55]" onClick={() => setIsDropdownOpen(false)} />
+            )}
+          </div>
         </div>
 
         <div className="w-px h-5 bg-white/10" />

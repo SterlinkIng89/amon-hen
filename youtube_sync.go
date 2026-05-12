@@ -54,12 +54,9 @@ func (a *App) SyncChannelData() error {
 	if err != nil {
 		// Check for insufficient permissions and trigger re-auth
 		if isInsufficientPermissions(err) {
-			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Se requiere re-autenticación para ampliar permisos. Abriendo navegador...")
-			go func() {
-				a.StartYouTubeAuth()
-				a.SyncChannelData() // retry after auth
-			}()
-			return fmt.Errorf("insufficient permissions, re-auth started")
+			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Se requiere re-autenticación para ampliar permisos. Por favor, pulsa Sincronizar de nuevo tras autorizar.")
+			go a.StartYouTubeAuth()
+			return fmt.Errorf("insufficient permissions, please re-auth and try again")
 		}
 		return err
 	}
@@ -273,11 +270,15 @@ func isInsufficientPermissions(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
+	// Only return true if it's clearly a permissions/scope issue, NOT a quota issue
+	if strings.Contains(msg, "quota") || strings.Contains(msg, "limit") {
+		return false
+	}
 	return strings.Contains(msg, "insufficient authentication scopes") ||
 		strings.Contains(msg, "caller does not have permission") ||
 		strings.Contains(msg, "insufficient permissions") ||
-		strings.Contains(msg, "403")
+		strings.Contains(msg, "permissiondenied")
 }
 
 // GetChannelVideos returns a paginated list of videos from SQLite
@@ -420,9 +421,9 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 }
 
 // LinkLocalToYouTube links a local file to a YouTube ID in both SQLite and config
-func (a *App) LinkLocalToYouTube(localPath, ytVideoId string) error {
+func (a *App) LinkLocalToYouTube(localPath, ytVideoId, gameTag string, episode int) error {
 	a.db.mu.Lock()
-	_, err := a.db.conn.Exec("UPDATE yt_videos SET local_file = ? WHERE id = ?", localPath, ytVideoId)
+	_, err := a.db.conn.Exec("UPDATE yt_videos SET local_file = ?, game_tag = ?, episode = ? WHERE id = ?", localPath, gameTag, episode, ytVideoId)
 	a.db.mu.Unlock()
 	if err != nil {
 		return err

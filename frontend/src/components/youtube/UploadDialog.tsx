@@ -61,10 +61,20 @@ export default function UploadDialog({
     if (!newPlaylistTitle.trim()) return;
     try {
       const id = await CreatePlaylist(newPlaylistTitle, "", privacy);
+      const newP: YTPlaylist = { 
+        id, 
+        title: newPlaylistTitle, 
+        videoCount: 0, 
+        description: "", 
+        thumbnailUrl: "", 
+        publishedAt: new Date().toISOString() 
+      };
+      setPlaylists(prev => [newP, ...prev]);
       setNewPlaylistTitle("");
       setIsCreating(false);
-      refreshPlaylists();
       setPlaylistId(id);
+      setPlaylistSearch(newPlaylistTitle);
+      refreshPlaylists();
     } catch (e) {
       console.error(e);
     }
@@ -337,7 +347,6 @@ export default function UploadDialog({
             </div>
           </div>
         </div>
-      </div>
 
         <div className="flex items-center justify-end gap-3 p-4 border-t border-border-subtle bg-surface">
           <button
@@ -366,6 +375,7 @@ export default function UploadDialog({
             Upload Now
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

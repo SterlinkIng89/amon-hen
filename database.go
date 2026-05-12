@@ -65,8 +65,10 @@ func (db *DB) migrate() error {
 		)`,
 	}
 	
-	// Migración manual para añadir published_at si no existe (ignorar error si ya existe)
+	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)
 	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN published_at TEXT")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN game_tag TEXT")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN episode INTEGER")
 
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {

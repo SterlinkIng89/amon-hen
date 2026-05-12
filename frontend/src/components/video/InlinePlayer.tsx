@@ -117,10 +117,20 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (!newPlaylistTitle.trim()) return;
     try {
       const id = await CreatePlaylist(newPlaylistTitle, "", privacy);
+      const newP: YTPlaylist = { 
+        id, 
+        title: newPlaylistTitle, 
+        videoCount: 0, 
+        description: "", 
+        thumbnailUrl: "", 
+        publishedAt: new Date().toISOString() 
+      };
+      setPlaylists(prev => [newP, ...prev]);
       setNewPlaylistTitle("");
       setIsCreatingPlaylist(false);
-      refreshPlaylists();
       setPlaylistId(id);
+      setPlaylistSearch(newPlaylistTitle);
+      refreshPlaylists(); // Still refresh to get full data
     } catch (e) {
       console.error(e);
     }
@@ -153,7 +163,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   // Reset when video changes
   useEffect(() => {
-    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
+    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
     setTagInput(video.game || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
@@ -162,20 +172,24 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setInfoSaved(false);
     setConfirmDelete(false);
     setDeleting(false);
-  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId]);
+  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId, video.episode]);
 
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode);
     setTagInput(val);
-    if (!video.youtubeTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, val));
+    
+    // If current title is the one we auto-generated for the old tag, or if it matches the current video's saved title, update it
+    // This allows the title to "follow" the tag unless the user has typed something custom
+    if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, val, video.episode));
     }
   };
 
   const handleSaveInfo = async () => {
     setSavingInfo(true);
     try {
-      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId);
+      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0);
       if (tagInput) addRecentTag(tagInput);
       setInfoSaved(true);
       onTagSaved?.();
@@ -208,7 +222,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setUploading(true);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId).catch(console.error);
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -221,9 +235,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       status: "uploading",
       progress: 0,
       playlistId,
+      gameTag: tagInput,
+      episode: video.episode,
     };
     onAddToQueue(item);
-    UploadToYouTube(video.path, ytTitle, description, privacy, playlistId || "").catch(() => {});
+    UploadToYouTube(video.path, ytTitle, description, privacy, playlistId || "", tagInput, video.episode || 0).catch(() => {});
     setTimeout(() => setUploading(false), 1000);
   };
 
@@ -231,7 +247,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (tagInput) addRecentTag(tagInput);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId).catch(console.error);
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -244,6 +260,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       status: "pending",
       progress: 0,
       playlistId,
+      gameTag: tagInput,
+      episode: video.episode,
     };
     onAddToQueue(item);
   };

@@ -300,7 +300,7 @@ func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
 }
 
 // UploadToYouTube uploads a single video to YouTube and emits progress events
-func (a *App) UploadToYouTube(path, title, description, privacy, playlistID string) error {
+func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int) error {
 	ctx := context.Background()
 
 	svc, err := a.youtubeClient(ctx)
@@ -352,7 +352,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID stri
 	}
 
 	// Save YouTube ID locally
-	a.LinkLocalToYouTube(path, result.Id)
+	a.LinkLocalToYouTube(path, result.Id, gameTag, episode)
 
 	// Add to playlist if specified
 	if playlistID != "" {

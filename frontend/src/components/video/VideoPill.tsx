@@ -51,7 +51,7 @@ export default function VideoPill({
   // Data normalization
   const title = isYT
     ? video.title
-    : video.youtubeTitle || generateYouTubeTitle(video.name, video.game);
+    : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode);
   const subtitle = isLocal ? video.name : "";
   const thumbnail = isYT ? video.thumbnailUrl : thumb;
   const publishedAt = isYT

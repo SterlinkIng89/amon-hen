@@ -1,11 +1,13 @@
 export namespace main {
 	
 	export class VideoMeta {
-	    youtube_title: string;
+	    game: string;
+	    youtubeTitle: string;
 	    description: string;
 	    privacy: string;
-	    youtube_id?: string;
-	    playlist_id?: string;
+	    youtubeId?: string;
+	    playlistId?: string;
+	    episode: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -13,11 +15,13 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.youtube_title = source["youtube_title"];
+	        this.game = source["game"];
+	        this.youtubeTitle = source["youtubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
-	        this.youtube_id = source["youtube_id"];
-	        this.playlist_id = source["playlist_id"];
+	        this.youtubeId = source["youtubeId"];
+	        this.playlistId = source["playlistId"];
+	        this.episode = source["episode"];
 	    }
 	}
 	export class Config {
@@ -73,6 +77,7 @@ export namespace main {
 	    youtubeId?: string;
 	    playlistId?: string;
 	    playlistTitle?: string;
+	    episode: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -92,6 +97,7 @@ export namespace main {
 	        this.youtubeId = source["youtubeId"];
 	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
 	    }
 	}
 	
