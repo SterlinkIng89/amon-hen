@@ -28,6 +28,7 @@ import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
 import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
+import LibrarySubHeader from "../components/video/LibrarySubHeader";
 
 type SortMode = "date" | "name" | "size";
 
@@ -464,6 +465,23 @@ export default function Dashboard() {
         />
       )}
 
+      {(view === "grid" || view === "player") && (
+        <LibrarySubHeader
+          folders={folders}
+          activeFolders={activeFolders}
+          allVideos={sortedVideos}
+          searchQuery={searchQuery}
+          sortMode={sortMode}
+          onSearchChange={setSearchQuery}
+          onSortChange={setSortMode}
+          onToggleFolder={toggleFolder}
+          onRemoveFolder={handleRemoveFolder}
+          onOpenFolderSettings={setSettingsFolder}
+          filterUploaded={filterUploaded}
+          onToggleFilterUploaded={() => setFilterUploaded((u) => !u)}
+        />
+      )}
+
       <div className="flex-1 flex overflow-hidden relative">
         {error && (
           <div
@@ -486,23 +504,15 @@ export default function Dashboard() {
             allVideos={sortedVideos}
             sortedVideos={filteredVideos}
             selectedPaths={selectedPaths}
-            searchQuery={searchQuery}
-            sortMode={sortMode}
-            onSearchChange={setSearchQuery}
-            onSortChange={setSortMode}
-            onToggleFolder={toggleFolder}
-            onRemoveFolder={handleRemoveFolder}
-            onOpenFolderSettings={(f) => setSettingsFolder(f)}
             onOpenVideo={handleVideoClick}
             onUploadTarget={setUploadTarget}
-            filterUploaded={filterUploaded}
-            onToggleFilterUploaded={() => setFilterUploaded(v => !v)}
           />
         )}
 
         {view === "player" && streamPort > 0 && (
           <PlayerView
-            sortedVideos={sortedVideos}
+            sortedVideos={filteredVideos}
+            allVideos={sortedVideos}
             selectedVideo={selectedVideo}
             selectedIndex={selectedIndex}
             streamPort={streamPort}
