@@ -94,6 +94,10 @@ export function OpenFolderDialog() {
   return window['go']['main']['App']['OpenFolderDialog']();
 }
 
+export function RegenerateThumbnail(arg1) {
+  return window['go']['main']['App']['RegenerateThumbnail'](arg1);
+}
+
 export function RemoveFolder(arg1) {
   return window['go']['main']['App']['RemoveFolder'](arg1);
 }

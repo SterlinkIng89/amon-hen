@@ -1,37 +1,43 @@
 import React, { useState, useEffect } from "react";
 import { SetVideoGames, DeleteFiles, GetChannelPlaylists, SetVideosPlaylist } from "../../../wailsjs/go/main/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
-import { YTPlaylist } from "../../types";
+import { VideoFile, YTPlaylist } from "../../types";
+import { generateYouTubeTitle } from "../../utils/videoUtils";
 import TagInput from "../ui/TagInput";
+import { QueueItem } from "../youtube/UploadQueue";
 
 interface Props {
   selectedPaths: string[];
+  selectedVideos: VideoFile[];
   onClearSelection: () => void;
   onTagsSaved: () => void;
   onFilesDeleted: () => void;
+  onAddToQueue: (items: QueueItem[]) => void;
 }
 
 export default function BulkActionBar({
   selectedPaths,
+  selectedVideos,
   onClearSelection,
   onTagsSaved,
   onFilesDeleted,
+  onAddToQueue,
 }: Props) {
   const [game, setGame] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  
+
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [playlistId, setPlaylistId] = useState("");
   const [playlistSearch, setPlaylistSearch] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [savingPlaylist, setSavingPlaylist] = useState(false);
-  
+
   useEffect(() => {
     GetChannelPlaylists("recent").then(setPlaylists).catch(console.error);
   }, []);
-  
+
   const { suggestions, addRecentTag } = useRecentTags();
 
   if (selectedPaths.length === 0) return null;
@@ -84,6 +90,31 @@ export default function BulkActionBar({
     }
   };
 
+  // Build QueueItems from the selected VideoFile objects and add them all to the queue
+  const handleAddAllToQueue = () => {
+    const items: QueueItem[] = selectedVideos
+      .filter((v) => !v.youtubeId) // skip already-uploaded videos
+      .map((v) => ({
+        id: crypto.randomUUID(),
+        videoPath: v.path,
+        videoName: v.name,
+        title: v.youtubeTitle || generateYouTubeTitle(v.name, v.game, v.episode),
+        description: v.description || "",
+        privacy: (v.privacy as "public" | "unlisted" | "private") || "unlisted",
+        status: "pending" as const,
+        progress: 0,
+        playlistId: v.playlistId || "",
+        gameTag: v.game || "",
+        episode: v.episode || 0,
+      }));
+
+    if (items.length === 0) return;
+    onAddToQueue(items);
+    onClearSelection();
+  };
+
+  const uploadableCount = selectedVideos.filter((v) => !v.youtubeId).length;
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSave();
     else if (e.key === "Escape") onClearSelection();
@@ -92,13 +123,13 @@ export default function BulkActionBar({
   return (
     <div className="absolute top-0 left-0 right-0 z-50 m-4 p-2 pl-3 bg-elevated/95 backdrop-blur-md border border-accent/40 rounded-md shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-between animate-slideDown">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold text-accent">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.7 }}>
             <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z" />
           </svg>
           <span>{selectedPaths.length} selected</span>
         </div>
-        <button className="flex items-center gap-1 px-1.5 py-0.5 bg-transparent border-none text-[10px] text-text-secondary cursor-pointer rounded-sm hover:bg-black/20 hover:text-text-primary transition-colors uppercase font-medium" onClick={onClearSelection}>
+        <button className="flex items-center gap-1 px-1.5 py-0.5 bg-transparent border-none text-[10px] text-text-secondary cursor-pointer rounded-sm hover:bg-black/20 hover:text-text-primary transition-colors font-medium" onClick={onClearSelection}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
           </svg>
@@ -117,7 +148,7 @@ export default function BulkActionBar({
             onChange={setGame}
             onEnter={handleSave}
             disabled={saving}
-            className="w-[180px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
+            className="w-[160px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
           />
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !game.trim()}>
             {saving ? "Saving..." : "Apply Tag"}
@@ -126,7 +157,7 @@ export default function BulkActionBar({
 
         <div className="w-px h-5 bg-white/10" />
 
-        {/* Playlist Action */}
+        {/* Playlist action */}
         <div className="flex items-center gap-2">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.6, flexShrink: 0 }}>
             <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
@@ -134,7 +165,7 @@ export default function BulkActionBar({
           <div className="relative">
             <input
               type="text"
-              className="w-[180px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
+              className="w-[160px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
               placeholder={savingPlaylist ? "Applying..." : "Add to playlist..."}
               value={playlistSearch}
               onChange={(e) => {
@@ -144,7 +175,7 @@ export default function BulkActionBar({
               onFocus={() => setIsDropdownOpen(true)}
               disabled={savingPlaylist}
             />
-            
+
             {isDropdownOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-elevated border border-border-medium rounded-md shadow-2xl z-[60] max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
                 {playlists
@@ -171,6 +202,23 @@ export default function BulkActionBar({
         </div>
 
         <div className="w-px h-5 bg-white/10" />
+
+        {/* Bulk queue action */}
+        {uploadableCount > 0 && (
+          <>
+            <button
+              className="btn btn-ghost btn-sm flex items-center gap-1.5"
+              onClick={handleAddAllToQueue}
+              title={`Add ${uploadableCount} video${uploadableCount > 1 ? "s" : ""} to upload queue`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+              </svg>
+              Queue {uploadableCount}
+            </button>
+            <div className="w-px h-5 bg-white/10" />
+          </>
+        )}
 
         {/* Delete action */}
         {confirmDelete ? (

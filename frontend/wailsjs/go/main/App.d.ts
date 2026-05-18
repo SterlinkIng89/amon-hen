@@ -48,6 +48,8 @@ export function LoadConfig():Promise<main.Config>;
 
 export function OpenFolderDialog():Promise<string>;
 
+export function RegenerateThumbnail(arg1:string):Promise<string>;
+
 export function RemoveFolder(arg1:string):Promise<void>;
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;

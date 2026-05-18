@@ -248,7 +248,8 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 	return a.saveConfig()
 }
 
-// DeleteFiles removes the given file paths from disk and from the config
+// DeleteFiles removes the given file paths from disk, config, and unlinks them
+// from the yt_videos table (clears local_file without deleting the YouTube video).
 func (a *App) DeleteFiles(paths []string) error {
 	var errs []string
 	for _, p := range paths {
@@ -269,6 +270,16 @@ func (a *App) DeleteFiles(paths []string) error {
 			previewPath := filepath.Join(a.cacheDir, "previews", key+".jpg")
 			os.Remove(thumbPath)
 			os.Remove(previewPath)
+		}
+
+		// Unlink from yt_videos — clears local_file so the YouTube video
+		// stays in the channel but is no longer linked to a local file.
+		if a.db != nil {
+			a.db.mu.Lock()
+			a.db.conn.Exec(
+				`UPDATE yt_videos SET local_file = NULL WHERE local_file = ?`, p,
+			)
+			a.db.mu.Unlock()
 		}
 
 		delete(a.config.VideoGames, p)
@@ -405,19 +416,50 @@ func generateYouTubeTitle(filename string, game string, episode int) string {
 }
 
 type VideoFile struct {
-	Name         string `json:"name"`
-	Path         string `json:"path"`
-	Size         int64  `json:"size"`
-	ModTime      int64  `json:"modTime"` // Unix timestamp in milliseconds
-	Folder       string `json:"folder"`  // Source folder path
-	Game         string `json:"game"`    // Game tag from config
-	YouTubeTitle string `json:"youtubeTitle"`
-	Description  string `json:"description"`
-	Privacy      string `json:"privacy"`
-	YouTubeID    string `json:"youtubeId,omitempty"`
-	PlaylistID   string `json:"playlistId,omitempty"`
+	Name          string `json:"name"`
+	Path          string `json:"path"`
+	Size          int64  `json:"size"`
+	ModTime       int64  `json:"modTime"` // Unix timestamp in milliseconds
+	Folder        string `json:"folder"`  // Source folder path
+	Game          string `json:"game"`    // Game tag from config
+	YouTubeTitle  string `json:"youtubeTitle"`
+	Description   string `json:"description"`
+	Privacy       string `json:"privacy"`
+	YouTubeID     string `json:"youtubeId,omitempty"`
+	PlaylistID    string `json:"playlistId,omitempty"`
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
-	Episode      int    `json:"episode"`
+	Episode       int    `json:"episode"`
+}
+
+// episodeCountForTag counts YouTube videos whose title starts with "<tag> - ".
+// This works for 1000+ pre-existing videos that have no game_tag in the DB,
+// because the title format is always "<tag> - <date>".
+// It also takes into account any explicitly-set episodes via game_tag+episode columns.
+func (a *App) episodeCountForTag(tag string) int {
+	if tag == "" {
+		return 0
+	}
+
+	// Pattern: title starts exactly with "<tag> - "
+	titlePattern := tag + " - %"
+
+	var titleCount, maxEpisode int
+	// Count by title match (covers pre-existing 1000+ videos)
+	a.db.conn.QueryRow(
+		`SELECT COUNT(*) FROM yt_videos WHERE title LIKE ?`, titlePattern,
+	).Scan(&titleCount)
+
+	// Also check explicit episode numbers stored via this app's upload workflow
+	a.db.conn.QueryRow(
+		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0`, tag,
+	).Scan(&maxEpisode)
+
+	// Return whichever is larger — title count covers all historical uploads,
+	// max episode covers cases where episodes were manually set.
+	if maxEpisode > titleCount {
+		return maxEpisode
+	}
+	return titleCount
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result
@@ -430,14 +472,13 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		".avi":  true,
 	}
 	var videos []VideoFile
-	
+
 	// Pre-load playlist info and linked files from DB
 	a.db.mu.Lock()
 	pMap := make(map[string]string)        // yt_id -> playlist_id
 	pTitleMap := make(map[string]string)   // yt_id -> playlist_title
 	linkedFiles := make(map[string]string) // filename -> yt_id (fallback matching)
 	pathMap := make(map[string]string)     // full_path -> yt_id
-	gameCounts := make(map[string]int)     // game_tag -> count of uploaded videos
 
 	rows, err := a.db.conn.Query(`
 		SELECT pi.video_id, pi.playlist_id, p.title 
@@ -455,30 +496,24 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 	}
 
-	// Fetch all linked videos to match by filename and get game counts/max episodes
-	vRows, err := a.db.conn.Query(`SELECT id, local_file, game_tag, episode FROM yt_videos`)
+	// Fetch linked video paths for matching
+	vRows, err := a.db.conn.Query(`SELECT id, local_file FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
 	if err == nil {
 		defer vRows.Close()
 		for vRows.Next() {
 			var id string
-			var lpath, gtag sql.NullString
-			var ep sql.NullInt64
-			if err := vRows.Scan(&id, &lpath, &gtag, &ep); err == nil {
+			var lpath sql.NullString
+			if err := vRows.Scan(&id, &lpath); err == nil {
 				if lpath.Valid && lpath.String != "" {
 					pathMap[lpath.String] = id
 					linkedFiles[filepath.Base(lpath.String)] = id
-				}
-				if gtag.Valid && gtag.String != "" {
-					if ep.Valid && int(ep.Int64) > gameCounts[gtag.String] {
-						gameCounts[gtag.String] = int(ep.Int64)
-					}
 				}
 			}
 		}
 	}
 	a.db.mu.Unlock()
 
-	// 1. First pass: scan all files and load metadata
+	// First pass: scan all files and load metadata
 	for _, dir := range folders {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -497,21 +532,21 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				}
 				meta := a.config.VideoMetadata[path]
 				videos = append(videos, VideoFile{
-					Name:         entry.Name(),
-					Path:         path,
-					Size:         info.Size(),
-					ModTime:      info.ModTime().UnixMilli(),
-					Folder:       dir,
-					Game:         meta.Game,
-					YouTubeTitle: meta.YouTubeTitle,
-					Description:  meta.Description,
-					Privacy:      meta.Privacy,
-					YouTubeID:    meta.YouTubeID,
-					PlaylistID:   meta.PlaylistID,
+					Name:          entry.Name(),
+					Path:          path,
+					Size:          info.Size(),
+					ModTime:       info.ModTime().UnixMilli(),
+					Folder:        dir,
+					Game:          meta.Game,
+					YouTubeTitle:  meta.YouTubeTitle,
+					Description:   meta.Description,
+					Privacy:       meta.Privacy,
+					YouTubeID:     meta.YouTubeID,
+					PlaylistID:    meta.PlaylistID,
 					PlaylistTitle: pTitleMap[meta.YouTubeID],
-					Episode:      meta.Episode,
+					Episode:       meta.Episode,
 				})
-				
+
 				vIdx := len(videos) - 1
 				// Fallback 1: Match by full path in DB
 				if videos[vIdx].YouTubeID == "" {
@@ -525,7 +560,7 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 						videos[vIdx].YouTubeID = id
 					}
 				}
-				
+
 				// Fallback playlist ID if missing in config but found in DB
 				if videos[vIdx].PlaylistID == "" && videos[vIdx].YouTubeID != "" {
 					videos[vIdx].PlaylistID = pMap[videos[vIdx].YouTubeID]
@@ -535,35 +570,41 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 	}
 
-	// 2. Second pass: Sort by ModTime (ascending) and assign episode numbers to local files
+	// Second pass: Sort by ModTime (ascending) and assign episode numbers
 	sort.Slice(videos, func(i, j int) bool {
 		return videos[i].ModTime < videos[j].ModTime
 	})
 
-	// Use gameCounts (from DB) as the starting point for each game
+	// Build per-tag episode counters using title-based counting from YouTube DB.
+	// This correctly counts pre-existing YT videos that match "<tag> - %",
+	// covering the scenario where 1000+ videos predate this app's upload workflow.
 	localCounters := make(map[string]int)
-	for game, count := range gameCounts {
-		localCounters[game] = count
-	}
 
 	for i := range videos {
 		game := videos[i].Game
 		if game == "" {
-			continue // Don't auto-number videos without a tag
+			continue
 		}
-		
-		// Only assign new episode number if it's 0 (new/tagged but not yet numbered)
+
+		// Lazily compute the starting count for this tag (once per unique tag)
+		if _, seen := localCounters[game]; !seen {
+			a.db.mu.Lock()
+			localCounters[game] = a.episodeCountForTag(game)
+			a.db.mu.Unlock()
+		}
+
+		// Only assign a new episode number if not yet set
 		if videos[i].Episode == 0 {
 			localCounters[game]++
 			videos[i].Episode = localCounters[game]
 		} else {
-			// Update counter to the max known episode for this game
+			// Keep the counter at least at this video's episode
 			if videos[i].Episode > localCounters[game] {
 				localCounters[game] = videos[i].Episode
 			}
 		}
-		
-		// AUTO-UPDATE: If the video has no title yet, or it's a default one, set it
+
+		// Auto-generate title if none saved yet
 		if videos[i].YouTubeTitle == "" {
 			videos[i].YouTubeTitle = generateYouTubeTitle(videos[i].Name, videos[i].Game, videos[i].Episode)
 		}
@@ -626,6 +667,26 @@ func (a *App) GetThumbnail(path string) (string, error) {
 	writeCached(cachePath, raw)
 	encoded := base64.StdEncoding.EncodeToString(raw)
 	return "data:image/png;base64," + encoded, nil
+}
+
+// RegenerateThumbnail deletes the cached thumbnail and preview for a file,
+// then generates and returns a fresh thumbnail. Call this when the user wants
+// to force a new frame capture.
+func (a *App) RegenerateThumbnail(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("file not found: %w", err)
+	}
+	key := cacheKey(path, info.ModTime())
+	thumbPath := filepath.Join(a.cacheDir, "thumbs", key+".png")
+	previewPath := filepath.Join(a.cacheDir, "previews", key+".jpg")
+
+	// Delete cached files so GetThumbnail / GetVideoPreview re-generate
+	os.Remove(thumbPath)
+	os.Remove(previewPath)
+
+	// Generate fresh thumbnail
+	return a.GetThumbnail(path)
 }
 
 // GetVideoPreview generates a 5x5 sprite sheet preview for a video file

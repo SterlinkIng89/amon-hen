@@ -300,6 +300,7 @@ export default function Dashboard() {
       {isSelecting && (
         <BulkActionBar
           selectedPaths={selectedPaths}
+          selectedVideos={sortedVideos.filter((v) => selectedPaths.includes(v.path))}
           onClearSelection={() => {
             setSelectedPaths([]);
             setLastSelectedIdx(-1);
@@ -312,6 +313,10 @@ export default function Dashboard() {
             setSelectedPaths([]);
             setSelectedIndex(-1);
             handleRescan();
+          }}
+          onAddToQueue={(items) => {
+            setQueue((prev) => [...prev, ...items]);
+            setQueueOpen(true);
           }}
         />
       )}

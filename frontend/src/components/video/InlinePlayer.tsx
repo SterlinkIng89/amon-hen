@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/main/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import TagInput from "../ui/TagInput";
@@ -137,9 +137,12 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   };
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
+  const [ytUpdateError, setYtUpdateError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [regenThumb, setRegenThumb] = useState<string | null>(null);
+  const [regenLoading, setRegenLoading] = useState(false);
 
   const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
     return localStorage.getItem("player_info_expanded") !== "false";
@@ -188,16 +191,41 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   const handleSaveInfo = async () => {
     setSavingInfo(true);
+    setYtUpdateError(null);
     try {
+      // 1. Always save to local config / DB first
       await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0);
       if (tagInput) addRecentTag(tagInput);
+
+      // 2. If video is already on YouTube, push the metadata update to the API
+      if (video.youtubeId) {
+        try {
+          await UpdateYouTubeVideoMetadata(video.youtubeId, ytTitle, description, privacy);
+        } catch (ytErr: any) {
+          // Don't block local save — just surface the error
+          setYtUpdateError(ytErr?.toString() ?? "Failed to update on YouTube");
+        }
+      }
+
       setInfoSaved(true);
       onTagSaved?.();
-      setTimeout(() => setInfoSaved(false), 2000);
+      setTimeout(() => setInfoSaved(false), 2500);
     } catch (e) {
       console.error(e);
     } finally {
       setSavingInfo(false);
+    }
+  };
+
+  const handleRegenerateThumbnail = async () => {
+    setRegenLoading(true);
+    try {
+      const fresh = await RegenerateThumbnail(video.path);
+      if (fresh) setRegenThumb(fresh);
+    } catch (e) {
+      console.error("Failed to regenerate thumbnail", e);
+    } finally {
+      setRegenLoading(false);
     }
   };
 
@@ -281,6 +309,20 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
             <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay />
           ) : (
             <div className="text-text-muted">Deleting...</div>
+          )}
+          {/* Regenerated thumbnail preview overlay — fades in briefly after regen */}
+          {regenThumb && (
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 animate-fadeIn"
+              onClick={() => setRegenThumb(null)}
+              title="Click to dismiss"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <img src={regenThumb} alt="New thumbnail" className="max-h-[200px] rounded-md border border-white/20 shadow-xl" />
+                <span className="text-[11px] text-green-400 font-bold">Thumbnail regenerated</span>
+                <span className="text-[10px] text-text-muted">Click anywhere to close</span>
+              </div>
+            </div>
           )}
         </div>
 
@@ -433,9 +475,21 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
               {/* Upload & Save actions - Fixed Bottom */}
               <div className="flex flex-col items-stretch gap-3 shrink-0">
-                <button 
-                  className={`btn ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"} transition-colors py-2 text-xs font-bold`} 
-                  onClick={handleDelete} 
+                {/* Thumbnail regen */}
+                <button
+                  className="btn bg-elevated border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary py-2 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                  onClick={handleRegenerateThumbnail}
+                  disabled={regenLoading}
+                  title="Re-capture a fresh thumbnail frame from this video"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                  </svg>
+                  {regenLoading ? "Regenerating..." : "Regenerate Thumbnail"}
+                </button>
+                <button
+                  className={`btn transition-colors py-2 text-xs font-bold ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"}`}
+                  onClick={handleDelete}
                   disabled={deleting}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -529,6 +583,17 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
             <div className="flex items-center justify-between gap-4 mt-1">
               <button className={`btn transition-colors py-2 text-xs font-bold ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"}`} onClick={handleDelete} disabled={deleting}>{confirmDelete ? "Confirm Delete?" : "Delete Video"}</button>
               <div className="flex items-center gap-3">
+                <button
+                  className="btn bg-elevated border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  onClick={handleRegenerateThumbnail}
+                  disabled={regenLoading}
+                  title="Re-capture thumbnail from video"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                  </svg>
+                  {regenLoading ? "..." : "Regen Thumb"}
+                </button>
                 <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>{infoSaved ? "Saved!" : "Save Info"}</button>
                 <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
                 {video.youtubeId && (

@@ -406,6 +406,23 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	// Save YouTube ID locally
 	a.LinkLocalToYouTube(path, result.Id, gameTag, episode)
 
+	// Persist game_tag + episode into yt_videos so future episode-count queries
+	// (which match by title LIKE '<tag> - %') have a fallback via explicit columns too.
+	// This row may not exist yet if the sync hasn't run \u2014 insert or update.
+	if a.db != nil && gameTag != "" {
+		a.db.mu.Lock()
+		a.db.conn.Exec(`
+			INSERT INTO yt_videos (id, title, game_tag, episode, local_file, synced_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				game_tag = excluded.game_tag,
+				episode  = excluded.episode,
+				local_file = excluded.local_file`,
+			result.Id, title, gameTag, episode, path, time.Now().Unix(),
+		)
+		a.db.mu.Unlock()
+	}
+
 	// Add to playlist if specified
 	if playlistID != "" {
 		if plErr := a.AddVideoToPlaylist(playlistID, result.Id); plErr != nil {
