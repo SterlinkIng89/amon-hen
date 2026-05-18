@@ -496,6 +496,26 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                   {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete?") : "Delete Video"}
                 </button>
                 <div className="flex flex-col gap-2.5">
+                  {/* YouTube update status */}
+                  {ytUpdateError && (
+                    <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-md">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-red-400 shrink-0 mt-0.5">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                      </svg>
+                      <span className="text-[10px] text-red-400 leading-tight flex-1" title={ytUpdateError}>
+                        Saved locally. YouTube update failed: {ytUpdateError.replace(/^Error: /, "")}
+                      </span>
+                      <button className="text-red-400/60 hover:text-red-400 shrink-0" onClick={() => setYtUpdateError(null)}>×</button>
+                    </div>
+                  )}
+                  {infoSaved && !ytUpdateError && video.youtubeId && (
+                    <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded-md">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="text-green-400 shrink-0">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                      <span className="text-[10px] text-green-400 font-medium">Saved locally and updated on YouTube</span>
+                    </div>
+                  )}
                   <button 
                     className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} 
                     onClick={handleSaveInfo} 
@@ -504,7 +524,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                     </svg>
-                    {infoSaved ? "Saved!" : savingInfo ? "Saving..." : "Save Info"}
+                    {infoSaved ? (video.youtubeId ? "Updated!" : "Saved!") : savingInfo ? (video.youtubeId ? "Updating..." : "Saving...") : "Save Info"}
                   </button>
                   <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
                   <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
@@ -594,7 +614,9 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                   </svg>
                   {regenLoading ? "..." : "Regen Thumb"}
                 </button>
-                <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>{infoSaved ? "Saved!" : "Save Info"}</button>
+                <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>
+                  {infoSaved ? (video.youtubeId ? "Updated!" : "Saved!") : savingInfo ? (video.youtubeId ? "Updating..." : "Saving...") : "Save Info"}
+                </button>
                 <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
                 {video.youtubeId && (
                   <a href={`https://youtu.be/${video.youtubeId}`} target="_blank" rel="noreferrer" className="btn bg-red-600/10 text-red-500 border border-red-500/20 hover:bg-red-600/20 py-2.5 text-xs font-bold flex items-center gap-1.5">
