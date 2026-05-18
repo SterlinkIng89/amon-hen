@@ -28,6 +28,20 @@ export namespace main {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class FolderConfig {
+	    recursive: boolean;
+	    max_duration_secs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FolderConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.recursive = source["recursive"];
+	        this.max_duration_secs = source["max_duration_secs"];
+	    }
+	}
 	export class VideoMeta {
 	    game: string;
 	    youtubeTitle: string;
@@ -36,6 +50,7 @@ export namespace main {
 	    youtubeId?: string;
 	    playlistId?: string;
 	    episode: number;
+	    durationSecs?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -50,6 +65,7 @@ export namespace main {
 	        this.youtubeId = source["youtubeId"];
 	        this.playlistId = source["playlistId"];
 	        this.episode = source["episode"];
+	        this.durationSecs = source["durationSecs"];
 	    }
 	}
 	export class Config {
@@ -59,6 +75,7 @@ export namespace main {
 	    youtube_token_json?: string;
 	    video_games: Record<string, string>;
 	    video_metadata: Record<string, VideoMeta>;
+	    folder_settings: Record<string, FolderConfig>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -72,6 +89,7 @@ export namespace main {
 	        this.youtube_token_json = source["youtube_token_json"];
 	        this.video_games = source["video_games"];
 	        this.video_metadata = this.convertValues(source["video_metadata"], VideoMeta, true);
+	        this.folder_settings = this.convertValues(source["folder_settings"], FolderConfig, true);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -92,6 +110,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	export class VideoFile {
 	    name: string;
 	    path: string;

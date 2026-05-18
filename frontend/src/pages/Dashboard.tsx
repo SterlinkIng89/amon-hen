@@ -27,6 +27,7 @@ import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
 import DevLogsPanel from "../components/youtube/DevLogsPanel";
+import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 
 type SortMode = "date" | "name" | "size";
 
@@ -85,6 +86,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>(() => loadPref("pref_sort_mode", "date" as SortMode));
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -490,6 +492,7 @@ export default function Dashboard() {
             onSortChange={setSortMode}
             onToggleFolder={toggleFolder}
             onRemoveFolder={handleRemoveFolder}
+            onOpenFolderSettings={(f) => setSettingsFolder(f)}
             onOpenVideo={handleVideoClick}
             onUploadTarget={setUploadTarget}
             filterUploaded={filterUploaded}
@@ -562,6 +565,16 @@ export default function Dashboard() {
       <DevLogsPanel
         open={devLogsOpen}
         onClose={() => setDevLogsOpen(false)}
+      />
+
+      <FolderSettingsDialog
+        folder={settingsFolder || ""}
+        open={settingsFolder !== null}
+        onClose={() => setSettingsFolder(null)}
+        onSaved={() => {
+          setSettingsFolder(null);
+          handleRescan();
+        }}
       />
     </div>
   );

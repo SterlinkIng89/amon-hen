@@ -44,4 +44,9 @@ export interface VideoGroup {
   videos: VideoFile[];
 }
 
+export interface FolderConfig {
+  recursive: boolean;
+  max_duration_secs: number;
+}
+
 export type ViewMode = "grid" | "player" | "channel";

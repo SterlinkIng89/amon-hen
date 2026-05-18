@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,12 @@ type VideoMeta struct {
 	YouTubeID    string `json:"youtubeId,omitempty"`
 	PlaylistID   string `json:"playlistId,omitempty"`
 	Episode      int    `json:"episode"`
+	DurationSecs int    `json:"durationSecs,omitempty"`
+}
+
+type FolderConfig struct {
+	Recursive       bool `json:"recursive"`
+	MaxDurationSecs int  `json:"max_duration_secs"`
 }
 
 // Config holds persistent application settings
@@ -39,9 +46,10 @@ type Config struct {
 	Folders             []string             `json:"folders"`
 	YouTubeClientID     string               `json:"youtube_client_id"`
 	YouTubeClientSecret string               `json:"youtube_client_secret"`
-	YouTubeTokenJSON    string               `json:"youtube_token_json,omitempty"`
-	VideoGames          map[string]string    `json:"video_games"`    // Maps path to game tag
-	VideoMetadata       map[string]VideoMeta `json:"video_metadata"` // Maps path to metadata
+	YouTubeTokenJSON    string                  `json:"youtube_token_json,omitempty"`
+	VideoGames          map[string]string       `json:"video_games"`    // Maps path to game tag
+	VideoMetadata       map[string]VideoMeta    `json:"video_metadata"` // Maps path to metadata
+	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
 }
 
 // App struct
@@ -462,6 +470,41 @@ func (a *App) episodeCountForTag(tag string) int {
 	return titleCount
 }
 
+// GetFolderSettings returns settings for a specific folder.
+func (a *App) GetFolderSettings(folder string) FolderConfig {
+	if a.config.FolderSettings == nil {
+		return FolderConfig{}
+	}
+	return a.config.FolderSettings[folder]
+}
+
+// SaveFolderSettings saves settings for a specific folder.
+func (a *App) SaveFolderSettings(folder string, cfg FolderConfig) error {
+	if a.config.FolderSettings == nil {
+		a.config.FolderSettings = make(map[string]FolderConfig)
+	}
+	a.config.FolderSettings[folder] = cfg
+	return a.saveConfig()
+}
+
+// getVideoDuration uses ffprobe to get duration in seconds.
+func getVideoDuration(path string) (int, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	durStr := strings.TrimSpace(string(out))
+	if durStr == "N/A" || durStr == "" {
+		return 0, fmt.Errorf("duration N/A")
+	}
+	durFloat, err := strconv.ParseFloat(durStr, 64)
+	if err != nil {
+		return 0, err
+	}
+	return int(durFloat), nil
+}
+
 // GetVideosFromFolders scans multiple directories and returns a merged result
 func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	supported := map[string]bool{
@@ -514,60 +557,101 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	a.db.mu.Unlock()
 
 	// First pass: scan all files and load metadata
+	configChanged := false
 	for _, dir := range folders {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if supported[ext] {
-				path := filepath.Join(dir, entry.Name())
-				info, err := entry.Info()
-				if err != nil {
-					continue
-				}
-				meta := a.config.VideoMetadata[path]
-				videos = append(videos, VideoFile{
-					Name:          entry.Name(),
-					Path:          path,
-					Size:          info.Size(),
-					ModTime:       info.ModTime().UnixMilli(),
-					Folder:        dir,
-					Game:          meta.Game,
-					YouTubeTitle:  meta.YouTubeTitle,
-					Description:   meta.Description,
-					Privacy:       meta.Privacy,
-					YouTubeID:     meta.YouTubeID,
-					PlaylistID:    meta.PlaylistID,
-					PlaylistTitle: pTitleMap[meta.YouTubeID],
-					Episode:       meta.Episode,
-				})
+		fSettings := a.GetFolderSettings(dir)
 
-				vIdx := len(videos) - 1
-				// Fallback 1: Match by full path in DB
-				if videos[vIdx].YouTubeID == "" {
-					if id, ok := pathMap[path]; ok {
-						videos[vIdx].YouTubeID = id
+		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				// If not recursive, skip subdirectories except the base dir itself
+				if !fSettings.Recursive && path != dir {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			ext := strings.ToLower(filepath.Ext(d.Name()))
+			if !supported[ext] {
+				return nil
+			}
+
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+
+			meta := a.config.VideoMetadata[path]
+
+			// Filter by max duration if set
+			if fSettings.MaxDurationSecs > 0 {
+				if meta.DurationSecs == 0 {
+					// Fetch and cache duration
+					dur, err := getVideoDuration(path)
+					if err == nil && dur > 0 {
+						meta.DurationSecs = dur
+						if a.config.VideoMetadata == nil {
+							a.config.VideoMetadata = make(map[string]VideoMeta)
+						}
+						a.config.VideoMetadata[path] = meta
+						configChanged = true
+					} else {
+						// If we can't read duration, we assume it's long to be safe, or just skip filtering?
+						// We'll skip it to not exclude valid files if ffprobe fails, but for now we set it to something high so it's filtered if it's over limit, wait, if we can't read we skip it entirely from result.
+						// Let's just set it to 999999 to skip it from clips but not scan it again.
+						meta.DurationSecs = 999999
+						a.config.VideoMetadata[path] = meta
+						configChanged = true
 					}
 				}
-				// Fallback 2: Match by filename in DB (useful if file was moved)
-				if videos[vIdx].YouTubeID == "" {
-					if id, ok := linkedFiles[entry.Name()]; ok {
-						videos[vIdx].YouTubeID = id
-					}
-				}
-
-				// Fallback playlist ID if missing in config but found in DB
-				if videos[vIdx].PlaylistID == "" && videos[vIdx].YouTubeID != "" {
-					videos[vIdx].PlaylistID = pMap[videos[vIdx].YouTubeID]
-					videos[vIdx].PlaylistTitle = pTitleMap[videos[vIdx].YouTubeID]
+				if meta.DurationSecs > fSettings.MaxDurationSecs {
+					return nil // skip this file
 				}
 			}
-		}
+
+			videos = append(videos, VideoFile{
+				Name:          d.Name(),
+				Path:          path,
+				Size:          info.Size(),
+				ModTime:       info.ModTime().UnixMilli(),
+				Folder:        dir,
+				Game:          meta.Game,
+				YouTubeTitle:  meta.YouTubeTitle,
+				Description:   meta.Description,
+				Privacy:       meta.Privacy,
+				YouTubeID:     meta.YouTubeID,
+				PlaylistID:    meta.PlaylistID,
+				PlaylistTitle: pTitleMap[meta.YouTubeID],
+				Episode:       meta.Episode,
+			})
+
+			vIdx := len(videos) - 1
+			// Fallback 1: Match by full path in DB
+			if videos[vIdx].YouTubeID == "" {
+				if id, ok := pathMap[path]; ok {
+					videos[vIdx].YouTubeID = id
+				}
+			}
+			// Fallback 2: Match by filename in DB (useful if file was moved)
+			if videos[vIdx].YouTubeID == "" {
+				if id, ok := linkedFiles[d.Name()]; ok {
+					videos[vIdx].YouTubeID = id
+				}
+			}
+
+			// Fallback playlist ID if missing in config but found in DB
+			if videos[vIdx].PlaylistID == "" && videos[vIdx].YouTubeID != "" {
+				videos[vIdx].PlaylistID = pMap[videos[vIdx].YouTubeID]
+				videos[vIdx].PlaylistTitle = pTitleMap[videos[vIdx].YouTubeID]
+			}
+			return nil
+		})
+	}
+
+	if configChanged {
+		a.saveConfig()
 	}
 
 	// Second pass: Sort by ModTime (ascending) and assign episode numbers

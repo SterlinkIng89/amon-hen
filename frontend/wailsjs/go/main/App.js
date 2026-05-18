@@ -38,6 +38,10 @@ export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4);
 }
 
+export function GetFolderSettings(arg1) {
+  return window['go']['main']['App']['GetFolderSettings'](arg1);
+}
+
 export function GetPlaylistVideos(arg1) {
   return window['go']['main']['App']['GetPlaylistVideos'](arg1);
 }
@@ -104,6 +108,10 @@ export function RegenerateThumbnail(arg1) {
 
 export function RemoveFolder(arg1) {
   return window['go']['main']['App']['RemoveFolder'](arg1);
+}
+
+export function SaveFolderSettings(arg1, arg2) {
+  return window['go']['main']['App']['SaveFolderSettings'](arg1, arg2);
 }
 
 export function SaveFolders(arg1) {

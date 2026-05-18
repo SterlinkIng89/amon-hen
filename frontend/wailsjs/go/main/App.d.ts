@@ -20,6 +20,8 @@ export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>
 
 export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
 
+export function GetFolderSettings(arg1:string):Promise<main.FolderConfig>;
+
 export function GetPlaylistVideos(arg1:string):Promise<Array<main.YTVideo>>;
 
 export function GetQuotaUsedToday():Promise<number>;
@@ -53,6 +55,8 @@ export function OpenFolderDialog():Promise<string>;
 export function RegenerateThumbnail(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
+
+export function SaveFolderSettings(arg1:string,arg2:main.FolderConfig):Promise<void>;
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;
 

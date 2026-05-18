@@ -18,6 +18,7 @@ interface VideoGridProps {
   onSortChange: (m: SortMode) => void;
   onToggleFolder: (path: string) => void;
   onRemoveFolder: (path: string) => void;
+  onOpenFolderSettings: (path: string) => void;
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onUploadTarget: (video: VideoFile) => void;
   filterUploaded: boolean;
@@ -52,6 +53,7 @@ export default function VideoGrid({
   onSortChange,
   onToggleFolder,
   onRemoveFolder,
+  onOpenFolderSettings,
   onOpenVideo,
   onUploadTarget,
   filterUploaded,
@@ -108,6 +110,16 @@ export default function VideoGrid({
                     </svg>
                   )}
                   {folderLabel(f)}
+                </button>
+                <button
+                  className={`flex items-center justify-center w-6 h-full bg-transparent border-none border-l cursor-pointer transition-colors hover:bg-accent/20 hover:text-accent-hover ${active ? "border-border-accent/40" : "border-border-subtle"}`}
+                  onClick={e => { e.stopPropagation(); onOpenFolderSettings(f); }}
+                  title="Folder Settings"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
                 </button>
                 <button
                   className={`flex items-center justify-center w-6 h-full bg-transparent border-none border-l cursor-pointer transition-colors hover:bg-red-500/10 hover:text-red-400 ${active ? "border-border-accent/40" : "border-border-subtle"}`}
