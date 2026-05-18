@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { VideoFile, VideoGroup } from "../../types";
 import VideoPill from "./VideoPill";
 
@@ -12,6 +12,21 @@ interface VideoGridProps {
   onRemoveFolder: (path: string) => void;
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onUploadTarget: (video: VideoFile) => void;
+  filterUploaded: boolean;
+  onToggleFilterUploaded: () => void;
+}
+
+/** Returns a human-readable label for a folder path.
+ *  Handles root drives like "K:" or "K:\" correctly. */
+function folderLabel(f: string): string {
+  // Normalize: remove trailing slashes
+  const normalized = f.replace(/[/\\]+$/, "");
+  // If it's a bare drive letter like "K:" → show "K:\"
+  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
+  // Otherwise take the last path segment
+  const parts = normalized.split(/[/\\]/);
+  const last = parts[parts.length - 1];
+  return last || normalized;
 }
 
 export default function VideoGrid({
@@ -24,11 +39,15 @@ export default function VideoGrid({
   onRemoveFolder,
   onOpenVideo,
   onUploadTarget,
+  filterUploaded,
+  onToggleFilterUploaded,
 }: VideoGridProps) {
+  const showFilterBar = folders.length > 0;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
-      {/* Folder Filters */}
-      {folders.length > 0 && (
+      {/* Filter bar */}
+      {showFilterBar && (
         <div className="flex flex-wrap items-center gap-2 p-3 bg-surface border-b border-border-subtle shrink-0">
           <span className="text-xs font-semibold text-text-secondary mr-1">Folders:</span>
           {folders.map(f => {
@@ -41,7 +60,7 @@ export default function VideoGrid({
                       <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
                     </svg>
                   )}
-                  {f.split(/\\|\//).pop()}
+                  {folderLabel(f)}
                 </button>
                 <button
                   className={`flex items-center justify-center w-6 h-full bg-transparent border-none border-l cursor-pointer transition-colors hover:bg-red-500/10 hover:text-red-400 ${active ? "border-border-accent/40" : "border-border-subtle"}`}
@@ -55,6 +74,25 @@ export default function VideoGrid({
               </div>
             );
           })}
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-border-subtle mx-1" />
+
+          {/* Uploaded filter chip */}
+          <button
+            onClick={onToggleFilterUploaded}
+            className={`flex items-center gap-1.5 px-2.5 h-6 border rounded-sm text-xs font-medium transition-all cursor-pointer ${
+              filterUploaded
+                ? "bg-red-500/10 border-red-500/40 text-red-400"
+                : "bg-elevated border-border-subtle text-text-secondary hover:border-border-medium"
+            }`}
+            title={filterUploaded ? "Showing only not-uploaded videos" : "Show only videos not yet uploaded"}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
+            </svg>
+            {filterUploaded ? "Not uploaded only" : "All videos"}
+          </button>
         </div>
       )}
 
@@ -65,6 +103,8 @@ export default function VideoGrid({
               <p>No folders added.</p>
               <p className="text-[12px] text-text-muted mt-1">Click "Add Folder" to begin.</p>
             </>
+          ) : filterUploaded ? (
+            <p>All videos in this folder are already uploaded.</p>
           ) : (
             <p>No videos found in active folders.</p>
           )}
@@ -74,7 +114,7 @@ export default function VideoGrid({
           {groups.map(group => (
             <section key={group.dateKey} className="mb-8 last:mb-0">
               <div className="flex items-center gap-3 mb-4">
-                <span className="font-bold text-text-primary text-base tracking-wide">{group.label}</span>
+                <span className="font-bold text-text-primary text-base">{group.label}</span>
                 <span className="text-xs text-text-muted font-medium bg-elevated px-2 py-0.5 rounded-sm">
                   {group.videos.length} video{group.videos.length !== 1 ? "s" : ""}
                 </span>

@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
+  const [filterUploaded, setFilterUploaded] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
@@ -55,10 +56,14 @@ export default function Dashboard() {
 
   // Derived state
   const sortedVideos = [...videos].sort((a, b) => b.modTime - a.modTime);
-  const filteredVideos =
+  const filteredByFolder =
     activeFolders.length === 0
       ? sortedVideos
       : sortedVideos.filter((v) => activeFolders.includes(v.folder));
+  // Apply uploaded filter: when active, hide videos that already have a YouTube ID
+  const filteredVideos = filterUploaded
+    ? filteredByFolder.filter((v) => !v.youtubeId)
+    : filteredByFolder;
   const groups = groupByDay(filteredVideos);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
@@ -346,6 +351,8 @@ export default function Dashboard() {
             onRemoveFolder={handleRemoveFolder}
             onOpenVideo={handleVideoClick}
             onUploadTarget={setUploadTarget}
+            filterUploaded={filterUploaded}
+            onToggleFilterUploaded={() => setFilterUploaded(v => !v)}
           />
         )}
 

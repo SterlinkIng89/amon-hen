@@ -96,6 +96,18 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [playlistSearch, setPlaylistSearch] = useState(video.playlistTitle || "");
   const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
 
+  // Sync form state whenever the video prop itself changes (e.g. after a rescan or
+  // when the user navigates to a different video with arrow keys).
+  // Without this, ytTitle/tagInput etc. would stay stale from the previous mount.
+  useEffect(() => {
+    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
+    setTagInput(video.game || "");
+    setDescription(video.description || "");
+    setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
+    setPlaylistId(video.playlistId || "");
+    setPlaylistSearch(video.playlistTitle || "");
+  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId]);
+
   useEffect(() => {
     if (playlistId && playlists.length > 0) {
       const p = playlists.find(p => p.id === playlistId);
