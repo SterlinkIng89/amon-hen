@@ -22,6 +22,10 @@ export function GetAPILogs(arg1) {
   return window['go']['main']['App']['GetAPILogs'](arg1);
 }
 
+export function GetAutoLaunch() {
+  return window['go']['main']['App']['GetAutoLaunch']();
+}
+
 export function GetCacheDir() {
   return window['go']['main']['App']['GetCacheDir']();
 }
@@ -114,12 +118,24 @@ export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['main']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }
 
+export function SetAutoLaunch(arg1) {
+  return window['go']['main']['App']['SetAutoLaunch'](arg1);
+}
+
+export function SetTrayUploadProgress(arg1) {
+  return window['go']['main']['App']['SetTrayUploadProgress'](arg1);
+}
+
 export function SetVideoGames(arg1, arg2) {
   return window['go']['main']['App']['SetVideoGames'](arg1, arg2);
 }
 
 export function SetVideosPlaylist(arg1, arg2) {
   return window['go']['main']['App']['SetVideosPlaylist'](arg1, arg2);
+}
+
+export function ShowUploadNotification(arg1, arg2) {
+  return window['go']['main']['App']['ShowUploadNotification'](arg1, arg2);
 }
 
 export function StartYouTubeAuth() {

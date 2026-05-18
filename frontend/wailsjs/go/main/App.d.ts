@@ -12,6 +12,8 @@ export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function GetAPILogs(arg1:number):Promise<Array<main.APILog>>;
 
+export function GetAutoLaunch():Promise<boolean>;
+
 export function GetCacheDir():Promise<string>;
 
 export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>;
@@ -58,9 +60,15 @@ export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
+export function SetAutoLaunch(arg1:boolean):Promise<void>;
+
+export function SetTrayUploadProgress(arg1:number):Promise<void>;
+
 export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function SetVideosPlaylist(arg1:Array<string>,arg2:string):Promise<void>;
+
+export function ShowUploadNotification(arg1:string,arg2:string):Promise<void>;
 
 export function StartYouTubeAuth():Promise<void>;
 

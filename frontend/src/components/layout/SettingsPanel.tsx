@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo } from "../../../wailsjs/go/main/App";
+import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch } from "../../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 
 interface YouTubeChannel {
@@ -16,9 +16,11 @@ interface Props {
 export default function SettingsPanel({ open, onClose }: Props) {
   const [authed, setAuthed] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [credsLoaded, setCredsLoaded] = useState(true); // Assume loaded by default
+  const [credsLoaded, setCredsLoaded] = useState(true);
   const [error, setError] = useState("");
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
+  const [autoLaunch, setAutoLaunch] = useState(false);
+  const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -33,10 +35,11 @@ export default function SettingsPanel({ open, onClose }: Props) {
         }
       }
     }).catch(() => {});
-    // Check if client_id exists in config
     LoadConfig().then(cfg => {
       setCredsLoaded(!!cfg.youtube_client_id);
     }).catch(() => setCredsLoaded(false));
+    // Load auto-launch state
+    GetAutoLaunch().then(setAutoLaunch).catch(() => {});
   }, [open]);
 
   useEffect(() => {
@@ -138,6 +141,49 @@ export default function SettingsPanel({ open, onClose }: Props) {
             )}
 
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+          </section>
+
+          {/* Auto-launch section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-text-muted">
+                <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+              </svg>
+              Startup
+            </div>
+            <div className="flex items-center justify-between gap-3 p-3 bg-elevated border border-border-subtle rounded-md">
+              <div>
+                <p className="text-xs font-medium text-text-primary">Launch on Windows startup</p>
+                <p className="text-[10px] text-text-secondary mt-0.5">Start Amon-Hen automatically when you log in</p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={autoLaunch}
+                disabled={autoLaunchSaving}
+                onClick={async () => {
+                  setAutoLaunchSaving(true);
+                  try {
+                    await SetAutoLaunch(!autoLaunch);
+                    setAutoLaunch(v => !v);
+                  } catch (e) {
+                    console.error("Failed to set auto-launch:", e);
+                  } finally {
+                    setAutoLaunchSaving(false);
+                  }
+                }}
+                className={`relative w-10 h-5 rounded-full transition-colors duration-200 border flex-shrink-0 cursor-pointer ${
+                  autoLaunch
+                    ? "bg-accent border-accent/60"
+                    : "bg-elevated border-border-medium"
+                } ${autoLaunchSaving ? "opacity-50 cursor-wait" : ""}`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    autoLaunch ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </section>
         </div>
       </aside>

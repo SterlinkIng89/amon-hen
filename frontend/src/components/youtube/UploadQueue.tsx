@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
-import { UploadToYouTube } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress } from "../../../wailsjs/go/main/App";
 import { formatName } from "../../utils/videoUtils";
 
 export interface QueueItem {
@@ -59,6 +59,8 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
   // Listen to YouTube progress/done/error events
   useEffect(() => {
     EventsOn("youtube:progress", (data: { path: string; percent: number }) => {
+      // Update tray icon title with current progress
+      SetTrayUploadProgress(data.percent).catch(() => {});
       onUpdateQueue(queueRef.current.map((item) =>
         item.videoPath === data.path
           ? { ...item, status: "uploading", progress: data.percent }
@@ -73,6 +75,12 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           : item
       );
       onUpdateQueue(updated);
+      // Clear tray progress indicator
+      SetTrayUploadProgress(-1).catch(() => {});
+      // Fire Windows toast notification
+      const doneItem = queueRef.current.find(i => i.videoPath === data.path);
+      const videoTitle = doneItem?.title || doneItem?.videoName || "Video";
+      ShowUploadNotification("Upload complete!", videoTitle).catch(() => {});
       // Move to next item
       processNext(updated);
     });
@@ -84,6 +92,8 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           : item
       );
       onUpdateQueue(updated);
+      // Clear tray progress on error too
+      SetTrayUploadProgress(-1).catch(() => {});
       processNext(updated);
     });
 

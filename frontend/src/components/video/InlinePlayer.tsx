@@ -71,12 +71,24 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName;
-      // Do not navigate if user is interacting with an input, textarea, or the video element
-      if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "VIDEO") {
+      // Do not fire shortcuts when user is typing
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") {
         return;
       }
-      if (e.key === "ArrowLeft" && onPrev) onPrev();
-      if (e.key === "ArrowRight" && onNext) onNext();
+      const el = videoRef.current;
+      if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+      if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
+      if (e.key === " " || e.key === "Spacebar") {
+        // Prevent page scroll
+        e.preventDefault();
+        if (!el) return;
+        if (el.paused) el.play().catch(() => {});
+        else el.pause();
+      }
+      if (e.key === "m" || e.key === "M") {
+        if (!el) return;
+        el.muted = !el.muted;
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

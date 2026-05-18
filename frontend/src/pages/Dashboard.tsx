@@ -8,6 +8,7 @@ import {
   IsYouTubeAuthed,
   UploadToYouTube,
   SaveVideoMetadata,
+  SaveFolders,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
@@ -27,6 +28,41 @@ import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
 import DevLogsPanel from "../components/youtube/DevLogsPanel";
 
+type SortMode = "date" | "name" | "size";
+
+// ─── Persistence helpers ────────────────────────────────────────────────────
+
+function loadPref<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function savePref(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+// ─── Sort helpers ────────────────────────────────────────────────────────────
+
+function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
+  const arr = [...videos];
+  switch (mode) {
+    case "name":
+      return arr.sort((a, b) => a.name.localeCompare(b.name));
+    case "size":
+      return arr.sort((a, b) => b.size - a.size);
+    case "date":
+    default:
+      return arr.sort((a, b) => b.modTime - a.modTime);
+  }
+}
+
 export default function Dashboard() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
@@ -34,7 +70,7 @@ export default function Dashboard() {
   const [streamPort, setStreamPort] = useState(0);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
-  const [view, setView] = useState<ViewMode>("grid");
+  const [view, setView] = useState<ViewMode>(() => loadPref("pref_view", "grid" as ViewMode));
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [uploadTarget, setUploadTarget] = useState<VideoFile | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -45,7 +81,11 @@ export default function Dashboard() {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
-  const [filterUploaded, setFilterUploaded] = useState(false);
+  const [filterUploaded, setFilterUploaded] = useState(() => loadPref("pref_filter_uploaded", false));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>(() => loadPref("pref_sort_mode", "date" as SortMode));
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounterRef = useRef(0);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
@@ -54,16 +94,33 @@ export default function Dashboard() {
     if (listRef.current) setListRoot(listRef.current);
   }, []);
 
-  // Derived state
-  const sortedVideos = [...videos].sort((a, b) => b.modTime - a.modTime);
+  // Persist view + filter preferences whenever they change
+  useEffect(() => { savePref("pref_view", view); }, [view]);
+  useEffect(() => { savePref("pref_filter_uploaded", filterUploaded); }, [filterUploaded]);
+  useEffect(() => { savePref("pref_sort_mode", sortMode); }, [sortMode]);
+
+  // Restore selectedIndex after first successful scan
+  const restoredIndexRef = useRef(false);
+
+  // Derived state — apply sort + search + folder + upload filters
+  const sortedVideos = applySortMode(videos, sortMode);
+
   const filteredByFolder =
     activeFolders.length === 0
       ? sortedVideos
       : sortedVideos.filter((v) => activeFolders.includes(v.folder));
-  // Apply uploaded filter: when active, hide videos that already have a YouTube ID
-  const filteredVideos = filterUploaded
+
+  const filteredByUpload = filterUploaded
     ? filteredByFolder.filter((v) => !v.youtubeId)
     : filteredByFolder;
+
+  const filteredVideos = searchQuery
+    ? filteredByUpload.filter(v =>
+        v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.game && v.game.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : filteredByUpload;
+
   const groups = groupByDay(filteredVideos);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
@@ -89,17 +146,99 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Clear selection on Escape
+  // Restore selectedIndex once videos are loaded (only once)
+  useEffect(() => {
+    if (videos.length === 0 || restoredIndexRef.current) return;
+    restoredIndexRef.current = true;
+    const saved = loadPref("pref_selected_index", -1);
+    const savedView = loadPref<ViewMode>("pref_view", "grid");
+    if (savedView === "player" && saved >= 0 && saved < sortedVideos.length) {
+      setSelectedIndex(saved);
+      setView("player");
+    } else {
+      // Fallback to grid if index is out of range
+      setView(savedView === "channel" ? "channel" : "grid");
+    }
+  }, [videos]);
+
+  // Persist selectedIndex on change
+  useEffect(() => {
+    savePref("pref_selected_index", selectedIndex);
+  }, [selectedIndex]);
+
+  // Clear selection + search on Escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedPaths.length > 0) {
-        setSelectedPaths([]);
-        setLastSelectedIdx(-1);
+      if (e.key === "Escape") {
+        if (selectedPaths.length > 0) {
+          setSelectedPaths([]);
+          setLastSelectedIdx(-1);
+        } else if (searchQuery) {
+          setSearchQuery("");
+        }
       }
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [selectedPaths.length]);
+  }, [selectedPaths.length, searchQuery]);
+
+  // ─── Drag & drop folder support ──────────────────────────────────────────
+
+  useEffect(() => {
+    const onDragEnter = (e: DragEvent) => {
+      // Only react to file drags
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      dragCounterRef.current += 1;
+      setIsDraggingOver(true);
+    };
+    const onDragLeave = () => {
+      dragCounterRef.current -= 1;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        setIsDraggingOver(false);
+      }
+    };
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDraggingOver(false);
+      const items = Array.from(e.dataTransfer?.items ?? []);
+      const dirs: string[] = [];
+      for (const item of items) {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry?.isDirectory) {
+          // In Wails/Electron the full path is available via .file()
+          const file = item.getAsFile();
+          if (file) {
+            // @ts-ignore — Wails exposes the real FS path
+            const p: string = file.path ?? "";
+            if (p) dirs.push(p);
+          }
+        }
+      }
+      if (dirs.length === 0) return;
+      const updated = [...folders];
+      for (const d of dirs) {
+        if (!updated.includes(d)) updated.push(d);
+      }
+      await SaveFolders(updated);
+      setFolders(updated);
+      await scanFolders(updated);
+    };
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [folders]);
 
   const scanFolders = useCallback(async (foldersToScan: string[]) => {
     if (foldersToScan.length === 0) return;
@@ -212,7 +351,6 @@ export default function Dashboard() {
 
   // Legacy modal path (used from grid card hover button)
   const handleUploadNow = async (video: VideoFile, opts: UploadOptions) => {
-    // Save metadata to local database first
     await SaveVideoMetadata(
       video.path,
       video.game || "",
@@ -236,7 +374,7 @@ export default function Dashboard() {
       gameTag: video.game,
       episode: video.episode,
     });
-    
+
     UploadToYouTube(
       video.path,
       opts.title,
@@ -247,12 +385,10 @@ export default function Dashboard() {
       video.episode || 0,
     ).catch(() => {});
 
-    // Refresh UI to show updated title
     handleRescan();
   };
 
   const handleAddToQueueModal = async (video: VideoFile, opts: UploadOptions) => {
-    // Save metadata to local database first
     await SaveVideoMetadata(
       video.path,
       video.game || "",
@@ -278,7 +414,7 @@ export default function Dashboard() {
         gameTag: video.game,
         episode: video.episode,
       },
-    ]);// Refresh UI to show updated title
+    ]);
     handleRescan();
   };
 
@@ -326,7 +462,7 @@ export default function Dashboard() {
         />
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {error && (
           <div
             style={{
@@ -345,8 +481,13 @@ export default function Dashboard() {
             folders={folders}
             activeFolders={activeFolders}
             groups={groups}
-            sortedVideos={sortedVideos}
+            allVideos={sortedVideos}
+            sortedVideos={filteredVideos}
             selectedPaths={selectedPaths}
+            searchQuery={searchQuery}
+            sortMode={sortMode}
+            onSearchChange={setSearchQuery}
+            onSortChange={setSortMode}
             onToggleFolder={toggleFolder}
             onRemoveFolder={handleRemoveFolder}
             onOpenVideo={handleVideoClick}
@@ -378,6 +519,19 @@ export default function Dashboard() {
         )}
 
         {view === "channel" && <ChannelPage />}
+
+        {/* Drag & drop overlay */}
+        {isDraggingOver && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm pointer-events-none animate-fadeIn">
+            <div className="flex flex-col items-center gap-3 p-10 bg-surface/90 border-2 border-dashed border-accent rounded-2xl shadow-2xl">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="text-accent">
+                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+              </svg>
+              <p className="text-lg font-bold text-text-primary">Drop folder here</p>
+              <p className="text-sm text-text-secondary">Release to add as a video source</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {uploadTarget && (
