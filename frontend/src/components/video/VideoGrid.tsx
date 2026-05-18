@@ -230,14 +230,14 @@ export default function VideoGrid({
               </div>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
                 {group.videos.map(video => {
-                  const sortedIdx = sortedVideos.findIndex(v => v.path === video.path);
+                  const absoluteIdx = allVideos.findIndex(v => v.path === video.path);
                   const selected = selectedPaths.includes(video.path);
                   return (
                     <VideoPill
                       key={video.path}
                       video={video}
                       selected={selected}
-                      onClick={(e) => onOpenVideo(sortedIdx, e)}
+                      onClick={(e) => onOpenVideo(absoluteIdx, e)}
                       onUpload={() => onUploadTarget(video)}
                     />
                   );
@@ -250,14 +250,15 @@ export default function VideoGrid({
         /* Flat layout for name/size sort */
         <div className="flex-1 overflow-y-auto p-5 pb-10">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
-            {sortedVideos.map((video, sortedIdx) => {
+            {sortedVideos.map((video) => {
+              const absoluteIdx = allVideos.findIndex(v => v.path === video.path);
               const selected = selectedPaths.includes(video.path);
               return (
                 <VideoPill
                   key={video.path}
                   video={video}
                   selected={selected}
-                  onClick={(e) => onOpenVideo(sortedIdx, e)}
+                  onClick={(e) => onOpenVideo(absoluteIdx, e)}
                   onUpload={() => onUploadTarget(video)}
                 />
               );
