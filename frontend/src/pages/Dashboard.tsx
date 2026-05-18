@@ -25,6 +25,7 @@ import UploadDialog, {
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
+import DevLogsPanel from "../components/youtube/DevLogsPanel";
 
 export default function Dashboard() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
@@ -43,6 +44,7 @@ export default function Dashboard() {
   const [ytAuthed, setYtAuthed] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
+  const [devLogsOpen, setDevLogsOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
@@ -291,6 +293,7 @@ export default function Dashboard() {
         onToggleQueue={() => setQueueOpen((o) => !o)}
         onOpenSettings={() => setSettingsOpen(true)}
         onAddFolder={handleAddFolder}
+        onOpenDevLogs={() => setDevLogsOpen(true)}
       />
 
       {/* Bulk action bar — shown in BOTH views when items are selected */}
@@ -388,6 +391,11 @@ export default function Dashboard() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      <DevLogsPanel
+        open={devLogsOpen}
+        onClose={() => setDevLogsOpen(false)}
       />
     </div>
   );

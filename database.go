@@ -63,6 +63,17 @@ func (db *DB) migrate() error {
 			position INTEGER,
 			PRIMARY KEY (playlist_id, video_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS api_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			ts INTEGER NOT NULL,
+			operation TEXT NOT NULL,
+			resource_id TEXT NOT NULL DEFAULT '',
+			resource_title TEXT NOT NULL DEFAULT '',
+			success INTEGER NOT NULL DEFAULT 1,
+			error_msg TEXT NOT NULL DEFAULT '',
+			quota_cost INTEGER NOT NULL DEFAULT 0,
+			duration_ms INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 	
 	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)

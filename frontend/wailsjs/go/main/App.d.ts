@@ -10,6 +10,8 @@ export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<stri
 
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
+export function GetAPILogs(arg1:number):Promise<Array<main.APILog>>;
+
 export function GetCacheDir():Promise<string>;
 
 export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>;
@@ -17,6 +19,8 @@ export function GetChannelPlaylists(arg1:string):Promise<Array<main.YTPlaylist>>
 export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
 
 export function GetPlaylistVideos(arg1:string):Promise<Array<main.YTVideo>>;
+
+export function GetQuotaUsedToday():Promise<number>;
 
 export function GetStreamPort():Promise<number>;
 

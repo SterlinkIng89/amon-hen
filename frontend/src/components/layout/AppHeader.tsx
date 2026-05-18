@@ -1,7 +1,6 @@
 import React from "react";
 import { ViewMode } from "../../types";
-
-
+import { QuotaBadge } from "../youtube/DevLogsPanel";
 
 interface AppHeaderProps {
   view: ViewMode;
@@ -14,6 +13,7 @@ interface AppHeaderProps {
   onToggleQueue: () => void;
   onOpenSettings: () => void;
   onAddFolder: () => void;
+  onOpenDevLogs: () => void;
 }
 
 export default function AppHeader({
@@ -27,6 +27,7 @@ export default function AppHeader({
   onToggleQueue,
   onOpenSettings,
   onAddFolder,
+  onOpenDevLogs,
 }: AppHeaderProps) {
   const headerLeft = view === "player" ? (
     <button className="flex items-center gap-[7px] py-[5px] pr-3 pl-2 bg-elevated border border-border-subtle rounded-sm text-text-secondary text-xs font-medium font-sans cursor-pointer transition-colors hover:bg-card hover:text-text-primary hover:border-border-medium shrink-0" onClick={() => onSetView("grid")}>
@@ -67,6 +68,19 @@ export default function AppHeader({
               <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
             </svg>
             Rescan
+          </button>
+        )}
+        {ytAuthed && <QuotaBadge />}
+        {ytAuthed && (
+          <button
+            className="btn btn-ghost"
+            onClick={onOpenDevLogs}
+            title="Dev: API call logs"
+            style={{ opacity: 0.45 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/>
+            </svg>
           </button>
         )}
         <button className="btn btn-ghost relative" onClick={onToggleQueue}>

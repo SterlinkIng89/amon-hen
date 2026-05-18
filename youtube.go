@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -37,6 +38,10 @@ func (a *App) oauthConfig() *oauth2.Config {
 func (a *App) SaveYouTubeCredentials(clientID, clientSecret string) error {
 	a.config.YouTubeClientID = clientID
 	a.config.YouTubeClientSecret = clientSecret
+	// Invalidate cached service since credentials changed
+	a.ytSvcMu.Lock()
+	a.ytSvc = nil
+	a.ytSvcMu.Unlock()
 	return a.saveConfig()
 }
 
@@ -151,6 +156,10 @@ func (a *App) StartYouTubeAuth() error {
 		if err := a.saveConfig(); err != nil {
 			return err
 		}
+		// Invalidate cached service so next call uses new token
+		a.ytSvcMu.Lock()
+		a.ytSvc = nil
+		a.ytSvcMu.Unlock()
 		runtime.EventsEmit(a.ctx, "youtube:auth-complete", nil)
 		return nil
 
@@ -164,11 +173,22 @@ func (a *App) StartYouTubeAuth() error {
 	}
 }
 
-// youtubeClient builds an authenticated YouTube API client, refreshing tokens if needed
+// youtubeClient returns a cached authenticated YouTube API client.
+// It only creates a new service or refreshes the token when strictly needed,
+// avoiding a token endpoint round-trip on every single API operation.
 func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 	if a.config.YouTubeTokenJSON == "" {
 		return nil, fmt.Errorf("not authenticated with YouTube")
 	}
+
+	a.ytSvcMu.Lock()
+	defer a.ytSvcMu.Unlock()
+
+	// Return the cached service if we already have one
+	if a.ytSvc != nil {
+		return a.ytSvc, nil
+	}
+
 	var token oauth2.Token
 	if err := json.Unmarshal([]byte(a.config.YouTubeTokenJSON), &token); err != nil {
 		return nil, err
@@ -176,7 +196,7 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 	cfg := a.oauthConfig()
 	tokenSource := cfg.TokenSource(ctx, &token)
 
-	// Persist refreshed token
+	// Refresh the token once and persist if it changed
 	newToken, err := tokenSource.Token()
 	if err != nil {
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
@@ -188,7 +208,11 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 	}
 
 	svc, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
-	return svc, err
+	if err != nil {
+		return nil, err
+	}
+	a.ytSvc = svc
+	return svc, nil
 }
 
 // progressReader wraps an io.Reader and emits upload progress events
@@ -220,8 +244,22 @@ type YouTubeChannel struct {
 	Thumbnail string `json:"thumbnail"`
 }
 
-// GetYouTubeChannelInfo fetches the current authenticated user's channel info
+// channelInfoCache caches the channel info in memory for the session
+var (
+	channelInfoCache   *YouTubeChannel
+	channelInfoCacheMu sync.Mutex
+)
+
+// GetYouTubeChannelInfo fetches the current authenticated user's channel info.
+// Result is cached in memory for the session to avoid repeated API calls.
 func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
+	channelInfoCacheMu.Lock()
+	if channelInfoCache != nil {
+		defer channelInfoCacheMu.Unlock()
+		return channelInfoCache, nil
+	}
+	channelInfoCacheMu.Unlock()
+
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
@@ -229,7 +267,9 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 	}
 
 	call := svc.Channels.List([]string{"snippet"}).Mine(true)
+	start := time.Now()
 	resp, err := call.Do()
+	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
 	if err != nil {
 		return nil, err
 	}
@@ -239,11 +279,17 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 	}
 
 	channel := resp.Items[0]
-	return &YouTubeChannel{
+	result := &YouTubeChannel{
 		ID:        channel.Id,
 		Title:     channel.Snippet.Title,
 		Thumbnail: channel.Snippet.Thumbnails.Default.Url,
-	}, nil
+	}
+
+	channelInfoCacheMu.Lock()
+	channelInfoCache = result
+	channelInfoCacheMu.Unlock()
+
+	return result, nil
 }
 
 // CreatePlaylist creates a new YouTube playlist
@@ -264,7 +310,9 @@ func (a *App) CreatePlaylist(title, description, privacy string) (string, error)
 		},
 	}
 
+	start := time.Now()
 	res, err := svc.Playlists.Insert([]string{"snippet", "status"}, playlist).Do()
+	a.logAPICall("playlists.insert", "", title, QuotaPlaylistsInsert, start, err)
 	if err != nil {
 		fmt.Printf("Error creating playlist: %v\n", err)
 		return "", err
@@ -291,7 +339,9 @@ func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
 		},
 	}
 
+	start := time.Now()
 	_, err = svc.PlaylistItems.Insert([]string{"snippet"}, item).Do()
+	a.logAPICall("playlistItems.insert", videoID, videoID, QuotaPlaylistItemsInsert, start, err)
 	if err != nil {
 		fmt.Printf("Error adding video %s to playlist %s: %v\n", videoID, playlistID, err)
 		return err
@@ -345,7 +395,9 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	call := svc.Videos.Insert([]string{"snippet", "status"}, video)
 	call.Media(pr, googleapi.ContentType("video/*"))
 
+	start := time.Now()
 	result, err := call.Do()
+	a.logAPICall("videos.insert", "", title, QuotaVideosInsert, start, err)
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
 		return err
@@ -356,7 +408,14 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 
 	// Add to playlist if specified
 	if playlistID != "" {
-		a.AddVideoToPlaylist(playlistID, result.Id)
+		if plErr := a.AddVideoToPlaylist(playlistID, result.Id); plErr != nil {
+			// Emit a warning but do not fail the whole upload
+			runtime.EventsEmit(a.ctx, "youtube:playlist-error", map[string]string{
+				"videoId":    result.Id,
+				"playlistId": playlistID,
+				"message":    plErr.Error(),
+			})
+		}
 	}
 
 	runtime.EventsEmit(a.ctx, "youtube:done", map[string]string{

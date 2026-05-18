@@ -16,10 +16,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	youtube "google.golang.org/api/youtube/v3"
 )
 
 type VideoMeta struct {
@@ -50,6 +52,9 @@ type App struct {
 	configPath string
 	config     Config
 	db         *DB
+	// Cached YouTube service — reused across API calls to avoid redundant token refreshes
+	ytSvc   *youtube.Service
+	ytSvcMu sync.Mutex
 }
 
 // NewApp creates a new App application struct
@@ -67,13 +72,23 @@ func (a *App) startup(ctx context.Context) {
 	a.initCache()
 	a.startStreamServer()
 
-	// Intentar sincronización en background
+	// Auto-sync in background — but only if last sync was more than 12 hours ago
+	// to avoid burning YouTube API quota on every app launch.
 	go func() {
-		// Wait a bit to not block startup
 		time.Sleep(2 * time.Second)
-		if a.IsYouTubeAuthed() {
-			a.SyncChannelData()
+		if !a.IsYouTubeAuthed() {
+			return
 		}
+		status, err := a.GetSyncStatus()
+		if err != nil {
+			return
+		}
+		lastSync, _ := status["lastSync"].(int64)
+		if lastSync > 0 && time.Since(time.Unix(lastSync, 0)) < 12*time.Hour {
+			fmt.Printf("Skipping auto-sync: last sync was %s ago\n", time.Since(time.Unix(lastSync, 0)).Round(time.Minute))
+			return
+		}
+		a.SyncChannelData()
 	}()
 }
 

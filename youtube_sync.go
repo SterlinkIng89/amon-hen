@@ -46,15 +46,16 @@ func (a *App) SyncChannelData() error {
 		return err
 	}
 
-	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Obteniendo información del canal...")
+	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Fetching channel info...")
 
 	// 1. Get user's uploads playlist ID
-	channelsCall := svc.Channels.List([]string{"contentDetails"}).Mine(true)
-	channelsResp, err := channelsCall.Do()
+	start := time.Now()
+	channelsResp, err := svc.Channels.List([]string{"contentDetails"}).Mine(true).Do()
+	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
 	if err != nil {
 		// Check for insufficient permissions and trigger re-auth
 		if isInsufficientPermissions(err) {
-			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Se requiere re-autenticación para ampliar permisos. Por favor, pulsa Sincronizar de nuevo tras autorizar.")
+			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Re-authentication required. Please press Sync again after authorizing.")
 			go a.StartYouTubeAuth()
 			return fmt.Errorf("insufficient permissions, please re-auth and try again")
 		}
@@ -69,14 +70,14 @@ func (a *App) SyncChannelData() error {
 	now := time.Now().Unix()
 
 	// 2. Fetch all playlists
-	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Sincronizando playlists...")
+	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing playlists...")
 	err = a.syncPlaylists(svc, now)
 	if err != nil {
 		fmt.Println("Error syncing playlists:", err)
 	}
 
 	// 3. Fetch all videos from uploads playlist
-	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Sincronizando videos...")
+	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing videos...")
 	err = a.syncVideos(svc, uploadsPlaylistID, now)
 	if err != nil {
 		return err
@@ -87,14 +88,22 @@ func (a *App) SyncChannelData() error {
 }
 
 func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
-	var playlistIDs []string
+	// Track playlist IDs and their remote video counts for smart item sync
+	type playlistEntry struct {
+		id             string
+		remoteCount    int64
+	}
+	var toSync []playlistEntry
+
 	pageToken := ""
 	for {
 		call := svc.Playlists.List([]string{"snippet", "contentDetails"}).Mine(true).MaxResults(50)
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
+		start := time.Now()
 		resp, err := call.Do()
+		a.logAPICall("playlists.list", "", "mine", QuotaPlaylistsList, start, err)
 		if err != nil {
 			return err
 		}
@@ -102,7 +111,6 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		a.db.mu.Lock()
 		tx, _ := a.db.conn.Begin()
 		for _, item := range resp.Items {
-			playlistIDs = append(playlistIDs, item.Id)
 			thumb := ""
 			if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
 				thumb = item.Snippet.Thumbnails.Medium.Url
@@ -114,6 +122,11 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
 				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at`,
 				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime)
+
+			toSync = append(toSync, playlistEntry{
+				id:          item.Id,
+				remoteCount: int64(item.ContentDetails.ItemCount),
+			})
 		}
 		tx.Commit()
 		a.db.mu.Unlock()
@@ -124,13 +137,25 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		pageToken = resp.NextPageToken
 	}
 
-	// Sincronizar items de cada playlist después de cerrar la transacción principal
-	for _, id := range playlistIDs {
-		a.syncPlaylistItems(svc, id, syncTime)
+	// Sync playlist items only when the video count has changed since last sync.
+	// This avoids N * playlistItems.list calls on every sync for unchanged playlists.
+	for _, entry := range toSync {
+		var localCount int64
+		a.db.mu.Lock()
+		a.db.conn.QueryRow("SELECT COUNT(*) FROM yt_playlist_items WHERE playlist_id = ?", entry.id).Scan(&localCount)
+		a.db.mu.Unlock()
+
+		if localCount == entry.remoteCount {
+			// Count matches, skip fetching items for this playlist
+			continue
+		}
+		a.syncPlaylistItems(svc, entry.id, syncTime)
 	}
 	return nil
 }
 
+// UpdateYouTubeVideoMetadata updates video title/description/privacy on YouTube.
+// Reads the current snippet from local SQLite instead of doing an extra videos.list API call.
 func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy string) error {
 	if !a.IsYouTubeAuthed() {
 		return fmt.Errorf("not authenticated")
@@ -142,29 +167,43 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 		return err
 	}
 
-	// 1. Fetch current video to preserve other snippet fields (like category, tags, etc)
-	listCall := svc.Videos.List([]string{"snippet", "status"}).Id(videoID)
-	listResp, err := listCall.Do()
+	// Read current local data to build the full snippet without a network round-trip.
+	// CategoryId defaults to 22 (People & Blogs) if unknown — YouTube requires it in updates.
+	a.db.mu.Lock()
+	var localTitle, localDesc sql.NullString
+	a.db.conn.QueryRow("SELECT title, description FROM yt_videos WHERE id = ?", videoID).Scan(&localTitle, &localDesc)
+	a.db.mu.Unlock()
+
+	// Merge: use provided values, fall back to what we have locally
+	finalTitle := title
+	if finalTitle == "" && localTitle.Valid {
+		finalTitle = localTitle.String
+	}
+	finalDesc := description
+	if finalDesc == "" && localDesc.Valid {
+		finalDesc = localDesc.String
+	}
+
+	video := &youtube.Video{
+		Id: videoID,
+		Snippet: &youtube.VideoSnippet{
+			Title:       finalTitle,
+			Description: finalDesc,
+			CategoryId:  "22", // required field for updates
+		},
+		Status: &youtube.VideoStatus{
+			PrivacyStatus: privacy,
+		},
+	}
+
+	start := time.Now()
+	_, err = svc.Videos.Update([]string{"snippet", "status"}, video).Do()
+	a.logAPICall("videos.update", videoID, finalTitle, QuotaVideosUpdate, start, err)
 	if err != nil {
 		return err
 	}
-	if len(listResp.Items) == 0 {
-		return fmt.Errorf("video not found on YouTube")
-	}
 
-	video := listResp.Items[0]
-	video.Snippet.Title = title
-	video.Snippet.Description = description
-	video.Status.PrivacyStatus = privacy
-
-	// 2. Perform the update
-	updateCall := svc.Videos.Update([]string{"snippet", "status"}, video)
-	_, err = updateCall.Do()
-	if err != nil {
-		return err
-	}
-
-	// 3. Update local database
+	// Update local database
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 	_, err = a.db.conn.Exec(`
@@ -183,7 +222,9 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string, syncTim
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
+		start := time.Now()
 		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", playlistID, playlistID, QuotaPlaylistItemsList, start, err)
 		if err != nil {
 			return err
 		}
@@ -212,7 +253,9 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
+		start := time.Now()
 		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", uploadsPlaylistID, "uploads", QuotaPlaylistItemsList, start, err)
 		if err != nil {
 			return err
 		}
@@ -224,8 +267,9 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 
 		if len(videoIDs) > 0 {
 			// Fetch full details for these videos
-			vidCall := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...)
-			vidResp, err := vidCall.Do()
+			start2 := time.Now()
+			vidResp, err := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...).Do()
+			a.logAPICall("videos.list", strings.Join(videoIDs, ","), fmt.Sprintf("%d videos", len(videoIDs)), QuotaVideosList, start2, err)
 			if err != nil {
 				return err
 			}
@@ -255,7 +299,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 			a.db.mu.Unlock()
 
 			totalProcessed += len(videoIDs)
-			runtime.EventsEmit(a.ctx, "youtube:sync-progress", fmt.Sprintf("Sincronizando videos... (%d)", totalProcessed))
+			runtime.EventsEmit(a.ctx, "youtube:sync-progress", fmt.Sprintf("Syncing videos... (%d)", totalProcessed))
 		}
 
 		if resp.NextPageToken == "" {
@@ -411,10 +455,6 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 		if localFile.Valid {
 			v.LocalFile = localFile.String
 		}
-		// In a specific playlist view, we can optionally fetch the playlist title too if needed,
-		// but usually the frontend already knows which playlist it's looking at.
-		// For consistency, let's add it if it's easy.
-		v.PlaylistTitle = "" // Will be handled if needed elsewhere
 		videos = append(videos, v)
 	}
 	return videos, nil

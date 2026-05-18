@@ -18,6 +18,10 @@ export function DeleteFiles(arg1) {
   return window['go']['main']['App']['DeleteFiles'](arg1);
 }
 
+export function GetAPILogs(arg1) {
+  return window['go']['main']['App']['GetAPILogs'](arg1);
+}
+
 export function GetCacheDir() {
   return window['go']['main']['App']['GetCacheDir']();
 }
@@ -32,6 +36,10 @@ export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4) {
 
 export function GetPlaylistVideos(arg1) {
   return window['go']['main']['App']['GetPlaylistVideos'](arg1);
+}
+
+export function GetQuotaUsedToday() {
+  return window['go']['main']['App']['GetQuotaUsedToday']();
 }
 
 export function GetStreamPort() {

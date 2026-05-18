@@ -1,5 +1,33 @@
 export namespace main {
 	
+	export class APILog {
+	    id: number;
+	    ts: number;
+	    operation: string;
+	    resourceId: string;
+	    resourceTitle: string;
+	    success: boolean;
+	    errorMsg: string;
+	    quotaCost: number;
+	    durationMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new APILog(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.ts = source["ts"];
+	        this.operation = source["operation"];
+	        this.resourceId = source["resourceId"];
+	        this.resourceTitle = source["resourceTitle"];
+	        this.success = source["success"];
+	        this.errorMsg = source["errorMsg"];
+	        this.quotaCost = source["quotaCost"];
+	        this.durationMs = source["durationMs"];
+	    }
+	}
 	export class VideoMeta {
 	    game: string;
 	    youtubeTitle: string;
