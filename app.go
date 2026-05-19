@@ -490,6 +490,7 @@ func (a *App) SaveFolderSettings(folder string, cfg FolderConfig) error {
 // getVideoDuration uses ffprobe to get duration in seconds.
 func getVideoDuration(path string) (int, error) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, err
@@ -742,6 +743,7 @@ func (a *App) GetThumbnail(path string) (string, error) {
 		"-c:v", "png",
 		"-",
 	)
+	hideWindow(cmd)
 	var buffer bytes.Buffer
 	cmd.Stdout = &buffer
 	if err := cmd.Run(); err != nil {
@@ -796,6 +798,7 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 		"-c:v", "mjpeg",
 		"-",
 	)
+	hideWindow(cmd)
 	var buffer bytes.Buffer
 	cmd.Stdout = &buffer
 	if err := cmd.Run(); err != nil {
@@ -810,6 +813,7 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 // GetVideoDuration returns the duration of the video in seconds using ffprobe
 func (a *App) GetVideoDuration(path string) (float64, error) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
+	hideWindow(cmd)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
