@@ -76,6 +76,7 @@ export namespace main {
 	    video_games: Record<string, string>;
 	    video_metadata: Record<string, VideoMeta>;
 	    folder_settings: Record<string, FolderConfig>;
+	    watch_folder_enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -90,6 +91,7 @@ export namespace main {
 	        this.video_games = source["video_games"];
 	        this.video_metadata = this.convertValues(source["video_metadata"], VideoMeta, true);
 	        this.folder_settings = this.convertValues(source["folder_settings"], FolderConfig, true);
+	        this.watch_folder_enabled = source["watch_folder_enabled"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

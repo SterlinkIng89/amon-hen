@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { GetAPILogs, GetQuotaUsedToday } from "../../../wailsjs/go/main/App";
+import { useToast } from "../ui/ToastContainer";
 
 interface APILog {
   id: number;
@@ -43,10 +44,31 @@ function fmtDate(ts: number): string {
 
 export function QuotaBadge() {
   const [used, setUsed] = useState<number | null>(null);
+  const warnedRef = useRef<Set<number>>(new Set());
+  const { addToast } = useToast();
 
   const refresh = useCallback(() => {
-    GetQuotaUsedToday().then(setUsed).catch(() => {});
-  }, []);
+    GetQuotaUsedToday().then((val) => {
+      setUsed(val);
+
+      const pct = (val / DAILY_LIMIT) * 100;
+
+      // Fire warning toasts once per session per threshold
+      if (pct >= 90 && !warnedRef.current.has(90)) {
+        warnedRef.current.add(90);
+        addToast(
+          `Critical: ${val.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} YouTube API quota units used today (${pct.toFixed(0)}%). Uploads may start failing.`,
+          "error"
+        );
+      } else if (pct >= 70 && !warnedRef.current.has(70)) {
+        warnedRef.current.add(70);
+        addToast(
+          `Heads up: ${pct.toFixed(0)}% of your daily YouTube API quota has been used (${val.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} units).`,
+          "warning"
+        );
+      }
+    }).catch(() => {});
+  }, [addToast]);
 
   useEffect(() => {
     refresh();
@@ -86,6 +108,7 @@ export function QuotaBadge() {
     </div>
   );
 }
+
 
 interface DevLogsPanelProps {
   open: boolean;

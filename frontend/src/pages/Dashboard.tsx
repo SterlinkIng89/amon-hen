@@ -11,6 +11,7 @@ import {
   SaveFolders,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { useToast } from "../components/ui/ToastContainer";
 
 // Types & Utils
 import { VideoFile, ViewMode } from "../types";
@@ -90,6 +91,8 @@ export default function Dashboard() {
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
 
+  const { addToast } = useToast();
+
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
 
@@ -144,8 +147,20 @@ export default function Dashboard() {
       .catch(console.error);
 
     EventsOn("youtube:auth-complete", () => setYtAuthed(true));
+
+    // Listen for new files detected by the folder watcher
+    EventsOn("files:new", (_path: string) => {
+      // Use the ref to get fresh folders without stale closure
+      setFolders((currentFolders) => {
+        scanFolders(currentFolders);
+        return currentFolders;
+      });
+      addToast("New video detected — library updated.", "success");
+    });
+
     return () => {
       EventsOff("youtube:auth-complete");
+      EventsOff("files:new");
     };
   }, []);
 

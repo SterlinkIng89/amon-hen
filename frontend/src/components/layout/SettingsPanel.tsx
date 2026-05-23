@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch } from "../../../wailsjs/go/main/App";
+import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled } from "../../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 
 interface YouTubeChannel {
@@ -21,6 +21,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
+  const [watchFolder, setWatchFolder] = useState(false);
+  const [watchFolderSaving, setWatchFolderSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -40,6 +42,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
     }).catch(() => setCredsLoaded(false));
     // Load auto-launch state
     GetAutoLaunch().then(setAutoLaunch).catch(() => {});
+    // Load watch-folder state
+    GetWatchFolderEnabled().then(setWatchFolder).catch(() => {});
   }, [open]);
 
   useEffect(() => {
@@ -180,6 +184,41 @@ export default function SettingsPanel({ open, onClose }: Props) {
                 <span
                   className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
                     autoLaunch ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Watch folder toggle */}
+            <div className="flex items-center justify-between gap-3 p-3 bg-elevated border border-border-subtle rounded-md">
+              <div>
+                <p className="text-xs font-medium text-text-primary">Watch folders for new videos</p>
+                <p className="text-[10px] text-text-secondary mt-0.5">Auto-refresh library when new video files are detected</p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={watchFolder}
+                disabled={watchFolderSaving}
+                onClick={async () => {
+                  setWatchFolderSaving(true);
+                  try {
+                    await SetWatchFolderEnabled(!watchFolder);
+                    setWatchFolder(v => !v);
+                  } catch (e) {
+                    console.error("Failed to set watch folder:", e);
+                  } finally {
+                    setWatchFolderSaving(false);
+                  }
+                }}
+                className={`relative w-10 h-5 rounded-full transition-colors duration-200 border flex-shrink-0 cursor-pointer ${
+                  watchFolder
+                    ? "bg-accent border-accent/60"
+                    : "bg-elevated border-border-medium"
+                } ${watchFolderSaving ? "opacity-50 cursor-wait" : ""}`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    watchFolder ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>

@@ -40,6 +40,8 @@ export function GetVideos(arg1:string):Promise<Array<main.VideoFile>>;
 
 export function GetVideosFromFolders(arg1:Array<string>):Promise<Array<main.VideoFile>>;
 
+export function GetWatchFolderEnabled():Promise<boolean>;
+
 export function GetYouTubeChannelInfo():Promise<main.YouTubeChannel>;
 
 export function ImportYouTubeJSON():Promise<void>;
@@ -71,6 +73,8 @@ export function SetTrayUploadProgress(arg1:number):Promise<void>;
 export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function SetVideosPlaylist(arg1:Array<string>,arg2:string):Promise<void>;
+
+export function SetWatchFolderEnabled(arg1:boolean):Promise<void>;
 
 export function ShowUploadNotification(arg1:string,arg2:string):Promise<void>;
 

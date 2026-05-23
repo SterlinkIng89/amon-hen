@@ -1,12 +1,15 @@
 import "./App.css";
 
 import Dashboard from "./pages/Dashboard";
+import { ToastProvider } from "./components/ui/ToastContainer";
 
 function App() {
   return (
-    <div id="App">
-      <Dashboard />
-    </div>
+    <ToastProvider>
+      <div id="App">
+        <Dashboard />
+      </div>
+    </ToastProvider>
   );
 }
 

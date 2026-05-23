@@ -50,6 +50,7 @@ type Config struct {
 	VideoGames          map[string]string       `json:"video_games"`    // Maps path to game tag
 	VideoMetadata       map[string]VideoMeta    `json:"video_metadata"` // Maps path to metadata
 	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
+	WatchFolderEnabled  bool                    `json:"watch_folder_enabled"`
 }
 
 // App struct
@@ -63,6 +64,8 @@ type App struct {
 	// Cached YouTube service — reused across API calls to avoid redundant token refreshes
 	ytSvc   *youtube.Service
 	ytSvcMu sync.Mutex
+	// Folder watcher — watches configured folders for new video files
+	watcher *FolderWatcher
 }
 
 // NewApp creates a new App application struct
@@ -79,6 +82,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.initCache()
 	a.startStreamServer()
+	a.startWatcher()
 
 	// Auto-sync in background — but only if last sync was more than 12 hours ago
 	// to avoid burning YouTube API quota on every app launch.
@@ -154,7 +158,11 @@ func (a *App) LoadConfig() Config {
 // SaveFolders persists the full folder list
 func (a *App) SaveFolders(folders []string) error {
 	a.config.Folders = folders
-	return a.saveConfig()
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	a.startWatcher() // restart watcher to pick up new folder list
+	return nil
 }
 
 // AddFolder opens a native folder picker, adds the chosen folder, and saves
@@ -171,7 +179,11 @@ func (a *App) AddFolder() (string, error) {
 		}
 	}
 	a.config.Folders = append(a.config.Folders, dir)
-	return dir, a.saveConfig()
+	if err := a.saveConfig(); err != nil {
+		return dir, err
+	}
+	a.startWatcher() // restart watcher to include the new folder
+	return dir, nil
 }
 
 // RemoveFolder removes a folder from the saved list
@@ -822,4 +834,19 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	var duration float64
 	fmt.Sscanf(strings.TrimSpace(out.String()), "%f", &duration)
 	return duration, nil
+}
+
+// GetWatchFolderEnabled returns whether automatic folder watching is enabled.
+func (a *App) GetWatchFolderEnabled() bool {
+	return a.config.WatchFolderEnabled
+}
+
+// SetWatchFolderEnabled enables or disables automatic folder watching and restarts the watcher.
+func (a *App) SetWatchFolderEnabled(enabled bool) error {
+	a.config.WatchFolderEnabled = enabled
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	a.startWatcher()
+	return nil
 }

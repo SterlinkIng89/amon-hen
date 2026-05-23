@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress } from "../../../wailsjs/go/main/App";
 import { formatName } from "../../utils/videoUtils";
@@ -28,8 +28,6 @@ interface Props {
   onSetRunning: (r: boolean) => void;
 }
 
-
-
 const statusIcon = {
   pending: (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--text-muted)" }}>
@@ -49,17 +47,85 @@ const statusIcon = {
   ),
 };
 
+// ─── Inline edit form for a single pending item ───────────────────────────────
+
+interface EditFormProps {
+  item: QueueItem;
+  onSave: (patch: Partial<QueueItem>) => void;
+  onCancel: () => void;
+}
+
+function EditForm({ item, onSave, onCancel }: EditFormProps) {
+  const [title, setTitle] = useState(item.title);
+  const [description, setDescription] = useState(item.description);
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(item.privacy);
+
+  return (
+    <div className="flex flex-col gap-2.5 mt-2 p-3 bg-black/20 rounded-md border border-white/5 animate-fadeIn">
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] font-semibold text-text-secondary">Title</label>
+        <input
+          className="bg-elevated border border-border-subtle rounded px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={100}
+          autoFocus
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] font-semibold text-text-secondary">Description</label>
+        <textarea
+          className="bg-elevated border border-border-subtle rounded px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent resize-none"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] font-semibold text-text-secondary">Privacy</label>
+        <div className="flex gap-1.5">
+          {(["public", "unlisted", "private"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPrivacy(p)}
+              className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-all border ${
+                privacy === p
+                  ? "bg-accent/10 text-accent border-accent/40"
+                  : "bg-elevated border-border-subtle text-text-muted hover:text-text-primary"
+              }`}
+            >
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 mt-1">
+        <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => onSave({ title: title.trim() || item.title, description, privacy })}
+          disabled={!title.trim()}
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main UploadQueue component ───────────────────────────────────────────────
+
 export default function UploadQueue({ open, queue, running, onClose, onUpdateQueue, onSetRunning }: Props) {
-  // Keep a ref so event callbacks always see fresh queue
   const queueRef = useRef(queue);
   queueRef.current = queue;
   const runningRef = useRef(running);
   runningRef.current = running;
 
-  // Listen to YouTube progress/done/error events
+  // Track which pending item (by id) is currently being edited
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   useEffect(() => {
     EventsOn("youtube:progress", (data: { path: string; percent: number }) => {
-      // Update tray icon title with current progress
       SetTrayUploadProgress(data.percent).catch(() => {});
       onUpdateQueue(queueRef.current.map((item) =>
         item.videoPath === data.path
@@ -75,13 +141,10 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           : item
       );
       onUpdateQueue(updated);
-      // Clear tray progress indicator
       SetTrayUploadProgress(-1).catch(() => {});
-      // Fire Windows toast notification
       const doneItem = queueRef.current.find(i => i.videoPath === data.path);
       const videoTitle = doneItem?.title || doneItem?.videoName || "Video";
       ShowUploadNotification("Upload complete!", videoTitle).catch(() => {});
-      // Move to next item
       processNext(updated);
     });
 
@@ -92,7 +155,6 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           : item
       );
       onUpdateQueue(updated);
-      // Clear tray progress on error too
       SetTrayUploadProgress(-1).catch(() => {});
       processNext(updated);
     });
@@ -118,17 +180,24 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
 
   const handleRemove = (id: string) => {
     onUpdateQueue(queue.filter((i) => i.id !== id));
+    if (editingId === id) setEditingId(null);
   };
 
   const handleClear = () => {
     onUpdateQueue(queue.filter((i) => i.status === "uploading"));
+    setEditingId(null);
+  };
+
+  const handleSaveEdit = (id: string, patch: Partial<QueueItem>) => {
+    onUpdateQueue(queue.map((i) => i.id === id ? { ...i, ...patch } : i));
+    setEditingId(null);
   };
 
   const pendingCount = queue.filter((i) => i.status === "pending").length;
   const doneCount = queue.filter((i) => i.status === "done").length;
 
   return (
-    <div className={`fixed bottom-4 right-4 w-[350px] bg-card border border-border-medium rounded-md shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+    <div className={`fixed bottom-4 right-4 w-[360px] bg-card border border-border-medium rounded-md shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
       {/* Queue header */}
       <div className="flex items-center justify-between p-3 border-b border-border-subtle bg-surface">
         <div className="flex items-center gap-2 text-accent">
@@ -171,7 +240,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       </div>
 
       {/* Queue items */}
-      <div className="flex flex-col p-2 gap-2 max-h-[40vh] overflow-y-auto bg-base">
+      <div className="flex flex-col p-2 gap-2 max-h-[50vh] overflow-y-auto bg-base">
         {queue.length === 0 ? (
           <div className="p-4 text-center text-xs text-text-muted">
             <p>No videos in queue</p>
@@ -179,54 +248,96 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
           </div>
         ) : (
           queue.map((item) => (
-            <div key={item.id} className={`flex gap-3 p-2.5 bg-elevated border rounded-sm ${item.status === "uploading" ? "border-accent bg-accent/5" : item.status === "done" ? "border-green-500/30 bg-green-500/5" : item.status === "error" ? "border-red-500/30 bg-red-500/5" : "border-border-subtle"}`}>
-              <div className="mt-0.5 shrink-0">{statusIcon[item.status]}</div>
+            <div
+              key={item.id}
+              className={`flex flex-col p-2.5 bg-elevated border rounded-sm ${
+                item.status === "uploading"
+                  ? "border-accent bg-accent/5"
+                  : item.status === "done"
+                  ? "border-green-500/30 bg-green-500/5"
+                  : item.status === "error"
+                  ? "border-red-500/30 bg-red-500/5"
+                  : editingId === item.id
+                  ? "border-accent/30"
+                  : "border-border-subtle"
+              }`}
+            >
+              {/* Item row */}
+              <div className="flex gap-3">
+                <div className="mt-0.5 shrink-0">{statusIcon[item.status]}</div>
 
-              <div className="flex flex-col gap-1 min-w-0 flex-1">
-                <span className="text-xs font-semibold text-text-primary truncate" title={item.title}>
-                  {item.title || formatName(item.videoName)}
-                </span>
-                <span className="text-[10px] font-mono text-text-muted truncate" title={item.videoName}>{item.videoName}</span>
-                <div className="flex items-center gap-2 flex-wrap text-[10px] mt-0.5">
-                  <span className="font-bold text-text-secondary">{item.privacy}</span>
+                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                  <span className="text-xs font-semibold text-text-primary truncate" title={item.title}>
+                    {item.title || formatName(item.videoName)}
+                  </span>
+                  <span className="text-[10px] font-mono text-text-muted truncate" title={item.videoName}>{item.videoName}</span>
+                  <div className="flex items-center gap-2 flex-wrap text-[10px] mt-0.5">
+                    <span className="font-bold text-text-secondary">{item.privacy}</span>
+                    {item.status === "uploading" && (
+                      <span className="text-accent font-semibold">{item.progress}%</span>
+                    )}
+                    {item.status === "done" && item.url && (
+                      <a className="text-accent hover:underline truncate max-w-[150px]" href={item.url} target="_blank" rel="noreferrer" title={item.url}>
+                        {item.url}
+                      </a>
+                    )}
+                    {item.status === "error" && (
+                      <span className="text-red-400 truncate max-w-[150px]" title={item.error}>{item.error}</span>
+                    )}
+                  </div>
+
                   {item.status === "uploading" && (
-                    <span className="text-accent font-semibold">{item.progress}%</span>
+                    <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-accent transition-all duration-300" style={{ width: `${item.progress}%` }} />
+                    </div>
                   )}
-                  {item.status === "done" && item.url && (
-                    <a className="text-accent hover:underline truncate max-w-[150px]" href={item.url} target="_blank" rel="noreferrer" title={item.url}>
-                      {item.url}
-                    </a>
-                  )}
-                  {item.status === "error" && (
-                    <span className="text-red-400 truncate max-w-[150px]" title={item.error}>{item.error}</span>
+                  {item.status === "done" && (
+                    <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-green-400 transition-all duration-300" style={{ width: "100%" }} />
+                    </div>
                   )}
                 </div>
 
-                {item.status === "uploading" && (
-                  <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
-                    <div
-                      className="h-full bg-accent transition-all duration-300"
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
-                )}
-                {item.status === "done" && (
-                  <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
-                    <div className="h-full bg-green-400 transition-all duration-300" style={{ width: "100%" }} />
-                  </div>
-                )}
+                {/* Action buttons */}
+                <div className="flex items-start gap-1 shrink-0">
+                  {/* Edit — only for pending */}
+                  {item.status === "pending" && (
+                    <button
+                      className={`p-0.5 w-5 h-5 bg-transparent border-none cursor-pointer rounded-sm transition-colors flex items-center justify-center ${
+                        editingId === item.id
+                          ? "text-accent"
+                          : "text-text-secondary hover:bg-black/10 hover:text-text-primary"
+                      }`}
+                      onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                      title={editingId === item.id ? "Close editor" : "Edit metadata"}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                      </svg>
+                    </button>
+                  )}
+                  {/* Remove */}
+                  {item.status !== "uploading" && (
+                    <button
+                      className="p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm hover:bg-black/10 hover:text-text-primary transition-colors flex items-center justify-center"
+                      onClick={() => handleRemove(item.id)}
+                      title="Remove"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {item.status !== "uploading" && (
-                <button
-                  className="p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm hover:bg-black/10 hover:text-text-primary transition-colors flex items-center justify-center shrink-0"
-                  onClick={() => handleRemove(item.id)}
-                  title="Remove"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                  </svg>
-                </button>
+              {/* Inline edit form */}
+              {editingId === item.id && (
+                <EditForm
+                  item={item}
+                  onSave={(patch) => handleSaveEdit(item.id, patch)}
+                  onCancel={() => setEditingId(null)}
+                />
               )}
             </div>
           ))

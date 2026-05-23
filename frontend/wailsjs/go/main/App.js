@@ -78,6 +78,10 @@ export function GetVideosFromFolders(arg1) {
   return window['go']['main']['App']['GetVideosFromFolders'](arg1);
 }
 
+export function GetWatchFolderEnabled() {
+  return window['go']['main']['App']['GetWatchFolderEnabled']();
+}
+
 export function GetYouTubeChannelInfo() {
   return window['go']['main']['App']['GetYouTubeChannelInfo']();
 }
@@ -140,6 +144,10 @@ export function SetVideoGames(arg1, arg2) {
 
 export function SetVideosPlaylist(arg1, arg2) {
   return window['go']['main']['App']['SetVideosPlaylist'](arg1, arg2);
+}
+
+export function SetWatchFolderEnabled(arg1) {
+  return window['go']['main']['App']['SetWatchFolderEnabled'](arg1);
 }
 
 export function ShowUploadNotification(arg1, arg2) {

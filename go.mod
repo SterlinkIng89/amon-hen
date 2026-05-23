@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/energye/systray v1.0.3
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/joho/godotenv v1.5.1
 	github.com/wailsapp/wails/v2 v2.12.0
