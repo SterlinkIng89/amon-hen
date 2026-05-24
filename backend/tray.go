@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 
 // trayIcon is the Windows .ico embedded at compile time.
 //
-//go:embed build/windows/icon.ico
+//go:embed icon.ico
 var trayIcon []byte
 
 // appIconPath is the .ico written to a temp file so beeep can reference it for toast notifications.
@@ -33,12 +33,12 @@ func init() {
 	}
 }
 
-// setupTray initialises the system tray. It must be called in a goroutine
+// SetupTray initialises the system tray. It must be called in a goroutine
 // because systray.Run blocks until the tray is destroyed.
 //
 // ctxCh receives the Wails context once OnStartup fires, allowing us to
 // call runtime.* methods after the window is fully ready.
-func setupTray(ctxCh <-chan context.Context) {
+func SetupTray(ctxCh <-chan context.Context) {
 	// ctx will be populated once the Wails window is ready.
 	var ctx context.Context
 

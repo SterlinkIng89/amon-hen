@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 
+	"amon-hen/backend"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -14,7 +16,7 @@ var assets embed.FS
 
 func main() {
 	// Create an instance of the app structure
-	app := NewApp()
+	app := backend.NewApp()
 
 	// Channel to pass the Wails context to the system tray goroutine.
 	// Buffered so the tray goroutine never blocks if it receives before startup fires.
@@ -22,11 +24,11 @@ func main() {
 
 	// Start the system tray in the background.
 	// systray.Run blocks, so it must live in its own goroutine.
-	go setupTray(ctxCh)
+	go backend.SetupTray(ctxCh)
 
 	// Wrap the startup hook so we can forward the context to the tray.
 	startupWithTray := func(ctx context.Context) {
-		app.startup(ctx)
+		app.Startup(ctx)
 		ctxCh <- ctx
 	}
 

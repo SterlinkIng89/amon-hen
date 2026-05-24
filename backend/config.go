@@ -1,0 +1,235 @@
+package backend
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/joho/godotenv"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type VideoMeta struct {
+	Game         string `json:"game"`
+	YouTubeTitle string `json:"youtubeTitle"`
+	Description  string `json:"description"`
+	Privacy      string `json:"privacy"`
+	YouTubeID    string `json:"youtubeId,omitempty"`
+	PlaylistID   string `json:"playlistId,omitempty"`
+	Episode      int    `json:"episode"`
+	DurationSecs int    `json:"durationSecs,omitempty"`
+}
+
+type FolderConfig struct {
+	Recursive       bool `json:"recursive"`
+	MaxDurationSecs int  `json:"max_duration_secs"`
+}
+
+// Config holds persistent application settings
+type Config struct {
+	Folders             []string             `json:"folders"`
+	YouTubeClientID     string               `json:"youtube_client_id"`
+	YouTubeClientSecret string               `json:"youtube_client_secret"`
+	YouTubeTokenJSON    string               `json:"youtube_token_json,omitempty"`
+	VideoGames          map[string]string    `json:"video_games"`    // Maps path to game tag
+	VideoMetadata       map[string]VideoMeta `json:"video_metadata"` // Maps path to metadata
+	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
+	WatchFolderEnabled  bool                 `json:"watch_folder_enabled"`
+}
+
+// initConfig loads config.json from %AppData%/AmonHen/
+func (a *App) initConfig() {
+	// Try to load .env first for dev/global vars
+	godotenv.Load() // ignore error if .env doesn't exist
+
+	base, err := os.UserConfigDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	dir := filepath.Join(base, "AmonHen")
+	os.MkdirAll(dir, 0755)
+	a.configPath = filepath.Join(dir, "config.json")
+
+	data, err := os.ReadFile(a.configPath)
+	if err == nil {
+		json.Unmarshal(data, &a.config)
+	}
+
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
+	}
+
+	// Fallback to .env if config.json is missing these
+	if a.config.YouTubeClientID == "" {
+		a.config.YouTubeClientID = os.Getenv("client_id")
+		if a.config.YouTubeClientID != "" {
+			fmt.Println("YouTube Client ID loaded from .env")
+		}
+	}
+	if a.config.YouTubeClientSecret == "" {
+		a.config.YouTubeClientSecret = os.Getenv("client_secret")
+		if a.config.YouTubeClientSecret != "" {
+			fmt.Println("YouTube Client Secret loaded from .env")
+		}
+	}
+}
+
+// saveConfig persists the current config to disk
+func (a *App) saveConfig() error {
+	data, err := json.MarshalIndent(a.config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(a.configPath, data, 0644)
+}
+
+// LoadConfig returns the current app configuration to the frontend
+func (a *App) LoadConfig() Config {
+	return a.config
+}
+
+// SaveFolders persists the full folder list
+func (a *App) SaveFolders(folders []string) error {
+	a.config.Folders = folders
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	a.startWatcher() // restart watcher to pick up new folder list
+	return nil
+}
+
+// AddFolder opens a native folder picker, adds the chosen folder, and saves
+func (a *App) AddFolder() (string, error) {
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Add video folder",
+	})
+	if err != nil || dir == "" {
+		return "", err
+	}
+	for _, f := range a.config.Folders {
+		if f == dir {
+			return dir, nil // already present
+		}
+	}
+	a.config.Folders = append(a.config.Folders, dir)
+	if err := a.saveConfig(); err != nil {
+		return dir, err
+	}
+	a.startWatcher() // restart watcher to include the new folder
+	return dir, nil
+}
+
+// RemoveFolder removes a folder from the saved list
+func (a *App) RemoveFolder(path string) error {
+	updated := []string{}
+	for _, f := range a.config.Folders {
+		if f != path {
+			updated = append(updated, f)
+		}
+	}
+	a.config.Folders = updated
+	return a.saveConfig()
+}
+
+// SetVideosPlaylist updates the playlist for multiple video paths
+func (a *App) SetVideosPlaylist(paths []string, playlistId string) error {
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+	for _, p := range paths {
+		meta := a.config.VideoMetadata[p]
+		meta.PlaylistID = playlistId
+		a.config.VideoMetadata[p] = meta
+	}
+	return a.saveConfig()
+}
+
+// SetVideoGames updates the game tag for multiple video paths and saves the config
+func (a *App) SetVideoGames(paths []string, game string) error {
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
+	}
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+
+	for _, p := range paths {
+		if game == "" {
+			delete(a.config.VideoGames, p)
+			// Also update metadata if exists
+			if meta, ok := a.config.VideoMetadata[p]; ok {
+				meta.Game = ""
+				meta.YouTubeTitle = "" // Force re-generation
+				a.config.VideoMetadata[p] = meta
+			}
+		} else {
+			a.config.VideoGames[p] = game
+			// Sync with metadata
+			meta := a.config.VideoMetadata[p]
+			meta.Game = game
+			meta.YouTubeTitle = "" // Force re-generation so it gets the new tag + episode
+			a.config.VideoMetadata[p] = meta
+		}
+	}
+	return a.saveConfig()
+}
+
+// SaveVideoMetadata updates all metadata for a specific video and saves the config
+func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string, playlistId string, episode int) error {
+	if a.config.VideoGames == nil {
+		a.config.VideoGames = make(map[string]string)
+	}
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+
+	if game == "" {
+		delete(a.config.VideoGames, path)
+	} else {
+		a.config.VideoGames[path] = game
+	}
+
+	a.config.VideoMetadata[path] = VideoMeta{
+		Game:         game,
+		YouTubeTitle: ytTitle,
+		Description:  desc,
+		Privacy:      privacy,
+		PlaylistID:   playlistId,
+		Episode:      episode,
+	}
+
+	return a.saveConfig()
+}
+
+// GetFolderSettings returns settings for a specific folder.
+func (a *App) GetFolderSettings(folder string) FolderConfig {
+	if a.config.FolderSettings == nil {
+		return FolderConfig{}
+	}
+	return a.config.FolderSettings[folder]
+}
+
+// SaveFolderSettings saves settings for a specific folder.
+func (a *App) SaveFolderSettings(folder string, cfg FolderConfig) error {
+	if a.config.FolderSettings == nil {
+		a.config.FolderSettings = make(map[string]FolderConfig)
+	}
+	a.config.FolderSettings[folder] = cfg
+	return a.saveConfig()
+}
+
+// GetWatchFolderEnabled returns whether automatic folder watching is enabled.
+func (a *App) GetWatchFolderEnabled() bool {
+	return a.config.WatchFolderEnabled
+}
+
+// SetWatchFolderEnabled enables or disables automatic folder watching and restarts the watcher.
+func (a *App) SetWatchFolderEnabled(enabled bool) error {
+	a.config.WatchFolderEnabled = enabled
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	a.startWatcher()
+	return nil
+}

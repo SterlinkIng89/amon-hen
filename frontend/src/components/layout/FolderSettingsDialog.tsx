@@ -9,6 +9,7 @@ interface FolderSettingsProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onSave?: (folder: string, settings: main.FolderConfig) => void;
 }
 
 export default function FolderSettingsDialog({ folder, open, onClose, onSaved }: FolderSettingsProps) {
