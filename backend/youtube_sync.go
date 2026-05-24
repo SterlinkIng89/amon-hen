@@ -12,16 +12,16 @@ import (
 )
 
 type YTVideo struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	PublishedAt  string `json:"publishedAt"`
-	ThumbnailUrl string `json:"thumbnailUrl"`
-	ViewCount    uint64 `json:"viewCount"`
-	LikeCount    uint64 `json:"likeCount"`
-	Duration     string `json:"duration"`
-	Privacy      string `json:"privacy"`
-	LocalFile    string `json:"localFile,omitempty"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	PublishedAt   string `json:"publishedAt"`
+	ThumbnailUrl  string `json:"thumbnailUrl"`
+	ViewCount     uint64 `json:"viewCount"`
+	LikeCount     uint64 `json:"likeCount"`
+	Duration      string `json:"duration"`
+	Privacy       string `json:"privacy"`
+	LocalFile     string `json:"localFile,omitempty"`
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
 }
 
@@ -43,7 +43,7 @@ func (a *App) SyncChannelData() error {
 	}
 
 	ctx := context.Background()
-	svc, err := a.youtubeClient(ctx)yn
+	svc, err := a.youtubeClient(ctx)
 	if err != nil {
 		return err
 	}
