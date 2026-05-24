@@ -15,6 +15,14 @@ import (
 var assets embed.FS
 
 func main() {
+	// Ensure only one instance of the app runs at a time.
+	// On Windows this uses a named mutex; on other platforms it is a no-op.
+	// A second launch (e.g. clicking the taskbar icon again) will exit here
+	// instead of creating a duplicate system-tray entry.
+	if !backend.AcquireSingleInstanceLock() {
+		return
+	}
+
 	// Create an instance of the app structure
 	app := backend.NewApp()
 
