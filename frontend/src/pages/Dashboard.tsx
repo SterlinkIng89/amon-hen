@@ -9,7 +9,7 @@ import {
   UploadToYouTube,
   SaveVideoMetadata,
   SaveFolders,
-} from "../../wailsjs/go/main/App";
+} from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useToast } from "../components/ui/ToastContainer";
 

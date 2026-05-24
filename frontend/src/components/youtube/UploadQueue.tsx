@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
-import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress } from "../../../wailsjs/go/backend/App";
 import { formatName } from "../../utils/videoUtils";
 
 export interface QueueItem {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled } from "../../../wailsjs/go/main/App";
+import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 
 interface YouTubeChannel {

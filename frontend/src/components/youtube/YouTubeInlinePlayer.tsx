@@ -5,7 +5,7 @@ import {
   GetChannelPlaylists, 
   AddVideoToPlaylist,
   CreatePlaylist
-} from "../../../wailsjs/go/main/App";
+} from "../../../wailsjs/go/backend/App";
 
 interface YouTubeInlinePlayerProps {
   video: YTVideo;

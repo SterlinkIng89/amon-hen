@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { GetFolderSettings, SaveFolderSettings } from "../../../wailsjs/go/main/App";
-import { main } from "../../../wailsjs/go/models";
+import { GetFolderSettings, SaveFolderSettings } from "../../../wailsjs/go/backend/App";
+import { backend } from "../../../wailsjs/go/models";
 
 // Define the shape manually to match the Go struct since it might not be auto-generated in models yet
 // Actually we can use the type from index.ts or define it
@@ -9,7 +9,7 @@ interface FolderSettingsProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
-  onSave?: (folder: string, settings: main.FolderConfig) => void;
+  onSave?: (folder: string, settings: backend.FolderConfig) => void;
 }
 
 export default function FolderSettingsDialog({ folder, open, onClose, onSaved }: FolderSettingsProps) {

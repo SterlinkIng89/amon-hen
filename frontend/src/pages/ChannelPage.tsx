@@ -5,7 +5,7 @@ import {
   GetChannelPlaylists,
   SyncChannelData,
   GetPlaylistVideos,
-} from "../../wailsjs/go/main/App";
+} from "../../wailsjs/go/backend/App";
 
 import VideoPill from "../components/video/VideoPill";
 import PlaylistCard from "../components/youtube/PlaylistCard";

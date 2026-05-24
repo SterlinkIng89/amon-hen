@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/main/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import TagInput from "../ui/TagInput";

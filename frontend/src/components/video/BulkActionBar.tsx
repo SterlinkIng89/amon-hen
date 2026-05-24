@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { SetVideoGames, DeleteFiles, GetChannelPlaylists, SetVideosPlaylist } from "../../../wailsjs/go/main/App";
+import { SetVideoGames, DeleteFiles, GetChannelPlaylists, SetVideosPlaylist } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { VideoFile, YTPlaylist } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";

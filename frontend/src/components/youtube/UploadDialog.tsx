@@ -4,7 +4,7 @@ import { generateYouTubeTitle } from "../../utils/videoUtils";
 import {
   GetChannelPlaylists,
   CreatePlaylist,
-} from "../../../wailsjs/go/main/App";
+} from "../../../wailsjs/go/backend/App";
 
 export interface UploadOptions {
   title: string;

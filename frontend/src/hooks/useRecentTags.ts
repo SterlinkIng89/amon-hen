@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LoadConfig } from '../../wailsjs/go/main/App';
+import { LoadConfig } from '../../wailsjs/go/backend/App';
 
 const STORAGE_KEY = 'amon_hen_recent_tags';
 

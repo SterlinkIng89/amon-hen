@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { GetAPILogs, GetQuotaUsedToday } from "../../../wailsjs/go/main/App";
+import { GetAPILogs, GetQuotaUsedToday } from "../../../wailsjs/go/backend/App";
 import { useToast } from "../ui/ToastContainer";
 
 interface APILog {
