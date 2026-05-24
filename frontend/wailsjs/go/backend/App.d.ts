@@ -7,6 +7,8 @@ export function AddFolder():Promise<string>;
 
 export function AddVideoToPlaylist(arg1:string,arg2:string):Promise<void>;
 
+export function CancelUpload(arg1:string):Promise<void>;
+
 export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function DeleteFiles(arg1:Array<string>):Promise<void>;

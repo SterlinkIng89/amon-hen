@@ -22,11 +22,16 @@ type App struct {
 	ytSvcMu sync.Mutex
 	// Folder watcher — watches configured folders for new video files
 	watcher *FolderWatcher
+	// Active uploads tracking
+	uploadsMu sync.Mutex
+	uploads   map[string]context.CancelFunc
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	return &App{
+		uploads: make(map[string]context.CancelFunc),
+	}
 }
 
 // Startup is called when the app starts

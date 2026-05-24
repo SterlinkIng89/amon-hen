@@ -349,9 +349,31 @@ func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
 	return nil
 }
 
+// CancelUpload cancels an ongoing video upload by its path
+func (a *App) CancelUpload(path string) error {
+	a.uploadsMu.Lock()
+	defer a.uploadsMu.Unlock()
+	if cancel, ok := a.uploads[path]; ok {
+		cancel()
+		delete(a.uploads, path)
+		return nil
+	}
+	return fmt.Errorf("no active upload found for path: %s", path)
+}
+
 // UploadToYouTube uploads a single video to YouTube and emits progress events
 func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	a.uploadsMu.Lock()
+	a.uploads[path] = cancel
+	a.uploadsMu.Unlock()
+
+	defer func() {
+		a.uploadsMu.Lock()
+		delete(a.uploads, path)
+		a.uploadsMu.Unlock()
+		cancel()
+	}()
 
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
@@ -392,13 +414,17 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 		},
 	}
 
-	call := svc.Videos.Insert([]string{"snippet", "status"}, video)
+	call := svc.Videos.Insert([]string{"snippet", "status"}, video).Context(ctx)
 	call.Media(pr, googleapi.ContentType("video/*"))
 
 	start := time.Now()
 	result, err := call.Do()
 	a.logAPICall("videos.insert", "", title, QuotaVideosInsert, start, err)
 	if err != nil {
+		if ctx.Err() == context.Canceled {
+			runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": "Upload cancelled"})
+			return fmt.Errorf("upload cancelled")
+		}
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
 		return err
 	}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
-import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress } from "../../../wailsjs/go/backend/App";
+import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress, CancelUpload } from "../../../wailsjs/go/backend/App";
 import { formatName } from "../../utils/videoUtils";
 
 export interface QueueItem {
@@ -165,6 +165,8 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
   const MAX_CONCURRENT_UPLOADS = 3;
 
   const processQueue = (currentQueue: QueueItem[]) => {
+    if (!runningRef.current) return;
+    
     const uploadingCount = currentQueue.filter(i => i.status === "uploading").length;
     
     if (uploadingCount >= MAX_CONCURRENT_UPLOADS) return;
@@ -193,8 +195,14 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
 
   const handleStart = () => {
     onSetRunning(true);
+    runningRef.current = true;
     // Usar el estado más reciente
     processQueue(queue);
+  };
+
+  const handlePause = () => {
+    onSetRunning(false);
+    runningRef.current = false;
   };
 
   const handleMoveUp = (index: number) => {
@@ -214,6 +222,16 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
   const handleRemove = (id: string) => {
     onUpdateQueue(queue.filter((i) => i.id !== id));
     if (editingId === id) setEditingId(null);
+  };
+
+  const handleCancelUpload = async (id: string, path: string) => {
+    try {
+      await CancelUpload(path);
+      // The backend will emit youtube:error with "Upload cancelled", which will
+      // update the state in our youtube:error event handler automatically.
+    } catch (e) {
+      console.error("Failed to cancel upload:", e);
+    }
   };
 
   const handleClear = () => {
@@ -257,7 +275,17 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
             </button>
           )}
           {running && (
-            <span className="text-[11px] text-accent font-semibold flex items-center gap-1 bg-accent-dim px-2 py-0.5 rounded-[10px]">Uploading...</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-accent font-semibold flex items-center gap-1 bg-accent-dim px-2 py-0.5 rounded-[10px]">
+                Uploading...
+              </span>
+              <button className="btn btn-ghost btn-sm text-yellow-400 hover:text-yellow-300" onClick={handlePause}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+                Pause Queue
+              </button>
+            </div>
           )}
           {queue.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={handleClear} title="Clear completed/errored">
@@ -372,6 +400,18 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                      </svg>
+                    </button>
+                  )}
+                  {/* Cancel Upload */}
+                  {item.status === "uploading" && (
+                    <button
+                      className="p-0.5 w-5 h-5 bg-transparent border-none text-red-400/80 cursor-pointer rounded-sm hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center justify-center"
+                      onClick={() => handleCancelUpload(item.id, item.videoPath)}
+                      title="Cancel Upload"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                       </svg>
                     </button>
                   )}

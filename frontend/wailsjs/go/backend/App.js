@@ -10,6 +10,10 @@ export function AddVideoToPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['AddVideoToPlaylist'](arg1, arg2);
 }
 
+export function CancelUpload(arg1) {
+  return window['go']['backend']['App']['CancelUpload'](arg1);
+}
+
 export function CreatePlaylist(arg1, arg2, arg3) {
   return window['go']['backend']['App']['CreatePlaylist'](arg1, arg2, arg3);
 }
