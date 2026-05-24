@@ -145,7 +145,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       const doneItem = queueRef.current.find(i => i.videoPath === data.path);
       const videoTitle = doneItem?.title || doneItem?.videoName || "Video";
       ShowUploadNotification("Upload complete!", videoTitle).catch(() => {});
-      processNext(updated);
+      processQueue(updated);
     });
 
     EventsOn("youtube:error", (data: { path: string; message: string }) => {
@@ -156,26 +156,59 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       );
       onUpdateQueue(updated);
       SetTrayUploadProgress(-1).catch(() => {});
-      processNext(updated);
+      processQueue(updated);
     });
 
     return () => { EventsOff("youtube:progress", "youtube:done", "youtube:error"); };
   }, []);
 
-  const processNext = (currentQueue: QueueItem[]) => {
-    const next = currentQueue.find((i) => i.status === "pending");
-    if (!next) {
+  const MAX_CONCURRENT_UPLOADS = 3;
+
+  const processQueue = (currentQueue: QueueItem[]) => {
+    const uploadingCount = currentQueue.filter(i => i.status === "uploading").length;
+    
+    if (uploadingCount >= MAX_CONCURRENT_UPLOADS) return;
+
+    const pendingItems = currentQueue.filter(i => i.status === "pending");
+    if (pendingItems.length === 0 && uploadingCount === 0) {
       onSetRunning(false);
       return;
     }
-    UploadToYouTube(next.videoPath, next.title, next.description, next.privacy, next.playlistId || "", next.gameTag || "", next.episode || 0).catch(() => {});
+
+    const slotsAvailable = MAX_CONCURRENT_UPLOADS - uploadingCount;
+    const itemsToStart = pendingItems.slice(0, slotsAvailable);
+
+    if (itemsToStart.length === 0) return;
+
+    // Marcamos localmente como 'uploading' para no volver a iniciarlos
+    const updatedQueue = [...currentQueue];
+    itemsToStart.forEach(item => {
+      const idx = updatedQueue.findIndex(i => i.id === item.id);
+      if (idx !== -1) updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading" };
+      UploadToYouTube(item.videoPath, item.title, item.description, item.privacy, item.playlistId || "", item.gameTag || "", item.episode || 0).catch(() => {});
+    });
+
+    onUpdateQueue(updatedQueue);
   };
 
   const handleStart = () => {
-    const first = queue.find((i) => i.status === "pending");
-    if (!first) return;
     onSetRunning(true);
-    UploadToYouTube(first.videoPath, first.title, first.description, first.privacy, first.playlistId || "", first.gameTag || "", first.episode || 0).catch(() => {});
+    // Usar el estado más reciente
+    processQueue(queue);
+  };
+
+  const handleMoveUp = (index: number) => {
+    if (index <= 0) return;
+    const newQueue = [...queue];
+    [newQueue[index - 1], newQueue[index]] = [newQueue[index], newQueue[index - 1]];
+    onUpdateQueue(newQueue);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index >= queue.length - 1) return;
+    const newQueue = [...queue];
+    [newQueue[index], newQueue[index + 1]] = [newQueue[index + 1], newQueue[index]];
+    onUpdateQueue(newQueue);
   };
 
   const handleRemove = (id: string) => {
@@ -247,7 +280,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
             <p className="text-[10px] mt-1 opacity-70">Click "Add to Queue" on any video to add it here</p>
           </div>
         ) : (
-          queue.map((item) => (
+          queue.map((item, index) => (
             <div
               key={item.id}
               className={`flex flex-col p-2.5 bg-elevated border rounded-sm ${
@@ -300,6 +333,32 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
 
                 {/* Action buttons */}
                 <div className="flex items-start gap-1 shrink-0">
+                  {/* Reorder Up */}
+                  {item.status === "pending" && (
+                    <button
+                      className={`p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === 0 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
+                      onClick={() => handleMoveUp(index)}
+                      disabled={index === 0}
+                      title="Move Up"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 14l5-5 5 5z" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Reorder Down */}
+                  {item.status === "pending" && (
+                    <button
+                      className={`p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === queue.length - 1 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
+                      onClick={() => handleMoveDown(index)}
+                      disabled={index === queue.length - 1}
+                      title="Move Down"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 10l5 5 5-5z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Edit — only for pending */}
                   {item.status === "pending" && (
                     <button

@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { SetVideoGames, DeleteFiles, GetChannelPlaylists, SetVideosPlaylist } from "../../../wailsjs/go/backend/App";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  SetVideoGames,
+  DeleteFiles,
+  GetChannelPlaylists,
+  SetVideosPlaylist,
+  CreatePlaylist,
+} from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { VideoFile, YTPlaylist } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";
@@ -29,16 +35,44 @@ export default function BulkActionBar({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
-  const [playlistId, setPlaylistId] = useState("");
+  // playlistSearch: text in the search input (for filtering)
   const [playlistSearch, setPlaylistSearch] = useState("");
+  // selectedPlaylistTitle: the playlist already chosen (shown as a chip)
+  const [selectedPlaylistTitle, setSelectedPlaylistTitle] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [savingPlaylist, setSavingPlaylist] = useState(false);
 
-  useEffect(() => {
-    GetChannelPlaylists("recent").then(setPlaylists).catch(console.error);
-  }, []);
+  // "Create new playlist" inline form state
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
+  const [creatingNewLoading, setCreatingNewLoading] = useState(false);
+  const newPlaylistInputRef = useRef<HTMLInputElement>(null);
+  const playlistInputRef = useRef<HTMLInputElement>(null);
 
   const { suggestions, addRecentTag } = useRecentTags();
+
+  // Derive the default search hint from the first selected video's game tag
+  const defaultSearch = selectedVideos[0]?.game || "";
+
+  // Fetch playlists whenever dropdown opens (always fresh) and pre-fill search
+  useEffect(() => {
+    if (isDropdownOpen) {
+      GetChannelPlaylists("recent").then(setPlaylists).catch(console.error);
+      // Pre-fill with game tag if search is still empty and no playlist chosen yet
+      if (!playlistSearch && !selectedPlaylistTitle) {
+        setPlaylistSearch(defaultSearch);
+      }
+      // Focus the search input
+      setTimeout(() => playlistInputRef.current?.focus(), 50);
+    }
+  }, [isDropdownOpen]);
+
+  // Focus the new playlist input when the form opens
+  useEffect(() => {
+    if (creatingNew) {
+      setTimeout(() => newPlaylistInputRef.current?.focus(), 50);
+    }
+  }, [creatingNew]);
 
   if (selectedPaths.length === 0) return null;
 
@@ -60,15 +94,36 @@ export default function BulkActionBar({
   const handleSavePlaylist = async (pId: string, pTitle: string) => {
     setSavingPlaylist(true);
     try {
-      await SetVideosPlaylist(selectedPaths, pId);
-      setPlaylistId(pId);
-      setPlaylistSearch(pTitle);
+      await SetVideosPlaylist(selectedPaths, pId, pTitle);
+      setSelectedPlaylistTitle(pTitle);
+      setPlaylistSearch("");
       setIsDropdownOpen(false);
+      setCreatingNew(false);
       onTagsSaved();
     } catch (e) {
       console.error("Failed to save playlist bulk", e);
     } finally {
       setSavingPlaylist(false);
+    }
+  };
+
+  const handleCreateNewPlaylist = async () => {
+    const title = newPlaylistTitle.trim();
+    if (!title) return;
+    setCreatingNewLoading(true);
+    try {
+      // Create the playlist on YouTube (unlisted by default)
+      const newId = await CreatePlaylist(title, "", "unlisted");
+      if (newId) {
+        // Immediately assign selected videos to the new playlist
+        await handleSavePlaylist(newId, title);
+        setNewPlaylistTitle("");
+        setCreatingNew(false);
+      }
+    } catch (e) {
+      console.error("Failed to create playlist", e);
+    } finally {
+      setCreatingNewLoading(false);
     }
   };
 
@@ -90,10 +145,14 @@ export default function BulkActionBar({
     }
   };
 
-  // Build QueueItems from the selected VideoFile objects and add them all to the queue
   const handleAddAllToQueue = () => {
-    const items: QueueItem[] = selectedVideos
-      .filter((v) => !v.youtubeId) // skip already-uploaded videos
+    if (selectedVideos.length === 0) return;
+    const first = selectedVideos[0];
+    const rest = selectedVideos.slice(1).sort((a, b) => a.modTime - b.modTime);
+    const orderedVideos = [first, ...rest];
+
+    const items: QueueItem[] = orderedVideos
+      .filter((v) => !v.youtubeId)
       .map((v) => ({
         id: crypto.randomUUID(),
         videoPath: v.path,
@@ -120,8 +179,13 @@ export default function BulkActionBar({
     else if (e.key === "Escape") onClearSelection();
   };
 
+  const filteredPlaylists = playlists.filter((p) =>
+    p.title.toLowerCase().includes(playlistSearch.toLowerCase())
+  );
+
   return (
-    <div className="absolute top-0 left-0 right-0 z-50 m-4 p-2 pl-3 bg-elevated/95 backdrop-blur-md border border-accent/40 rounded-md shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-between animate-slideDown">
+    <div className="w-full bg-elevated border-b border-border-medium z-40 px-4 py-2 flex items-center justify-between animate-fadeIn shrink-0">
+      {/* Left: selection count + clear */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-accent">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.7 }}>
@@ -129,7 +193,10 @@ export default function BulkActionBar({
           </svg>
           <span>{selectedPaths.length} selected</span>
         </div>
-        <button className="flex items-center gap-1 px-1.5 py-0.5 bg-transparent border-none text-[10px] text-text-secondary cursor-pointer rounded-sm hover:bg-black/20 hover:text-text-primary transition-colors font-medium" onClick={onClearSelection}>
+        <button
+          className="flex items-center gap-1 px-1.5 py-0.5 bg-transparent border-none text-[10px] text-text-secondary cursor-pointer rounded-sm hover:bg-black/20 hover:text-text-primary transition-colors font-medium"
+          onClick={onClearSelection}
+        >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
           </svg>
@@ -137,6 +204,7 @@ export default function BulkActionBar({
         </button>
       </div>
 
+      {/* Right: actions */}
       <div className="flex items-center gap-3">
         {/* Tag action */}
         <div className="flex items-center gap-2">
@@ -160,45 +228,116 @@ export default function BulkActionBar({
         {/* Playlist action */}
         <div className="flex items-center gap-2">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.6, flexShrink: 0 }}>
-            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
           </svg>
-          <div className="relative">
-            <input
-              type="text"
-              className="w-[160px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
-              placeholder={savingPlaylist ? "Applying..." : "Add to playlist..."}
-              value={playlistSearch}
-              onChange={(e) => {
-                setPlaylistSearch(e.target.value);
-                setIsDropdownOpen(true);
-              }}
-              onFocus={() => setIsDropdownOpen(true)}
-              disabled={savingPlaylist}
-            />
 
-            {isDropdownOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-elevated border border-border-medium rounded-md shadow-2xl z-[60] max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
-                {playlists
-                  .filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase()))
-                  .map(p => (
+          {/* Show selected playlist as a chip, or the trigger button */}
+          {selectedPlaylistTitle ? (
+            <div className="flex items-center gap-1 h-[26px] px-2 bg-accent/15 border border-accent/30 rounded-sm text-[11px] font-medium text-accent max-w-[180px]">
+              <span className="truncate">{selectedPlaylistTitle}</span>
+              <button
+                className="ml-1 p-0 bg-transparent border-none text-accent/70 hover:text-accent cursor-pointer leading-none shrink-0"
+                onClick={() => { setSelectedPlaylistTitle(""); setPlaylistSearch(""); }}
+                title="Change playlist"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                ref={playlistInputRef}
+                type="text"
+                className="w-[160px] bg-black/30 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-white/20 focus:border-accent focus:bg-black/50"
+                placeholder={savingPlaylist ? "Applying..." : `Playlist (${defaultSearch || "search..."})` }
+                value={playlistSearch}
+                onChange={(e) => {
+                  setPlaylistSearch(e.target.value);
+                  setCreatingNew(false);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                disabled={savingPlaylist}
+              />
+
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-elevated border border-border-medium rounded-md shadow-2xl z-[60] max-h-60 overflow-y-auto custom-scrollbar animate-fadeIn">
+                  {/* ── Existing playlists ─────────────────────────────── */}
+                  {filteredPlaylists.map((p) => (
                     <button
                       key={p.id}
                       className="w-full text-left px-3 py-2 text-[11px] text-text-primary hover:bg-accent/10 transition-colors border-none bg-transparent cursor-pointer flex items-center justify-between"
                       onClick={() => handleSavePlaylist(p.id, p.title)}
                     >
                       <span className="truncate">{p.title}</span>
-                      <span className="text-[9px] text-text-muted">{p.videoCount}</span>
+                      <span className="text-[9px] text-text-muted ml-2 shrink-0">{p.videoCount} videos</span>
                     </button>
                   ))}
-                {playlists.length === 0 && (
-                  <div className="p-3 text-center text-[10px] text-text-muted">No playlists found</div>
-                )}
-              </div>
-            )}
-            {isDropdownOpen && (
-              <div className="fixed inset-0 z-[55]" onClick={() => setIsDropdownOpen(false)} />
-            )}
-          </div>
+
+                  {/* ── Create new playlist ─────────────────────────────── */}
+                  <div className="border-t border-border-subtle">
+                    {!creatingNew ? (
+                      <button
+                        className="w-full text-left px-3 py-2 text-[11px] font-bold text-accent hover:bg-accent/10 transition-colors border-none bg-transparent cursor-pointer flex items-center gap-2"
+                        onClick={() => {
+                          setCreatingNew(true);
+                          // Pre-fill with current search or game tag
+                          setNewPlaylistTitle(playlistSearch || defaultSearch);
+                        }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
+                        </svg>
+                        {playlistSearch ? `Create "${playlistSearch}"` : "Create new playlist"}
+                      </button>
+                    ) : (
+                      <div className="px-3 py-2 flex items-center gap-2">
+                        <input
+                          ref={newPlaylistInputRef}
+                          type="text"
+                          className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                          placeholder="Playlist name..."
+                          value={newPlaylistTitle}
+                          onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleCreateNewPlaylist();
+                            if (e.key === "Escape") setCreatingNew(false);
+                          }}
+                        />
+                        <button
+                          className="btn btn-primary btn-sm shrink-0"
+                          onClick={handleCreateNewPlaylist}
+                          disabled={creatingNewLoading || !newPlaylistTitle.trim()}
+                        >
+                          {creatingNewLoading ? "..." : "Create"}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm shrink-0"
+                          onClick={() => setCreatingNew(false)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {filteredPlaylists.length === 0 && !creatingNew && (
+                    <p className="px-3 py-2 text-[10px] text-text-muted text-center">No playlists match</p>
+                  )}
+                </div>
+              )}
+
+              {/* Click-outside dismissal */}
+              {isDropdownOpen && (
+                <div
+                  className="fixed inset-0 z-[55]"
+                  onClick={() => { setIsDropdownOpen(false); setCreatingNew(false); }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         <div className="w-px h-5 bg-white/10" />
@@ -212,7 +351,7 @@ export default function BulkActionBar({
               title={`Add ${uploadableCount} video${uploadableCount > 1 ? "s" : ""} to upload queue`}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
               </svg>
               Queue {uploadableCount}
             </button>
@@ -223,14 +362,21 @@ export default function BulkActionBar({
         {/* Delete action */}
         {confirmDelete ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-red-400 font-medium">Delete {selectedPaths.length} file{selectedPaths.length > 1 ? "s" : ""}?</span>
+            <span className="text-xs text-red-400 font-medium">
+              Delete {selectedPaths.length} file{selectedPaths.length > 1 ? "s" : ""}?
+            </span>
             <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={deleting}>
               {deleting ? "Deleting..." : "Confirm Delete"}
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>Cancel</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </button>
           </div>
         ) : (
-          <button className="btn btn-ghost btn-sm hover:!text-red-400 hover:!border-red-400/30 hover:!bg-red-500/10" onClick={handleDelete}>
+          <button
+            className="btn btn-ghost btn-sm hover:!text-red-400 hover:!border-red-400/30 hover:!bg-red-500/10"
+            onClick={handleDelete}
+          >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
             </svg>

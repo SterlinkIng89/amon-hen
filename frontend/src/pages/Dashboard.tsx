@@ -1,57 +1,38 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  GetVideosFromFolders,
   GetStreamPort,
-  AddFolder,
-  RemoveFolder,
-  LoadConfig,
   IsYouTubeAuthed,
-  UploadToYouTube,
   SaveVideoMetadata,
-  SaveFolders,
+  UploadToYouTube,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import { useToast } from "../components/ui/ToastContainer";
 
 // Types & Utils
 import { VideoFile, ViewMode } from "../types";
 import { groupByDay } from "../utils/videoUtils";
 
+// Global store
+import { useAppStore } from "../store/useAppStore";
+
+// Hooks
+import { useVideoLibrary } from "../hooks/useVideoLibrary";
+
+// UI
 import AppHeader from "../components/layout/AppHeader";
 import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
 import ChannelPage from "./ChannelPage";
-import UploadDialog, {
-  UploadOptions,
-} from "../components/youtube/UploadDialog";
+import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
+
 import SettingsPanel from "../components/layout/SettingsPanel";
 import BulkActionBar from "../components/video/BulkActionBar";
 import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
+import ErrorBoundary from "../components/ui/ErrorBoundary";
 
 type SortMode = "date" | "name" | "size";
-
-// ─── Persistence helpers ────────────────────────────────────────────────────
-
-function loadPref<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function savePref(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
-
-// ─── Sort helpers ────────────────────────────────────────────────────────────
 
 function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
   const arr = [...videos];
@@ -67,32 +48,33 @@ function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
 }
 
 export default function Dashboard() {
-  const [videos, setVideos] = useState<VideoFile[]>([]);
-  const [folders, setFolders] = useState<string[]>([]);
-  const [activeFolders, setActiveFolders] = useState<string[]>([]);
+  // ── Global store ────────────────────────────────────────────────────────────
+  const {
+    queue, setQueue, addToQueue, queueOpen, setQueueOpen, queueRunning, setQueueRunning,
+    ytAuthed, setYtAuthed,
+    view, setView,
+    sortMode, setSortMode,
+    filterUploaded, setFilterUploaded,
+    selectedIndex, setSelectedIndex,
+  } = useAppStore();
+
+  // ── Video library hook ───────────────────────────────────────────────────────
+  const {
+    videos, folders, activeFolders, scanning, error,
+    isDraggingOver, handleAddFolder, handleRemoveFolder, handleRescan, toggleFolder,
+  } = useVideoLibrary();
+
+  // ── Local UI state ───────────────────────────────────────────────────────────
   const [streamPort, setStreamPort] = useState(0);
-  const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState("");
-  const [view, setView] = useState<ViewMode>(() => loadPref("pref_view", "grid" as ViewMode));
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [uploadTarget, setUploadTarget] = useState<VideoFile | null>(null);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [queueOpen, setQueueOpen] = useState(false);
-  const [queueRunning, setQueueRunning] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [ytAuthed, setYtAuthed] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
-  const [filterUploaded, setFilterUploaded] = useState(() => loadPref("pref_filter_uploaded", false));
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortMode, setSortMode] = useState<SortMode>(() => loadPref("pref_sort_mode", "date" as SortMode));
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
-  const dragCounterRef = useRef(0);
 
-  const { addToast } = useToast();
-
+  const restoredIndexRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
 
@@ -100,16 +82,8 @@ export default function Dashboard() {
     if (listRef.current) setListRoot(listRef.current);
   }, []);
 
-  // Persist view + filter preferences whenever they change
-  useEffect(() => { savePref("pref_view", view); }, [view]);
-  useEffect(() => { savePref("pref_filter_uploaded", filterUploaded); }, [filterUploaded]);
-  useEffect(() => { savePref("pref_sort_mode", sortMode); }, [sortMode]);
-
-  // Restore selectedIndex after first successful scan
-  const restoredIndexRef = useRef(false);
-
-  // Derived state — apply sort + search + folder + upload filters
-  const sortedVideos = applySortMode(videos, sortMode);
+  // ── Derived state ────────────────────────────────────────────────────────────
+  const sortedVideos = applySortMode(videos, sortMode as SortMode);
 
   const filteredByFolder =
     activeFolders.length === 0
@@ -121,70 +95,37 @@ export default function Dashboard() {
     : filteredByFolder;
 
   const filteredVideos = searchQuery
-    ? filteredByUpload.filter(v =>
-        v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (v.game && v.game.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? filteredByUpload.filter(
+        (v) =>
+          v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (v.game && v.game.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : filteredByUpload;
 
   const groups = groupByDay(filteredVideos);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
-  // Load config on mount
+  // ── Init: stream port + YouTube auth ────────────────────────────────────────
   useEffect(() => {
     GetStreamPort().then(setStreamPort).catch(console.error);
-    IsYouTubeAuthed()
-      .then(setYtAuthed)
-      .catch(() => {});
-    LoadConfig()
-      .then((cfg) => {
-        const savedFolders = cfg.folders ?? [];
-        if (savedFolders.length > 0) {
-          setFolders(savedFolders);
-          scanFolders(savedFolders);
-        }
-      })
-      .catch(console.error);
+    IsYouTubeAuthed().then(setYtAuthed).catch(() => {});
 
     EventsOn("youtube:auth-complete", () => setYtAuthed(true));
-
-    // Listen for new files detected by the folder watcher
-    EventsOn("files:new", (_path: string) => {
-      // Use the ref to get fresh folders without stale closure
-      setFolders((currentFolders) => {
-        scanFolders(currentFolders);
-        return currentFolders;
-      });
-      addToast("New video detected — library updated.", "success");
-    });
-
-    return () => {
-      EventsOff("youtube:auth-complete");
-      EventsOff("files:new");
-    };
+    return () => { EventsOff("youtube:auth-complete"); };
   }, []);
 
-  // Restore selectedIndex once videos are loaded (only once)
+  // ── Restore selectedIndex once videos are loaded (once only) ─────────────────
   useEffect(() => {
     if (videos.length === 0 || restoredIndexRef.current) return;
     restoredIndexRef.current = true;
-    const saved = loadPref("pref_selected_index", -1);
-    const savedView = loadPref<ViewMode>("pref_view", "grid");
-    if (savedView === "player" && saved >= 0 && saved < sortedVideos.length) {
-      setSelectedIndex(saved);
-      setView("player");
+    if (view === "player" && selectedIndex >= 0 && selectedIndex < sortedVideos.length) {
+      // Already restored from store — nothing to do
     } else {
-      // Fallback to grid if index is out of range
-      setView(savedView === "channel" ? "channel" : "grid");
+      setView(view === "channel" ? "channel" : view === "player" ? "grid" : view);
     }
   }, [videos]);
 
-  // Persist selectedIndex on change
-  useEffect(() => {
-    savePref("pref_selected_index", selectedIndex);
-  }, [selectedIndex]);
-
-  // Clear selection + search on Escape
+  // ── Escape key: clear selection or search ────────────────────────────────────
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -200,114 +141,10 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPaths.length, searchQuery]);
 
-  // ─── Drag & drop folder support ──────────────────────────────────────────
-
-  useEffect(() => {
-    const onDragEnter = (e: DragEvent) => {
-      // Only react to file drags
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      dragCounterRef.current += 1;
-      setIsDraggingOver(true);
-    };
-    const onDragLeave = () => {
-      dragCounterRef.current -= 1;
-      if (dragCounterRef.current <= 0) {
-        dragCounterRef.current = 0;
-        setIsDraggingOver(false);
-      }
-    };
-    const onDragOver = (e: DragEvent) => {
-      e.preventDefault();
-    };
-    const onDrop = async (e: DragEvent) => {
-      e.preventDefault();
-      dragCounterRef.current = 0;
-      setIsDraggingOver(false);
-      const items = Array.from(e.dataTransfer?.items ?? []);
-      const dirs: string[] = [];
-      for (const item of items) {
-        const entry = item.webkitGetAsEntry?.();
-        if (entry?.isDirectory) {
-          // In Wails/Electron the full path is available via .file()
-          const file = item.getAsFile();
-          if (file) {
-            // @ts-ignore — Wails exposes the real FS path
-            const p: string = file.path ?? "";
-            if (p) dirs.push(p);
-          }
-        }
-      }
-      if (dirs.length === 0) return;
-      const updated = [...folders];
-      for (const d of dirs) {
-        if (!updated.includes(d)) updated.push(d);
-      }
-      await SaveFolders(updated);
-      setFolders(updated);
-      await scanFolders(updated);
-    };
-    window.addEventListener("dragenter", onDragEnter);
-    window.addEventListener("dragleave", onDragLeave);
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("drop", onDrop);
-    return () => {
-      window.removeEventListener("dragenter", onDragEnter);
-      window.removeEventListener("dragleave", onDragLeave);
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("drop", onDrop);
-    };
-  }, [folders]);
-
-  const scanFolders = useCallback(async (foldersToScan: string[]) => {
-    if (foldersToScan.length === 0) return;
-    setScanning(true);
-    setError("");
-    try {
-      const result = await GetVideosFromFolders(foldersToScan);
-      const list = result ?? [];
-      setVideos(list);
-      if (list.length === 0)
-        setError("No videos found in the selected folders.");
-    } catch (e: any) {
-      setError(`Scan failed: ${e?.message ?? e}`);
-    } finally {
-      setScanning(false);
-    }
-  }, []);
-
-  const handleAddFolder = async () => {
-    try {
-      const dir = await AddFolder();
-      if (!dir) return;
-      const updated = folders.includes(dir) ? folders : [...folders, dir];
-      setFolders(updated);
-      await scanFolders(updated);
-    } catch {
-      setError("Failed to add folder.");
-    }
-  };
-
-  const handleRemoveFolder = async (path: string) => {
-    await RemoveFolder(path);
-    const updated = folders.filter((f) => f !== path);
-    setFolders(updated);
-    setActiveFolders((a) => a.filter((f) => f !== path));
-    await scanFolders(updated);
-  };
-
-  const handleRescan = () => scanFolders(folders);
-
-  const toggleFolder = (path: string) => {
-    setActiveFolders((prev) =>
-      prev.includes(path) ? prev.filter((f) => f !== path) : [...prev, path],
-    );
-  };
-
-  // Unified click handler used in BOTH grid and player views
+  // ── Video click handler ──────────────────────────────────────────────────────
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
 
-    // Auto-include the currently playing video if we are in player view and starting a multi-selection
     let currentPaths = [...selectedPaths];
     if (
       view === "player" &&
@@ -315,21 +152,15 @@ export default function Dashboard() {
       (e.shiftKey || e.ctrlKey || e.metaKey)
     ) {
       if (selectedIndex !== -1) {
-        const currentPlaying = sortedVideos[selectedIndex].path;
-        currentPaths.push(currentPlaying);
+        currentPaths.push(sortedVideos[selectedIndex].path);
       }
     }
 
     if (e.shiftKey) {
       const anchorIdx =
-        lastSelectedIdx !== -1
-          ? lastSelectedIdx
-          : selectedIndex !== -1
-            ? selectedIndex
-            : 0;
+        lastSelectedIdx !== -1 ? lastSelectedIdx : selectedIndex !== -1 ? selectedIndex : 0;
       const start = Math.min(anchorIdx, sortedIdx);
       const end = Math.max(anchorIdx, sortedIdx);
-
       for (let i = start; i <= end; i++) {
         const p = sortedVideos[i].path;
         if (!currentPaths.includes(p)) currentPaths.push(p);
@@ -344,7 +175,6 @@ export default function Dashboard() {
       setSelectedPaths(currentPaths);
       setLastSelectedIdx(sortedIdx);
     } else {
-      // Plain click: clear selection, open player
       setSelectedPaths([]);
       setSelectedIndex(sortedIdx);
       setLastSelectedIdx(sortedIdx);
@@ -356,7 +186,9 @@ export default function Dashboard() {
     if (i >= 0 && i < sortedVideos.length) setSelectedIndex(i);
   };
 
+  // ── Upload helpers ───────────────────────────────────────────────────────────
   const handleAddToQueue = (item: QueueItem) => {
+
     if (item.status === "uploading") {
       setQueue((q) => [item, ...q]);
       setQueueOpen(true);
@@ -367,40 +199,22 @@ export default function Dashboard() {
     }
   };
 
-  // Legacy modal path (used from grid card hover button)
   const handleUploadNow = async (video: VideoFile, opts: UploadOptions) => {
     await SaveVideoMetadata(
-      video.path,
-      video.game || "",
-      opts.title,
-      opts.description,
-      opts.privacy,
-      opts.playlistId || "",
-      video.episode || 0,
+      video.path, video.game || "", opts.title, opts.description,
+      opts.privacy, opts.playlistId || "", video.episode || 0,
     ).catch(console.error);
 
     handleAddToQueue({
-      id: crypto.randomUUID(),
-      videoPath: video.path,
-      videoName: video.name,
-      title: opts.title,
-      description: opts.description,
-      privacy: opts.privacy,
-      status: "uploading",
-      progress: 0,
-      playlistId: opts.playlistId,
-      gameTag: video.game,
-      episode: video.episode,
+      id: crypto.randomUUID(), videoPath: video.path, videoName: video.name,
+      title: opts.title, description: opts.description, privacy: opts.privacy,
+      status: "uploading", progress: 0, playlistId: opts.playlistId,
+      gameTag: video.game, episode: video.episode,
     });
 
     UploadToYouTube(
-      video.path,
-      opts.title,
-      opts.description,
-      opts.privacy,
-      opts.playlistId || "",
-      video.game || "",
-      video.episode || 0,
+      video.path, opts.title, opts.description, opts.privacy,
+      opts.playlistId || "", video.game || "", video.episode || 0,
     ).catch(() => {});
 
     handleRescan();
@@ -408,29 +222,17 @@ export default function Dashboard() {
 
   const handleAddToQueueModal = async (video: VideoFile, opts: UploadOptions) => {
     await SaveVideoMetadata(
-      video.path,
-      video.game || "",
-      opts.title,
-      opts.description,
-      opts.privacy,
-      opts.playlistId || "",
-      video.episode || 0,
+      video.path, video.game || "", opts.title, opts.description,
+      opts.privacy, opts.playlistId || "", video.episode || 0,
     ).catch(console.error);
 
     setQueue((q) => [
       ...q,
       {
-        id: crypto.randomUUID(),
-        videoPath: video.path,
-        videoName: video.name,
-        title: opts.title,
-        description: opts.description,
-        privacy: opts.privacy,
-        status: "pending",
-        progress: 0,
-        playlistId: opts.playlistId,
-        gameTag: video.game,
-        episode: video.episode,
+        id: crypto.randomUUID(), videoPath: video.path, videoName: video.name,
+        title: opts.title, description: opts.description, privacy: opts.privacy,
+        status: "pending", progress: 0, playlistId: opts.playlistId,
+        gameTag: video.game, episode: video.episode,
       },
     ]);
     handleRescan();
@@ -442,43 +244,18 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <AppHeader
-        view={view}
+        view={view as ViewMode}
         foldersCount={folders.length}
         scanning={scanning}
         pendingCount={pendingCount}
         ytAuthed={ytAuthed}
         onSetView={setView}
         onRescan={handleRescan}
-        onToggleQueue={() => setQueueOpen((o) => !o)}
+        onToggleQueue={() => setQueueOpen(!queueOpen)}
         onOpenSettings={() => setSettingsOpen(true)}
         onAddFolder={handleAddFolder}
         onOpenDevLogs={() => setDevLogsOpen(true)}
       />
-
-      {/* Bulk action bar — shown in BOTH views when items are selected */}
-      {isSelecting && (
-        <BulkActionBar
-          selectedPaths={selectedPaths}
-          selectedVideos={sortedVideos.filter((v) => selectedPaths.includes(v.path))}
-          onClearSelection={() => {
-            setSelectedPaths([]);
-            setLastSelectedIdx(-1);
-          }}
-          onTagsSaved={() => {
-            setSelectedPaths([]);
-            handleRescan();
-          }}
-          onFilesDeleted={() => {
-            setSelectedPaths([]);
-            setSelectedIndex(-1);
-            handleRescan();
-          }}
-          onAddToQueue={(items) => {
-            setQueue((prev) => [...prev, ...items]);
-            setQueueOpen(true);
-          }}
-        />
-      )}
 
       {(view === "grid" || view === "player") && (
         <LibrarySubHeader
@@ -486,74 +263,84 @@ export default function Dashboard() {
           activeFolders={activeFolders}
           allVideos={sortedVideos}
           searchQuery={searchQuery}
-          sortMode={sortMode}
+          sortMode={sortMode as SortMode}
           onSearchChange={setSearchQuery}
           onSortChange={setSortMode}
           onToggleFolder={toggleFolder}
           onRemoveFolder={handleRemoveFolder}
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
-          onToggleFilterUploaded={() => setFilterUploaded((u) => !u)}
+          onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
+        />
+      )}
+
+      {/* Bulk action bar */}
+      {isSelecting && (
+        <BulkActionBar
+          selectedPaths={selectedPaths}
+          selectedVideos={selectedPaths.map(p => sortedVideos.find(v => v.path === p)).filter((v): v is VideoFile => v !== undefined)}
+          onClearSelection={() => { setSelectedPaths([]); setLastSelectedIdx(-1); }}
+          onTagsSaved={() => { setSelectedPaths([]); handleRescan(); }}
+          onFilesDeleted={() => { setSelectedPaths([]); setSelectedIndex(-1); handleRescan(); }}
+          onAddToQueue={(items) => { setQueue(q => [...q, ...items]); setQueueOpen(true); }}
         />
       )}
 
       <div className="flex-1 flex overflow-hidden relative">
         {error && (
-          <div
-            style={{
-              padding: "16px",
-              color: "#f87171",
-              background: "rgba(248,113,113,0.1)",
-              textAlign: "center",
-            }}
-          >
+          <div style={{ padding: "16px", color: "#f87171", background: "rgba(248,113,113,0.1)", textAlign: "center" }}>
             {error}
           </div>
         )}
 
         {view === "grid" && (
-          <VideoGrid
-            folders={folders}
-            activeFolders={activeFolders}
-            groups={groups}
-            allVideos={sortedVideos}
-            sortedVideos={filteredVideos}
-            selectedPaths={selectedPaths}
-            onOpenVideo={handleVideoClick}
-            onUploadTarget={setUploadTarget}
-          />
+          <ErrorBoundary area="Video Grid">
+            <VideoGrid
+              folders={folders}
+              activeFolders={activeFolders}
+              groups={groups}
+              allVideos={sortedVideos}
+              sortedVideos={filteredVideos}
+              selectedPaths={selectedPaths}
+              onOpenVideo={handleVideoClick}
+              onUploadTarget={setUploadTarget}
+            />
+          </ErrorBoundary>
         )}
 
         {view === "player" && streamPort > 0 && (
-          <PlayerView
-            sortedVideos={filteredVideos}
-            allVideos={sortedVideos}
-            selectedVideo={selectedVideo}
-            selectedIndex={selectedIndex}
-            streamPort={streamPort}
-            listRef={listRef}
-            listRoot={listRoot}
-            selectedPaths={selectedPaths}
-            onGoTo={goTo}
-            onVideoClick={handleVideoClick}
-            onUploadTarget={setUploadTarget}
-            onTagSaved={handleRescan}
-            onFilesDeleted={() => {
-              setSelectedIndex(-1);
-              handleRescan();
-            }}
-            onAddToQueue={handleAddToQueue}
-          />
+          <ErrorBoundary area="Player">
+            <PlayerView
+              sortedVideos={filteredVideos}
+              allVideos={sortedVideos}
+              selectedVideo={selectedVideo}
+              selectedIndex={selectedIndex}
+              streamPort={streamPort}
+              listRef={listRef}
+              listRoot={listRoot}
+              selectedPaths={selectedPaths}
+              onGoTo={goTo}
+              onVideoClick={handleVideoClick}
+              onUploadTarget={setUploadTarget}
+              onTagSaved={handleRescan}
+              onFilesDeleted={() => { setSelectedIndex(-1); handleRescan(); }}
+              onAddToQueue={handleAddToQueue}
+            />
+          </ErrorBoundary>
         )}
 
-        {view === "channel" && <ChannelPage />}
+        {view === "channel" && (
+          <ErrorBoundary area="Channel">
+            <ChannelPage />
+          </ErrorBoundary>
+        )}
 
         {/* Drag & drop overlay */}
         {isDraggingOver && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm pointer-events-none animate-fadeIn">
             <div className="flex flex-col items-center gap-3 p-10 bg-surface/90 border-2 border-dashed border-accent rounded-2xl shadow-2xl">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="text-accent">
-                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
               </svg>
               <p className="text-lg font-bold text-text-primary">Drop folder here</p>
               <p className="text-sm text-text-secondary">Release to add as a video source</p>
@@ -577,29 +364,20 @@ export default function Dashboard() {
           queue={queue}
           running={queueRunning}
           onClose={() => setQueueOpen(false)}
-          onUpdateQueue={setQueue}
+          onUpdateQueue={(q) => setQueue(q)}
           onSetRunning={setQueueRunning}
         />
       )}
 
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <DevLogsPanel
-        open={devLogsOpen}
-        onClose={() => setDevLogsOpen(false)}
-      />
+      <DevLogsPanel open={devLogsOpen} onClose={() => setDevLogsOpen(false)} />
 
       <FolderSettingsDialog
         folder={settingsFolder || ""}
         open={settingsFolder !== null}
         onClose={() => setSettingsFolder(null)}
-        onSaved={() => {
-          setSettingsFolder(null);
-          handleRescan();
-        }}
+        onSaved={() => { setSettingsFolder(null); handleRescan(); }}
       />
     </div>
   );

@@ -49,6 +49,7 @@ export namespace backend {
 	    privacy: string;
 	    youtubeId?: string;
 	    playlistId?: string;
+	    playlistTitle?: string;
 	    episode: number;
 	    durationSecs?: number;
 	
@@ -64,6 +65,7 @@ export namespace backend {
 	        this.privacy = source["privacy"];
 	        this.youtubeId = source["youtubeId"];
 	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
 	        this.episode = source["episode"];
 	        this.durationSecs = source["durationSecs"];
 	    }

@@ -73,7 +73,7 @@ export function SetTrayUploadProgress(arg1:number):Promise<void>;
 
 export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
 
-export function SetVideosPlaylist(arg1:Array<string>,arg2:string):Promise<void>;
+export function SetVideosPlaylist(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 
 export function SetWatchFolderEnabled(arg1:boolean):Promise<void>;
 

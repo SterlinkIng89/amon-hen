@@ -11,14 +11,15 @@ import (
 )
 
 type VideoMeta struct {
-	Game         string `json:"game"`
-	YouTubeTitle string `json:"youtubeTitle"`
-	Description  string `json:"description"`
-	Privacy      string `json:"privacy"`
-	YouTubeID    string `json:"youtubeId,omitempty"`
-	PlaylistID   string `json:"playlistId,omitempty"`
-	Episode      int    `json:"episode"`
-	DurationSecs int    `json:"durationSecs,omitempty"`
+	Game          string `json:"game"`
+	YouTubeTitle  string `json:"youtubeTitle"`
+	Description   string `json:"description"`
+	Privacy       string `json:"privacy"`
+	YouTubeID     string `json:"youtubeId,omitempty"`
+	PlaylistID    string `json:"playlistId,omitempty"`
+	PlaylistTitle string `json:"playlistTitle,omitempty"`
+	Episode       int    `json:"episode"`
+	DurationSecs  int    `json:"durationSecs,omitempty"`
 }
 
 type FolderConfig struct {
@@ -132,14 +133,15 @@ func (a *App) RemoveFolder(path string) error {
 	return a.saveConfig()
 }
 
-// SetVideosPlaylist updates the playlist for multiple video paths
-func (a *App) SetVideosPlaylist(paths []string, playlistId string) error {
+// SetVideosPlaylist updates the playlist ID and title for multiple video paths
+func (a *App) SetVideosPlaylist(paths []string, playlistId string, playlistTitle string) error {
 	if a.config.VideoMetadata == nil {
 		a.config.VideoMetadata = make(map[string]VideoMeta)
 	}
 	for _, p := range paths {
 		meta := a.config.VideoMetadata[p]
 		meta.PlaylistID = playlistId
+		meta.PlaylistTitle = playlistTitle
 		a.config.VideoMetadata[p] = meta
 	}
 	return a.saveConfig()

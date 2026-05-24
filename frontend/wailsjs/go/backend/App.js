@@ -142,8 +142,8 @@ export function SetVideoGames(arg1, arg2) {
   return window['go']['backend']['App']['SetVideoGames'](arg1, arg2);
 }
 
-export function SetVideosPlaylist(arg1, arg2) {
-  return window['go']['backend']['App']['SetVideosPlaylist'](arg1, arg2);
+export function SetVideosPlaylist(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['SetVideosPlaylist'](arg1, arg2, arg3);
 }
 
 export function SetWatchFolderEnabled(arg1) {

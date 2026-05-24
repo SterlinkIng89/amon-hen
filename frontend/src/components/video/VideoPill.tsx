@@ -126,7 +126,7 @@ export default function VideoPill({
         setHovered(false);
         setBgPos("0% 0%");
       }}
-      className={`group flex bg-card rounded-xl border overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
+      className={`group flex select-none bg-card rounded-xl border overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected

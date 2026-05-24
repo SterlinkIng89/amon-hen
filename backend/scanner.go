@@ -206,7 +206,14 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				Privacy:       meta.Privacy,
 				YouTubeID:     meta.YouTubeID,
 				PlaylistID:    meta.PlaylistID,
-				PlaylistTitle: pTitleMap[meta.YouTubeID],
+				// Prefer the DB-derived title (for uploaded videos); fall back to
+				// the persisted title (set by bulk-assign for local-only videos).
+				PlaylistTitle: func() string {
+					if t := pTitleMap[meta.YouTubeID]; t != "" {
+						return t
+					}
+					return meta.PlaylistTitle
+				}(),
 				Episode:       meta.Episode,
 			})
 
