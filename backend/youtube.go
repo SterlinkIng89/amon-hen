@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -425,7 +426,13 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 			runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": "Upload cancelled"})
 			return fmt.Errorf("upload cancelled")
 		}
-		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
+		
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "quotaExceeded") || strings.Contains(errMsg, "RATE_LIMIT_EXCEEDED") {
+			errMsg = "Daily YouTube upload limit reached (~6 videos/day). Please wait 24h or request a quota increase in Google Cloud Console."
+		}
+		
+		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": errMsg})
 		return err
 	}
 
