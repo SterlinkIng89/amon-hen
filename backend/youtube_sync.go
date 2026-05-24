@@ -34,14 +34,16 @@ type YTPlaylist struct {
 	PublishedAt  string `json:"publishedAt"`
 }
 
-// SyncChannelData downloads all videos and playlists from the channel and saves them to SQLite
+// SyncChannelData downloads all videos and playlists from the channel and saves them to SQLite.
+// After upserting every live item it purges rows that no longer exist on YouTube
+// (i.e. videos/playlists the user deleted from the YouTube website).
 func (a *App) SyncChannelData() error {
 	if !a.IsYouTubeAuthed() {
 		return fmt.Errorf("not authenticated")
 	}
 
 	ctx := context.Background()
-	svc, err := a.youtubeClient(ctx)
+	svc, err := a.youtubeClient(ctx)yn
 	if err != nil {
 		return err
 	}
@@ -53,7 +55,6 @@ func (a *App) SyncChannelData() error {
 	channelsResp, err := svc.Channels.List([]string{"contentDetails"}).Mine(true).Do()
 	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
 	if err != nil {
-		// Check for insufficient permissions and trigger re-auth
 		if isInsufficientPermissions(err) {
 			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Re-authentication required. Please press Sync again after authorizing.")
 			go a.StartYouTubeAuth()
@@ -71,29 +72,118 @@ func (a *App) SyncChannelData() error {
 
 	// 2. Fetch all playlists
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing playlists...")
-	err = a.syncPlaylists(svc, now)
+	seenPlaylists, err := a.syncPlaylists(svc, now)
 	if err != nil {
 		fmt.Println("Error syncing playlists:", err)
 	}
 
 	// 3. Fetch all videos from uploads playlist
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing videos...")
-	err = a.syncVideos(svc, uploadsPlaylistID, now)
+	seenVideos, err := a.syncVideos(svc, uploadsPlaylistID, now)
 	if err != nil {
 		return err
+	}
+
+	// 4. Purge rows that no longer exist on YouTube.
+	// This handles videos/playlists the user deleted via the YouTube website.
+	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Cleaning up deleted items...")
+	if err := a.purgeDeletedVideos(seenVideos); err != nil {
+		fmt.Println("Error purging deleted videos:", err)
+	}
+	if err := a.purgeDeletedPlaylists(seenPlaylists); err != nil {
+		fmt.Println("Error purging deleted playlists:", err)
 	}
 
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
 	return nil
 }
 
-func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
-	// Track playlist IDs and their remote video counts for smart item sync
+// purgeDeletedVideos removes from yt_videos (and yt_playlist_items) any video
+// whose ID was not returned by the YouTube API during this sync pass.
+// seenIDs is the complete set of video IDs fetched from the uploads playlist.
+func (a *App) purgeDeletedVideos(seenIDs map[string]bool) error {
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	// Collect all local IDs
+	rows, err := a.db.conn.Query("SELECT id FROM yt_videos")
+	if err != nil {
+		return err
+	}
+	var toDelete []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil && !seenIDs[id] {
+			toDelete = append(toDelete, id)
+		}
+	}
+	rows.Close()
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	tx, err := a.db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	for _, id := range toDelete {
+		tx.Exec("DELETE FROM yt_videos WHERE id = ?", id)
+		tx.Exec("DELETE FROM yt_playlist_items WHERE video_id = ?", id)
+		fmt.Printf("Purged deleted video: %s\n", id)
+	}
+	return tx.Commit()
+}
+
+// purgeDeletedPlaylists removes playlists (and their items) that no longer
+// exist on YouTube. seenIDs is the set of playlist IDs fetched this sync.
+func (a *App) purgeDeletedPlaylists(seenIDs map[string]bool) error {
+	if len(seenIDs) == 0 {
+		// If syncPlaylists errored and returned nothing, skip to be safe.
+		return nil
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	rows, err := a.db.conn.Query("SELECT id FROM yt_playlists")
+	if err != nil {
+		return err
+	}
+	var toDelete []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil && !seenIDs[id] {
+			toDelete = append(toDelete, id)
+		}
+	}
+	rows.Close()
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	tx, err := a.db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	for _, id := range toDelete {
+		tx.Exec("DELETE FROM yt_playlists WHERE id = ?", id)
+		tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", id)
+		fmt.Printf("Purged deleted playlist: %s\n", id)
+	}
+	return tx.Commit()
+}
+
+// syncPlaylists fetches all playlists from YouTube and upserts them into SQLite.
+// It returns the set of playlist IDs seen so the caller can purge stale rows.
+func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bool, error) {
 	type playlistEntry struct {
-		id             string
-		remoteCount    int64
+		id          string
+		remoteCount int64
 	}
 	var toSync []playlistEntry
+	seenIDs := make(map[string]bool)
 
 	pageToken := ""
 	for {
@@ -105,12 +195,13 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		resp, err := call.Do()
 		a.logAPICall("playlists.list", "", "mine", QuotaPlaylistsList, start, err)
 		if err != nil {
-			return err
+			return seenIDs, err
 		}
 
 		a.db.mu.Lock()
 		tx, _ := a.db.conn.Begin()
 		for _, item := range resp.Items {
+			seenIDs[item.Id] = true
 			thumb := ""
 			if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
 				thumb = item.Snippet.Thumbnails.Medium.Url
@@ -138,7 +229,6 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 	}
 
 	// Sync playlist items only when the video count has changed since last sync.
-	// This avoids N * playlistItems.list calls on every sync for unchanged playlists.
 	for _, entry := range toSync {
 		var localCount int64
 		a.db.mu.Lock()
@@ -146,12 +236,11 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) error {
 		a.db.mu.Unlock()
 
 		if localCount == entry.remoteCount {
-			// Count matches, skip fetching items for this playlist
 			continue
 		}
 		a.syncPlaylistItems(svc, entry.id, syncTime)
 	}
-	return nil
+	return seenIDs, nil
 }
 
 // UpdateYouTubeVideoMetadata updates video title/description/privacy on YouTube.
@@ -244,9 +333,12 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string, syncTim
 	return nil
 }
 
-func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTime int64) error {
+// syncVideos fetches all videos from the uploads playlist and upserts them into SQLite.
+// It returns the set of video IDs seen so the caller can purge stale rows.
+func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTime int64) (map[string]bool, error) {
 	pageToken := ""
 	totalProcessed := 0
+	seenIDs := make(map[string]bool)
 
 	for {
 		call := svc.PlaylistItems.List([]string{"contentDetails"}).PlaylistId(uploadsPlaylistID).MaxResults(50)
@@ -257,21 +349,23 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 		resp, err := call.Do()
 		a.logAPICall("playlistItems.list", uploadsPlaylistID, "uploads", QuotaPlaylistItemsList, start, err)
 		if err != nil {
-			return err
+			return seenIDs, err
 		}
 
 		var videoIDs []string
 		for _, item := range resp.Items {
-			videoIDs = append(videoIDs, item.ContentDetails.VideoId)
+			id := item.ContentDetails.VideoId
+			videoIDs = append(videoIDs, id)
+			seenIDs[id] = true
 		}
 
 		if len(videoIDs) > 0 {
-			// Fetch full details for these videos
+			// Fetch full details for this batch
 			start2 := time.Now()
 			vidResp, err := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...).Do()
 			a.logAPICall("videos.list", strings.Join(videoIDs, ","), fmt.Sprintf("%d videos", len(videoIDs)), QuotaVideosList, start2, err)
 			if err != nil {
-				return err
+				return seenIDs, err
 			}
 
 			a.db.mu.Lock()
@@ -307,7 +401,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 		}
 		pageToken = resp.NextPageToken
 	}
-	return nil
+	return seenIDs, nil
 }
 
 func isInsufficientPermissions(err error) bool {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../types";
 import { SyncChannelData } from "../../wailsjs/go/backend/App";
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 import VideoPill from "../components/video/VideoPill";
 import PlaylistCard from "../components/youtube/PlaylistCard";
@@ -19,6 +20,8 @@ export default function ChannelPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [autoplay, setAutoplay] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("");
 
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +53,38 @@ export default function ChannelPage() {
     debouncedSearch,
     selectedPlaylist,
   });
+
+  // Listen for sync events
+  useEffect(() => {
+    EventsOn("youtube:sync-progress", (msg: string) => {
+      setSyncStatus(msg);
+    });
+    EventsOn("youtube:sync-done", () => {
+      setIsSyncing(false);
+      setSyncStatus("Sync complete!");
+      setTimeout(() => setSyncStatus(""), 3000);
+      loadData(true);
+    });
+
+    return () => {
+      EventsOff("youtube:sync-progress");
+      EventsOff("youtube:sync-done");
+    };
+  }, [loadData]);
+
+  const handleSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncStatus("Starting sync...");
+    try {
+      await SyncChannelData();
+    } catch (e) {
+      console.error("Sync failed:", e);
+      setIsSyncing(false);
+      setSyncStatus("Failed to sync");
+      setTimeout(() => setSyncStatus(""), 3000);
+    }
+  };
 
   // Scroll sidebar to selected video in player view
   useEffect(() => {
@@ -222,16 +257,27 @@ export default function ChannelPage() {
               </button>
             </div>
 
-            <button
-              onClick={() => { SyncChannelData(); loadData(true); }}
-              disabled={loading}
-              className="p-1.5 rounded-lg bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border border-border-subtle transition-all active:scale-95 group"
-              title="Sync with YouTube"
-            >
-              <svg className={`${loading ? "animate-spin text-accent" : "group-hover:rotate-180 transition-transform duration-500"}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {syncStatus && (
+                <span className={`text-[10px] font-bold ${isSyncing ? "text-accent animate-pulse" : "text-green-500"} transition-all max-w-[150px] truncate`}>
+                  {syncStatus}
+                </span>
+              )}
+              <button
+                onClick={handleSync}
+                disabled={loading || isSyncing}
+                className={`p-1.5 rounded-lg border transition-all group active:scale-95 ${
+                  isSyncing 
+                    ? "bg-accent/10 border-accent/30 text-accent" 
+                    : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"
+                } disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`}
+                title="Sync with YouTube"
+              >
+                <svg className={`${isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
