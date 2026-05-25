@@ -170,6 +170,10 @@ export function SyncChannelData() {
   return window['go']['backend']['App']['SyncChannelData']();
 }
 
+export function SyncRecentVideos(arg1) {
+  return window['go']['backend']['App']['SyncRecentVideos'](arg1);
+}
+
 export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
 }

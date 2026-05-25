@@ -87,6 +87,8 @@ export function Startup(arg1:context.Context):Promise<void>;
 
 export function SyncChannelData():Promise<void>;
 
+export function SyncRecentVideos(arg1:number):Promise<void>;
+
 export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

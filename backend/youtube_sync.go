@@ -404,6 +404,113 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 	return seenIDs, nil
 }
 
+// SyncRecentVideos fetches only the most recent videos from the uploads playlist
+// (up to maxVideos) and upserts them into SQLite. No purge step is performed.
+// This is much cheaper than a full SyncChannelData and is used after an upload
+// finishes or when the user wants a quick refresh.
+func (a *App) SyncRecentVideos(maxVideos int) error {
+	if !a.IsYouTubeAuthed() {
+		return fmt.Errorf("not authenticated")
+	}
+	if maxVideos <= 0 {
+		maxVideos = 20
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Fetching recent videos...")
+
+	// Get uploads playlist ID
+	start := time.Now()
+	channelsResp, err := svc.Channels.List([]string{"contentDetails"}).Mine(true).Do()
+	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
+	if err != nil {
+		if isInsufficientPermissions(err) {
+			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Re-authentication required.")
+			go a.StartYouTubeAuth()
+			return fmt.Errorf("insufficient permissions, please re-auth and try again")
+		}
+		return err
+	}
+	if len(channelsResp.Items) == 0 {
+		return fmt.Errorf("no channel found")
+	}
+	uploadsPlaylistID := channelsResp.Items[0].ContentDetails.RelatedPlaylists.Uploads
+	syncTime := time.Now().Unix()
+
+	// Fetch only the first page(s) needed to get maxVideos results
+	var videoIDs []string
+	pageToken := ""
+	for len(videoIDs) < maxVideos {
+		pageSize := int64(maxVideos - len(videoIDs))
+		if pageSize > 50 {
+			pageSize = 50
+		}
+		call := svc.PlaylistItems.List([]string{"contentDetails"}).
+			PlaylistId(uploadsPlaylistID).
+			MaxResults(pageSize)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		start2 := time.Now()
+		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", uploadsPlaylistID, "recent", QuotaPlaylistItemsList, start2, err)
+		if err != nil {
+			return err
+		}
+		for _, item := range resp.Items {
+			videoIDs = append(videoIDs, item.ContentDetails.VideoId)
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if len(videoIDs) == 0 {
+		runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
+		return nil
+	}
+
+	// Fetch full details and upsert
+	start3 := time.Now()
+	vidResp, err := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...).Do()
+	a.logAPICall("videos.list", strings.Join(videoIDs, ","), fmt.Sprintf("%d recent videos", len(videoIDs)), QuotaVideosList, start3, err)
+	if err != nil {
+		return err
+	}
+
+	a.db.mu.Lock()
+	tx, _ := a.db.conn.Begin()
+	for _, vid := range vidResp.Items {
+		thumb := ""
+		if vid.Snippet.Thumbnails != nil {
+			if vid.Snippet.Thumbnails.High != nil {
+				thumb = vid.Snippet.Thumbnails.High.Url
+			} else if vid.Snippet.Thumbnails.Default != nil {
+				thumb = vid.Snippet.Thumbnails.Default.Url
+			}
+		}
+		tx.Exec(`INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, synced_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+			title=excluded.title, description=excluded.description, published_at=excluded.published_at,
+			thumbnail_url=excluded.thumbnail_url, view_count=excluded.view_count, like_count=excluded.like_count,
+			duration=excluded.duration, privacy=excluded.privacy, synced_at=excluded.synced_at`,
+			vid.Id, vid.Snippet.Title, vid.Snippet.Description, vid.Snippet.PublishedAt, thumb,
+			vid.Statistics.ViewCount, vid.Statistics.LikeCount, vid.ContentDetails.Duration, vid.Status.PrivacyStatus, syncTime)
+	}
+	tx.Commit()
+	a.db.mu.Unlock()
+
+	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
+	return nil
+}
+
 func isInsufficientPermissions(err error) bool {
 	if err == nil {
 		return false

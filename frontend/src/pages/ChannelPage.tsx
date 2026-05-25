@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../types";
-import { SyncChannelData } from "../../wailsjs/go/backend/App";
+import { SyncRecentVideos } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 import VideoPill from "../components/video/VideoPill";
@@ -54,7 +54,7 @@ export default function ChannelPage() {
     selectedPlaylist,
   });
 
-  // Listen for sync events
+  // Listen for sync events and upload completions
   useEffect(() => {
     EventsOn("youtube:sync-progress", (msg: string) => {
       setSyncStatus(msg);
@@ -65,10 +65,15 @@ export default function ChannelPage() {
       setTimeout(() => setSyncStatus(""), 3000);
       loadData(true);
     });
+    // Refresh channel list whenever any upload finishes so the new video appears
+    EventsOn("youtube:done", () => {
+      loadData(true);
+    });
 
     return () => {
       EventsOff("youtube:sync-progress");
       EventsOff("youtube:sync-done");
+      EventsOff("youtube:done");
     };
   }, [loadData]);
 
@@ -77,7 +82,8 @@ export default function ChannelPage() {
     setIsSyncing(true);
     setSyncStatus("Starting sync...");
     try {
-      await SyncChannelData();
+      // Fetch only the most recent 20 videos — fast and quota-friendly
+      await SyncRecentVideos(20);
     } catch (e) {
       console.error("Sync failed:", e);
       setIsSyncing(false);
