@@ -385,6 +385,7 @@ export default function ChannelPage() {
                     playlist={p}
                     viewMode={viewMode}
                     onClick={() => { setSelectedPlaylist(p); setTimeout(() => loadData(true), 50); }}
+                    onDeleted={() => loadData(true)}
                   />
                 ))}
             </div>

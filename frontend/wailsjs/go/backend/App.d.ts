@@ -13,6 +13,8 @@ export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<stri
 
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
+export function DeletePlaylist(arg1:string):Promise<void>;
+
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
 
 export function GetAutoLaunch():Promise<boolean>;

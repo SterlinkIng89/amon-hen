@@ -22,6 +22,10 @@ export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }
 
+export function DeletePlaylist(arg1) {
+  return window['go']['backend']['App']['DeletePlaylist'](arg1);
+}
+
 export function GetAPILogs(arg1) {
   return window['go']['backend']['App']['GetAPILogs'](arg1);
 }

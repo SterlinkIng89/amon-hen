@@ -433,6 +433,37 @@ func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
 	return nil
 }
 
+// DeletePlaylist deletes a playlist from YouTube and removes it from the local DB.
+// The local rows are only removed after the API call succeeds.
+func (a *App) DeletePlaylist(playlistID string) error {
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	err = svc.Playlists.Delete(playlistID).Do()
+	a.logAPICall("playlists.delete", playlistID, playlistID, 50, start, err)
+	if err != nil {
+		return fmt.Errorf("failed to delete playlist on YouTube: %w", err)
+	}
+
+	// Remove from local DB only after YouTube confirms deletion
+	if a.db != nil {
+		a.db.mu.Lock()
+		tx, txErr := a.db.conn.Begin()
+		if txErr == nil {
+			tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", playlistID)
+			tx.Exec("DELETE FROM yt_playlists WHERE id = ?", playlistID)
+			tx.Commit()
+		}
+		a.db.mu.Unlock()
+	}
+
+	return nil
+}
+
 // CancelUpload cancels an ongoing video upload by its path
 func (a *App) CancelUpload(path string) error {
 	a.uploadsMu.Lock()
