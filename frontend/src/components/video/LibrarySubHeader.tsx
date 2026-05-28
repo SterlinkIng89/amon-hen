@@ -13,7 +13,6 @@ interface LibrarySubHeaderProps {
   onSearchChange: (q: string) => void;
   onSortChange: (m: SortMode) => void;
   onToggleFolder: (path: string) => void;
-  onRemoveFolder: (path: string) => void;
   onOpenFolderSettings: (path: string) => void;
   filterUploaded: boolean;
   onToggleFilterUploaded: () => void;
@@ -36,7 +35,6 @@ export default function LibrarySubHeader({
   onSearchChange,
   onSortChange,
   onToggleFolder,
-  onRemoveFolder,
   onOpenFolderSettings,
   filterUploaded,
   onToggleFilterUploaded,
@@ -79,16 +77,18 @@ export default function LibrarySubHeader({
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                       </svg>
                     </button>
-                    <button
-                      className={`flex items-center justify-center w-7 h-full bg-transparent border-none border-l cursor-pointer transition-colors hover:bg-red-500 hover:text-white ${active ? "border-white/20" : "border-border-subtle"}`}
-                      onClick={e => { e.stopPropagation(); onRemoveFolder(f); }}
-                      title="Remove folder"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
+                    {active && (
+                      <button
+                        className="flex items-center justify-center w-7 h-full bg-transparent border-none border-l cursor-pointer transition-colors hover:bg-black/20 border-white/20"
+                        onClick={e => { e.stopPropagation(); onToggleFolder(f); }}
+                        title="Remove filter"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}

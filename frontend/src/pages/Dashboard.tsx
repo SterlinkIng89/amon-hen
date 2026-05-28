@@ -267,7 +267,6 @@ export default function Dashboard() {
           onSearchChange={setSearchQuery}
           onSortChange={setSortMode}
           onToggleFolder={toggleFolder}
-          onRemoveFolder={handleRemoveFolder}
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
           onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
@@ -380,6 +379,7 @@ export default function Dashboard() {
         open={settingsFolder !== null}
         onClose={() => setSettingsFolder(null)}
         onSaved={() => { setSettingsFolder(null); handleRescan(); }}
+        onRemoveFolder={handleRemoveFolder}
       />
     </div>
   );

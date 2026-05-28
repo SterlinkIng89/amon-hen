@@ -10,15 +10,20 @@ interface FolderSettingsProps {
   onClose: () => void;
   onSaved: () => void;
   onSave?: (folder: string, settings: backend.FolderConfig) => void;
+  onRemoveFolder?: (folder: string) => void;
 }
 
-export default function FolderSettingsDialog({ folder, open, onClose, onSaved }: FolderSettingsProps) {
+export default function FolderSettingsDialog({ folder, open, onClose, onSaved, onRemoveFolder }: FolderSettingsProps) {
   const [recursive, setRecursive] = useState(false);
   const [maxDur, setMaxDur] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setConfirmDelete(false);
+      return;
+    }
     GetFolderSettings(folder)
       .then((cfg: any) => {
         setRecursive(cfg.recursive || false);
@@ -126,22 +131,55 @@ export default function FolderSettingsDialog({ folder, open, onClose, onSaved }:
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 bg-elevated border-t border-border-subtle flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-text-secondary bg-transparent border border-border-subtle rounded-md hover:bg-black/20 transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`px-4 py-2 text-sm font-semibold text-base bg-accent rounded-md transition-colors cursor-pointer flex items-center justify-center min-w-[80px] ${
-              saving ? "opacity-70 cursor-wait" : "hover:bg-accent-hover"
-            }`}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+        <div className="px-5 py-4 bg-elevated border-t border-border-subtle flex items-center justify-between">
+          <div className="flex items-center">
+            {onRemoveFolder && (
+              confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-red-400">Are you sure?</span>
+                  <button
+                    onClick={() => {
+                      onRemoveFolder(folder);
+                      onClose();
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-red-500 rounded hover:bg-red-600 transition-colors cursor-pointer border-none"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-3 py-1.5 text-xs font-semibold text-text-secondary bg-transparent hover:text-text-primary transition-colors cursor-pointer border-none"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="px-3 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors cursor-pointer bg-transparent border-none"
+                >
+                  Remove Folder
+                </button>
+              )
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-semibold text-text-secondary bg-transparent border border-border-subtle rounded-md hover:bg-black/20 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`px-4 py-2 text-sm font-semibold text-base bg-accent rounded-md transition-colors cursor-pointer flex items-center justify-center min-w-[80px] ${
+                saving ? "opacity-70 cursor-wait" : "hover:bg-accent-hover"
+              }`}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
