@@ -15,6 +15,8 @@ export interface UploadOptions {
 
 interface Props {
   video: VideoFile;
+  /** Current status of this file in the queue, if any */
+  queueStatus?: "pending" | "uploading" | "done" | "error";
   onClose: () => void;
   onUploadNow: (opts: UploadOptions) => void;
   onAddToQueue: (opts: UploadOptions) => void;
@@ -22,10 +24,13 @@ interface Props {
 
 export default function UploadDialog({
   video,
+  queueStatus,
   onClose,
   onUploadNow,
   onAddToQueue,
 }: Props) {
+  // Block uploading the same file while it is already active
+  const isAlreadyActive = queueStatus === "pending" || queueStatus === "uploading";
   const [title, setTitle] = useState(
     video.youtubeTitle || generateYouTubeTitle(video.name, video.game),
   );
@@ -356,9 +361,27 @@ export default function UploadDialog({
           </div>
         </div>
 
+        {/* Duplicate warning banner */}
+        {isAlreadyActive && (
+          <div className="mx-4 mb-3 flex items-start gap-2.5 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-sm animate-fadeIn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400 shrink-0 mt-0.5">
+              <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+            </svg>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-bold text-yellow-400">
+                {queueStatus === "uploading" ? "Upload already in progress" : "Already in queue"}
+              </span>
+              <span className="text-[11px] text-yellow-400/70">
+                This file is {queueStatus === "uploading" ? "currently being uploaded" : "already waiting in the queue"}. Remove it from the queue first to avoid duplicates.
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-3 p-4 border-t border-border-subtle bg-surface">
           <button
             className="btn btn-ghost"
+            disabled={isAlreadyActive}
             onClick={() => {
               onAddToQueue(opts());
               onClose();
@@ -375,7 +398,7 @@ export default function UploadDialog({
               onUploadNow(opts());
               onClose();
             }}
-            disabled={!title.trim()}
+            disabled={!title.trim() || isAlreadyActive}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />

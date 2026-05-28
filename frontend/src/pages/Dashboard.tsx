@@ -352,6 +352,7 @@ export default function Dashboard() {
       {uploadTarget && (
         <UploadDialog
           video={uploadTarget}
+          queueStatus={queue.find(i => i.videoPath === uploadTarget.path)?.status}
           onClose={() => setUploadTarget(null)}
           onUploadNow={(opts) => handleUploadNow(uploadTarget, opts)}
           onAddToQueue={(opts) => handleAddToQueueModal(uploadTarget, opts)}
