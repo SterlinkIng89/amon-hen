@@ -293,7 +293,7 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 	return result, nil
 }
 
-// CreatePlaylist creates a new YouTube playlist
+// CreatePlaylist creates a new YouTube playlist and saves it to the local DB.
 func (a *App) CreatePlaylist(title, description, privacy string) (string, error) {
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
@@ -319,7 +319,90 @@ func (a *App) CreatePlaylist(title, description, privacy string) (string, error)
 		return "", err
 	}
 
+	// Persist immediately so the playlist is available without a full sync
+	if a.db != nil {
+		a.db.mu.Lock()
+		a.db.conn.Exec(`
+			INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at)
+			VALUES (?, ?, ?, 0, '', ?, ?)
+			ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description`,
+			res.Id, title, description, res.Snippet.PublishedAt, time.Now().Unix())
+		a.db.mu.Unlock()
+	}
+
 	return res.Id, nil
+}
+
+// GetOrCreatePlaylist returns the YouTube playlist ID for the given title.
+// It checks the local DB first, then the YouTube API, and only creates a new
+// playlist if none with that title is found — preventing accidental duplicates.
+func (a *App) GetOrCreatePlaylist(title, description, privacy string) (string, error) {
+	if title == "" {
+		return "", fmt.Errorf("playlist title cannot be empty")
+	}
+
+	// 1. Check local DB for an existing playlist with this exact title
+	if a.db != nil {
+		a.db.mu.Lock()
+		var existingID string
+		err := a.db.conn.QueryRow(
+			"SELECT id FROM yt_playlists WHERE LOWER(title) = LOWER(?) LIMIT 1", title,
+		).Scan(&existingID)
+		a.db.mu.Unlock()
+		if err == nil && existingID != "" {
+			fmt.Printf("GetOrCreatePlaylist: reusing existing local playlist %q (%s)\n", title, existingID)
+			return existingID, nil
+		}
+	}
+
+	// 2. Search YouTube API for a matching playlist title
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	pageToken := ""
+	for {
+		call := svc.Playlists.List([]string{"snippet"}).Mine(true).MaxResults(50)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		start := time.Now()
+		resp, err := call.Do()
+		a.logAPICall("playlists.list", "", "mine (dedup search)", QuotaPlaylistsList, start, err)
+		if err != nil {
+			break // fall through to create
+		}
+		for _, item := range resp.Items {
+			if strings.EqualFold(item.Snippet.Title, title) {
+				fmt.Printf("GetOrCreatePlaylist: found existing YouTube playlist %q (%s)\n", title, item.Id)
+				// Save to local DB so future calls hit the cache
+				if a.db != nil {
+					a.db.mu.Lock()
+					thumb := ""
+					if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
+						thumb = item.Snippet.Thumbnails.Medium.Url
+					}
+					a.db.conn.Exec(`
+						INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at)
+						VALUES (?, ?, ?, 0, ?, ?, ?)
+						ON CONFLICT(id) DO UPDATE SET title=excluded.title`,
+						item.Id, item.Snippet.Title, item.Snippet.Description, thumb, item.Snippet.PublishedAt, time.Now().Unix())
+					a.db.mu.Unlock()
+				}
+				return item.Id, nil
+			}
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	// 3. No existing playlist found — create a new one
+	fmt.Printf("GetOrCreatePlaylist: creating new playlist %q\n", title)
+	return a.CreatePlaylist(title, description, privacy)
 }
 
 // AddVideoToPlaylist adds an existing video to a YouTube playlist
@@ -465,6 +548,19 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 				"playlistId": playlistID,
 				"message":    plErr.Error(),
 			})
+		} else if a.db != nil {
+			// Persist the membership immediately so the Channel view is correct
+			// without needing a full sync
+			a.db.mu.Lock()
+			a.db.conn.Exec(`
+				INSERT INTO yt_playlist_items (playlist_id, video_id, position)
+				VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM yt_playlist_items WHERE playlist_id=?))
+				ON CONFLICT(playlist_id, video_id) DO NOTHING`,
+				playlistID, result.Id, playlistID)
+			a.db.conn.Exec(
+				`UPDATE yt_playlists SET video_count = video_count + 1 WHERE id = ?`,
+				playlistID)
+			a.db.mu.Unlock()
 		}
 	}
 

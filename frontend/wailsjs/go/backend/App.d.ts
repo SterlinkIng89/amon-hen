@@ -25,6 +25,8 @@ export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,ar
 
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
 
+export function GetOrCreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function GetPlaylistVideos(arg1:string):Promise<Array<backend.YTVideo>>;
 
 export function GetQuotaUsedToday():Promise<number>;

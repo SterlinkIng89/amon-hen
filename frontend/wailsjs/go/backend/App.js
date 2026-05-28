@@ -46,6 +46,10 @@ export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
 }
 
+export function GetOrCreatePlaylist(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['GetOrCreatePlaylist'](arg1, arg2, arg3);
+}
+
 export function GetPlaylistVideos(arg1) {
   return window['go']['backend']['App']['GetPlaylistVideos'](arg1);
 }

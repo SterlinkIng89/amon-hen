@@ -3,7 +3,7 @@ import { VideoFile, YTPlaylist } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";
 import {
   GetChannelPlaylists,
-  CreatePlaylist,
+  GetOrCreatePlaylist,
 } from "../../../wailsjs/go/backend/App";
 
 export interface UploadOptions {
@@ -39,12 +39,13 @@ export default function UploadDialog({
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [playlistSearch, setPlaylistSearch] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [playlistError, setPlaylistError] = useState("");
 
-  const refreshPlaylists = () => {
+  const refreshPlaylists = () =>
     GetChannelPlaylists("recent")
       .then(setPlaylists)
       .catch(() => {});
-  };
 
   useEffect(() => {
     refreshPlaylists();
@@ -59,24 +60,20 @@ export default function UploadDialog({
 
   const handleCreatePlaylist = async () => {
     if (!newPlaylistTitle.trim()) return;
+    setIsCreatingPlaylist(true);
+    setPlaylistError("");
     try {
-      const id = await CreatePlaylist(newPlaylistTitle, "", privacy);
-      const newP: YTPlaylist = { 
-        id, 
-        title: newPlaylistTitle, 
-        videoCount: 0, 
-        description: "", 
-        thumbnailUrl: "", 
-        publishedAt: new Date().toISOString() 
-      };
-      setPlaylists(prev => [newP, ...prev]);
+      const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", privacy);
+      // Refresh from DB — the backend already persisted the playlist row
+      await refreshPlaylists();
       setNewPlaylistTitle("");
       setIsCreating(false);
       setPlaylistId(id);
-      setPlaylistSearch(newPlaylistTitle);
-      refreshPlaylists();
-    } catch (e) {
-      console.error(e);
+      setPlaylistSearch(newPlaylistTitle.trim());
+    } catch (e: any) {
+      setPlaylistError(e?.toString() ?? "Failed to get or create playlist");
+    } finally {
+      setIsCreatingPlaylist(false);
     }
   };
 
@@ -160,30 +157,41 @@ export default function UploadDialog({
               </label>
               <button
                 className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer"
-                onClick={() => setIsCreating(!isCreating)}
+                onClick={() => { setIsCreating(!isCreating); setPlaylistError(""); }}
               >
-                {isCreating ? "CANCEL" : "+ CREATE NEW"}
+                {isCreating ? "CANCEL" : "+ GET OR CREATE"}
               </button>
             </div>
 
             {isCreating ? (
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 bg-elevated border border-accent rounded-sm px-3 py-2 text-sm text-text-primary outline-none focus:bg-card"
-                  type="text"
-                  value={newPlaylistTitle}
-                  onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                  placeholder="New playlist title..."
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
-                />
-                <button
-                  className="btn btn-primary btn-sm px-4"
-                  onClick={handleCreatePlaylist}
-                  disabled={!newPlaylistTitle.trim()}
-                >
-                  CREATE
-                </button>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 bg-elevated border border-accent rounded-sm px-3 py-2 text-sm text-text-primary outline-none focus:bg-card"
+                    type="text"
+                    value={newPlaylistTitle}
+                    onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                    placeholder="Playlist name..."
+                    autoFocus
+                    disabled={isCreatingPlaylist}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
+                  />
+                  <button
+                    className="btn btn-primary btn-sm px-4 min-w-[80px]"
+                    onClick={handleCreatePlaylist}
+                    disabled={!newPlaylistTitle.trim() || isCreatingPlaylist}
+                  >
+                    {isCreatingPlaylist ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : "GET / CREATE"}
+                  </button>
+                </div>
+                <span className="text-[10px] text-text-muted">
+                  If a playlist with this name already exists on your channel, it will be reused.
+                </span>
+                {playlistError && (
+                  <span className="text-[10px] text-red-400 font-medium">{playlistError}</span>
+                )}
               </div>
             ) : (
               <div className="relative">

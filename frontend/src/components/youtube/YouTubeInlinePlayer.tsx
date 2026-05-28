@@ -4,7 +4,7 @@ import {
   UpdateYouTubeVideoMetadata, 
   GetChannelPlaylists, 
   AddVideoToPlaylist,
-  CreatePlaylist
+  GetOrCreatePlaylist
 } from "../../../wailsjs/go/backend/App";
 
 interface YouTubeInlinePlayerProps {
@@ -40,6 +40,8 @@ export default function YouTubeInlinePlayer({
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [playlistSearch, setPlaylistSearch] = useState("");
+  const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] = useState(false);
+  const [playlistCreateError, setPlaylistCreateError] = useState("");
 
   const refreshPlaylists = () => {
     GetChannelPlaylists("recent").then(setPlaylists).catch(() => {});
@@ -141,15 +143,19 @@ export default function YouTubeInlinePlayer({
 
   const handleCreateAndAdd = async () => {
     if (!newPlaylistTitle.trim()) return;
+    setIsCreatingPlaylistLoading(true);
+    setPlaylistCreateError("");
     try {
-      const id = await CreatePlaylist(newPlaylistTitle, "", editablePrivacy);
+      const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", editablePrivacy);
       await AddVideoToPlaylist(id, video.id);
       setNewPlaylistTitle("");
       setIsCreatingPlaylist(false);
       setShowPlaylistPicker(false);
       refreshPlaylists();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setPlaylistCreateError(e?.toString() ?? "Failed");
+    } finally {
+      setIsCreatingPlaylistLoading(false);
     }
   };
 
@@ -335,16 +341,23 @@ export default function YouTubeInlinePlayer({
                         type="text"
                         value={newPlaylistTitle}
                         onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                        placeholder="New playlist title..."
+                        placeholder="Playlist name..."
                         autoFocus
+                        disabled={isCreatingPlaylistLoading}
                         onKeyDown={(e) => e.key === "Enter" && handleCreateAndAdd()}
                       />
+                      <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
+                      {playlistCreateError && (
+                        <span className="text-[10px] text-red-400">{playlistCreateError}</span>
+                      )}
                       <button 
-                        className="btn btn-primary btn-sm w-full"
+                        className="btn btn-primary btn-sm w-full min-h-[28px]"
                         onClick={handleCreateAndAdd}
-                        disabled={!newPlaylistTitle.trim()}
+                        disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}
                       >
-                        CREATE & ADD
+                        {isCreatingPlaylistLoading ? (
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+                        ) : "GET / CREATE & ADD"}
                       </button>
                     </div>
                   ) : (

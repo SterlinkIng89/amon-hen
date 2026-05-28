@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, CreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/backend/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import TagInput from "../ui/TagInput";
@@ -107,6 +107,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [playlistSearch, setPlaylistSearch] = useState(video.playlistTitle || "");
   const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
+  const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] = useState(false);
+  const [playlistCreateError, setPlaylistCreateError] = useState("");
 
   // Sync form state whenever the video prop itself changes (e.g. after a rescan or
   // when the user navigates to a different video with arrow keys).
@@ -139,24 +141,19 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   const handleCreatePlaylist = async () => {
     if (!newPlaylistTitle.trim()) return;
+    setIsCreatingPlaylistLoading(true);
+    setPlaylistCreateError("");
     try {
-      const id = await CreatePlaylist(newPlaylistTitle, "", privacy);
-      const newP: YTPlaylist = { 
-        id, 
-        title: newPlaylistTitle, 
-        videoCount: 0, 
-        description: "", 
-        thumbnailUrl: "", 
-        publishedAt: new Date().toISOString() 
-      };
-      setPlaylists(prev => [newP, ...prev]);
+      const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", privacy);
       setNewPlaylistTitle("");
       setIsCreatingPlaylist(false);
       setPlaylistId(id);
-      setPlaylistSearch(newPlaylistTitle);
-      refreshPlaylists(); // Still refresh to get full data
-    } catch (e) {
-      console.error(e);
+      setPlaylistSearch(newPlaylistTitle.trim());
+      refreshPlaylists();
+    } catch (e: any) {
+      setPlaylistCreateError(e?.toString() ?? "Failed to get or create playlist");
+    } finally {
+      setIsCreatingPlaylistLoading(false);
     }
   };
   const [savingInfo, setSavingInfo] = useState(false);
@@ -457,15 +454,21 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                         </span>
                       )}
                     </div>
-                    <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}>
-                      {isCreatingPlaylist ? "CANCEL" : "+ CREATE"}
+                    <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
+                      {isCreatingPlaylist ? "CANCEL" : "+ GET OR CREATE"}
                     </button>
                   </div>
 
                   {isCreatingPlaylist ? (
-                    <div className="flex gap-2">
-                      <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="New playlist title..." autoFocus onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                      <button className="btn btn-primary btn-sm px-3" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim()}>OK</button>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-2">
+                        <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                        <button className="btn btn-primary btn-sm px-3 min-w-[42px]" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                          {isCreatingPlaylistLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "OK"}
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
+                      {playlistCreateError && <span className="text-[10px] text-red-400">{playlistCreateError}</span>}
                     </div>
                   ) : (
                     <div className="relative">
@@ -594,14 +597,20 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
               <div className="flex flex-col gap-1.5 relative">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-text-secondary">Playlist</label>
-                  <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}>
-                    {isCreatingPlaylist ? "CANCEL" : "+ CREATE"}
+                  <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
+                    {isCreatingPlaylist ? "CANCEL" : "+ GET OR CREATE"}
                   </button>
                 </div>
                 {isCreatingPlaylist ? (
-                  <div className="flex gap-2">
-                    <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="New title..." autoFocus onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                    <button className="btn btn-primary btn-sm px-3" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim()}>OK</button>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex gap-2">
+                      <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                      <button className="btn btn-primary btn-sm px-3 min-w-[42px]" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                        {isCreatingPlaylistLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "OK"}
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
+                    {playlistCreateError && <span className="text-[10px] text-red-400">{playlistCreateError}</span>}
                   </div>
                 ) : (
                   <div className="relative">

@@ -4,7 +4,7 @@ import {
   DeleteFiles,
   GetChannelPlaylists,
   SetVideosPlaylist,
-  CreatePlaylist,
+  GetOrCreatePlaylist,
 } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { VideoFile, YTPlaylist } from "../../types";
@@ -112,16 +112,15 @@ export default function BulkActionBar({
     if (!title) return;
     setCreatingNewLoading(true);
     try {
-      // Create the playlist on YouTube (unlisted by default)
-      const newId = await CreatePlaylist(title, "", "unlisted");
+      // Use GetOrCreatePlaylist to avoid duplicate playlists with the same name
+      const newId = await GetOrCreatePlaylist(title, "", "unlisted");
       if (newId) {
-        // Immediately assign selected videos to the new playlist
         await handleSavePlaylist(newId, title);
         setNewPlaylistTitle("");
         setCreatingNew(false);
       }
     } catch (e) {
-      console.error("Failed to create playlist", e);
+      console.error("Failed to get or create playlist", e);
     } finally {
       setCreatingNewLoading(false);
     }
@@ -290,7 +289,7 @@ export default function BulkActionBar({
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
                         </svg>
-                        {playlistSearch ? `Create "${playlistSearch}"` : "Create new playlist"}
+                        {playlistSearch ? `Get or Create "${playlistSearch}"` : "Get or create playlist"}
                       </button>
                     ) : (
                       <div className="px-3 py-2 flex items-center gap-2">
@@ -311,7 +310,9 @@ export default function BulkActionBar({
                           onClick={handleCreateNewPlaylist}
                           disabled={creatingNewLoading || !newPlaylistTitle.trim()}
                         >
-                          {creatingNewLoading ? "..." : "Create"}
+                          {creatingNewLoading ? (
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : "Get / Create"}
                         </button>
                         <button
                           className="btn btn-ghost btn-sm shrink-0"
