@@ -280,6 +280,7 @@ export default function Dashboard() {
           selectedPaths={selectedPaths}
           selectedVideos={selectedPaths.map(p => sortedVideos.find(v => v.path === p)).filter((v): v is VideoFile => v !== undefined)}
           onClearSelection={() => { setSelectedPaths([]); setLastSelectedIdx(-1); }}
+          onRescanOnly={() => handleRescan()}
           onTagsSaved={() => { setSelectedPaths([]); handleRescan(); }}
           onFilesDeleted={() => { setSelectedPaths([]); setSelectedIndex(-1); handleRescan(); }}
           onAddToQueue={(items) => { setQueue(q => [...q, ...items]); setQueueOpen(true); }}

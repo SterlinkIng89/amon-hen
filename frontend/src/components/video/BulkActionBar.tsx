@@ -16,6 +16,9 @@ interface Props {
   selectedPaths: string[];
   selectedVideos: VideoFile[];
   onClearSelection: () => void;
+  /** Rescan videos without clearing selection — used after tag/playlist apply */
+  onRescanOnly: () => void;
+  /** Rescan + clear selection — used after a full destructive action */
   onTagsSaved: () => void;
   onFilesDeleted: () => void;
   onAddToQueue: (items: QueueItem[]) => void;
@@ -25,6 +28,7 @@ export default function BulkActionBar({
   selectedPaths,
   selectedVideos,
   onClearSelection,
+  onRescanOnly,
   onTagsSaved,
   onFilesDeleted,
   onAddToQueue,
@@ -39,6 +43,8 @@ export default function BulkActionBar({
   const [playlistSearch, setPlaylistSearch] = useState("");
   // selectedPlaylistTitle: the playlist already chosen (shown as a chip)
   const [selectedPlaylistTitle, setSelectedPlaylistTitle] = useState("");
+  // selectedPlaylistId: the resolved ID — used when queuing after playlist apply
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [savingPlaylist, setSavingPlaylist] = useState(false);
 
@@ -83,7 +89,8 @@ export default function BulkActionBar({
       await SetVideoGames(selectedPaths, game);
       if (game) addRecentTag(game);
       setGame("");
-      onTagsSaved();
+      // Rescan to update video data but keep selection so user can chain more actions
+      onRescanOnly();
     } catch (e) {
       console.error("Failed to save tags", e);
     } finally {
@@ -96,10 +103,12 @@ export default function BulkActionBar({
     try {
       await SetVideosPlaylist(selectedPaths, pId, pTitle);
       setSelectedPlaylistTitle(pTitle);
+      setSelectedPlaylistId(pId);
       setPlaylistSearch("");
       setIsDropdownOpen(false);
       setCreatingNew(false);
-      onTagsSaved();
+      // Rescan to update video data but keep selection so user can queue right after
+      onRescanOnly();
     } catch (e) {
       console.error("Failed to save playlist bulk", e);
     } finally {
@@ -161,7 +170,9 @@ export default function BulkActionBar({
         privacy: (v.privacy as "public" | "unlisted" | "private") || "unlisted",
         status: "pending" as const,
         progress: 0,
-        playlistId: v.playlistId || "",
+        // Use the freshly-set playlist ID if the user just applied one via the bar,
+        // otherwise fall back to what is stored in the video file metadata.
+        playlistId: selectedPlaylistId || v.playlistId || "",
         gameTag: v.game || "",
         episode: v.episode || 0,
       }));
@@ -171,6 +182,7 @@ export default function BulkActionBar({
     onClearSelection();
   };
 
+  // Only count videos that haven't been uploaded yet for the queue button
   const uploadableCount = selectedVideos.filter((v) => !v.youtubeId).length;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -343,7 +355,7 @@ export default function BulkActionBar({
 
         <div className="w-px h-5 bg-white/10" />
 
-        {/* Bulk queue action */}
+        {/* Bulk queue action — always show if there are non-uploaded videos */}
         {uploadableCount > 0 && (
           <>
             <button
