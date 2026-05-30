@@ -257,24 +257,6 @@ export default function VideoPill({
               </span>
             ) : (
               <span className="flex items-center gap-1.5">
-                <span className="flex items-center gap-1 font-medium">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-60"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  {formatSize(video.size)}
-                </span>
                 {isLocal && video.youtubeId && (
                   <div
                     className="shrink-0 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center text-white shadow-sm"
@@ -285,6 +267,9 @@ export default function VideoPill({
                     </svg>
                   </div>
                 )}
+                <span className="flex items-center gap-1 font-medium">
+                  {formatSize(video.size)}
+                </span>
               </span>
             )}
           </div>
