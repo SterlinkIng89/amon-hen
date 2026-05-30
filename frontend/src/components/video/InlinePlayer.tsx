@@ -333,61 +333,61 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     privacy !== (video.privacy || "unlisted");
 
   return (
-    <div className={`flex h-full overflow-hidden bg-base ${isWide ? "flex-row" : "flex-col"}`}>
+    <div className={`flex h-full overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}>
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Video */}
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[200px]">
           {!deleting ? (
             <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay />
           ) : (
-            <div className="text-text-muted">Deleting...</div>
+            <div className="text-white/60">Deleting...</div>
           )}
-          {/* Regenerated thumbnail preview overlay — fades in briefly after regen */}
+          {/* Regenerated thumbnail preview overlay */}
           {regenThumb && (
             <div
-              className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 animate-fadeIn"
+              className="absolute inset-0 flex items-center justify-center bg-black/90 z-20 animate-fadeIn"
               onClick={() => setRegenThumb(null)}
               title="Click to dismiss"
             >
-              <div className="flex flex-col items-center gap-2">
-                <img src={regenThumb} alt="New thumbnail" className="max-h-[200px] rounded-md border border-white/20 shadow-xl" />
-                <span className="text-[11px] text-green-400 font-bold">Thumbnail regenerated</span>
-                <span className="text-[10px] text-text-muted">Click anywhere to close</span>
+              <div className="flex flex-col items-center gap-3">
+                <img src={regenThumb} alt="New thumbnail" className="max-h-[200px] rounded-lg shadow-2xl" />
+                <span className="text-[12px] text-green-500 font-medium">Thumbnail regenerated</span>
+                <span className="text-[11px] text-white/50">Click anywhere to close</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Nav */}
-        <div className={`flex items-center px-6 py-2.5 bg-surface border-t border-border-subtle shrink-0 shadow-sm z-10 relative ${isWide ? "justify-center" : "justify-between"}`}>
+        <div className={`flex items-center px-6 py-3 bg-[#0f0f0f] shrink-0 z-10 relative ${isWide ? "justify-center" : "justify-between"}`}>
           {/* Left: File Info (Only for standard mode) */}
           {!isWide && (
             <div className="flex-1 flex items-center gap-2 overflow-hidden mr-4">
-              <span className="font-mono text-xs text-text-muted truncate" title={video.path}>{video.name}</span>
-              <span className="text-text-secondary/40 shrink-0 text-xs">•</span>
-              <span className="text-text-secondary text-xs shrink-0">{formatSize(video.size)}</span>
+              <span className="font-medium text-sm text-white/90 truncate" title={video.path}>{video.name}</span>
+              <span className="text-white/40 shrink-0 text-sm">•</span>
+              <span className="text-white/60 text-sm shrink-0">{formatSize(video.size)}</span>
             </div>
           )}
 
           {/* Center: Controls */}
           <div className="flex items-center gap-2">
             <button 
-              className="btn btn-ghost px-5 py-2 hover:bg-elevated rounded-md transition-colors flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-30" 
+              className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
               onClick={onPrev ?? undefined} 
               disabled={!onPrev} 
               title="Previous (←)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
               Previous
             </button>
             <button 
-              className="btn btn-ghost px-5 py-2 hover:bg-elevated rounded-md transition-colors flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-30" 
+              className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
               onClick={onNext ?? undefined} 
               disabled={!onNext} 
               title="Next (→)"
             >
               Next
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
             </button>
           </div>
 
@@ -395,11 +395,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
           {!isWide && (
             <div className="flex-1 flex justify-end ml-4">
               <button 
-                className="flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-all px-3 py-1.5 rounded-md hover:bg-elevated border border-border-subtle shadow-sm"
+                className="flex items-center gap-2 text-sm font-medium text-white/90 hover:bg-white/10 transition-all px-4 py-2 rounded-full"
                 onClick={() => setIsInfoExpanded(!isInfoExpanded)}
               >
                 {isInfoExpanded ? "Hide Details" : "Show Details"}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isInfoExpanded ? "rotate-180" : ""}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isInfoExpanded ? "rotate-180" : ""}`}>
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </button>
@@ -410,95 +410,95 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
       {/* Info & Edit panel */}
       {isWide ? (
-        <div className={`bg-surface border-l border-border-subtle shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded ? "w-[400px] 2xl:w-[480px]" : "w-12 items-center py-4"}`}>
+        <div className={`bg-[#0f0f0f] border-l border-white/10 shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded ? "w-[420px] 2xl:w-[480px]" : "w-14 items-center py-4"}`}>
           {isInfoExpanded ? (
-            <div className="flex flex-col h-full w-full p-6 gap-5 animate-in fade-in duration-300">
+            <div className="flex flex-col h-full w-full p-6 gap-6 animate-in fade-in duration-300 text-white">
               {/* Panel Header (Sidebar mode) */}
-              <div className="flex items-center gap-4 pb-5 border-b border-border-subtle shrink-0">
+              <div className="flex items-center gap-4 pb-4 border-b border-white/10 shrink-0">
                 <button 
-                  className="flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text-primary transition-colors px-2 py-1 rounded hover:bg-elevated shrink-0"
+                  className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white/90 transition-colors shrink-0"
                   onClick={() => setIsInfoExpanded(false)}
+                  title="Hide Details"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="rotate-90">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="rotate-90">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
-                  Hide
                 </button>
                 <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="font-mono text-xs text-text-muted truncate" title={video.path}>{video.name}</span>
-                  <span className="text-text-secondary/40 shrink-0 text-xs">•</span>
-                  <span className="text-text-secondary text-xs shrink-0">{formatSize(video.size)}</span>
+                  <span className="font-medium text-sm text-white/90 truncate" title={video.path}>{video.name}</span>
+                  <span className="text-white/40 shrink-0 text-xs">•</span>
+                  <span className="text-white/60 text-xs shrink-0">{formatSize(video.size)}</span>
                 </div>
               </div>
 
               {/* Form Content - Scrollable Middle */}
-              <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pr-1 custom-scrollbar">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-text-secondary">Game Tag</label>
+              <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-white/90">Game Tag</label>
                   <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-text-secondary">YouTube Title</label>
-                  <input type="text" className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-text-secondary">Description</label>
-                  <textarea className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent resize-y min-h-[120px]" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-white/90">YouTube Title</label>
+                  <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-text-secondary">Privacy</label>
+                  <label className="text-sm font-medium text-white/90">Description</label>
+                  <textarea className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors resize-y min-h-[140px]" value={description} onChange={e => setDescription(e.target.value)} rows={5} />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <label className="text-sm font-medium text-white/90">Privacy</label>
                   <div className="flex gap-2">
                     {(["public", "unlisted", "private"] as const).map(p => (
-                      <button key={p} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${privacy === p ? "bg-accent/10 text-accent border-accent/50 border" : "bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                      <button key={p} className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${privacy === p ? "bg-white text-black" : "bg-[#272727] text-white/90 hover:bg-[#3f3f3f]"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5 relative">
+                <div className="flex flex-col gap-2 relative">
                    <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-medium text-text-secondary">Playlist (Optional)</label>
+                      <label className="text-sm font-medium text-white/90">Playlist</label>
                       {video.playlistTitle && (
-                        <span className="text-[10px] bg-accent/10 text-accent px-1.5 py-0.5 rounded flex items-center gap-1 font-bold">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+                        <span className="text-xs bg-[#3ea6ff]/10 text-[#3ea6ff] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
                           Linked: {video.playlistTitle}
                         </span>
                       )}
                     </div>
-                    <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
-                      {isCreatingPlaylist ? "Cancel" : "+ Get or create"}
+                    <button className="text-sm font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
+                      {isCreatingPlaylist ? "Cancel" : "New Playlist"}
                     </button>
                   </div>
 
                   {isCreatingPlaylist ? (
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       <div className="flex gap-2">
-                        <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                        <button className="btn btn-primary btn-sm px-3 min-w-[42px]" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
-                          {isCreatingPlaylistLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "OK"}
+                        <input className="flex-1 bg-[#272727] border border-transparent rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                        <button className="bg-white text-black hover:bg-gray-200 rounded-full px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                          {isCreatingPlaylistLoading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : "Create"}
                         </button>
                       </div>
-                      <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
-                      {playlistCreateError && <span className="text-[10px] text-red-400">{playlistCreateError}</span>}
+                      <span className="text-xs text-white/50">Existing playlist with same name will be reused.</span>
+                      {playlistCreateError && <span className="text-xs text-red-400">{playlistCreateError}</span>}
                     </div>
                   ) : (
                     <div className="relative">
-                      <input className="w-full bg-elevated border border-border-subtle rounded-md pl-9 pr-3 py-2 text-xs text-text-primary outline-none hover:border-border-medium focus:border-accent" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Search or select playlist..."} />
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input className="w-full bg-[#272727] border border-transparent rounded-lg pl-10 pr-10 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                       </div>
                       {playlistId && (
-                        <button className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary" onClick={() => { setPlaylistId(""); setPlaylistSearch(""); }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/50 hover:bg-white/10 hover:text-white transition-colors" onClick={() => { setPlaylistId(""); setPlaylistSearch(""); }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                         </button>
                       )}
                       
                       {isPlaylistDropdownOpen && (
-                        <div className="absolute left-0 right-0 bottom-full mb-1 bg-card border border-border-medium rounded-md shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
+                        <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
                           {playlists.filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase())).map(p => (
-                            <button key={p.id} className={`w-full text-left px-3 py-2 hover:bg-accent/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-accent/5 text-accent" : "text-text-primary"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
-                              <span className="text-xs font-bold truncate flex-1">{p.title}</span>
-                              {playlistId === p.id && <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-accent"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
+                            <button key={p.id} className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-white/5 text-white" : "text-white/90"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
+                              <span className="text-sm font-medium truncate flex-1">{p.title}</span>
+                              {playlistId === p.id && <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#3ea6ff]"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
                             </button>
                           ))}
                         </div>
@@ -509,131 +509,127 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 </div>
               </div>
 
-              <div className="h-px bg-border-subtle w-full shrink-0" />
-
               {/* Upload & Save actions - Fixed Bottom */}
-              <div className="flex flex-col items-stretch gap-3 shrink-0">
-                {/* Thumbnail regen */}
-                <button
-                  className="btn bg-elevated border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary py-2 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                  onClick={handleRegenerateThumbnail}
-                  disabled={regenLoading}
-                  title="Re-capture a fresh thumbnail frame from this video"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-                  </svg>
-                  {regenLoading ? "Regenerating..." : "Regenerate Thumbnail"}
-                </button>
-                <button
-                  className={`btn transition-colors py-2 text-xs font-bold ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"}`}
-                  onClick={handleDelete}
-                  disabled={deleting}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                  {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete?") : "Delete Video"}
-                </button>
-                <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col items-stretch gap-3 shrink-0 pt-4 border-t border-white/10">
+                <div className="flex items-center gap-3">
+                  <button
+                    className="flex-1 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors"
+                    onClick={handleRegenerateThumbnail}
+                    disabled={regenLoading}
+                    title="Re-capture a fresh thumbnail frame from this video"
+                  >
+                    {regenLoading ? "..." : "Regen Thumb"}
+                  </button>
+                  <button
+                    className={`flex-1 py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`}
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    {confirmDelete ? (deleting ? "Deleting..." : "Confirm Delete") : "Delete"}
+                  </button>
+                </div>
+                
+                <div className="flex flex-col gap-3">
                   {/* YouTube update status */}
                   {ytUpdateError && (
-                    <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-md">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-red-400 shrink-0 mt-0.5">
+                    <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-red-400 shrink-0 mt-0.5">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                       </svg>
-                      <span className="text-[10px] text-red-400 leading-tight flex-1" title={ytUpdateError}>
+                      <span className="text-xs text-red-400 leading-tight flex-1" title={ytUpdateError}>
                         Saved locally. YouTube update failed: {ytUpdateError.replace(/^Error: /, "")}
                       </span>
                       <button className="text-red-400/60 hover:text-red-400 shrink-0" onClick={() => setYtUpdateError(null)}>×</button>
                     </div>
                   )}
                   {infoSaved && !ytUpdateError && video.youtubeId && (
-                    <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded-md">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="text-green-400 shrink-0">
+                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-green-400 shrink-0">
                         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                       </svg>
-                      <span className="text-[10px] text-green-400 font-medium">Saved locally and updated on YouTube</span>
+                      <span className="text-xs text-green-400 font-medium">Saved locally and updated on YouTube</span>
                     </div>
                   )}
+
                   <button 
-                    className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} 
+                    className={`w-full py-3 rounded-full text-sm font-medium transition-colors ${infoSaved || isDirty ? "bg-[#3ea6ff] text-black hover:bg-[#65b8ff]" : "bg-[#272727] text-white/50 cursor-default"}`} 
                     onClick={handleSaveInfo} 
                     disabled={savingInfo || (!isDirty && !infoSaved)}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-                    </svg>
                     {infoSaved ? (video.youtubeId ? "Updated!" : "Saved!") : savingInfo ? (video.youtubeId ? "Updating..." : "Saving...") : "Save Info"}
                   </button>
-                  <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
-                  <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
+                  <div className="flex gap-2">
+                    <button className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors" onClick={handleAddToQueue}>Add to Queue</button>
+                    <button className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>Upload Now</button>
+                  </div>
                 </div>
               </div>
             </div>
           ) : (
             <button 
-              className="p-3 hover:bg-elevated rounded-md transition-colors text-text-secondary hover:text-text-primary group"
+              className="p-3 mt-2 rounded-full hover:bg-white/10 text-white/90 transition-colors group"
               onClick={() => setIsInfoExpanded(true)}
               title="Show Details"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-90 group-hover:scale-110 transition-transform">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-90 group-hover:scale-110 transition-transform">
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
           )}
         </div>
       ) : (
+        // Standard View Bottom Panel
         isInfoExpanded && (
-          <div className="bg-surface border-t border-border-subtle p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">Game Tag</label>
+          <div className="bg-[#0f0f0f] border-t border-white/10 p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300 text-white">
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-white/90">Game Tag</label>
                 <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">YouTube Title</label>
-                <input type="text" className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">Description</label>
-                <textarea className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent resize-y min-h-[80px]" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-white/90">YouTube Title</label>
+                <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-text-secondary">Privacy</label>
+                <label className="text-sm font-medium text-white/90">Description</label>
+                <textarea className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors resize-y min-h-[100px]" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+              </div>
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-medium text-white/90">Privacy</label>
                 <div className="flex gap-2">
                   {(["public", "unlisted", "private"] as const).map(p => (
-                    <button key={p} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${privacy === p ? "bg-accent/10 text-accent border-accent/50 border" : "bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                    <button key={p} className={`px-6 py-2 rounded-full text-sm font-medium transition-colors ${privacy === p ? "bg-white text-black" : "bg-[#272727] text-white/90 hover:bg-[#3f3f3f]"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
                   ))}
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5 relative">
+              <div className="flex flex-col gap-2 relative">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-text-secondary">Playlist</label>
-                  <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
-                    {isCreatingPlaylist ? "Cancel" : "+ Get or create"}
+                  <label className="text-sm font-medium text-white/90">Playlist</label>
+                  <button className="text-sm font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
+                    {isCreatingPlaylist ? "Cancel" : "New Playlist"}
                   </button>
                 </div>
                 {isCreatingPlaylist ? (
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     <div className="flex gap-2">
-                      <input className="flex-1 bg-elevated border border-accent rounded-md px-3 py-1.5 text-xs text-text-primary outline-none focus:bg-card" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                      <button className="btn btn-primary btn-sm px-3 min-w-[42px]" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
-                        {isCreatingPlaylistLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "OK"}
+                      <input className="flex-1 bg-[#272727] border border-transparent rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                      <button className="bg-white text-black hover:bg-gray-200 rounded-full px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                        {isCreatingPlaylistLoading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : "Create"}
                       </button>
                     </div>
-                    <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
-                    {playlistCreateError && <span className="text-[10px] text-red-400">{playlistCreateError}</span>}
+                    {playlistCreateError && <span className="text-xs text-red-400">{playlistCreateError}</span>}
                   </div>
                 ) : (
                   <div className="relative">
-                    <input className="w-full bg-elevated border border-border-subtle rounded-md pl-9 pr-3 py-2 text-xs text-text-primary outline-none focus:border-accent" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input className="w-full bg-[#272727] border border-transparent rounded-lg pl-10 pr-10 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     </div>
                     {isPlaylistDropdownOpen && (
-                      <div className="absolute left-0 right-0 bottom-full mb-1 bg-card border border-border-medium rounded-md shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar animate-fadeIn">
+                      <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
                         {playlists.filter(p => p.title.toLowerCase().includes(playlistSearch.toLowerCase())).map(p => (
-                          <button key={p.id} className={`w-full text-left px-3 py-2 hover:bg-accent/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-accent/5 text-accent" : "text-text-primary"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
-                            <span className="text-xs font-bold truncate flex-1">{p.title}</span>
+                          <button key={p.id} className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-white/5 text-white" : "text-white/90"}`} onClick={() => { setPlaylistId(p.id); setPlaylistSearch(p.title); setIsPlaylistDropdownOpen(false); }}>
+                            <span className="text-sm font-medium truncate flex-1">{p.title}</span>
                           </button>
                         ))}
                       </div>
@@ -643,34 +639,36 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 )}
               </div>
             </div>
-            <div className="h-px bg-border-subtle w-full my-1" />
-            <div className="flex items-center justify-between gap-4 mt-1">
-              <button className={`btn transition-colors py-2 text-xs font-bold ${confirmDelete ? "bg-red-500/20 text-red-500" : "bg-red-500/5 text-red-500/70 hover:bg-red-500/10 hover:text-red-500"}`} onClick={handleDelete} disabled={deleting}>{confirmDelete ? "Confirm Delete?" : "Delete Video"}</button>
+            
+            <div className="h-px bg-white/10 w-full my-4" />
+            
+            <div className="flex items-center justify-between gap-4">
+              <button className={`px-6 py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`} onClick={handleDelete} disabled={deleting}>{confirmDelete ? "Confirm Delete" : "Delete Video"}</button>
+              
               <div className="flex items-center gap-3">
                 <button
-                  className="btn bg-elevated border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  className="px-5 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors flex items-center gap-2"
                   onClick={handleRegenerateThumbnail}
                   disabled={regenLoading}
-                  title="Re-capture thumbnail from video"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
                   </svg>
                   {regenLoading ? "..." : "Regen Thumb"}
                 </button>
-                <button className={`btn transition-colors py-2.5 shadow-sm text-xs font-bold ${infoSaved || isDirty ? "bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500/20" : "bg-elevated border border-border-subtle text-text-muted opacity-50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>
+                <button className={`px-6 py-2.5 rounded-full text-sm font-medium transition-colors ${infoSaved || isDirty ? "bg-[#3ea6ff] text-black hover:bg-[#65b8ff]" : "bg-[#272727] text-white/50 cursor-default"}`} onClick={handleSaveInfo} disabled={savingInfo || (!isDirty && !infoSaved)}>
                   {infoSaved ? (video.youtubeId ? "Updated!" : "Saved!") : savingInfo ? (video.youtubeId ? "Updating..." : "Saving...") : "Save Info"}
                 </button>
-                <button className="btn btn-ghost bg-elevated border border-border-subtle hover:border-border-medium py-2.5 text-xs font-bold" onClick={handleAddToQueue}>Add to Queue</button>
+                <button className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors" onClick={handleAddToQueue}>Add to Queue</button>
                 {video.youtubeId && (
-                  <a href={`https://youtu.be/${video.youtubeId}`} target="_blank" rel="noreferrer" className="btn bg-red-600/10 text-red-500 border border-red-500/20 hover:bg-red-600/20 py-2.5 text-xs font-bold flex items-center gap-1.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <a href={`https://youtu.be/${video.youtubeId}`} target="_blank" rel="noreferrer" className="px-5 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
                     </svg>
-                    View on YouTube
+                    View on YT
                   </a>
                 )}
-                <button className="btn btn-primary py-3 shadow-md hover:shadow-lg transition-all text-xs font-bold" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>
+                <button className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors" onClick={handleUploadNow} disabled={uploading || !ytTitle.trim()}>
                   {video.youtubeId ? "Re-upload" : "Upload Now"}
                 </button>
               </div>

@@ -173,7 +173,7 @@ export default function YouTubeInlinePlayer({
   };
 
   return (
-    <div ref={containerRef} className={`flex-1 flex overflow-hidden bg-base ${isWide ? "flex-row" : "flex-col"}`}>
+    <div ref={containerRef} className={`flex-1 flex overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}>
       {/* Player Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center group min-w-0">
         <div id="yt-player-container" className="w-full h-full" />
@@ -182,7 +182,7 @@ export default function YouTubeInlinePlayer({
         {onPrev && (
           <button
             onClick={onPrev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+            className="absolute left-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
@@ -192,7 +192,7 @@ export default function YouTubeInlinePlayer({
         {onNext && (
           <button
             onClick={onNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+            className="absolute right-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18l6-6-6-6" />
@@ -202,34 +202,34 @@ export default function YouTubeInlinePlayer({
       </div>
 
       {/* Info Panel */}
-      <div className={`bg-surface border-border-subtle p-5 overflow-y-auto custom-scrollbar shrink-0 ${isWide ? "border-l w-[420px] h-full" : "border-t flex-1 min-h-[200px] max-h-[50%]"}`}>
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-start justify-between gap-4 mb-4">
+      <div className={`bg-[#0f0f0f] border-white/10 p-6 overflow-y-auto custom-scrollbar shrink-0 text-white ${isWide ? "border-l w-[420px] h-full" : "border-t flex-1 min-h-[200px] max-h-[50%]"}`}>
+        <div className="max-w-4xl mx-auto flex flex-col gap-6">
+          <div className="flex items-start justify-between gap-4">
             {isEditing ? (
               <input
                 type="text"
-                className="flex-1 bg-elevated border border-border-subtle rounded-md px-3 py-2 text-lg font-bold text-text-primary outline-none focus:border-accent"
+                className="flex-1 bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-lg font-bold text-white outline-none focus:border-[#3ea6ff]"
                 value={editableTitle}
                 onChange={(e) => setEditableTitle(e.target.value)}
               />
             ) : (
-              <h1 className="text-xl font-bold text-text-primary leading-tight">
+              <h1 className="text-xl font-bold text-white leading-tight">
                 {editableTitle}
               </h1>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0 mt-1">
               {isEditing ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="btn btn-accent px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
+                    className="px-4 py-2 rounded-full bg-[#3ea6ff] hover:bg-[#65b8ff] text-black text-sm font-bold flex items-center gap-2 transition-colors"
                   >
                     {isSaving ? (
-                      <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                     ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                         <polyline points="17 21 17 13 7 13 7 21" />
                         <polyline points="7 3 7 8 15 8" />
@@ -240,7 +240,7 @@ export default function YouTubeInlinePlayer({
                   <button
                     onClick={() => setIsEditing(false)}
                     disabled={isSaving}
-                    className="btn btn-elevated px-4 py-2 rounded-lg text-xs font-bold text-text-secondary hover:text-text-primary"
+                    className="px-4 py-2 rounded-full bg-transparent hover:bg-white/10 text-white/90 text-sm font-bold transition-colors"
                   >
                     Cancel
                   </button>
@@ -248,10 +248,10 @@ export default function YouTubeInlinePlayer({
               ) : (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                  className="p-2.5 rounded-full bg-transparent hover:bg-white/10 text-white/90 transition-colors"
                   title="Edit video details"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -260,27 +260,27 @@ export default function YouTubeInlinePlayer({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary mb-6 pb-6 border-b border-border-subtle">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-white/60 pb-5 border-b border-white/10">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-text-primary">
+              <span className="font-bold text-white/90">
                 {formatNumber(video.viewCount)}
               </span>
-              <span className="text-text-muted text-xs">views</span>
+              <span className="text-white/50 text-xs">views</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-text-primary">
+              <span className="font-bold text-white/90">
                 {formatNumber(video.likeCount)}
               </span>
-              <span className="text-text-muted text-xs">likes</span>
+              <span className="text-white/50 text-xs">likes</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-text-muted text-xs">
+              <span className="text-white/50 text-xs">
                 {formatDate(video.publishedAt)}
               </span>
             </div>
             {isEditing ? (
               <select
-                className="bg-elevated border border-border-subtle rounded px-2 py-1 text-xs font-bold text-accent outline-none focus:border-accent ml-auto"
+                className="bg-[#272727] border border-transparent rounded-lg px-3 py-1.5 text-xs font-bold text-white outline-none focus:border-[#3ea6ff] ml-auto cursor-pointer"
                 value={editablePrivacy}
                 onChange={(e) => setEditablePrivacy(e.target.value)}
               >
@@ -290,21 +290,21 @@ export default function YouTubeInlinePlayer({
               </select>
             ) : (
               <span
-                className={`px-2 py-1 rounded text-[10px] font-bold border ml-auto ${
+                className={`px-3 py-1 rounded-full text-xs font-bold ml-auto ${
                   editablePrivacy === "public"
-                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    ? "bg-green-500 text-white"
                     : editablePrivacy === "unlisted"
-                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                      : "bg-red-500/10 text-red-400 border-red-500/20"
+                      ? "bg-[#272727] text-white/90"
+                      : "bg-red-500 text-white"
                 }`}
               >
-                {editablePrivacy}
+                {editablePrivacy.charAt(0).toUpperCase() + editablePrivacy.slice(1)}
               </span>
             )}
 
             {video.playlistTitle && !showPlaylistPicker && (
-              <div className="flex items-center gap-1.5 bg-text-muted/10 text-text-muted text-[10px] font-bold py-1 px-3 rounded border border-border-subtle ml-2">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="opacity-70">
+              <div className="flex items-center gap-1.5 bg-[#3ea6ff]/10 text-[#3ea6ff] text-xs font-medium py-1 px-3 rounded-full ml-2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
                 </svg>
                 <span className="truncate max-w-[150px]">{video.playlistTitle}</span>
@@ -314,25 +314,25 @@ export default function YouTubeInlinePlayer({
             <div className="relative">
               <button
                 onClick={() => setShowPlaylistPicker(!showPlaylistPicker)}
-                className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors flex items-center gap-2"
+                className="px-3 py-1.5 rounded-full bg-transparent hover:bg-white/10 text-white/90 transition-colors flex items-center gap-2"
                 title="Add to playlist"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 5L6 9H2V15H6L11 19V5Z" />
                   <line x1="23" y1="9" x2="17" y2="15" />
                   <line x1="17" y1="9" x2="23" y2="15" />
                 </svg>
-                <span className="text-[10px] font-bold">Add to playlist</span>
+                <span className="text-xs font-bold">Add</span>
               </button>
               
               {showPlaylistPicker && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border-medium rounded-lg shadow-xl z-50 overflow-hidden animate-slideDown">
-                  <div className="p-3 border-b border-border-subtle bg-surface/50 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-text-secondary">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-slideDown">
+                  <div className="p-3 border-b border-white/10 bg-[#0f0f0f]/50 flex items-center justify-between">
+                    <span className="text-xs font-medium text-white/90">
                       {isCreatingPlaylist ? "Create playlist" : "Select playlist"}
                     </span>
                     <button 
-                      className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer"
+                      className="text-xs font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
                       onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}
                     >
                       {isCreatingPlaylist ? "Cancel" : "+ New"}
@@ -340,9 +340,9 @@ export default function YouTubeInlinePlayer({
                   </div>
                   
                   {isCreatingPlaylist ? (
-                    <div className="p-3 flex flex-col gap-2">
+                    <div className="p-4 flex flex-col gap-3">
                       <input
-                        className="w-full bg-elevated border border-accent rounded-sm px-3 py-2 text-xs text-text-primary outline-none focus:bg-card"
+                        className="w-full bg-[#0f0f0f] border border-transparent rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff]"
                         type="text"
                         value={newPlaylistTitle}
                         onChange={(e) => setNewPlaylistTitle(e.target.value)}
@@ -351,34 +351,34 @@ export default function YouTubeInlinePlayer({
                         disabled={isCreatingPlaylistLoading}
                         onKeyDown={(e) => e.key === "Enter" && handleCreateAndAdd()}
                       />
-                      <span className="text-[10px] text-text-muted">Existing playlist with same name will be reused.</span>
+                      <span className="text-[10px] text-white/50">Existing playlist with same name will be reused.</span>
                       {playlistCreateError && (
                         <span className="text-[10px] text-red-400">{playlistCreateError}</span>
                       )}
                       <button 
-                        className="btn btn-primary btn-sm w-full min-h-[28px]"
+                        className="w-full py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors"
                         onClick={handleCreateAndAdd}
                         disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}
                       >
                         {isCreatingPlaylistLoading ? (
-                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
-                        ) : "Get or create & add"}
+                          <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin mx-auto" />
+                        ) : "Create & Add"}
                       </button>
                     </div>
                   ) : (
                     <div className="flex flex-col">
-                      <div className="p-2 border-b border-border-subtle bg-base/30">
+                      <div className="p-2 border-b border-white/10">
                         <div className="relative">
                           <input
-                            className="w-full bg-elevated border border-border-subtle rounded-sm pl-8 pr-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent transition-colors"
+                            className="w-full bg-[#0f0f0f] border border-transparent rounded-lg pl-9 pr-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff]"
                             type="text"
                             placeholder="Search playlists..."
                             value={playlistSearch}
                             onChange={(e) => setPlaylistSearch(e.target.value)}
                             autoFocus
                           />
-                          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="11" cy="11" r="8" />
                               <line x1="21" y1="21" x2="16.65" y2="16.65" />
                             </svg>
@@ -392,7 +392,7 @@ export default function YouTubeInlinePlayer({
                             p.title.toLowerCase().includes(playlistSearch.toLowerCase())
                           )
                           .length === 0 ? (
-                          <div className="p-4 text-center text-xs text-text-muted">No playlists found</div>
+                          <div className="p-4 text-center text-sm text-white/50">No playlists found</div>
                         ) : (
                           playlists
                             .filter((p) =>
@@ -402,13 +402,13 @@ export default function YouTubeInlinePlayer({
                               <button
                                 key={p.id}
                                 onClick={() => handleAddToPlaylist(p.id)}
-                                className="w-full text-left p-3 hover:bg-accent/10 transition-colors flex items-center justify-between group"
+                                className="w-full text-left p-3 hover:bg-white/10 transition-colors flex items-center justify-between group"
                               >
                                 <div className="flex items-center justify-between w-full min-w-0 gap-3">
-                                  <span className="text-xs font-bold text-text-primary truncate flex-1">{p.title}</span>
-                                  <span className="text-[10px] text-text-muted whitespace-nowrap">{p.videoCount} videos</span>
+                                  <span className="text-sm font-medium text-white/90 truncate flex-1">{p.title}</span>
+                                  <span className="text-xs text-white/50 whitespace-nowrap">{p.videoCount} videos</span>
                                 </div>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#3ea6ff] opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                                   <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                                 </svg>
                               </button>
@@ -424,13 +424,13 @@ export default function YouTubeInlinePlayer({
 
           {isEditing ? (
             <textarea
-              className="w-full h-40 bg-elevated border border-border-subtle rounded-md px-3 py-2 text-sm text-text-secondary outline-none focus:border-accent custom-scrollbar"
+              className="w-full h-48 bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] custom-scrollbar"
               value={editableDescription}
               onChange={(e) => setEditableDescription(e.target.value)}
               placeholder="Enter video description..."
             />
           ) : (
-            <div className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
+            <div className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
               {editableDescription || "No description available."}
             </div>
           )}
