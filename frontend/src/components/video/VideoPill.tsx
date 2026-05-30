@@ -116,7 +116,7 @@ export default function VideoPill({
     ? compact
       ? "h-16 min-h-[64px]"
       : "h-28 min-h-[112px]"
-    : "h-fit";
+    : "h-full";
   const thumbHeightClass = isList ? "h-full" : "aspect-video";
 
   return (
@@ -224,7 +224,7 @@ export default function VideoPill({
       >
         <div className="flex flex-col gap-0.5">
           <h3
-            className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px]"}`}
+            className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
             title={title}
           >
             {/* Colorize game-name prefix with its deterministic per-tag color */}
@@ -251,41 +251,10 @@ export default function VideoPill({
         >
           <div className="flex items-center gap-3">
             {isYT ? (
-              <>
-                <span className="flex items-center gap-1 font-medium">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-60"
-                  >
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  {formatNumber(video.viewCount)}
-                </span>
-                <span className="flex items-center gap-1 font-medium">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-60"
-                  >
-                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                  </svg>
-                  {formatNumber(video.likeCount)}
-                </span>
-              </>
+              <span className="text-text-muted font-medium truncate">
+                {formatNumber(video.viewCount)} views • {formatNumber(video.likeCount)} likes
+                {publishedAt && ` • ${publishedAt}`}
+              </span>
             ) : (
               <span className="flex items-center gap-1.5">
                 <span className="flex items-center gap-1 font-medium">
@@ -320,7 +289,7 @@ export default function VideoPill({
             )}
           </div>
 
-          {!isList && publishedAt && (
+          {!isList && publishedAt && !isYT && (
             <span className="font-medium opacity-60">{publishedAt}</span>
           )}
         </div>

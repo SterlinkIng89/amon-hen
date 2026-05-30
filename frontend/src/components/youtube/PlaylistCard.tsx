@@ -16,8 +16,8 @@ export default function PlaylistCard({
   onDeleted,
 }: PlaylistCardProps) {
   const isList = viewMode === "list";
-  const heightClass = isList ? "h-[120px]" : "h-fit";
-  const thumbHeightClass = isList ? "h-full" : "h-[112px]";
+  const heightClass = isList ? "h-[120px]" : "h-full";
+  const thumbHeightClass = isList ? "h-full" : "aspect-video";
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -123,7 +123,7 @@ export default function PlaylistCard({
 
   return (
     <div
-      className={`flex bg-card rounded-xl border border-border-subtle overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group ${isList ? "flex-row" : "flex-col"} ${heightClass} relative`}
+      className={`flex rounded-xl overflow-hidden transition-all duration-300 cursor-pointer group ${isList ? "flex-row" : "flex-col"} ${heightClass} relative bg-card border border-transparent hover:border-accent/30 hover:bg-elevated hover:shadow-[0_0_20px_rgba(var(--color-accent),0.15)]`}
       onClick={onClick}
     >
       <div
@@ -133,7 +133,7 @@ export default function PlaylistCard({
           <img
             src={playlist.thumbnailUrl}
             alt={playlist.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-opacity duration-700"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-elevated text-text-muted">
@@ -181,29 +181,27 @@ export default function PlaylistCard({
             <line x1="3" y1="18" x2="3.01" y2="18"></line>
           </svg>
         </div>
+        {/* Delete button — hover absolute */}
+        <button
+          className="absolute top-2 left-2 p-1.5 rounded-full bg-black/50 border border-white/20 backdrop-blur-md text-white/80 hover:text-red-400 hover:bg-black/80 hover:border-red-500/50 opacity-0 group-hover:opacity-100 transition-all shadow-lg z-20"
+          onClick={handleDeleteClick}
+          title="Delete playlist from YouTube"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+          </svg>
+        </button>
       </div>
 
       <div
-        className={`flex flex-col flex-1 justify-between min-w-0 ${isList ? "px-3 py-2" : "p-3.5"}`}
+        className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3 pb-2.5 gap-1.5"}`}
       >
         <h3
-          className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm"}`}
+          className={`font-semibold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
           title={playlist.title}
         >
           {playlist.title}
         </h3>
-
-        {/* Delete button — only visible on hover */}
-        <button
-          className="self-start mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 opacity-0 group-hover:opacity-100 transition-all"
-          onClick={handleDeleteClick}
-          title="Delete playlist from YouTube"
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-          </svg>
-          Delete
-        </button>
       </div>
     </div>
   );
