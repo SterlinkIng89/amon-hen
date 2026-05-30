@@ -95,7 +95,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   }, [onPrev, onNext]);
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
+  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
   const [tagInput, setTagInput] = useState(video.game || "");
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
@@ -114,7 +114,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   // when the user navigates to a different video with arrow keys).
   // Without this, ytTitle/tagInput etc. would stay stale from the previous mount.
   useEffect(() => {
-    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game));
+    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
     setTagInput(video.game || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
@@ -213,15 +213,26 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const handleSaveInfo = async () => {
     setSavingInfo(true);
     setYtUpdateError(null);
+
+    const tagChanged = tagInput !== (video.game || "");
+
+    // When the tag changed, blank the persisted title so the backend scanner
+    // re-enumerates this video with the correct episode number for the new tag
+    // (same mechanism that SetVideoGames / BulkActionBar uses).
+    const currentTitle = ytTitle; // capture before we clear it
+    const titleToSave = tagChanged ? "" : ytTitle;
+    if (tagChanged) {
+      setYtTitle(""); // will be re-populated after the next rescan
+    }
     try {
       // 1. Always save to local config / DB first
-      await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0);
+      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, video.episode || 0);
       if (tagInput) addRecentTag(tagInput);
 
       // 2. If video is already on YouTube, push the metadata update to the API
       if (video.youtubeId) {
         try {
-          await UpdateYouTubeVideoMetadata(video.youtubeId, ytTitle, description, privacy);
+          await UpdateYouTubeVideoMetadata(video.youtubeId, currentTitle, description, privacy);
         } catch (ytErr: any) {
           // Don't block local save — just surface the error
           setYtUpdateError(ytErr?.toString() ?? "Failed to update on YouTube");
