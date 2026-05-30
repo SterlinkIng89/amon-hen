@@ -455,7 +455,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                       )}
                     </div>
                     <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
-                      {isCreatingPlaylist ? "CANCEL" : "+ GET OR CREATE"}
+                      {isCreatingPlaylist ? "Cancel" : "+ Get or create"}
                     </button>
                   </div>
 
@@ -598,7 +598,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-text-secondary">Playlist</label>
                   <button className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer" onClick={() => { setIsCreatingPlaylist(!isCreatingPlaylist); setPlaylistCreateError(""); }}>
-                    {isCreatingPlaylist ? "CANCEL" : "+ GET OR CREATE"}
+                    {isCreatingPlaylist ? "Cancel" : "+ Get or create"}
                   </button>
                 </div>
                 {isCreatingPlaylist ? (

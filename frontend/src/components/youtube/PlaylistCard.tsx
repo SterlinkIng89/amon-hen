@@ -16,8 +16,8 @@ export default function PlaylistCard({
   onDeleted,
 }: PlaylistCardProps) {
   const isList = viewMode === "list";
-  const heightClass = isList ? "h-[120px]" : "h-fit w-[213px]";
-  const thumbHeightClass = isList ? "h-full" : "h-[120px]";
+  const heightClass = isList ? "h-[120px]" : "h-fit";
+  const thumbHeightClass = isList ? "h-full" : "h-[112px]";
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -123,7 +123,7 @@ export default function PlaylistCard({
 
   return (
     <div
-      className={`flex bg-card rounded-xl border border-border-subtle overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group ${isList ? "flex-row" : "flex-col"} ${heightClass} relative`}
+      className={`flex bg-card rounded-xl border border-border-subtle overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group ${isList ? "flex-row" : "flex-col"} ${heightClass} relative`}
       onClick={onClick}
     >
       <div
@@ -133,7 +133,7 @@ export default function PlaylistCard({
           <img
             src={playlist.thumbnailUrl}
             alt={playlist.title}
-            className="w-full h-full object-cover transition-transform duration-500"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-elevated text-text-muted">
@@ -187,7 +187,7 @@ export default function PlaylistCard({
         className={`flex flex-col flex-1 justify-between min-w-0 ${isList ? "px-3 py-2" : "p-3.5"}`}
       >
         <h3
-          className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm h-10"}`}
+          className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm"}`}
           title={playlist.title}
         >
           {playlist.title}

@@ -53,7 +53,7 @@ export default function LibrarySubHeader({
         <div className="flex items-center gap-4 flex-wrap">
           {/* Folders */}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Folders:</span>
+            <span className="text-[10px] font-bold text-text-muted">Folders:</span>
             <div className="flex items-center gap-2 flex-wrap">
               {folders.map(f => {
                 const active = activeFolders.includes(f);
@@ -146,7 +146,7 @@ export default function LibrarySubHeader({
 
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Sort by:</span>
+          <span className="text-[10px] font-bold text-text-muted">Sort by:</span>
           <select
             className="bg-elevated/50 border border-border-subtle rounded-lg px-3 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
             value={sortMode}

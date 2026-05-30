@@ -164,7 +164,7 @@ export default function UploadDialog({
                 className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer"
                 onClick={() => { setIsCreating(!isCreating); setPlaylistError(""); }}
               >
-                {isCreating ? "CANCEL" : "+ GET OR CREATE"}
+                {isCreating ? "Cancel" : "+ Get or create"}
               </button>
             </div>
 
@@ -188,7 +188,7 @@ export default function UploadDialog({
                   >
                     {isCreatingPlaylist ? (
                       <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : "GET / CREATE"}
+                    ) : "Get or create"}
                   </button>
                 </div>
                 <span className="text-[10px] text-text-muted">

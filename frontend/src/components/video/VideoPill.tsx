@@ -5,6 +5,7 @@ import {
   formatDuration,
   generateYouTubeTitle,
 } from "../../utils/videoUtils";
+import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
 import {
   GetThumbnail,
@@ -42,6 +43,7 @@ export default function VideoPill({
   const [bgPos, setBgPos] = useState("0% 0%");
   const [hovered, setHovered] = useState(false);
   const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [localDuration, setLocalDuration] = useState<number | null>(null);
 
   // Helper: Is it a YouTube video or a Local file?
@@ -109,13 +111,13 @@ export default function VideoPill({
   };
 
   const isList = viewMode === "list";
-  const thumbWidth = compact ? "140px" : "213px";
+  const thumbWidth = compact ? "120px" : "200px";
   const heightClass = isList
     ? compact
-      ? "h-20 min-h-[80px]"
-      : "h-32 min-h-[128px]"
-    : "h-fit w-[213px]";
-  const thumbHeightClass = isList ? "h-full" : "h-[120px]";
+      ? "h-16 min-h-[64px]"
+      : "h-28 min-h-[112px]"
+    : "h-fit";
+  const thumbHeightClass = isList ? "h-full" : "h-[112px]";
 
   return (
     <div
@@ -126,14 +128,14 @@ export default function VideoPill({
         setHovered(false);
         setBgPos("0% 0%");
       }}
-      className={`group flex select-none bg-card rounded-xl border overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
+      className={`group flex select-none bg-card rounded-xl border overflow-hidden transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-0.5 ${
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected
           ? "ring-2 ring-accent/30 border-accent bg-accent/5 shadow-accent/20"
           : selected
             ? "ring-2 ring-accent border-accent bg-accent/5 shadow-accent/20"
-            : "border-border-subtle hover:border-border-medium hover:bg-elevated/30"
+            : "border-border-subtle hover:border-border-medium hover:shadow-md"
       }`}
     >
       {/* Thumbnail Area */}
@@ -159,7 +161,10 @@ export default function VideoPill({
           <img
             src={thumbnail || "/placeholder-thumb.jpg"}
             alt={title}
-            className="w-full h-full object-cover transition-transform duration-500"
+            onLoad={() => setImgLoaded(true)}
+            className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
+              imgLoaded ? "opacity-100" : "opacity-0"
+            }`}
           />
         )}
 
@@ -244,7 +249,17 @@ export default function VideoPill({
             className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm"}`}
             title={title}
           >
-            {title}
+            {/* Colorize game-name prefix with its deterministic per-tag color */}
+            {isLocal && (video as VideoFile).game && (video as VideoFile).game!.length > 0 && title.startsWith((video as VideoFile).game!) ? (
+              <>
+                <span style={{ color: getTagColor((video as VideoFile).game!) }}>
+                  {(video as VideoFile).game}
+                </span>
+                <span>{title.slice((video as VideoFile).game!.length)}</span>
+              </>
+            ) : (
+              title
+            )}
           </h3>
           {subtitle && (
             <p
@@ -327,11 +342,7 @@ export default function VideoPill({
             <span className="font-bold opacity-60">{publishedAt}</span>
           )}
 
-          {isLocal && video.game && (
-            <div className="flex items-center gap-1.5 bg-accent/10 text-accent text-[9px] font-bold py-0.5 px-2 rounded-full border border-accent/20">
-              <span className="truncate max-w-[80px]">{video.game}</span>
-            </div>
-          )}
+
         </div>
       </div>
     </div>

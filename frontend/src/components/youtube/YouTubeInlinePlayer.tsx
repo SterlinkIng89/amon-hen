@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../../types";
 import { 
   UpdateYouTubeVideoMetadata, 
@@ -50,15 +50,20 @@ export default function YouTubeInlinePlayer({
   useEffect(() => {
     refreshPlaylists();
   }, []);
-  const [aspectRatio, setAspectRatio] = useState(window.innerWidth / window.innerHeight);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isWide, setIsWide] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => setAspectRatio(window.innerWidth / window.innerHeight);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setIsWide(entry.contentRect.width >= 900);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
-
-  const isWide = aspectRatio >= 2.0;
 
   useEffect(() => {
     setEditableTitle(video.title);
@@ -168,7 +173,7 @@ export default function YouTubeInlinePlayer({
   };
 
   return (
-    <div className={`flex-1 flex overflow-hidden bg-base ${isWide ? "flex-row" : "flex-col"}`}>
+    <div ref={containerRef} className={`flex-1 flex overflow-hidden bg-base ${isWide ? "flex-row" : "flex-col"}`}>
       {/* Player Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center group min-w-0">
         <div id="yt-player-container" className="w-full h-full" />
@@ -197,7 +202,7 @@ export default function YouTubeInlinePlayer({
       </div>
 
       {/* Info Panel */}
-      <div className={`bg-surface border-border-subtle p-6 overflow-y-auto custom-scrollbar shrink-0 ${isWide ? "border-l w-[450px] h-full" : "border-t flex-1 max-h-[40%]"}`}>
+      <div className={`bg-surface border-border-subtle p-5 overflow-y-auto custom-scrollbar shrink-0 ${isWide ? "border-l w-[420px] h-full" : "border-t flex-1 min-h-[200px] max-h-[50%]"}`}>
         <div className="max-w-4xl mx-auto">
           <div className="flex items-start justify-between gap-4 mb-4">
             {isEditing ? (
@@ -230,14 +235,14 @@ export default function YouTubeInlinePlayer({
                         <polyline points="7 3 7 8 15 8" />
                       </svg>
                     )}
-                    SAVE
+                    Save
                   </button>
                   <button
                     onClick={() => setIsEditing(false)}
                     disabled={isSaving}
                     className="btn btn-elevated px-4 py-2 rounded-lg text-xs font-bold text-text-secondary hover:text-text-primary"
                   >
-                    CANCEL
+                    Cancel
                   </button>
                 </div>
               ) : (
@@ -279,13 +284,13 @@ export default function YouTubeInlinePlayer({
                 value={editablePrivacy}
                 onChange={(e) => setEditablePrivacy(e.target.value)}
               >
-                <option value="public">PUBLIC</option>
-                <option value="unlisted">UNLISTED</option>
-                <option value="private">PRIVATE</option>
+                <option value="public">Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private</option>
               </select>
             ) : (
               <span
-                className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ml-auto ${
+                className={`px-2 py-1 rounded text-[10px] font-bold border ml-auto ${
                   editablePrivacy === "public"
                     ? "bg-green-500/10 text-green-400 border-green-500/20"
                     : editablePrivacy === "unlisted"
@@ -317,20 +322,20 @@ export default function YouTubeInlinePlayer({
                   <line x1="23" y1="9" x2="17" y2="15" />
                   <line x1="17" y1="9" x2="23" y2="15" />
                 </svg>
-                <span className="text-[10px] font-bold">ADD TO PLAYLIST</span>
+                <span className="text-[10px] font-bold">Add to playlist</span>
               </button>
               
               {showPlaylistPicker && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border-medium rounded-lg shadow-xl z-50 overflow-hidden animate-fadeIn">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border-medium rounded-lg shadow-xl z-50 overflow-hidden animate-slideDown">
                   <div className="p-3 border-b border-border-subtle bg-surface/50 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase">
-                      {isCreatingPlaylist ? "Create Playlist" : "Select Playlist"}
+                    <span className="text-[10px] font-bold text-text-secondary">
+                      {isCreatingPlaylist ? "Create playlist" : "Select playlist"}
                     </span>
                     <button 
                       className="text-[10px] font-bold text-accent hover:underline bg-transparent border-none cursor-pointer"
                       onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}
                     >
-                      {isCreatingPlaylist ? "CANCEL" : "+ NEW"}
+                      {isCreatingPlaylist ? "Cancel" : "+ New"}
                     </button>
                   </div>
                   
@@ -357,7 +362,7 @@ export default function YouTubeInlinePlayer({
                       >
                         {isCreatingPlaylistLoading ? (
                           <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
-                        ) : "GET / CREATE & ADD"}
+                        ) : "Get or create & add"}
                       </button>
                     </div>
                   ) : (

@@ -46,6 +46,29 @@
   .btn-success {
     @apply bg-green-400/15 text-green-400 border-green-400/30;
   }
+
+  /* Image fade-in on load */
+  .img-fade {
+    @apply opacity-0 transition-opacity duration-300;
+  }
+  .img-fade.loaded {
+    @apply opacity-100;
+  }
+
+  /* Custom scrollbar utility */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-border-subtle rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-border-medium;
+  }
 }
 
 
