@@ -117,7 +117,7 @@ export default function VideoPill({
       ? "h-16 min-h-[64px]"
       : "h-28 min-h-[112px]"
     : "h-fit";
-  const thumbHeightClass = isList ? "h-full" : "h-[112px]";
+  const thumbHeightClass = isList ? "h-full" : "aspect-video";
 
   return (
     <div
@@ -128,14 +128,14 @@ export default function VideoPill({
         setHovered(false);
         setBgPos("0% 0%");
       }}
-      className={`group flex select-none bg-card rounded-xl border overflow-hidden transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-0.5 ${
+      className={`group flex select-none rounded-xl overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected
-          ? "ring-2 ring-accent/30 border-accent bg-accent/5 shadow-accent/20"
+          ? "bg-accent/10 ring-2 ring-accent/50 shadow-[0_0_15px_rgba(var(--color-accent),0.3)]"
           : selected
-            ? "ring-2 ring-accent border-accent bg-accent/5 shadow-accent/20"
-            : "border-border-subtle hover:border-border-medium hover:shadow-md"
+            ? "bg-accent/10 ring-2 ring-accent shadow-[0_0_15px_rgba(var(--color-accent),0.3)]"
+            : "bg-card border border-transparent hover:border-accent/30 hover:bg-elevated hover:shadow-[0_0_20px_rgba(var(--color-accent),0.15)]"
       }`}
     >
       {/* Thumbnail Area */}
@@ -150,7 +150,7 @@ export default function VideoPill({
 
         {isLocal && sprite && hovered ? (
           <div
-            className="absolute inset-0 w-full h-full"
+            className="absolute inset-0 w-full h-full transition-opacity duration-300"
             style={{
               backgroundImage: `url(${sprite})`,
               backgroundSize: "500% 500%",
@@ -162,7 +162,7 @@ export default function VideoPill({
             src={thumbnail || "/placeholder-thumb.jpg"}
             alt={title}
             onLoad={() => setImgLoaded(true)}
-            className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
+            className={`w-full h-full object-cover transition-opacity duration-700 ${
               imgLoaded ? "opacity-100" : "opacity-0"
             }`}
           />
@@ -170,12 +170,12 @@ export default function VideoPill({
 
         {/* Play Icon on Hover */}
         <div
-          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300 ${hovered ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] transition-opacity duration-300 ${hovered ? "opacity-100" : "opacity-0"}`}
         >
           <div
-            className={`w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white shadow-lg transition-transform duration-300 ${hovered ? "scale-100" : "scale-75"}`}
+            className="w-12 h-12 bg-black/50 border border-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
               <path d="M8 5v14l11-7z" />
             </svg>
           </div>
@@ -184,38 +184,16 @@ export default function VideoPill({
         {/* Duration Badge */}
         {displayDuration && (
           <div
-            className={`absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-white z-10 border border-white/10 tabular-nums ${isList && compact ? "scale-90" : ""}`}
+            className={`absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-white z-10 tabular-nums shadow-sm border border-white/10 ${isList && compact ? "scale-90" : ""}`}
           >
             {displayDuration}
-          </div>
-        )}
-
-        {/* Badges (Local, YT) */}
-
-        {isLocal && video.youtubeId && (
-          <div
-            className={`absolute top-2 left-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white border border-white/20 z-10 shadow-lg shadow-green-500/20 ${isList ? "scale-75 origin-top-left" : ""}`}
-            title="Uploaded to YouTube"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
           </div>
         )}
 
         {/* Action Buttons on Hover */}
         {hovered && isLocal && !video.youtubeId && (
           <button
-            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent z-20 shadow-xl"
+            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent hover:shadow-[0_0_10px_rgba(var(--color-accent),0.3)] z-20"
             title="Upload to YouTube"
             onClick={(e) => {
               e.stopPropagation();
@@ -242,33 +220,25 @@ export default function VideoPill({
 
       {/* Info Panel */}
       <div
-        className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3.5 gap-2"}`}
+        className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3 pb-2.5 gap-1.5"}`}
       >
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5">
           <h3
-            className={`font-bold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-sm"}`}
+            className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px]"}`}
             title={title}
           >
             {/* Colorize game-name prefix with its deterministic per-tag color */}
             {isLocal && (video as VideoFile).game && (video as VideoFile).game!.length > 0 && title.startsWith((video as VideoFile).game!) ? (
               <>
-                <span style={{ color: getTagColor((video as VideoFile).game!) }}>
+                <span style={{ color: getTagColor((video as VideoFile).game!) }} className="font-bold drop-shadow-sm">
                   {(video as VideoFile).game}
                 </span>
-                <span>{title.slice((video as VideoFile).game!.length)}</span>
+                <span className="opacity-90">{title.slice((video as VideoFile).game!.length)}</span>
               </>
             ) : (
               title
             )}
           </h3>
-          {subtitle && (
-            <p
-              className="text-[10px] text-text-muted font-mono truncate opacity-60"
-              title={subtitle}
-            >
-              {subtitle}
-            </p>
-          )}
           {isList && publishedAt && (
             <span className="text-[10px] text-text-muted font-medium mt-0.5">
               {publishedAt}
@@ -277,12 +247,12 @@ export default function VideoPill({
         </div>
 
         <div
-          className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto pt-2"}`}
+          className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto pt-1"}`}
         >
           <div className="flex items-center gap-3">
             {isYT ? (
               <>
-                <span className="flex items-center gap-1 font-bold">
+                <span className="flex items-center gap-1 font-medium">
                   <svg
                     width="10"
                     height="10"
@@ -292,14 +262,14 @@ export default function VideoPill({
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="opacity-50"
+                    className="opacity-60"
                   >
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
                   {formatNumber(video.viewCount)}
                 </span>
-                <span className="flex items-center gap-1 font-bold">
+                <span className="flex items-center gap-1 font-medium">
                   <svg
                     width="10"
                     height="10"
@@ -309,7 +279,7 @@ export default function VideoPill({
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="opacity-50"
+                    className="opacity-60"
                   >
                     <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
                   </svg>
@@ -317,34 +287,45 @@ export default function VideoPill({
                 </span>
               </>
             ) : (
-              <span className="flex items-center gap-1 font-bold">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="opacity-50"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                {formatSize(video.size)}
+              <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1 font-medium">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="opacity-60"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  {formatSize(video.size)}
+                </span>
+                {isLocal && video.youtubeId && (
+                  <div
+                    className="shrink-0 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center text-white shadow-sm"
+                    title="Uploaded to YouTube"
+                  >
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  </div>
+                )}
               </span>
             )}
           </div>
 
           {!isList && publishedAt && (
-            <span className="font-bold opacity-60">{publishedAt}</span>
+            <span className="font-medium opacity-60">{publishedAt}</span>
           )}
-
-
         </div>
       </div>
     </div>
   );
 }
+
