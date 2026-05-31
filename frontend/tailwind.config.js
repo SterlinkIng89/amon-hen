@@ -3,31 +3,46 @@ import defaultTheme from "tailwindcss/defaultTheme";
 
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
-  darkMode: "class",
+  // Always dark — no class toggling needed
+  darkMode: "media",
   theme: {
     extend: {
       colors: {
-        base: "#0d0f14",
-        surface: "#13161e",
-        elevated: "#1a1e28",
+        // ── Backgrounds (Zinc scale — zero blue hue) ────────────────────
+        base:     "#09090b",   // Zinc-950: true near-black
+        surface:  "#111113",   // Zinc-900-ish: darkest chrome
+        elevated: "#18181b",   // Zinc-900: panels, sidebars
         card: {
-          DEFAULT: "#1e2330",
-          hover: "#252a38",
+          DEFAULT: "#1c1c1f",  // Zinc-800-ish: video cards, list items
+          hover:   "#27272a",  // Zinc-800: hover state
         },
+
+        // ── Accent — orange iris from the logo ──────────────────────────
         accent: {
-          DEFAULT: "#f97316",
-          hover: "#fb923c",
-          dim: "rgba(249, 115, 22, 0.12)",
+          DEFAULT: "#f97316",               // Orange-500
+          hover:   "#fb923c",               // Orange-400
+          dim:     "rgba(249,115,22,0.12)", // subtle tint for selections
         },
+
+        // ── Fire — crimson ring from the logo (danger / special) ────────
+        fire: {
+          DEFAULT: "#b91c1c",               // Crimson close to #B22222
+          dim:     "rgba(185,28,28,0.15)",
+        },
+
+        // ── Borders ─────────────────────────────────────────────────────
         border: {
-          subtle: "rgba(255, 255, 255, 0.06)",
-          medium: "rgba(255, 255, 255, 0.10)",
-          accent: "rgba(249, 115, 22, 0.40)",
+          subtle: "rgba(255,255,255,0.07)",
+          medium: "rgba(255,255,255,0.12)",
+          accent: "rgba(249,115,22,0.35)",
+          fire:   "rgba(185,28,28,0.40)",
         },
+
+        // ── Text (Zinc — warm-neutral, no blue tint) ────────────────────
         text: {
-          primary: "#e8eaf0",
-          secondary: "#7c8799",
-          muted: "#3e4a5c",
+          primary:   "#f4f4f5", // Zinc-100: crisp warm white
+          secondary: "#71717a", // Zinc-500: mid-grey labels
+          muted:     "#3f3f46", // Zinc-700: de-emphasised hints
         },
       },
       borderRadius: {
