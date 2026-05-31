@@ -11,8 +11,12 @@ import { useChannelData } from "../hooks/useChannelData";
 
 export default function ChannelPage() {
   const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
-  const [playlistSort, setPlaylistSort] = useState<"recent" | "title" | "videos">("recent");
-  const [videoSort, setVideoSort] = useState<"recent" | "title" | "views">("recent");
+  const [playlistSort, setPlaylistSort] = useState<"recent" | "title" | "videos" | "updated">(
+    () => (localStorage.getItem("ch:playlistSort_v2") as any) || "updated"
+  );
+  const [videoSort, setVideoSort] = useState<"recent" | "title" | "views">(
+    () => (localStorage.getItem("ch:videoSort") as any) || "recent"
+  );
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<YTVideo | null>(null);
@@ -31,6 +35,10 @@ export default function ChannelPage() {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Persist sort preferences so they survive navigation away and back
+  useEffect(() => { localStorage.setItem("ch:playlistSort_v2", playlistSort); }, [playlistSort]);
+  useEffect(() => { localStorage.setItem("ch:videoSort", videoSort); }, [videoSort]);
 
   // Reset state when tab changes
   useEffect(() => {
@@ -246,6 +254,7 @@ export default function ChannelPage() {
               ) : (
                 <>
                   <option value="recent">Recently created</option>
+                  <option value="updated">Recently updated</option>
                   <option value="title">A–Z title</option>
                   <option value="videos">Most videos</option>
                 </>

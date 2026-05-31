@@ -7,7 +7,7 @@ import {
 } from "../../wailsjs/go/backend/App";
 
 type VideoSort = "recent" | "title" | "views";
-type PlaylistSort = "recent" | "title" | "videos";
+type PlaylistSort = "recent" | "title" | "videos" | "updated";
 
 interface UseChannelDataOptions {
   activeTab: "videos" | "playlists";

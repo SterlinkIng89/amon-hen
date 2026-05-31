@@ -615,11 +615,19 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 		orderBy = "title ASC"
 	} else if sortBy == "videos" {
 		orderBy = "video_count DESC"
+	} else if sortBy == "updated" {
+		// Sort by the most recently published video in the playlist (proxy for last modified)
+		orderBy = `(
+			SELECT MAX(v.published_at)
+			FROM yt_videos v
+			JOIN yt_playlist_items pi ON v.id = pi.video_id
+			WHERE pi.playlist_id = p.id
+		) DESC NULLS LAST`
 	}
 
 	rows, err := a.db.conn.Query(fmt.Sprintf(`
-		SELECT id, title, description, video_count, thumbnail_url, published_at
-		FROM yt_playlists
+		SELECT p.id, p.title, p.description, p.video_count, p.thumbnail_url, p.published_at
+		FROM yt_playlists p
 		ORDER BY %s`, orderBy))
 	if err != nil {
 		return nil, err
