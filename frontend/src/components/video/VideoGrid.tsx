@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { VideoFile, VideoGroup } from "../../types";
 import VideoPill from "./VideoPill";
 import StatsBar from "./StatsBar";
+import { useAppStore } from "../../store/useAppStore";
 
 type SortMode = "date" | "name" | "size";
 
@@ -42,6 +43,12 @@ export default function VideoGrid({
   onUploadTarget,
 }: VideoGridProps) {
   const useGroups = groups.length > 0; // If Dashboard groups it, we use it
+  const { queue } = useAppStore();
+
+  const getUploadProgress = (path: string): number | undefined => {
+    const item = queue.find(q => q.videoPath === path && q.status === "uploading");
+    return item ? item.progress : undefined;
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base relative">
@@ -79,6 +86,7 @@ export default function VideoGrid({
                       selected={selected}
                       onClick={(e) => onOpenVideo(absoluteIdx, e)}
                       onUpload={() => onUploadTarget(video)}
+                      uploadProgress={getUploadProgress(video.path)}
                     />
                   );
                 })}
@@ -100,6 +108,7 @@ export default function VideoGrid({
                   selected={selected}
                   onClick={(e) => onOpenVideo(absoluteIdx, e)}
                   onUpload={() => onUploadTarget(video)}
+                  uploadProgress={getUploadProgress(video.path)}
                 />
               );
             })}

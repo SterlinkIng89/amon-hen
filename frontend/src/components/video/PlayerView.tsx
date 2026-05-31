@@ -3,6 +3,7 @@ import { VideoFile } from "../../types";
 import VideoPill from "./VideoPill";
 import InlinePlayer from "./InlinePlayer";
 import { QueueItem } from "../youtube/UploadQueue";
+import { useAppStore } from "../../store/useAppStore";
 
 interface PlayerViewProps {
   sortedVideos: VideoFile[];
@@ -37,6 +38,12 @@ export default function PlayerView({
   onFilesDeleted,
   onAddToQueue,
 }: PlayerViewProps) {
+  const { queue } = useAppStore();
+
+  const getUploadProgress = (path: string): number | undefined => {
+    const item = queue.find(q => q.videoPath === path && q.status === "uploading");
+    return item ? item.progress : undefined;
+  };
   return (
     <div className="flex-1 flex overflow-hidden">
       <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
@@ -53,6 +60,7 @@ export default function PlayerView({
                 compact={true}
                 onClick={(e) => onVideoClick(absoluteIdx, e)}
                 onUpload={() => onUploadTarget(video)}
+                uploadProgress={getUploadProgress(video.path)}
               />
             );
           })}
