@@ -73,14 +73,19 @@ export function useChannelData({
         if (reset) {
           setVideos(newVideos);
           setPage(2);
-          setHasMore(newVideos.length < res.total);
+          // No more pages if we got everything, or fewer than a full page
+          setHasMore(newVideos.length > 0 && newVideos.length < res.total);
         } else {
-          setVideos((prev) => {
-            const combined = [...prev, ...newVideos];
-            setHasMore(combined.length < res.total);
-            return combined;
-          });
-          setPage((prev) => prev + 1);
+          if (newVideos.length === 0) {
+            // Empty page — definitely at the end, stop immediately
+            setHasMore(false);
+          } else {
+            // Capture the next combined length before the async setState
+            const nextCount = pageToLoad * 40; // upper bound of what we now have
+            setVideos((prev) => [...prev, ...newVideos]);
+            setPage((prev) => prev + 1);
+            setHasMore(newVideos.length === 40 && nextCount < res.total);
+          }
         }
       } else if (activeTab === "playlists") {
         const pRes: any = await GetChannelPlaylists(
@@ -103,6 +108,9 @@ export function useChannelData({
 
   // Infinite scroll observer
   useEffect(() => {
+    // Guard against rapid re-fires when the sentinel is always visible (short list)
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const obs = new IntersectionObserver(
       (entries) => {
         if (
@@ -113,14 +121,21 @@ export function useChannelData({
           activeTab === "videos" &&
           !selectedPlaylist
         ) {
-          loadData(false);
+          if (debounceTimer) return; // already scheduled — skip
+          debounceTimer = setTimeout(() => {
+            debounceTimer = null;
+            loadData(false);
+          }, 150);
         }
       },
       { threshold: 0.1 }
     );
 
     if (loadMoreRef.current) obs.observe(loadMoreRef.current);
-    return () => obs.disconnect();
+    return () => {
+      obs.disconnect();
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [hasMore, loading, loadingMore, activeTab, selectedPlaylist]);
 
   const filteredVideos = selectedPlaylist
