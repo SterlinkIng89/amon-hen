@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { YTVideo, YTPlaylist } from "../../types";
 import { 
   UpdateYouTubeVideoMetadata, 
@@ -50,20 +50,15 @@ export default function YouTubeInlinePlayer({
   useEffect(() => {
     refreshPlaylists();
   }, []);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isWide, setIsWide] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(window.innerWidth / window.innerHeight);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setIsWide(entry.contentRect.width >= 900);
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    const handleResize = () => setAspectRatio(window.innerWidth / window.innerHeight);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const isWide = aspectRatio >= 2.0;
 
   useEffect(() => {
     setEditableTitle(video.title);
@@ -173,7 +168,7 @@ export default function YouTubeInlinePlayer({
   };
 
   return (
-    <div ref={containerRef} className={`flex-1 flex overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}>
+    <div className={`flex-1 flex overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}>
       {/* Player Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center group min-w-0">
         <div id="yt-player-container" className="w-full h-full" />
@@ -202,8 +197,8 @@ export default function YouTubeInlinePlayer({
       </div>
 
       {/* Info Panel */}
-      <div className={`bg-[#0f0f0f] border-white/10 p-6 overflow-y-auto custom-scrollbar shrink-0 text-white ${isWide ? "border-l w-[420px] h-full" : "border-t flex-1 min-h-[200px] max-h-[50%]"}`}>
-        <div className="max-w-4xl mx-auto flex flex-col gap-6">
+      <div className={`bg-[#0f0f0f] border-white/10 overflow-y-auto custom-scrollbar shrink-0 text-white ${isWide ? "border-l w-[420px] h-full p-6" : "border-t max-h-[280px] p-4"}`}>
+        <div className={`max-w-4xl mx-auto flex flex-col ${isWide ? "gap-6" : "gap-3"}`}>
           <div className="flex items-start justify-between gap-4">
             {isEditing ? (
               <input
@@ -260,7 +255,7 @@ export default function YouTubeInlinePlayer({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-white/60 pb-5 border-b border-white/10">
+          <div className={`flex flex-wrap items-center gap-4 text-sm text-white/60 border-b border-white/10 ${isWide ? "pb-5" : "pb-3"}`}>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-white/90">
                 {formatNumber(video.viewCount)}
