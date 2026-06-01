@@ -252,7 +252,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
   const doneCount = queue.filter((i) => i.status === "done").length;
 
   return (
-    <div className={`fixed bottom-4 right-4 w-[360px] bg-card border border-border-medium rounded-md shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+    <div className={`fixed top-[190px] right-4 w-[360px] bg-card border border-border-medium rounded-md overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "-translate-y-[120%] opacity-0 pointer-events-none"}`}>
       {/* Queue header */}
       <div className="flex items-center justify-between p-3 border-b border-border-subtle bg-surface">
         <div className="flex items-center gap-2 text-accent">
