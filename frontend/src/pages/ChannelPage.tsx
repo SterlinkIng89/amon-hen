@@ -82,7 +82,6 @@ export default function ChannelPage() {
     return () => {
       EventsOff("youtube:sync-progress");
       EventsOff("youtube:sync-done");
-      EventsOff("youtube:done");
     };
   }, [loadData]);
 

@@ -359,16 +359,15 @@ export default function Dashboard() {
         />
       )}
 
-      {queueOpen && (
-        <UploadQueue
-          open={queueOpen}
-          queue={queue}
-          running={queueRunning}
-          onClose={() => setQueueOpen(false)}
-          onUpdateQueue={(q) => setQueue(q)}
-          onSetRunning={setQueueRunning}
-        />
-      )}
+      <UploadQueue
+        open={queueOpen}
+        queue={queue}
+        running={queueRunning}
+        onClose={() => setQueueOpen(false)}
+        onUpdateQueue={(q) => setQueue(q)}
+        onSetRunning={setQueueRunning}
+        onUploadDone={handleRescan}
+      />
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 

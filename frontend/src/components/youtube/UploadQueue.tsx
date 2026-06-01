@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void;
   onUpdateQueue: (queue: QueueItem[]) => void;
   onSetRunning: (r: boolean) => void;
+  onUploadDone?: () => void;
 }
 
 const statusIcon = {
@@ -115,11 +116,13 @@ function EditForm({ item, onSave, onCancel }: EditFormProps) {
 
 // ─── Main UploadQueue component ───────────────────────────────────────────────
 
-export default function UploadQueue({ open, queue, running, onClose, onUpdateQueue, onSetRunning }: Props) {
+export default function UploadQueue({ open, queue, running, onClose, onUpdateQueue, onSetRunning, onUploadDone }: Props) {
   const queueRef = useRef(queue);
   queueRef.current = queue;
   const runningRef = useRef(running);
   runningRef.current = running;
+  const onUploadDoneRef = useRef(onUploadDone);
+  onUploadDoneRef.current = onUploadDone;
 
   // Track which pending item (by id) is currently being edited
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export default function UploadQueue({ open, queue, running, onClose, onUpdateQue
       const videoTitle = doneItem?.title || doneItem?.videoName || "Video";
       ShowUploadNotification("Upload complete!", videoTitle).catch(() => {});
       processQueue(updated);
+      onUploadDoneRef.current?.();
     });
 
     EventsOn("youtube:error", (data: { path: string; message: string }) => {
