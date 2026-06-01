@@ -141,6 +141,15 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPaths.length, searchQuery]);
 
+  // ── Auto-close queue when entering player ────────────────────────────────────
+  const prevViewRef = useRef(view);
+  useEffect(() => {
+    if (view === "player" && prevViewRef.current !== "player") {
+      setQueueOpen(false);
+    }
+    prevViewRef.current = view;
+  }, [view, setQueueOpen]);
+
   // ── Video click handler ──────────────────────────────────────────────────────
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
@@ -240,6 +249,13 @@ export default function Dashboard() {
 
   const pendingCount = queue.filter((i) => i.status === "pending").length;
   const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
+
+  let queueTopOffset = 140;
+  if (isSelecting) {
+    queueTopOffset = 190;
+  } else if (view === "player") {
+    queueTopOffset = 140;
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -363,6 +379,7 @@ export default function Dashboard() {
         open={queueOpen}
         queue={queue}
         running={queueRunning}
+        topOffset={queueTopOffset}
         onClose={() => setQueueOpen(false)}
         onUpdateQueue={(q) => setQueue(q)}
         onSetRunning={setQueueRunning}
