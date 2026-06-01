@@ -215,7 +215,7 @@ export default function Dashboard() {
     ).catch(console.error);
 
     handleAddToQueue({
-      id: crypto.randomUUID(), videoPath: video.path, videoName: video.name,
+      id: crypto.randomUUID(), videoPath: video.path, videoName: video.name, size: video.size,
       title: opts.title, description: opts.description, privacy: opts.privacy,
       status: "uploading", progress: 0, playlistId: opts.playlistId,
       gameTag: video.game, episode: video.episode,
@@ -238,7 +238,7 @@ export default function Dashboard() {
     setQueue((q) => [
       ...q,
       {
-        id: crypto.randomUUID(), videoPath: video.path, videoName: video.name,
+        id: crypto.randomUUID(), videoPath: video.path, videoName: video.name, size: video.size,
         title: opts.title, description: opts.description, privacy: opts.privacy,
         status: "pending", progress: 0, playlistId: opts.playlistId,
         gameTag: video.game, episode: video.episode,

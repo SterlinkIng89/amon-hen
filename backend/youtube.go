@@ -218,11 +218,13 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 
 // progressReader wraps an io.Reader and emits upload progress events
 type progressReader struct {
-	r       io.Reader
-	total   int64
-	read    int64
-	lastPct int
-	onProg  func(int)
+	r          io.Reader
+	total      int64
+	read       int64
+	lastPct    int
+	lastUpdate time.Time
+	lastRead   int64
+	onProg     func(int, float64) // percent, speed in bytes/sec
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
@@ -230,9 +232,18 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	pr.read += int64(n)
 	if pr.total > 0 {
 		pct := int(float64(pr.read) / float64(pr.total) * 100)
-		if pct != pr.lastPct {
+		now := time.Now()
+		elapsed := now.Sub(pr.lastUpdate)
+		
+		if pct != pr.lastPct || elapsed >= time.Second {
+			speed := 0.0
+			if elapsed.Seconds() > 0 {
+				speed = float64(pr.read-pr.lastRead) / elapsed.Seconds()
+			}
 			pr.lastPct = pct
-			pr.onProg(pct)
+			pr.lastUpdate = now
+			pr.lastRead = pr.read
+			pr.onProg(pct, speed)
 		}
 	}
 	return n, err
@@ -509,12 +520,14 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	}
 
 	pr := &progressReader{
-		r:     f,
-		total: info.Size(),
-		onProg: func(pct int) {
+		r:          f,
+		total:      info.Size(),
+		lastUpdate: time.Now(),
+		onProg: func(pct int, speed float64) {
 			runtime.EventsEmit(a.ctx, "youtube:progress", map[string]interface{}{
 				"path":    path,
 				"percent": pct,
+				"speed":   speed,
 			})
 		},
 	}

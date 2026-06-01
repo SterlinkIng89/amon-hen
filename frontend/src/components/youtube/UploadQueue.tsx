@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { UploadToYouTube, ShowUploadNotification, SetTrayUploadProgress, CancelUpload } from "../../../wailsjs/go/backend/App";
 import { formatName } from "../../utils/videoUtils";
+import VideoPill from "../video/VideoPill";
+import { VideoFile } from "../../types";
 
 export interface QueueItem {
   id: string;
   videoPath: string;
   videoName: string;
+  size: number;
   title: string;
   description: string;
   privacy: "public" | "unlisted" | "private";
@@ -15,8 +18,9 @@ export interface QueueItem {
   playlistId?: string;
   gameTag?: string;
   episode?: number;
-  url?: string;
   error?: string;
+  url?: string;
+  uploadSpeed?: number;
 }
 
 interface Props {
@@ -129,11 +133,11 @@ export default function UploadQueue({ open, queue, running, topOffset = 100, onC
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
-    EventsOn("youtube:progress", (data: { path: string; percent: number }) => {
+    EventsOn("youtube:progress", (data: { path: string; percent: number; speed?: number }) => {
       SetTrayUploadProgress(data.percent).catch(() => {});
       onUpdateQueue(queueRef.current.map((item) =>
         item.videoPath === data.path
-          ? { ...item, status: "uploading", progress: data.percent }
+          ? { ...item, status: "uploading", progress: data.percent, uploadSpeed: data.speed }
           : item
       ));
     });
@@ -255,23 +259,22 @@ export default function UploadQueue({ open, queue, running, topOffset = 100, onC
   return (
     <div 
       style={{ top: `${topOffset}px` }}
-      className={`fixed right-4 w-[360px] bg-card border border-border-medium rounded-md overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "-translate-y-[120%] opacity-0 pointer-events-none"}`}
+      className={`fixed right-4 w-[480px] bg-card border border-border-medium rounded-md overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex flex-col z-[100] transform transition-all duration-300 ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "-translate-y-[120%] opacity-0 pointer-events-none"}`}
     >
       {/* Queue header */}
-      <div className="flex items-center justify-between p-3 border-b border-border-subtle bg-surface">
+      <div className="flex flex-wrap items-center justify-between p-3 border-b border-border-subtle bg-surface gap-2">
         <div className="flex items-center gap-2 text-accent">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
           </svg>
-          <span className="text-sm font-bold flex items-center gap-2">
+          <span className="text-sm font-bold flex items-center gap-1">
             Upload Queue
             {queue.length > 0 && (
-              <span className="bg-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[10px]">{queue.length}</span>
+              <span className="text-text-secondary font-medium ml-1">
+                ({doneCount} / {queue.length})
+              </span>
             )}
           </span>
-          {doneCount > 0 && (
-            <span className="text-[10px] text-green-400 font-medium ml-1">{doneCount} done</span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {pendingCount > 0 && !running && (
@@ -316,138 +319,122 @@ export default function UploadQueue({ open, queue, running, topOffset = 100, onC
             <p className="text-[10px] mt-1 opacity-70">Click "Add to Queue" on any video to add it here</p>
           </div>
         ) : (
-          queue.map((item, index) => (
-            <div
-              key={item.id}
-              className={`flex flex-col p-2.5 bg-elevated border rounded-sm ${
-                item.status === "uploading"
-                  ? "border-accent bg-accent/5"
-                  : item.status === "done"
-                  ? "border-green-500/30 bg-green-500/5"
-                  : item.status === "error"
-                  ? "border-red-500/30 bg-red-500/5"
-                  : editingId === item.id
-                  ? "border-accent/30"
-                  : "border-border-subtle"
-              }`}
-            >
-              {/* Item row */}
-              <div className="flex gap-3">
-                <div className="mt-0.5 shrink-0">{statusIcon[item.status]}</div>
+          queue.map((item, index) => {
+            const videoFile: VideoFile = {
+              name: item.videoName,
+              path: item.videoPath,
+              size: item.size || 0,
+              modTime: 0,
+              folder: "",
+              game: item.gameTag || "",
+              youtubeTitle: item.title,
+              youtubeId: item.status === "done" ? "done" : undefined,
+            };
 
-                <div className="flex flex-col gap-1 min-w-0 flex-1">
-                  <span className="text-xs font-semibold text-text-primary truncate" title={item.title}>
-                    {item.title || formatName(item.videoName)}
-                  </span>
-                  <span className="text-[10px] font-mono text-text-muted truncate" title={item.videoName}>{item.videoName}</span>
-                  <div className="flex items-center gap-2 flex-wrap text-[10px] mt-0.5">
-                    <span className="font-bold text-text-secondary">{item.privacy}</span>
-                    {item.status === "uploading" && (
-                      <span className="text-accent font-semibold">{item.progress}%</span>
-                    )}
-                    {item.status === "done" && item.url && (
-                      <a className="text-accent hover:underline truncate max-w-[150px]" href={item.url} target="_blank" rel="noreferrer" title={item.url}>
-                        {item.url}
-                      </a>
-                    )}
+            return (
+              <div
+                key={item.id}
+                className={`flex flex-col gap-1 ${
+                  item.status === "uploading"
+                    ? "p-1 bg-accent/5 rounded-xl border border-accent/30"
+                    : item.status === "done"
+                    ? "p-1 bg-green-500/5 rounded-xl border border-green-500/30"
+                    : item.status === "error"
+                    ? "p-1 bg-red-500/5 rounded-xl border border-red-500/30"
+                    : editingId === item.id
+                    ? "p-1 rounded-xl border border-accent/30"
+                    : "p-1"
+                }`}
+              >
+                <div className="flex gap-2 items-stretch group/queue-item">
+                  <div className="relative flex-1 min-w-0">
+                    <VideoPill
+                      video={videoFile}
+                      viewMode="list"
+                      compact={true}
+                      uploadProgress={item.status === "uploading" ? item.progress : undefined}
+                      uploadSpeed={item.status === "uploading" ? item.uploadSpeed : undefined}
+                      readOnlyThumbnail={true}
+                    />
                     {item.status === "error" && (
-                      <span className="text-red-400 truncate max-w-[150px]" title={item.error}>{item.error}</span>
+                      <div className="absolute inset-0 bg-red-500/20 border border-red-500/50 rounded-xl pointer-events-none flex items-center justify-center backdrop-blur-[1px]">
+                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded shadow-lg truncate max-w-[90%]">{item.error}</span>
+                      </div>
                     )}
                   </div>
 
-                  {item.status === "uploading" && (
-                    <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-accent transition-all duration-300" style={{ width: `${item.progress}%` }} />
-                    </div>
-                  )}
-                  {item.status === "done" && (
-                    <div className="h-1 bg-black/40 rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-green-400 transition-all duration-300" style={{ width: "100%" }} />
-                    </div>
-                  )}
+                  {/* Action buttons */}
+                  <div className="flex flex-col items-center justify-center gap-1 w-8 shrink-0 bg-elevated border border-border-subtle rounded-xl py-1 opacity-50 group-hover/queue-item:opacity-100 transition-opacity">
+                    {/* Reorder Up */}
+                    {item.status === "pending" && (
+                      <button
+                        className={`p-0.5 w-6 h-6 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === 0 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
+                        onClick={() => handleMoveUp(index)}
+                        disabled={index === 0}
+                        title="Move Up"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5z" /></svg>
+                      </button>
+                    )}
+                    {/* Reorder Down */}
+                    {item.status === "pending" && (
+                      <button
+                        className={`p-0.5 w-6 h-6 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === queue.length - 1 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
+                        onClick={() => handleMoveDown(index)}
+                        disabled={index === queue.length - 1}
+                        title="Move Down"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z" /></svg>
+                      </button>
+                    )}
+                    {/* Edit */}
+                    {item.status === "pending" && (
+                      <button
+                        className={`p-0.5 w-6 h-6 bg-transparent border-none cursor-pointer rounded-sm transition-colors flex items-center justify-center ${
+                          editingId === item.id ? "text-accent" : "text-text-secondary hover:bg-black/10 hover:text-text-primary"
+                        }`}
+                        onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                        title={editingId === item.id ? "Close editor" : "Edit metadata"}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                        </svg>
+                      </button>
+                    )}
+                    {/* Cancel Upload */}
+                    {item.status === "uploading" && (
+                      <button
+                        className="p-0.5 w-6 h-6 bg-transparent border-none text-red-400/80 cursor-pointer rounded-sm hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center justify-center"
+                        onClick={() => handleCancelUpload(item.id, item.videoPath)}
+                        title="Cancel Upload"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                      </button>
+                    )}
+                    {/* Remove */}
+                    {item.status !== "uploading" && (
+                      <button
+                        className="p-0.5 w-6 h-6 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm hover:bg-black/10 hover:text-text-primary transition-colors flex items-center justify-center"
+                        onClick={() => handleRemove(item.id)}
+                        title="Remove"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex items-start gap-1 shrink-0">
-                  {/* Reorder Up */}
-                  {item.status === "pending" && (
-                    <button
-                      className={`p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === 0 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
-                      onClick={() => handleMoveUp(index)}
-                      disabled={index === 0}
-                      title="Move Up"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7 14l5-5 5 5z" />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Reorder Down */}
-                  {item.status === "pending" && (
-                    <button
-                      className={`p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm transition-colors flex items-center justify-center ${index === queue.length - 1 ? "opacity-30 cursor-not-allowed" : "hover:bg-black/10 hover:text-text-primary"}`}
-                      onClick={() => handleMoveDown(index)}
-                      disabled={index === queue.length - 1}
-                      title="Move Down"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7 10l5 5 5-5z" />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Edit — only for pending */}
-                  {item.status === "pending" && (
-                    <button
-                      className={`p-0.5 w-5 h-5 bg-transparent border-none cursor-pointer rounded-sm transition-colors flex items-center justify-center ${
-                        editingId === item.id
-                          ? "text-accent"
-                          : "text-text-secondary hover:bg-black/10 hover:text-text-primary"
-                      }`}
-                      onClick={() => setEditingId(editingId === item.id ? null : item.id)}
-                      title={editingId === item.id ? "Close editor" : "Edit metadata"}
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                      </svg>
-                    </button>
-                  )}
-                  {/* Cancel Upload */}
-                  {item.status === "uploading" && (
-                    <button
-                      className="p-0.5 w-5 h-5 bg-transparent border-none text-red-400/80 cursor-pointer rounded-sm hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center justify-center"
-                      onClick={() => handleCancelUpload(item.id, item.videoPath)}
-                      title="Cancel Upload"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Remove */}
-                  {item.status !== "uploading" && (
-                    <button
-                      className="p-0.5 w-5 h-5 bg-transparent border-none text-text-secondary cursor-pointer rounded-sm hover:bg-black/10 hover:text-text-primary transition-colors flex items-center justify-center"
-                      onClick={() => handleRemove(item.id)}
-                      title="Remove"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+                {/* Inline edit form */}
+                {editingId === item.id && (
+                  <EditForm
+                    item={item}
+                    onSave={(patch) => handleSaveEdit(item.id, patch)}
+                    onCancel={() => setEditingId(null)}
+                  />
+                )}
               </div>
-
-              {/* Inline edit form */}
-              {editingId === item.id && (
-                <EditForm
-                  item={item}
-                  onSave={(patch) => handleSaveEdit(item.id, patch)}
-                  onCancel={() => setEditingId(null)}
-                />
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

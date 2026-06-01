@@ -165,6 +165,7 @@ export default function BulkActionBar({
         id: crypto.randomUUID(),
         videoPath: v.path,
         videoName: v.name,
+        size: v.size,
         title: v.youtubeTitle || generateYouTubeTitle(v.name, v.game, v.episode),
         description: v.description || "",
         privacy: (v.privacy as "public" | "unlisted" | "private") || "unlisted",

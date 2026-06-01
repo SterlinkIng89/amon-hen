@@ -23,6 +23,8 @@ interface VideoPillProps {
   viewMode?: "grid" | "list";
   compact?: boolean;
   uploadProgress?: number; // 0-100 while uploading, undefined otherwise
+  uploadSpeed?: number; // bytes per second while uploading
+  readOnlyThumbnail?: boolean;
 }
 
 export default function VideoPill({
@@ -35,6 +37,8 @@ export default function VideoPill({
   viewMode = "grid",
   compact = false,
   uploadProgress,
+  uploadSpeed,
+  readOnlyThumbnail = false,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -125,12 +129,14 @@ export default function VideoPill({
     <div
       ref={ref}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => { if (!readOnlyThumbnail) setHovered(true); }}
       onMouseLeave={() => {
-        setHovered(false);
-        setBgPos("0% 0%");
+        if (!readOnlyThumbnail) {
+          setHovered(false);
+          setBgPos("0% 0%");
+        }
       }}
-      className={`group flex select-none rounded-xl overflow-hidden transition-all duration-300 cursor-pointer shrink-0 ${
+      className={`group flex select-none rounded-xl overflow-hidden transition-all duration-300 ${onClick ? "cursor-pointer" : "cursor-default"} shrink-0 ${
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected
@@ -281,25 +287,32 @@ export default function VideoPill({
           )}
 
           {!isYT && uploadProgress !== undefined && (
-            <span className="flex items-center gap-1 ml-0.5">
-              <span
-                className="inline-block w-14 h-1 rounded-full overflow-hidden bg-white/10 shrink-0"
-                title={`Uploading: ${uploadProgress}%`}
-              >
+            <span className="flex items-center gap-2 ml-0.5">
+              {uploadSpeed !== undefined && uploadSpeed > 0 && (
+                <span className="text-[9px] text-text-muted font-medium tabular-nums mt-0.5">
+                  {formatSize(uploadSpeed)}/s
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <span
+                  className="inline-block w-14 h-1 rounded-full overflow-hidden bg-white/10 shrink-0"
+                  title={`Uploading: ${uploadProgress}%`}
+                >
                 <span
                   className="block h-full rounded-full transition-all duration-300"
                   style={{
                     width: `${uploadProgress}%`,
                     background: "linear-gradient(90deg, var(--color-accent, #7c3aed) 0%, hsl(from var(--color-accent, #7c3aed) h s 75%) 100%)",
-                    boxShadow: "0 0 4px var(--color-accent, #7c3aed)",
-                  }}
-                />
-              </span>
-              <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
-                {uploadProgress}%
-              </span>
+                  boxShadow: "0 0 4px var(--color-accent, #7c3aed)",
+                }}
+              />
             </span>
-          )}
+            <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
+              {uploadProgress}%
+            </span>
+          </span>
+        </span>
+      )}
         </div>
       </div>
     </div>
