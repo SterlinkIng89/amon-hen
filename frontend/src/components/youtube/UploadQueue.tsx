@@ -309,7 +309,7 @@ export default function UploadQueue({ open, queue, running, topOffset = 100, onC
       </div>
 
       {/* Queue items */}
-      <div className="flex flex-col p-2 gap-2 max-h-[50vh] overflow-y-auto bg-base">
+      <div className="flex flex-col p-2 gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar bg-base">
         {queue.length === 0 ? (
           <div className="p-4 text-center text-xs text-text-muted">
             <p>No videos in queue</p>
