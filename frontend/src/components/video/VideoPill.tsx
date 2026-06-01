@@ -272,32 +272,33 @@ export default function VideoPill({
                 <span className="flex items-center gap-1 font-medium">
                   {formatSize(video.size)}
                 </span>
-                {uploadProgress !== undefined && (
-                  <span className="flex items-center gap-1 ml-0.5">
-                    <span
-                      className="inline-block w-14 h-1 rounded-full overflow-hidden bg-white/10 shrink-0"
-                      title={`Uploading: ${uploadProgress}%`}
-                    >
-                      <span
-                        className="block h-full rounded-full transition-all duration-300"
-                        style={{
-                          width: `${uploadProgress}%`,
-                          background: "linear-gradient(90deg, var(--color-accent, #7c3aed) 0%, hsl(from var(--color-accent, #7c3aed) h s 75%) 100%)",
-                          boxShadow: "0 0 4px var(--color-accent, #7c3aed)",
-                        }}
-                      />
-                    </span>
-                    <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
-                      {uploadProgress}%
-                    </span>
-                  </span>
-                )}
               </span>
             )}
           </div>
 
           {!isList && publishedAt && !isYT && (
             <span className="font-medium opacity-60">{publishedAt}</span>
+          )}
+
+          {!isYT && uploadProgress !== undefined && (
+            <span className="flex items-center gap-1 ml-0.5">
+              <span
+                className="inline-block w-14 h-1 rounded-full overflow-hidden bg-white/10 shrink-0"
+                title={`Uploading: ${uploadProgress}%`}
+              >
+                <span
+                  className="block h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${uploadProgress}%`,
+                    background: "linear-gradient(90deg, var(--color-accent, #7c3aed) 0%, hsl(from var(--color-accent, #7c3aed) h s 75%) 100%)",
+                    boxShadow: "0 0 4px var(--color-accent, #7c3aed)",
+                  }}
+                />
+              </span>
+              <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
+                {uploadProgress}%
+              </span>
+            </span>
           )}
         </div>
       </div>
