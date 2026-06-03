@@ -54,10 +54,10 @@ func generateYouTubeTitle(filename string, game string, episode int) string {
 
 	epSuffix := ""
 	if episode > 0 {
-		epSuffix = fmt.Sprintf(" - %d", episode)
+		epSuffix = fmt.Sprintf(" — %d", episode)
 	}
 
-	return fmt.Sprintf("%s - %s%s", game, dateStr, epSuffix)
+	return fmt.Sprintf("%s — %s%s", game, dateStr, epSuffix)
 }
 
 // episodeCountForTag counts YouTube videos whose title starts with "<tag> - ".

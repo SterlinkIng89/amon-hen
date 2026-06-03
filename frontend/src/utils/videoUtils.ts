@@ -38,9 +38,9 @@ export function generateYouTubeTitle(filename: string, game?: string, episode?: 
   
   if (!game) return datePart;
   
-  const epSuffix = (episode && episode > 0) ? ` - ${episode}` : "";
+  const epSuffix = (episode && episode > 0) ? ` — ${episode}` : "";
   
-  return `${game} - ${datePart}${epSuffix}`;
+  return `${game} — ${datePart}${epSuffix}`;
 }
 
 export function toLocalDateKey(ms: number) {
