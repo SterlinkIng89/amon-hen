@@ -12,6 +12,7 @@ interface VideoGridProps {
   groups: VideoGroup[];
   allVideos: VideoFile[];       // unfiltered, for stats
   sortedVideos: VideoFile[];    // already sorted by Dashboard
+  sortMode: SortMode;
   selectedPaths: string[];
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onUploadTarget: (video: VideoFile) => void;
@@ -38,11 +39,13 @@ export default function VideoGrid({
   groups,
   allVideos,
   sortedVideos,
+  sortMode,
   selectedPaths,
   onOpenVideo,
   onUploadTarget,
 }: VideoGridProps) {
-  const useGroups = groups.length > 0; // If Dashboard groups it, we use it
+  // Only use date-grouped layout when sorting by date
+  const useGroups = sortMode === "date" && groups.length > 0;
   const { queue } = useAppStore();
 
   const getUploadProgress = (path: string): number | undefined => {

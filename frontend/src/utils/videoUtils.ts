@@ -58,9 +58,9 @@ export function formatGroupLabel(k: string) {
 }
 
 export function groupByDay(videos: VideoFile[]): VideoGroup[] {
-  const sorted = [...videos].sort((a, b) => b.modTime - a.modTime);
+  // Preserve caller's order — do NOT re-sort here.
   const map = new Map<string, VideoFile[]>();
-  for (const v of sorted) {
+  for (const v of videos) {
     const k = toLocalDateKey(v.modTime);
     if (!map.has(k)) map.set(k, []);
     map.get(k)!.push(v);

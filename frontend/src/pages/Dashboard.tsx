@@ -317,6 +317,7 @@ export default function Dashboard() {
               groups={groups}
               allVideos={sortedVideos}
               sortedVideos={filteredVideos}
+              sortMode={sortMode as SortMode}
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
               onUploadTarget={setUploadTarget}
