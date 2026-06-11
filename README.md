@@ -1,6 +1,6 @@
 # Amon Hen
 
-> A desktop app for gamers who upload — scan your local video library, tag gameplay clips by game and episode, and push them straight to YouTube.
+A desktop app for gamers who upload — scan your local video library, tag gameplay clips by game and episode, and push them straight to YouTube.
 
 Built with [Wails v2](https://wails.io/) (Go backend + React/TypeScript frontend), SQLite for local data, and the YouTube Data API v3.
 
@@ -8,34 +8,34 @@ Built with [Wails v2](https://wails.io/) (Go backend + React/TypeScript frontend
 
 ## Features
 
-| Feature | Details |
-|---|---|
-| **Multi-folder library** | Add multiple video source folders. Filter, search, and sort your clips from a single view |
+| Feature                     | Details                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Multi-folder library**    | Add multiple video source folders. Filter, search, and sort your clips from a single view                                             |
 | **Game tagging & episodes** | Tag videos with a game name; the app auto-assigns sequential episode numbers, including against your existing YouTube channel history |
-| **YouTube upload** | Upload videos with title, description, privacy, and playlist in one click — or queue several for sequential upload |
-| **Playlist management** | Create, assign, and delete YouTube playlists; dedup logic prevents accidental duplicates |
-| **Channel sync** | Pull your full YouTube channel video & playlist data into a local SQLite database (syncs at most every 12 h to protect API quota) |
-| **Local video player** | Stream and preview videos directly inside the app via a built-in HTTP stream server |
-| **Folder watcher** | Automatically detects new video files dropped into watched folders |
-| **System tray** | Minimise to tray — the app keeps running without a taskbar entry |
-| **Single instance** | A second launch brings the existing window to focus instead of opening a duplicate |
-| **Per-folder settings** | Configure recursion depth and maximum video duration per folder |
+| **YouTube upload**          | Upload videos with title, description, privacy, and playlist in one click — or queue several for sequential upload                    |
+| **Playlist management**     | Create, assign, and delete YouTube playlists; dedup logic prevents accidental duplicates                                              |
+| **Channel sync**            | Pull your full YouTube channel video & playlist data into a local SQLite database (syncs at most every 12 h to protect API quota)     |
+| **Local video player**      | Stream and preview videos directly inside the app via a built-in HTTP stream server                                                   |
+| **Folder watcher**          | Automatically detects new video files dropped into watched folders                                                                    |
+| **System tray**             | Minimise to tray — the app keeps running without a taskbar entry                                                                      |
+| **Single instance**         | A second launch brings the existing window to focus instead of opening a duplicate                                                    |
+| **Per-folder settings**     | Configure recursion depth and maximum video duration per folder                                                                       |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Desktop framework** | [Wails v2](https://wails.io/) |
-| **Backend** | Go 1.25 |
-| **Frontend** | React 18 + TypeScript + Vite |
-| **Styling** | Tailwind CSS |
-| **Local DB** | SQLite via `modernc.org/sqlite` (no CGO) |
-| **YouTube** | Google YouTube Data API v3 + OAuth 2.0 |
-| **Notifications** | `gen2brain/beeep` |
-| **System tray** | `energye/systray` |
-| **File watching** | `fsnotify/fsnotify` |
+| Layer                 | Technology                               |
+| --------------------- | ---------------------------------------- |
+| **Desktop framework** | [Wails v2](https://wails.io/)            |
+| **Backend**           | Go 1.25                                  |
+| **Frontend**          | React 18 + TypeScript + Vite             |
+| **Styling**           | Tailwind CSS                             |
+| **Local DB**          | SQLite via `modernc.org/sqlite` (no CGO) |
+| **YouTube**           | Google YouTube Data API v3 + OAuth 2.0   |
+| **Notifications**     | `gen2brain/beeep`                        |
+| **System tray**       | `energye/systray`                        |
+| **File watching**     | `fsnotify/fsnotify`                      |
 
 ---
 
@@ -65,7 +65,7 @@ cd amon-hen
 You can supply your Google OAuth credentials in two ways:
 
 **Option A – Import JSON (recommended)**  
-In the app's **Settings** panel, click *Import OAuth JSON* and select the `client_secret_*.json` file downloaded from Google Cloud Console.
+In the app's **Settings** panel, click _Import OAuth JSON_ and select the `client_secret_*.json` file downloaded from Google Cloud Console.
 
 **Option B – Environment variables (dev only)**  
 Copy `.env.example` to `.env` and fill in your credentials:
@@ -100,7 +100,7 @@ The output executable is placed in `build/bin/`.
 ### Adding video folders
 
 1. Click the **+** button in the header (or drag-and-drop a folder onto the app window).
-2. The folder is scanned immediately; new files are detected automatically if *Folder Watching* is enabled.
+2. The folder is scanned immediately; new files are detected automatically if _Folder Watching_ is enabled.
 3. Each folder can be individually configured (recursive scan, max video duration) via the settings icon next to its name.
 
 ### Tagging videos
@@ -159,14 +159,14 @@ amon-hen/
 
 All settings are stored in `%AppData%\AmonHen\config.json` (Windows) or the equivalent OS config directory. There is no manual editing required — the Settings panel in the app handles everything.
 
-| Setting | Description |
-|---|---|
-| `folders` | List of watched video source folders |
-| `folder_settings` | Per-folder recursive & duration-filter options |
-| `youtube_client_id/secret` | Google OAuth credentials |
-| `youtube_token_json` | Stored OAuth token (refresh token included) |
-| `video_metadata` | Per-file game tag, episode, title, description, privacy, playlist |
-| `watch_folder_enabled` | Toggle for real-time folder watching |
+| Setting                    | Description                                                       |
+| -------------------------- | ----------------------------------------------------------------- |
+| `folders`                  | List of watched video source folders                              |
+| `folder_settings`          | Per-folder recursive & duration-filter options                    |
+| `youtube_client_id/secret` | Google OAuth credentials                                          |
+| `youtube_token_json`       | Stored OAuth token (refresh token included)                       |
+| `video_metadata`           | Per-file game tag, episode, title, description, privacy, playlist |
+| `watch_folder_enabled`     | Toggle for real-time folder watching                              |
 
 ---
 
