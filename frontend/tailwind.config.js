@@ -70,6 +70,10 @@ export default {
         slideDown: "slideDown 0.15s ease-out",
         slideUp: "slideUp 0.2s ease-out",
         fadeIn: "fadeIn 0.18s ease-out",
+        "badge-bump": "badgeBump 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both",
+        "badge-glow": "badgeGlow 1.5s ease-in-out infinite",
+        "progress-slide": "progressSlide 1.2s ease-in-out infinite",
+        "spin-slow": "spin 2s linear infinite",
       },
       keyframes: {
         shimmer: {
@@ -87,6 +91,20 @@ export default {
         fadeIn: {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
+        },
+        badgeBump: {
+          "0%":   { transform: "scale(1)" },
+          "30%":  { transform: "scale(1.5)" },
+          "60%":  { transform: "scale(0.9)" },
+          "100%": { transform: "scale(1)" },
+        },
+        badgeGlow: {
+          "0%, 100%": { boxShadow: "0 0 4px 0px rgba(249,115,22,0.6)" },
+          "50%":       { boxShadow: "0 0 10px 2px rgba(249,115,22,0.9)" },
+        },
+        progressSlide: {
+          "0%":   { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(400%)" },
         },
       },
     },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   GetStreamPort,
   IsYouTubeAuthed,
@@ -22,6 +22,7 @@ import AppHeader from "../components/layout/AppHeader";
 import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
 import ChannelPage from "./ChannelPage";
+import QueuePage from "./QueuePage";
 import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 
@@ -31,8 +32,11 @@ import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
+import DevQueueSeeder from "../components/ui/DevQueueSeeder";
 
 type SortMode = "date" | "name" | "size";
+
+const MAX_CONCURRENT_UPLOADS = 3;
 
 function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
   const arr = [...videos];
@@ -50,7 +54,7 @@ function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
 export default function Dashboard() {
   // ── Global store ────────────────────────────────────────────────────────────
   const {
-    queue, setQueue, addToQueue, queueOpen, setQueueOpen, queueRunning, setQueueRunning,
+    queue, setQueue, queueRunning, setQueueRunning, queueAddedAt, bumpQueueAdded,
     ytAuthed, setYtAuthed,
     view, setView,
     sortMode, setSortMode,
@@ -77,6 +81,10 @@ export default function Dashboard() {
   const restoredIndexRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const runningRef = useRef(queueRunning);
+  runningRef.current = queueRunning;
 
   useEffect(() => {
     if (listRef.current) setListRoot(listRef.current);
@@ -141,15 +149,6 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPaths.length, searchQuery]);
 
-  // ── Auto-close queue when entering player ────────────────────────────────────
-  const prevViewRef = useRef(view);
-  useEffect(() => {
-    if (view === "player" && prevViewRef.current !== "player") {
-      setQueueOpen(false);
-    }
-    prevViewRef.current = view;
-  }, [view, setQueueOpen]);
-
   // ── Video click handler ──────────────────────────────────────────────────────
   const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
     const video = sortedVideos[sortedIdx];
@@ -195,17 +194,46 @@ export default function Dashboard() {
     if (i >= 0 && i < sortedVideos.length) setSelectedIndex(i);
   };
 
+  // ── processQueue (local, mirrors UploadQueue.tsx logic) ──────────────────────
+  const processQueue = (currentQueue: QueueItem[]) => {
+    if (!runningRef.current) return;
+
+    const uploadingCount = currentQueue.filter(i => i.status === "uploading").length;
+    if (uploadingCount >= MAX_CONCURRENT_UPLOADS) return;
+
+    const pendingItems = currentQueue.filter(i => i.status === "pending");
+    if (pendingItems.length === 0 && uploadingCount === 0) {
+      setQueueRunning(false);
+      return;
+    }
+
+    const slotsAvailable = MAX_CONCURRENT_UPLOADS - uploadingCount;
+    const itemsToStart = pendingItems.slice(0, slotsAvailable);
+    if (itemsToStart.length === 0) return;
+
+    const updatedQueue = [...currentQueue];
+    itemsToStart.forEach(item => {
+      const idx = updatedQueue.findIndex(i => i.id === item.id);
+      if (idx !== -1) updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading" };
+      UploadToYouTube(
+        item.videoPath, item.title, item.description, item.privacy,
+        item.playlistId || "", item.gameTag || "", item.episode || 0,
+      ).catch(() => {});
+    });
+
+    setQueue(updatedQueue);
+  };
+
   // ── Upload helpers ───────────────────────────────────────────────────────────
   const handleAddToQueue = (item: QueueItem) => {
-
+    // No auto-open — just add and bump the badge
     if (item.status === "uploading") {
       setQueue((q) => [item, ...q]);
-      setQueueOpen(true);
       setQueueRunning(true);
     } else {
       setQueue((q) => [...q, item]);
-      setQueueOpen(true);
     }
+    bumpQueueAdded();
   };
 
   const handleUploadNow = async (video: VideoFile, opts: UploadOptions) => {
@@ -244,30 +272,52 @@ export default function Dashboard() {
         gameTag: video.game, episode: video.episode,
       },
     ]);
+    bumpQueueAdded();
     handleRescan();
   };
 
-  const pendingCount = queue.filter((i) => i.status === "pending").length;
-  const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
+  // ── Queue stats for header ───────────────────────────────────────────────────
+  const pendingCount   = queue.filter(i => i.status === "pending").length;
+  const uploadingCount = queue.filter(i => i.status === "uploading").length;
+  const queueCount     = pendingCount + uploadingCount;
 
-  let queueTopOffset = 140;
-  if (isSelecting) {
-    queueTopOffset = 190;
-  } else if (view === "player") {
-    queueTopOffset = 140;
-  }
+  // Global upload progress (average of all uploading items)
+  const uploadingItems = queue.filter(i => i.status === "uploading");
+  const uploadProgress = uploadingItems.length > 0
+    ? uploadingItems.reduce((sum, i) => sum + (i.progress || 0), 0) / uploadingItems.length
+    : 0;
+
+  // ── QueuePage handlers ───────────────────────────────────────────────────────
+  const handleQueueStart = () => {
+    setQueueRunning(true);
+    runningRef.current = true;
+    processQueue(queue);
+  };
+
+  const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {/* Hidden logic component — drives upload events */}
+      <UploadQueue
+        queue={queue}
+        running={queueRunning}
+        onUpdateQueue={(q) => setQueue(q)}
+        onSetRunning={setQueueRunning}
+        onUploadDone={handleRescan}
+      />
+
       <AppHeader
         view={view as ViewMode}
         foldersCount={folders.length}
         scanning={scanning}
-        pendingCount={pendingCount}
+        queueCount={queueCount}
+        uploadingCount={uploadingCount}
+        uploadProgress={uploadProgress}
+        queueAddedAt={queueAddedAt}
         ytAuthed={ytAuthed}
         onSetView={setView}
         onRescan={handleRescan}
-        onToggleQueue={() => setQueueOpen(!queueOpen)}
         onOpenSettings={() => setSettingsOpen(true)}
         onAddFolder={handleAddFolder}
         onOpenDevLogs={() => setDevLogsOpen(true)}
@@ -298,7 +348,7 @@ export default function Dashboard() {
           onRescanOnly={() => handleRescan()}
           onTagsSaved={() => { setSelectedPaths([]); handleRescan(); }}
           onFilesDeleted={() => { setSelectedPaths([]); setSelectedIndex(-1); handleRescan(); }}
-          onAddToQueue={(items) => { setQueue(q => [...q, ...items]); setQueueOpen(true); }}
+          onAddToQueue={(items) => { setQueue(q => [...q, ...items]); bumpQueueAdded(); }}
         />
       )}
 
@@ -352,6 +402,18 @@ export default function Dashboard() {
           </ErrorBoundary>
         )}
 
+        {view === "queue" && (
+          <ErrorBoundary area="Queue">
+            <QueuePage
+              queue={queue}
+              running={queueRunning}
+              onUpdateQueue={(q) => setQueue(q)}
+              onSetRunning={setQueueRunning}
+              onStart={handleQueueStart}
+            />
+          </ErrorBoundary>
+        )}
+
         {/* Drag & drop overlay */}
         {isDraggingOver && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm pointer-events-none animate-fadeIn">
@@ -376,21 +438,8 @@ export default function Dashboard() {
         />
       )}
 
-      <UploadQueue
-        open={queueOpen}
-        queue={queue}
-        running={queueRunning}
-        topOffset={queueTopOffset}
-        onClose={() => setQueueOpen(false)}
-        onUpdateQueue={(q) => setQueue(q)}
-        onSetRunning={setQueueRunning}
-        onUploadDone={handleRescan}
-      />
-
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-
       <DevLogsPanel open={devLogsOpen} onClose={() => setDevLogsOpen(false)} />
-
       <FolderSettingsDialog
         folder={settingsFolder || ""}
         open={settingsFolder !== null}
@@ -398,6 +447,7 @@ export default function Dashboard() {
         onSaved={() => { setSettingsFolder(null); handleRescan(); }}
         onRemoveFolder={handleRemoveFolder}
       />
+      <DevQueueSeeder />
     </div>
   );
 }

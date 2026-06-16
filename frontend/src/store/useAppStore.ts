@@ -10,8 +10,8 @@ type SortMode = "date" | "name" | "size";
 
 interface AppState {
   queue: QueueItem[];
-  queueOpen: boolean;
   queueRunning: boolean;
+  queueAddedAt: number; // timestamp bump — changes every time an item is added
   ytAuthed: boolean;
   view: ViewMode;
   sortMode: SortMode;
@@ -52,8 +52,8 @@ const saved = loadPersistedPrefs();
 
 let state: AppState = {
   queue: [],
-  queueOpen: false,
   queueRunning: false,
+  queueAddedAt: 0,
   ytAuthed: false,
   view: (saved.view as ViewMode) ?? "grid",
   sortMode: (saved.sortMode as SortMode) ?? "date",
@@ -97,8 +97,9 @@ export function useAppStore() {
   return {
     ...s,
     setQueue,
-    addToQueue: (items: QueueItem[]) => setState((prev) => ({ queue: [...prev.queue, ...items] })),
-    setQueueOpen: (queueOpen: boolean) => setState({ queueOpen }),
+    addToQueue: (items: QueueItem[]) =>
+      setState((prev) => ({ queue: [...prev.queue, ...items], queueAddedAt: Date.now() })),
+    bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
     setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
     setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
     setView: (view: ViewMode) => setState({ view }),

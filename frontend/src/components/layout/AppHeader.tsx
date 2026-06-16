@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ViewMode } from "../../types";
 import { QuotaBadge } from "../youtube/DevLogsPanel";
 
@@ -6,11 +6,13 @@ interface AppHeaderProps {
   view: ViewMode;
   foldersCount: number;
   scanning: boolean;
-  pendingCount: number;
+  queueCount: number;        // total active (pending + uploading)
+  uploadingCount: number;    // currently uploading
+  uploadProgress: number;    // 0-100 global upload progress (shown as mini arc when away from queue)
+  queueAddedAt: number;      // timestamp — changes whenever an item is added (triggers badge bump)
   ytAuthed: boolean;
   onSetView: (view: ViewMode) => void;
   onRescan: () => void;
-  onToggleQueue: () => void;
   onOpenSettings: () => void;
   onAddFolder: () => void;
   onOpenDevLogs: () => void;
@@ -20,28 +22,46 @@ export default function AppHeader({
   view,
   foldersCount,
   scanning,
-  pendingCount,
+  queueCount,
+  uploadingCount,
+  uploadProgress,
+  queueAddedAt,
   ytAuthed,
   onSetView,
   onRescan,
-  onToggleQueue,
   onOpenSettings,
   onAddFolder,
   onOpenDevLogs,
 }: AppHeaderProps) {
   const isLibrary = view === "grid" || view === "player";
 
+  // ── Badge bump animation ────────────────────────────────────────────────────
+  const [bumping, setBumping] = useState(false);
+  const prevAddedAt = useRef(queueAddedAt);
+
+  useEffect(() => {
+    if (queueAddedAt !== 0 && queueAddedAt !== prevAddedAt.current) {
+      prevAddedAt.current = queueAddedAt;
+      setBumping(true);
+      const t = setTimeout(() => setBumping(false), 400);
+      return () => clearTimeout(t);
+    }
+  }, [queueAddedAt]);
+
+  const isQueueView = view === "queue";
+  const hasUploading = uploadingCount > 0;
+
   return (
     <header className="flex items-center justify-between px-4 h-header shrink-0 bg-surface border-b border-border-subtle gap-2.5 z-10">
       <div className="flex items-center gap-6 shrink-0 h-full border-r border-border-subtle pr-4">
-        <button 
+        <button
           className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 ${isLibrary ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
           onClick={() => onSetView("grid")}
         >
           Library
         </button>
         {ytAuthed && (
-          <button 
+          <button
             className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-1.5 ${view === "channel" ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
             onClick={() => onSetView("channel")}
           >
@@ -51,7 +71,45 @@ export default function AppHeader({
             Channel
           </button>
         )}
+        {ytAuthed && (
+          <button
+            className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-2 ${isQueueView ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
+            onClick={() => onSetView("queue")}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={isQueueView ? "text-accent" : ""}>
+              <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+            </svg>
+            Queue
+            {/* Badge */}
+            {queueCount > 0 && (
+              <span
+                className={`
+                  relative inline-flex items-center justify-center
+                  min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none
+                  transition-colors
+                  ${bumping ? "animate-badge-bump" : ""}
+                  ${hasUploading
+                    ? "bg-accent text-white animate-badge-glow"
+                    : "bg-accent/20 text-accent border border-accent/40"
+                  }
+                `}
+              >
+                {queueCount}
+                {/* Uploading pulse ring */}
+                {hasUploading && !isQueueView && (
+                  <span className="absolute inset-0 rounded-full bg-accent/40 animate-ping" />
+                )}
+              </span>
+            )}
+
+            {/* Mini progress arc when uploading and NOT on queue page */}
+            {hasUploading && !isQueueView && uploadProgress > 0 && (
+              <MiniProgressArc progress={uploadProgress} />
+            )}
+          </button>
+        )}
       </div>
+
       <div className="flex items-center gap-[7px] flex-1 justify-end min-w-0">
         {foldersCount > 0 && !scanning && (
           <button className="btn btn-ghost" onClick={onRescan}>
@@ -74,13 +132,6 @@ export default function AppHeader({
             </svg>
           </button>
         )}
-        <button className="btn btn-ghost relative" onClick={onToggleQueue}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
-          </svg>
-          Queue
-          {pendingCount > 0 && <span className="bg-accent text-white text-[9px] font-bold py-[2px] px-[5px] rounded-sm ml-1 leading-none">{pendingCount}</span>}
-        </button>
         <button className="btn btn-ghost relative" onClick={onOpenSettings}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
@@ -95,5 +146,29 @@ export default function AppHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+// ── Mini SVG progress arc ─────────────────────────────────────────────────────
+
+function MiniProgressArc({ progress }: { progress: number }) {
+  const r = 7;
+  const circ = 2 * Math.PI * r;
+  const dash = (progress / 100) * circ;
+
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" className="shrink-0 -ml-0.5">
+      <circle cx="9" cy="9" r={r} fill="none" stroke="rgba(249,115,22,0.15)" strokeWidth="2.5" />
+      <circle
+        cx="9" cy="9" r={r}
+        fill="none"
+        stroke="#f97316"
+        strokeWidth="2.5"
+        strokeDasharray={`${dash} ${circ}`}
+        strokeLinecap="round"
+        transform="rotate(-90 9 9)"
+        style={{ transition: "stroke-dasharray 0.4s ease" }}
+      />
+    </svg>
   );
 }
