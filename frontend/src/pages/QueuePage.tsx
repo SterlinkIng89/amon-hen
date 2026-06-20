@@ -398,7 +398,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
       <div className="flex flex-col gap-0 shrink-0 border-b border-border-subtle">
 
         {/* Top bar: title + controls */}
-        <div className="flex items-center justify-between px-6 py-3 gap-4">
+        <div className="flex items-center justify-between px-6 h-14 shrink-0 gap-4">
           <div className="flex items-center gap-2">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-accent shrink-0">
               <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>

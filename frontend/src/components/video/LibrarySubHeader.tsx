@@ -49,7 +49,7 @@ export default function LibrarySubHeader({
   return (
     <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
       {/* Top Row: Filters & Sort */}
-      <div className="flex items-center justify-between px-6 py-3">
+      <div className="flex items-center justify-between px-6 h-14 shrink-0">
         <div className="flex items-center gap-4 flex-wrap">
           {/* Folders */}
           <div className="flex items-center gap-2">
@@ -161,7 +161,7 @@ export default function LibrarySubHeader({
 
       {/* Bottom Row: Stats */}
       {allVideos.length > 0 && (
-        <div className="flex items-center gap-4 px-6 py-2 bg-elevated/30 border-t border-border-subtle text-xs text-text-secondary overflow-x-auto">
+        <div className="flex items-center gap-4 px-6 h-9 shrink-0 bg-elevated/30 border-t border-border-subtle text-xs text-text-secondary overflow-x-auto">
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="font-bold text-text-primary">{allVideos.length}</span>
             <span>videos</span>

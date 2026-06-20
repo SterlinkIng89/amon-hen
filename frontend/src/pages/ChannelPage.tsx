@@ -135,7 +135,7 @@ export default function ChannelPage() {
       {/* ── Sticky sub-header — row 1: title / tabs / search ─────────────────── */}
       <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
         {/* Row 1 */}
-        <div className="flex items-center gap-3 px-5 py-2.5 flex-wrap">
+        <div className="flex items-center gap-3 px-5 h-14 shrink-0 flex-wrap">
           {/* Breadcrumb / title */}
           {selectedPlaylist ? (
             <div className="flex items-center gap-3 shrink-0">
