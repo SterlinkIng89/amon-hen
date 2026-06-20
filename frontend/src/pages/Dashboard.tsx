@@ -32,7 +32,6 @@ import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
-import DevQueueSeeder from "../components/ui/DevQueueSeeder";
 
 type SortMode = "date" | "name" | "size";
 
@@ -54,7 +53,7 @@ function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
 export default function Dashboard() {
   // ── Global store ────────────────────────────────────────────────────────────
   const {
-    queue, setQueue, queueRunning, setQueueRunning, queueAddedAt, bumpQueueAdded,
+    queue, setQueue, queueRunning, setQueueRunning, queueAddedAt, bumpQueueAdded, queueDoneAt, bumpQueueDone,
     ytAuthed, setYtAuthed,
     view, setView,
     sortMode, setSortMode,
@@ -304,7 +303,7 @@ export default function Dashboard() {
         running={queueRunning}
         onUpdateQueue={(q) => setQueue(q)}
         onSetRunning={setQueueRunning}
-        onUploadDone={handleRescan}
+        onUploadDone={() => { bumpQueueDone(); handleRescan(); }}
       />
 
       <AppHeader
@@ -315,6 +314,7 @@ export default function Dashboard() {
         uploadingCount={uploadingCount}
         uploadProgress={uploadProgress}
         queueAddedAt={queueAddedAt}
+        queueDoneAt={queueDoneAt}
         ytAuthed={ytAuthed}
         onSetView={setView}
         onRescan={handleRescan}
@@ -447,7 +447,6 @@ export default function Dashboard() {
         onSaved={() => { setSettingsFolder(null); handleRescan(); }}
         onRemoveFolder={handleRemoveFolder}
       />
-      <DevQueueSeeder />
     </div>
   );
 }

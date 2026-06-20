@@ -9,7 +9,8 @@ interface AppHeaderProps {
   queueCount: number;        // total active (pending + uploading)
   uploadingCount: number;    // currently uploading
   uploadProgress: number;    // 0-100 global upload progress (shown as mini arc when away from queue)
-  queueAddedAt: number;      // timestamp — changes whenever an item is added (triggers badge bump)
+  queueAddedAt: number;      // timestamp — changes whenever an item is added (triggers badge ticker)
+  queueDoneAt: number;       // timestamp — changes whenever an item finishes (triggers downward ticker)
   ytAuthed: boolean;
   onSetView: (view: ViewMode) => void;
   onRescan: () => void;
@@ -26,6 +27,7 @@ export default function AppHeader({
   uploadingCount,
   uploadProgress,
   queueAddedAt,
+  queueDoneAt,
   ytAuthed,
   onSetView,
   onRescan,
@@ -35,18 +37,91 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const isLibrary = view === "grid" || view === "player";
 
-  // ── Badge bump animation ────────────────────────────────────────────────────
-  const [bumping, setBumping] = useState(false);
-  const prevAddedAt = useRef(queueAddedAt);
+  // ── Badge ticker (slot-machine: old ↑ | +N ↓ | +N ↑ | new ↓) ──────────────────
+  // tickerContent: what's rendered inside the badge right now
+  // tickerPhase:   which CSS animation to play on the inner span
+  type TickPhase = 'out' | 'in' | 'out-down' | 'in-down' | null;
+  const [tickerContent, setTickerContent] = useState<string | number>(queueCount);
+  const [tickerPhase, setTickerPhase]     = useState<TickPhase>(null);
+  const [tickerKey, setTickerKey]         = useState(0); // force remount to replay animation
+  const prevAddedAt   = useRef(queueAddedAt);
+  const prevDoneAt    = useRef(queueDoneAt);
+  const prevCountRef  = useRef(queueCount);
+
+  // Keep ticker in sync when idle
+  useEffect(() => {
+    if (tickerPhase === null) {
+      setTickerContent(queueCount);
+      prevCountRef.current = queueCount;
+    }
+  }, [queueCount, tickerPhase]);
 
   useEffect(() => {
-    if (queueAddedAt !== 0 && queueAddedAt !== prevAddedAt.current) {
-      prevAddedAt.current = queueAddedAt;
-      setBumping(true);
-      const t = setTimeout(() => setBumping(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [queueAddedAt]);
+    if (queueAddedAt === 0 || queueAddedAt === prevAddedAt.current) return;
+    prevAddedAt.current = queueAddedAt;
+
+    const oldCount = prevCountRef.current;
+    const newCount = queueCount;
+    const delta    = Math.max(newCount - oldCount, 1);
+    const deltaStr = `+${delta}`;
+
+    const bump = (content: string | number, phase: TickPhase) => {
+      setTickerContent(content);
+      setTickerPhase(phase);
+      setTickerKey((k) => k + 1);
+    };
+
+    // 1 — old exits up
+    bump(oldCount, 'out');
+
+    // 2 — delta enters from below
+    const t1 = setTimeout(() => bump(deltaStr, 'in'),  160);
+    // 3 — delta exits up
+    const t2 = setTimeout(() => bump(deltaStr, 'out'), 380);
+    // 4 — new count enters from below
+    const t3 = setTimeout(() => {
+      prevCountRef.current = newCount;
+      bump(newCount, 'in');
+    }, 540);
+    // 5 — stable
+    const t4 = setTimeout(() => setTickerPhase(null), 740);
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  }, [queueAddedAt, queueCount]);
+
+  // Downward ticker when an item finishes
+  useEffect(() => {
+    if (queueDoneAt === 0 || queueDoneAt === prevDoneAt.current) return;
+    prevDoneAt.current = queueDoneAt;
+
+    const oldCount = prevCountRef.current;
+    const newCount = queueCount;
+
+    const bump = (content: string | number, phase: TickPhase) => {
+      setTickerContent(content);
+      setTickerPhase(phase);
+      setTickerKey((k) => k + 1);
+    };
+
+    const checkmark = "✓";
+
+    // 1 — old exits down
+    bump(oldCount, 'out-down');
+
+    // 2 — checkmark enters from above
+    const t1 = setTimeout(() => bump(checkmark, 'in-down'), 160);
+    // 3 — checkmark exits down (holds longer)
+    const t2 = setTimeout(() => bump(checkmark, 'out-down'), 600);
+    // 4 — new count enters from above
+    const t3 = setTimeout(() => {
+      prevCountRef.current = newCount;
+      bump(newCount, 'in-down');
+    }, 760);
+    // 5 — stable
+    const t4 = setTimeout(() => setTickerPhase(null), 960);
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  }, [queueDoneAt, queueCount]);
 
   const isQueueView = view === "queue";
   const hasUploading = uploadingCount > 0;
@@ -72,42 +147,76 @@ export default function AppHeader({
           </button>
         )}
         {ytAuthed && (
-          <button
-            className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-2 ${isQueueView ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
-            onClick={() => onSetView("queue")}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={isQueueView ? "text-accent" : ""}>
-              <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
-            </svg>
-            Queue
-            {/* Badge */}
-            {queueCount > 0 && (
-              <span
-                className={`
-                  relative inline-flex items-center justify-center
-                  min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none
-                  transition-colors
-                  ${bumping ? "animate-badge-bump" : ""}
-                  ${hasUploading
-                    ? "bg-accent text-white animate-badge-glow"
-                    : "bg-accent/20 text-accent border border-accent/40"
-                  }
-                `}
-              >
-                {queueCount}
-                {/* Uploading pulse ring */}
-                {hasUploading && !isQueueView && (
-                  <span className="absolute inset-0 rounded-full bg-accent/40 animate-ping" />
-                )}
-              </span>
-            )}
+          <div className="relative h-full flex items-center">
+            <button
+              className={`relative text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center overflow-hidden ${isQueueView ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary hover:bg-elevated/30"}`}
+              onClick={() => onSetView("queue")}
+            >
+              {/* Dynamic Fill Background */}
+              {hasUploading && !isQueueView && (
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-accent/15 transition-all duration-300 pointer-events-none" 
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              )}
 
-            {/* Mini progress arc when uploading and NOT on queue page */}
-            {hasUploading && !isQueueView && uploadProgress > 0 && (
-              <MiniProgressArc progress={uploadProgress} />
-            )}
-          </button>
+              <div className="relative z-10 flex items-center gap-2 shrink-0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={isQueueView ? "text-accent" : ""}>
+                  <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                </svg>
+                Queue
+              </div>
+              
+              {/* Badge with slot-machine ticker (wrapped for smooth width transition) */}
+              <div
+                className="relative z-10"
+                style={{
+                  width: (queueCount > 0 || tickerPhase !== null) ? "34px" : "0px", // 26px badge + 8px margin
+                  opacity: (queueCount > 0 || tickerPhase !== null) ? 1 : 0,
+                  overflow: "hidden",
+                  transition: "width 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <span
+                  className={`
+                    relative inline-flex items-center justify-center overflow-hidden shrink-0
+                    min-w-[26px] h-[18px] px-1.5 rounded-full text-[10px] font-bold leading-none
+                    transition-colors duration-150 ml-2
+                    ${hasUploading
+                      ? "bg-accent text-white"
+                      : "bg-accent/20 text-accent border border-accent/40"
+                    }
+                  `}
+                >
+                  <span
+                    key={tickerKey}
+                    style={{
+                      display: "block",
+                      lineHeight: 1,
+                      color: typeof tickerContent === "string" && tickerContent.startsWith("+") 
+                        ? (hasUploading ? "#a7f3d0" : "#10b981") 
+                        : typeof tickerContent === "string" && tickerContent === "✓"
+                        ? "#10b981"
+                        : undefined,
+                      transition: "color 0.15s ease",
+                      animation:
+                        tickerPhase === "out" ? "badgeNumOut 0.16s ease forwards" :
+                        tickerPhase === "in"  ? "badgeNumIn 0.16s ease forwards"  :
+                        tickerPhase === "out-down" ? "badgeNumOutDown 0.16s ease forwards" :
+                        tickerPhase === "in-down"  ? "badgeNumInDown 0.16s ease forwards"  :
+                        "none",
+                    }}
+                  >
+                    {tickerPhase === null ? queueCount : tickerContent}
+                  </span>
+                </span>
+              </div>
+            </button>
+          </div>
         )}
+
       </div>
 
       <div className="flex items-center gap-[7px] flex-1 justify-end min-w-0">
@@ -149,26 +258,3 @@ export default function AppHeader({
   );
 }
 
-// ── Mini SVG progress arc ─────────────────────────────────────────────────────
-
-function MiniProgressArc({ progress }: { progress: number }) {
-  const r = 7;
-  const circ = 2 * Math.PI * r;
-  const dash = (progress / 100) * circ;
-
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" className="shrink-0 -ml-0.5">
-      <circle cx="9" cy="9" r={r} fill="none" stroke="rgba(249,115,22,0.15)" strokeWidth="2.5" />
-      <circle
-        cx="9" cy="9" r={r}
-        fill="none"
-        stroke="#f97316"
-        strokeWidth="2.5"
-        strokeDasharray={`${dash} ${circ}`}
-        strokeLinecap="round"
-        transform="rotate(-90 9 9)"
-        style={{ transition: "stroke-dasharray 0.4s ease" }}
-      />
-    </svg>
-  );
-}

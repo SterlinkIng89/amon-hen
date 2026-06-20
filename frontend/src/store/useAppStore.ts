@@ -12,6 +12,7 @@ interface AppState {
   queue: QueueItem[];
   queueRunning: boolean;
   queueAddedAt: number; // timestamp bump — changes every time an item is added
+  queueDoneAt: number;  // timestamp bump — changes every time an item finishes
   ytAuthed: boolean;
   view: ViewMode;
   sortMode: SortMode;
@@ -54,6 +55,7 @@ let state: AppState = {
   queue: [],
   queueRunning: false,
   queueAddedAt: 0,
+  queueDoneAt: 0,
   ytAuthed: false,
   view: (saved.view as ViewMode) ?? "grid",
   sortMode: (saved.sortMode as SortMode) ?? "date",
@@ -100,6 +102,7 @@ export function useAppStore() {
     addToQueue: (items: QueueItem[]) =>
       setState((prev) => ({ queue: [...prev.queue, ...items], queueAddedAt: Date.now() })),
     bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
+    bumpQueueDone: () => setState({ queueDoneAt: Date.now() }),
     setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
     setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
     setView: (view: ViewMode) => setState({ view }),

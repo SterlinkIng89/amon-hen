@@ -187,7 +187,7 @@ function QueueRow({
         isDragging
           ? "opacity-40 border-accent/30 bg-accent/5"
           : isDragOver
-          ? "border-accent/60 bg-accent/10 shadow-[0_0_15px_rgba(249,115,22,0.15)]"
+          ? "border-accent/60 bg-accent/10"
           : item.status === "uploading"
           ? "border-accent/20 bg-accent/5"
           : item.status === "done"
@@ -320,7 +320,6 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
   const uploadingCount = queue.filter(i => i.status === "uploading").length;
   const doneCount     = queue.filter(i => i.status === "done").length;
   const errorCount    = queue.filter(i => i.status === "error").length;
-  const totalActive   = pendingCount + uploadingCount;
 
   // Global upload speed
   const totalSpeed = queue
@@ -451,12 +450,8 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
           <div className="flex items-center gap-3 px-6 pb-2.5">
             <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${overallProgress}%`,
-                  background: "linear-gradient(90deg, #f97316 0%, #fb923c 100%)",
-                  boxShadow: "0 0 6px rgba(249,115,22,0.5)",
-                }}
+                className="h-full rounded-full transition-all duration-500 bg-accent"
+                style={{ width: `${overallProgress}%` }}
               />
             </div>
             <span className="text-[10px] font-bold tabular-nums text-accent shrink-0 w-8 text-right">
@@ -465,7 +460,6 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
           </div>
         )}
       </div>
-
 
       {/* ── Queue list ───────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
@@ -483,7 +477,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2 max-w-3xl mx-auto">
+          <div className="flex flex-col gap-2 max-w-3xl mx-auto pb-12">
 
             {/* Section: uploading */}
             {uploadingCount > 0 && (

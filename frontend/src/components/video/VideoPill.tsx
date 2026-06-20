@@ -140,10 +140,10 @@ export default function VideoPill({
         isList ? "flex-row" : "flex-col"
       } ${heightClass} ${
         multiSelected
-          ? "bg-accent/10 ring-2 ring-accent/50 shadow-[0_0_15px_rgba(var(--color-accent),0.3)]"
+          ? "bg-accent/10 ring-2 ring-accent/50"
           : selected
-            ? "bg-accent/10 ring-2 ring-accent shadow-[0_0_15px_rgba(var(--color-accent),0.3)]"
-            : "bg-card border border-transparent hover:border-accent/30 hover:bg-elevated hover:shadow-[0_0_20px_rgba(var(--color-accent),0.15)]"
+            ? "bg-accent/10 ring-2 ring-accent"
+            : "bg-card border border-transparent hover:border-accent/30 hover:bg-elevated"
       }`}
     >
       {/* Thumbnail Area */}
@@ -201,7 +201,7 @@ export default function VideoPill({
         {/* Action Buttons on Hover */}
         {hovered && isLocal && !video.youtubeId && (
           <button
-            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent hover:shadow-[0_0_10px_rgba(var(--color-accent),0.3)] z-20"
+            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent z-20"
             title="Upload to YouTube"
             onClick={(e) => {
               e.stopPropagation();
@@ -302,10 +302,9 @@ export default function VideoPill({
                   className="block h-full rounded-full transition-all duration-300"
                   style={{
                     width: `${uploadProgress}%`,
-                    background: "linear-gradient(90deg, var(--color-accent, #7c3aed) 0%, hsl(from var(--color-accent, #7c3aed) h s 75%) 100%)",
-                  boxShadow: "0 0 4px var(--color-accent, #7c3aed)",
-                }}
-              />
+                    background: "var(--color-accent, #7c3aed)",
+                  }}
+                />
             </span>
             <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
               {uploadProgress}%
