@@ -232,7 +232,7 @@ export default function VideoPill({
       >
         <div className="flex flex-col gap-0.5">
           <h3
-            className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
+            className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px]"}`}
             title={title}
           >
             {/* Colorize game-name prefix with its deterministic per-tag color */}
@@ -295,18 +295,19 @@ export default function VideoPill({
               )}
               <span className="flex items-center gap-1">
                 <span
-                  className="inline-block w-14 h-1 rounded-full overflow-hidden bg-white/10 shrink-0"
+                  className="inline-block w-14 h-[5px] rounded-full overflow-hidden bg-white/10 shrink-0"
                   title={`Uploading: ${uploadProgress}%`}
                 >
                 <span
-                  className="block h-full rounded-full transition-all duration-300"
+                  className="block h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${uploadProgress}%`,
-                    background: "var(--color-accent, #7c3aed)",
+                    background: "var(--accent, #f97316)",
+                    boxShadow: "0 0 6px 1px rgba(249,115,22,0.7)",
                   }}
                 />
             </span>
-            <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--color-accent, #7c3aed)" }}>
+            <span className="text-[9px] font-bold tabular-nums" style={{ color: "var(--accent, #f97316)" }}>
               {uploadProgress}%
             </span>
           </span>

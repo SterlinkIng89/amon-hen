@@ -47,12 +47,13 @@ export default function StatsBar({ videos }: StatsBarProps) {
           <span className="text-text-muted"> / {videos.length} uploaded</span>
         </span>
         {/* Mini progress bar */}
-        <div className="w-16 h-1.5 bg-elevated rounded-full overflow-hidden border border-border-subtle">
+        <div className="w-16 h-[5px] bg-elevated rounded-full overflow-hidden border border-border-subtle">
           <div
-            className="h-full rounded-full transition-all duration-300"
+            className="h-full rounded-full transition-all duration-500"
             style={{
               width: `${uploadPct}%`,
-              background: uploadPct === 100 ? "var(--color-green-400, #4ade80)" : "var(--accent)",
+              background: uploadPct === 100 ? "#4ade80" : "var(--accent, #f97316)",
+              boxShadow: uploadPct > 0 && uploadPct < 100 ? "0 0 6px 1px rgba(249,115,22,0.6)" : "none",
             }}
           />
         </div>
