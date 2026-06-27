@@ -8,6 +8,7 @@ import PlaylistCard from "../components/youtube/PlaylistCard";
 import YouTubeInlinePlayer from "../components/youtube/YouTubeInlinePlayer";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 import { useChannelData } from "../hooks/useChannelData";
+import ChannelAnalytics from "../components/youtube/ChannelAnalytics";
 
 export default function ChannelPage() {
   const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
@@ -27,6 +28,8 @@ export default function ChannelPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
   const [sidebarSearch, setSidebarSearch] = useState("");
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -73,10 +76,13 @@ export default function ChannelPage() {
       setSyncStatus("Sync complete!");
       setTimeout(() => setSyncStatus(""), 3000);
       loadData(true);
+      // Bump refresh key so ChannelAnalytics re-fetches its data
+      setAnalyticsRefreshKey((k) => k + 1);
     });
     // Refresh channel list whenever any upload finishes so the new video appears
     EventsOn("youtube:done", () => {
       loadData(true);
+      setAnalyticsRefreshKey((k) => k + 1);
     });
 
     return () => {
@@ -218,6 +224,25 @@ export default function ChannelPage() {
 
           {/* Right controls */}
           <div className="flex items-center gap-2 ml-auto shrink-0">
+
+            {/* Analytics toggle */}
+            <button
+              onClick={() => setShowAnalytics((v) => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                showAnalytics
+                  ? "bg-accent/10 border-accent/40 text-accent"
+                  : "bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"
+              }`}
+              title={showAnalytics ? "Hide analytics" : "Show channel analytics"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
+              </svg>
+              Analytics
+            </button>
+
+            <div className="w-px h-4 bg-border-subtle" />
+
             {/* Grid / List toggle */}
             <div className="flex items-center gap-0.5 bg-elevated/50 p-0.5 rounded-lg border border-border-subtle">
               <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded transition-all ${viewMode === "grid" ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"}`} title="Grid view">
@@ -298,6 +323,15 @@ export default function ChannelPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Analytics panel (collapsible) ─────────────────────────────────── */}
+      {showAnalytics && (
+        <div className="border-b border-border-subtle bg-base overflow-y-auto max-h-[420px] custom-scrollbar shrink-0 animate-slideDown">
+          <ErrorBoundary area="Channel Analytics">
+            <ChannelAnalytics refreshKey={analyticsRefreshKey} />
+          </ErrorBoundary>
+        </div>
+      )}
 
       {/* ── Content area ────────────────────────────────────────────────────── */}
       {viewType === "player" && selectedVideo ? (

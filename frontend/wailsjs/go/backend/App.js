@@ -38,6 +38,10 @@ export function GetCacheDir() {
   return window['go']['backend']['App']['GetCacheDir']();
 }
 
+export function GetChannelAnalytics() {
+  return window['go']['backend']['App']['GetChannelAnalytics']();
+}
+
 export function GetChannelPlaylists(arg1) {
   return window['go']['backend']['App']['GetChannelPlaylists'](arg1);
 }

@@ -28,6 +28,96 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class MonthlyCount {
+	    month: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MonthlyCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.month = source["month"];
+	        this.count = source["count"];
+	    }
+	}
+	export class TopVideo {
+	    id: string;
+	    title: string;
+	    thumbnailUrl: string;
+	    viewCount: number;
+	    likeCount: number;
+	    duration: string;
+	    privacy: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TopVideo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.viewCount = source["viewCount"];
+	        this.likeCount = source["likeCount"];
+	        this.duration = source["duration"];
+	        this.privacy = source["privacy"];
+	    }
+	}
+	export class ChannelAnalytics {
+	    totalVideos: number;
+	    totalViews: number;
+	    totalLikes: number;
+	    totalPlaylists: number;
+	    avgViewsPerVideo: number;
+	    avgLikesPerVideo: number;
+	    likeRatio: number;
+	    publicCount: number;
+	    unlistedCount: number;
+	    privateCount: number;
+	    topVideos: TopVideo[];
+	    uploadTrend: MonthlyCount[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ChannelAnalytics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalVideos = source["totalVideos"];
+	        this.totalViews = source["totalViews"];
+	        this.totalLikes = source["totalLikes"];
+	        this.totalPlaylists = source["totalPlaylists"];
+	        this.avgViewsPerVideo = source["avgViewsPerVideo"];
+	        this.avgLikesPerVideo = source["avgLikesPerVideo"];
+	        this.likeRatio = source["likeRatio"];
+	        this.publicCount = source["publicCount"];
+	        this.unlistedCount = source["unlistedCount"];
+	        this.privateCount = source["privateCount"];
+	        this.topVideos = this.convertValues(source["topVideos"], TopVideo);
+	        this.uploadTrend = this.convertValues(source["uploadTrend"], MonthlyCount);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FolderConfig {
 	    recursive: boolean;
 	    max_duration_secs: number;
@@ -114,6 +204,8 @@ export namespace backend {
 		    return a;
 		}
 	}
+	
+	
 	
 	export class VideoFile {
 	    name: string;

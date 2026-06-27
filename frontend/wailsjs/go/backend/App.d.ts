@@ -21,6 +21,8 @@ export function GetAutoLaunch():Promise<boolean>;
 
 export function GetCacheDir():Promise<string>;
 
+export function GetChannelAnalytics():Promise<backend.ChannelAnalytics>;
+
 export function GetChannelPlaylists(arg1:string):Promise<Array<backend.YTPlaylist>>;
 
 export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
