@@ -69,18 +69,24 @@ func (a *App) episodeCountForTag(tag string) int {
 		return 0
 	}
 
-	// Pattern: title starts exactly with "<tag> - "
-	titlePattern := tag + " - %"
+	// Pattern: title starts exactly with "<tag> - " (hyphen, legacy format)
+	titlePatternHyphen := tag + " - %"
+	// Pattern: title starts exactly with "<tag> — " (em-dash, format used by this app)
+	titlePatternDash := tag + " \u2014 %"
 
 	var titleCount, maxEpisode int
 	// Count by title match (covers pre-existing 1000+ videos)
 	a.db.conn.QueryRow(
-		`SELECT COUNT(*) FROM yt_videos WHERE title LIKE ?`, titlePattern,
+		`SELECT COUNT(*) FROM yt_videos WHERE title LIKE ? OR title LIKE ?`,
+		titlePatternHyphen, titlePatternDash,
 	).Scan(&titleCount)
 
-	// Also check explicit episode numbers stored via this app's upload workflow
+	// Also check explicit episode numbers stored via this app's upload workflow.
+	// IMPORTANT: only count rows that still have a local_file linked — this
+	// prevents stale game_tag values (from videos whose tag was corrected in
+	// config but the DB row wasn't updated yet) from inflating the counter.
 	a.db.conn.QueryRow(
-		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0`, tag,
+		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0 AND local_file IS NOT NULL AND local_file != ''`, tag,
 	).Scan(&maxEpisode)
 
 	// Return whichever is larger — title count covers all historical uploads,

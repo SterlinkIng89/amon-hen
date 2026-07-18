@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist } from "../types";
-import { SyncRecentVideos } from "../../wailsjs/go/backend/App";
+import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 import VideoPill from "../components/video/VideoPill";
@@ -30,6 +30,8 @@ export default function ChannelPage() {
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -91,17 +93,63 @@ export default function ChannelPage() {
     };
   }, [loadData]);
 
-  const handleSync = async () => {
+  // Auto-sync on first visit if DB is empty
+  useEffect(() => {
+    const checkAndAutoSync = async () => {
+      try {
+        const authed = await IsYouTubeAuthed();
+        if (!authed) return;
+        const status: any = await GetSyncStatus();
+        if ((status?.count ?? 0) === 0) {
+          // First time — do a full channel sync
+          setIsSyncing(true);
+          setSyncStatus("First sync — fetching all channel data...");
+          await SyncChannelData();
+        }
+      } catch (e) {
+        console.error("Auto-sync check failed:", e);
+      }
+    };
+    checkAndAutoSync();
+  }, []);
+
+  // Close sync dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) {
+        setShowSyncMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSyncLight = async () => {
     if (isSyncing) return;
+    setShowSyncMenu(false);
     setIsSyncing(true);
-    setSyncStatus("Starting sync...");
+    setSyncStatus("Quick sync — last 20 videos...");
     try {
-      // Fetch only the most recent 20 videos — fast and quota-friendly
       await SyncRecentVideos(20);
     } catch (e) {
-      console.error("Sync failed:", e);
+      console.error("Light sync failed:", e);
       setIsSyncing(false);
-      setSyncStatus("Failed to sync");
+      setSyncStatus("Sync failed");
+      setTimeout(() => setSyncStatus(""), 3000);
+    }
+  };
+
+  const handleSyncFull = async () => {
+    if (isSyncing) return;
+    setShowSyncMenu(false);
+    setIsSyncing(true);
+    setSyncStatus("Full sync — fetching entire channel...");
+    try {
+      await SyncChannelData();
+    } catch (e) {
+      console.error("Full sync failed:", e);
+      setIsSyncing(false);
+      setSyncStatus("Sync failed");
       setTimeout(() => setSyncStatus(""), 3000);
     }
   };
@@ -301,24 +349,80 @@ export default function ChannelPage() {
             {/* Sync */}
             <div className="flex items-center gap-2">
               {syncStatus && (
-                <span className={`text-[10px] font-bold ${isSyncing ? "text-accent animate-pulse" : "text-green-500"} max-w-[120px] truncate`}>
+                <span className={`text-[10px] font-bold ${isSyncing ? "text-accent animate-pulse" : "text-green-500"} max-w-[140px] truncate`}>
                   {syncStatus}
                 </span>
               )}
-              <button
-                onClick={handleSync}
-                disabled={loading || isSyncing}
-                className={`p-1.5 rounded-lg border transition-all group active:scale-95 ${
-                  isSyncing
-                    ? "bg-accent/10 border-accent/30 text-accent"
-                    : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"
-                } disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`}
-                title="Sync with YouTube"
-              >
-                <svg className={`${isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-              </button>
+              {/* Split sync button: main action (light) + dropdown for full */}
+              <div ref={syncMenuRef} className="relative flex items-center">
+                {/* Main sync button — light sync */}
+                <button
+                  onClick={handleSyncLight}
+                  disabled={loading || isSyncing}
+                  className={`flex items-center gap-1 pl-2 pr-1.5 py-1.5 rounded-l-lg border-y border-l transition-all group active:scale-95 ${
+                    isSyncing
+                      ? "bg-accent/10 border-accent/30 text-accent"
+                      : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"
+                  } disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`}
+                  title="Light sync — fetch recent 20 videos"
+                >
+                  <svg className={`${isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                  <span className="text-[10px] font-bold">Light</span>
+                </button>
+                {/* Dropdown chevron */}
+                <button
+                  onClick={() => setShowSyncMenu((v) => !v)}
+                  disabled={loading || isSyncing}
+                  className={`flex items-center justify-center px-1 py-1.5 rounded-r-lg border transition-all ${
+                    isSyncing
+                      ? "bg-accent/10 border-accent/30 text-accent"
+                      : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title="More sync options"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {/* Dropdown menu */}
+                {showSyncMenu && (
+                  <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[180px] bg-surface border border-border-subtle rounded-xl shadow-2xl overflow-hidden animate-slideDown">
+                    <button
+                      onClick={handleSyncLight}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-elevated/60 transition-colors group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 group-hover:bg-accent/20 transition-colors">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+                          <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-text-primary">Light Sync</p>
+                        <p className="text-[10px] text-text-muted">Fetch last 20 videos only</p>
+                      </div>
+                    </button>
+                    <div className="h-px bg-border-subtle mx-2" />
+                    <button
+                      onClick={handleSyncFull}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-elevated/60 transition-colors group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0 group-hover:bg-purple-500/20 transition-colors">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-text-primary">Full Sync</p>
+                        <p className="text-[10px] text-text-muted">Fetch entire channel history</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

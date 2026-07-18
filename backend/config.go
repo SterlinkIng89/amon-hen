@@ -157,21 +157,38 @@ func (a *App) SetVideoGames(paths []string, game string) error {
 	}
 
 	for _, p := range paths {
+		prevMeta := a.config.VideoMetadata[p]
+		tagChanged := prevMeta.Game != game
+
 		if game == "" {
 			delete(a.config.VideoGames, p)
-			// Also update metadata if exists
-			if meta, ok := a.config.VideoMetadata[p]; ok {
-				meta.Game = ""
-				meta.YouTubeTitle = "" // Force re-generation
-				a.config.VideoMetadata[p] = meta
-			}
+			meta := a.config.VideoMetadata[p]
+			meta.Game = ""
+			meta.YouTubeTitle = "" // Force re-generation
+			meta.Episode = 0      // Reset so it is recalculated under the new tag
+			a.config.VideoMetadata[p] = meta
 		} else {
 			a.config.VideoGames[p] = game
-			// Sync with metadata
 			meta := a.config.VideoMetadata[p]
 			meta.Game = game
 			meta.YouTubeTitle = "" // Force re-generation so it gets the new tag + episode
+			if tagChanged {
+				// Tag changed: clear the stale episode so it is re-assigned on the
+				// next scan instead of keeping the number from the old tag.
+				meta.Episode = 0
+			}
 			a.config.VideoMetadata[p] = meta
+		}
+
+		// Also wipe the stale game_tag / episode columns in yt_videos so that
+		// episodeCountForTag does not count this file under the old tag anymore.
+		if tagChanged && a.db != nil {
+			a.db.mu.Lock()
+			a.db.conn.Exec(
+				`UPDATE yt_videos SET game_tag = ?, episode = NULL WHERE local_file = ?`,
+				game, p,
+			)
+			a.db.mu.Unlock()
 		}
 	}
 	return a.saveConfig()
