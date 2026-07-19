@@ -97,6 +97,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   // Info panel state
   const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
   const [tagInput, setTagInput] = useState(video.game || "");
+  const [episodeInput, setEpisodeInput] = useState<number | "">(video.episode || "");
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
     (video.privacy as "public" | "unlisted" | "private") || "unlisted"
@@ -116,11 +117,12 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   useEffect(() => {
     setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
     setTagInput(video.game || "");
+    setEpisodeInput(video.episode || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
-  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId]);
+  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId, video.episode]);
 
   useEffect(() => {
     if (playlistId && playlists.length > 0) {
@@ -189,6 +191,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   useEffect(() => {
     setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
     setTagInput(video.game || "");
+    setEpisodeInput(video.episode || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
     setPlaylistId(video.playlistId || "");
@@ -200,13 +203,27 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode);
+    const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp);
     setTagInput(val);
     
     // If current title is the one we auto-generated for the old tag, or if it matches the current video's saved title, update it
     // This allows the title to "follow" the tag unless the user has typed something custom
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, val, video.episode));
+      setYtTitle(generateYouTubeTitle(video.name, val, currentEp));
+    }
+  };
+
+  // Auto-update YT title when episode number changes
+  const handleEpisodeChange = (val: string) => {
+    const num = val === "" ? "" : parseInt(val, 10);
+    if (val !== "" && isNaN(num as number)) return; // ignore non-numeric input
+    setEpisodeInput(num);
+    const currentEp = num !== "" ? Number(num) : 0;
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode);
+    // Only auto-update the title if it was auto-generated (not custom)
+    if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp));
     }
   };
 
@@ -215,6 +232,17 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setYtUpdateError(null);
 
     const tagChanged = tagInput !== (video.game || "");
+
+    // Resolve episode: prefer explicit Episode # field, then parse from title
+    // text (supports the old workflow where users edit "— N" in the title),
+    // then fall back to the original prop episode.
+    let resolvedEpisode: number;
+    if (episodeInput !== "") {
+      resolvedEpisode = Number(episodeInput);
+    } else {
+      const epFromTitle = ytTitle.match(/ [—\-] (\d+)$/);
+      resolvedEpisode = epFromTitle ? parseInt(epFromTitle[1], 10) : (video.episode || 0);
+    }
 
     // When the tag changed, blank the persisted title so the backend scanner
     // re-enumerates this video with the correct episode number for the new tag
@@ -226,7 +254,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     }
     try {
       // 1. Always save to local config / DB first
-      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, video.episode || 0);
+      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode);
       if (tagInput) addRecentTag(tagInput);
 
       // 2. If video is already on YouTube, push the metadata update to the API
@@ -282,7 +310,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setUploading(true);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0).catch(console.error);
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0)).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -297,10 +325,10 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       progress: 0,
       playlistId,
       gameTag: tagInput,
-      episode: video.episode,
+      episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
     };
     onAddToQueue(item);
-    UploadToYouTube(video.path, ytTitle, description, privacy, playlistId || "", tagInput, video.episode || 0).catch(() => {});
+    UploadToYouTube(video.path, ytTitle, description, privacy, playlistId || "", tagInput, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0)).catch(() => {});
     setTimeout(() => setUploading(false), 1000);
   };
 
@@ -308,7 +336,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (tagInput) addRecentTag(tagInput);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, video.episode || 0).catch(console.error);
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0)).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -323,7 +351,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       progress: 0,
       playlistId,
       gameTag: tagInput,
-      episode: video.episode,
+      episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
     };
     onAddToQueue(item);
   };
@@ -332,7 +360,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     tagInput !== (video.game || "") ||
     ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game)) ||
     description !== (video.description || "") ||
-    privacy !== (video.privacy || "unlisted");
+    privacy !== (video.privacy || "unlisted") ||
+    (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
 
   return (
     <div className={`flex h-full overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}>
@@ -439,9 +468,28 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                   <label className="text-sm font-medium text-white/90">Game Tag</label>
                   <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-white/90">YouTube Title</label>
-                  <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
+                <div className="flex gap-3">
+                  <div className="flex flex-col gap-2 flex-1">
+                    <label className="text-sm font-medium text-white/90">YouTube Title</label>
+                    <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => {
+                      const val = e.target.value;
+                      setYtTitle(val);
+                      // Auto-sync Episode # when user types "— N" at end of title
+                      const epMatch = val.match(/ [—\-] (\d+)$/);
+                      if (epMatch) setEpisodeInput(parseInt(epMatch[1], 10));
+                    }} maxLength={100} />
+                  </div>
+                  <div className="flex flex-col gap-2 w-24 shrink-0">
+                    <label className="text-sm font-medium text-white/90">Episode #</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                      value={episodeInput}
+                      onChange={e => handleEpisodeChange(e.target.value)}
+                      placeholder="—"
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium text-white/90">Description</label>
@@ -588,9 +636,28 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 <label className="text-sm font-medium text-white/90">Game Tag</label>
                 <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-white/90">YouTube Title</label>
-                <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => setYtTitle(e.target.value)} maxLength={100} />
+              <div className="flex gap-3">
+                <div className="flex flex-col gap-2 flex-1">
+                  <label className="text-sm font-medium text-white/90">YouTube Title</label>
+                  <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => {
+                    const val = e.target.value;
+                    setYtTitle(val);
+                    // Auto-sync Episode # when user types "— N" at end of title
+                    const epMatch = val.match(/ [—\-] (\d+)$/);
+                    if (epMatch) setEpisodeInput(parseInt(epMatch[1], 10));
+                  }} maxLength={100} />
+                </div>
+                <div className="flex flex-col gap-2 w-24 shrink-0">
+                  <label className="text-sm font-medium text-white/90">Episode #</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                    value={episodeInput}
+                    onChange={e => handleEpisodeChange(e.target.value)}
+                    placeholder="—"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-white/90">Description</label>

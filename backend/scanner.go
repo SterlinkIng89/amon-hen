@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,9 +16,9 @@ type VideoFile struct {
 	Name          string `json:"name"`
 	Path          string `json:"path"`
 	Size          int64  `json:"size"`
-	ModTime       int64  `json:"modTime"` // Unix timestamp in milliseconds
-	Folder        string `json:"folder"`  // Source folder path
-	Game          string `json:"game"`    // Game tag from config
+	ModTime       int64  `json:"modTime"`
+	Folder        string `json:"folder"`
+	Game          string `json:"game"`
 	YouTubeTitle  string `json:"youtubeTitle"`
 	Description   string `json:"description"`
 	Privacy       string `json:"privacy"`
@@ -27,9 +28,8 @@ type VideoFile struct {
 	Episode       int    `json:"episode"`
 }
 
-// generateYouTubeTitle replicates the frontend logic to create a suggested title
+// generateYouTubeTitle builds the suggested upload title from filename, game tag and episode.
 func generateYouTubeTitle(filename string, game string, episode int) string {
-	// Pattern: YYYY-MM-DD
 	re := regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})`)
 	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
 	match := re.FindStringSubmatch(stem)
@@ -60,44 +60,60 @@ func generateYouTubeTitle(filename string, game string, episode int) string {
 	return fmt.Sprintf("%s — %s%s", game, dateStr, epSuffix)
 }
 
-// episodeCountForTag counts YouTube videos whose title starts with "<tag> - ".
-// This works for 1000+ pre-existing videos that have no game_tag in the DB,
-// because the title format is always "<tag> - <date>".
-// It also takes into account any explicitly-set episodes via game_tag+episode columns.
+// episodeCountForTag returns the highest episode number already used for a tag
+// by querying yt_videos. It parses the trailing "— N" from titles (covers
+// uploaded videos with no explicit episode column) and also checks the episode
+// column directly. Falls back to COUNT when no episode suffix is found.
 func (a *App) episodeCountForTag(tag string) int {
 	if tag == "" {
 		return 0
 	}
 
-	// Pattern: title starts exactly with "<tag> - " (hyphen, legacy format)
 	titlePatternHyphen := tag + " - %"
-	// Pattern: title starts exactly with "<tag> — " (em-dash, format used by this app)
 	titlePatternDash := tag + " \u2014 %"
 
-	var titleCount, maxEpisode int
-	// Count by title match (covers pre-existing 1000+ videos)
-	a.db.conn.QueryRow(
-		`SELECT COUNT(*) FROM yt_videos WHERE title LIKE ? OR title LIKE ?`,
-		titlePatternHyphen, titlePatternDash,
-	).Scan(&titleCount)
+	epRe := regexp.MustCompile(` (?:—|-) (\d+)$`)
 
-	// Also check explicit episode numbers stored via this app's upload workflow.
-	// IMPORTANT: only count rows that still have a local_file linked — this
-	// prevents stale game_tag values (from videos whose tag was corrected in
-	// config but the DB row wasn't updated yet) from inflating the counter.
+	maxFromTitles := 0
+	titleCount := 0
+
+	rows, err := a.db.conn.Query(
+		`SELECT title FROM yt_videos WHERE title LIKE ? OR title LIKE ?`,
+		titlePatternHyphen, titlePatternDash,
+	)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var title string
+			if rows.Scan(&title) != nil {
+				continue
+			}
+			titleCount++
+			if m := epRe.FindStringSubmatch(title); m != nil {
+				if n, err := strconv.Atoi(m[1]); err == nil && n > maxFromTitles {
+					maxFromTitles = n
+				}
+			}
+		}
+	}
+
+	titleMax := maxFromTitles
+	if titleMax == 0 {
+		titleMax = titleCount
+	}
+
+	var maxEpisode int
 	a.db.conn.QueryRow(
 		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0 AND local_file IS NOT NULL AND local_file != ''`, tag,
 	).Scan(&maxEpisode)
 
-	// Return whichever is larger — title count covers all historical uploads,
-	// max episode covers cases where episodes were manually set.
-	if maxEpisode > titleCount {
+	if maxEpisode > titleMax {
 		return maxEpisode
 	}
-	return titleCount
+	return titleMax
 }
 
-// GetVideosFromFolders scans multiple directories and returns a merged result
+// GetVideosFromFolders scans multiple directories and returns a merged result.
 func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	supported := map[string]bool{
 		".mp4":  true,
@@ -108,12 +124,11 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	}
 	var videos []VideoFile
 
-	// Pre-load playlist info and linked files from DB
 	a.db.mu.Lock()
-	pMap := make(map[string]string)        // yt_id -> playlist_id
-	pTitleMap := make(map[string]string)   // yt_id -> playlist_title
-	linkedFiles := make(map[string]string) // filename -> yt_id (fallback matching)
-	pathMap := make(map[string]string)     // full_path -> yt_id
+	pMap := make(map[string]string)
+	pTitleMap := make(map[string]string)
+	linkedFiles := make(map[string]string)
+	pathMap := make(map[string]string)
 
 	rows, err := a.db.conn.Query(`
 		SELECT pi.video_id, pi.playlist_id, p.title 
@@ -131,7 +146,6 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 	}
 
-	// Fetch linked video paths for matching
 	vRows, err := a.db.conn.Query(`SELECT id, local_file FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
 	if err == nil {
 		defer vRows.Close()
@@ -148,7 +162,6 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	}
 	a.db.mu.Unlock()
 
-	// First pass: scan all files and load metadata
 	configChanged := false
 	for _, dir := range folders {
 		fSettings := a.GetFolderSettings(dir)
@@ -158,7 +171,6 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				return nil
 			}
 			if d.IsDir() {
-				// If not recursive, skip subdirectories except the base dir itself
 				if !fSettings.Recursive && path != dir {
 					return filepath.SkipDir
 				}
@@ -177,10 +189,8 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 
 			meta := a.config.VideoMetadata[path]
 
-			// Filter by max duration if set
 			if fSettings.MaxDurationSecs > 0 {
 				if meta.DurationSecs == 0 {
-					// Fetch and cache duration
 					dur, err := a.GetVideoDuration(path)
 					if err == nil && dur > 0 {
 						meta.DurationSecs = int(dur)
@@ -196,48 +206,43 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					}
 				}
 				if meta.DurationSecs > fSettings.MaxDurationSecs {
-					return nil // skip this file
+					return nil
 				}
 			}
 
 			videos = append(videos, VideoFile{
-				Name:          d.Name(),
-				Path:          path,
-				Size:          info.Size(),
-				ModTime:       info.ModTime().UnixMilli(),
-				Folder:        dir,
-				Game:          meta.Game,
-				YouTubeTitle:  meta.YouTubeTitle,
-				Description:   meta.Description,
-				Privacy:       meta.Privacy,
-				YouTubeID:     meta.YouTubeID,
-				PlaylistID:    meta.PlaylistID,
-				// Prefer the DB-derived title (for uploaded videos); fall back to
-				// the persisted title (set by bulk-assign for local-only videos).
+				Name:         d.Name(),
+				Path:         path,
+				Size:         info.Size(),
+				ModTime:      info.ModTime().UnixMilli(),
+				Folder:       dir,
+				Game:         meta.Game,
+				YouTubeTitle: meta.YouTubeTitle,
+				Description:  meta.Description,
+				Privacy:      meta.Privacy,
+				YouTubeID:    meta.YouTubeID,
+				PlaylistID:   meta.PlaylistID,
 				PlaylistTitle: func() string {
 					if t := pTitleMap[meta.YouTubeID]; t != "" {
 						return t
 					}
 					return meta.PlaylistTitle
 				}(),
-				Episode:       meta.Episode,
+				Episode: meta.Episode,
 			})
 
 			vIdx := len(videos) - 1
-			// Fallback 1: Match by full path in DB
 			if videos[vIdx].YouTubeID == "" {
 				if id, ok := pathMap[path]; ok {
 					videos[vIdx].YouTubeID = id
 				}
 			}
-			// Fallback 2: Match by filename in DB (useful if file was moved)
 			if videos[vIdx].YouTubeID == "" {
 				if id, ok := linkedFiles[d.Name()]; ok {
 					videos[vIdx].YouTubeID = id
 				}
 			}
 
-			// Fallback playlist ID if missing in config but found in DB
 			if videos[vIdx].PlaylistID == "" && videos[vIdx].YouTubeID != "" {
 				videos[vIdx].PlaylistID = pMap[videos[vIdx].YouTubeID]
 				videos[vIdx].PlaylistTitle = pTitleMap[videos[vIdx].YouTubeID]
@@ -250,10 +255,20 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		a.saveConfig()
 	}
 
-	// Second pass: Sort by ModTime (ascending) and assign episode numbers
 	sort.Slice(videos, func(i, j int) bool {
 		return videos[i].ModTime < videos[j].ModTime
 	})
+
+	// Pre-scan: find the highest explicit episode set in config per tag.
+	// Local explicit episodes take priority over the DB count as the counter base.
+	localMaxExplicit := make(map[string]int)
+	for i := range videos {
+		if videos[i].Game != "" && videos[i].Episode > 0 {
+			if videos[i].Episode > localMaxExplicit[videos[i].Game] {
+				localMaxExplicit[videos[i].Game] = videos[i].Episode
+			}
+		}
+	}
 
 	localCounters := make(map[string]int)
 
@@ -265,8 +280,15 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 
 		if _, seen := localCounters[game]; !seen {
 			a.db.mu.Lock()
-			localCounters[game] = a.episodeCountForTag(game)
+			dbBase := a.episodeCountForTag(game)
 			a.db.mu.Unlock()
+
+			localBase := localMaxExplicit[game]
+			if localBase > 0 {
+				localCounters[game] = localBase
+			} else {
+				localCounters[game] = dbBase
+			}
 		}
 
 		if videos[i].Episode == 0 {
@@ -286,17 +308,15 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	return videos, nil
 }
 
-// GetVideos scans a single directory (backward compat)
+// GetVideos scans a single directory (backward compat).
 func (a *App) GetVideos(dirPath string) ([]VideoFile, error) {
 	return a.GetVideosFromFolders([]string{dirPath})
 }
 
-// DeleteFiles removes the given file paths from disk, config, and unlinks them
-// from the yt_videos table (clears local_file without deleting the YouTube video).
+// DeleteFiles removes files from disk, config, and unlinks them from yt_videos.
 func (a *App) DeleteFiles(paths []string) error {
 	var errs []string
 	for _, p := range paths {
-		// Get info before deleting to calculate cache keys
 		info, statErr := os.Stat(p)
 
 		err := os.Remove(p)
@@ -306,7 +326,6 @@ func (a *App) DeleteFiles(paths []string) error {
 			}
 		}
 
-		// Clean up cache if stat was successful
 		if statErr == nil {
 			key := cacheKey(p, info.ModTime())
 			thumbPath := filepath.Join(a.cacheDir, "thumbs", key+".png")
@@ -315,8 +334,6 @@ func (a *App) DeleteFiles(paths []string) error {
 			os.Remove(previewPath)
 		}
 
-		// Unlink from yt_videos — clears local_file so the YouTube video
-		// stays in the channel but is no longer linked to a local file.
 		if a.db != nil {
 			a.db.mu.Lock()
 			a.db.conn.Exec(
