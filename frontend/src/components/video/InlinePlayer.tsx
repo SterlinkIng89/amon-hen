@@ -187,7 +187,33 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   const { addRecentTag } = useRecentTags();
 
-  // Reset when video changes
+  // --- Auto-save on navigation ---
+  // formSnapshotRef is updated inline on EVERY render. When video.path changes
+  // the component re-renders with old state (not yet reset), so the snapshot
+  // still holds the previous video's form values at the time the effect cleanup runs.
+  const formSnapshotRef = useRef({ tagInput, ytTitle, episodeInput, description, privacy, playlistId });
+  formSnapshotRef.current = { tagInput, ytTitle, episodeInput, description, privacy, playlistId };
+
+  // Tracks the path this snapshot belongs to. Effect body runs AFTER cleanup,
+  // so cleanup always reads the OLD path.
+  const autoSavePathRef = useRef(video.path);
+  useEffect(() => {
+    autoSavePathRef.current = video.path;
+    return () => {
+      const path = autoSavePathRef.current;
+      const s = formSnapshotRef.current;
+      let ep = s.episodeInput !== "" ? Number(s.episodeInput) : 0;
+      if (!ep) {
+        const m = s.ytTitle.match(/ [—\-] (\d+)$/);
+        if (m) ep = parseInt(m[1], 10);
+      }
+      SaveVideoMetadata(path, s.tagInput, s.ytTitle, s.description, s.privacy, s.playlistId, ep)
+        .then(() => onTagSaved?.())
+        .catch(console.error);
+    };
+  }, [video.path]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset form when video changes
   useEffect(() => {
     setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
     setTagInput(video.game || "");
