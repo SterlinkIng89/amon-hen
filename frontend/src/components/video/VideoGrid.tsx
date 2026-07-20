@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { VideoFile, VideoGroup, GameProfile } from "../../types";
 import VideoPill from "./VideoPill";
-import StatsBar from "./StatsBar";
 import { useAppStore } from "../../store/useAppStore";
 import { formatSize } from "../../utils/videoUtils";
 import { LoadConfig } from "../../../wailsjs/go/backend/App";
@@ -155,8 +154,6 @@ export default function VideoGrid({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base relative">
-      <StatsBar videos={allVideos} />
-
       {sortedVideos.length === 0 ? (
         <EmptyState hasFolders={folders.length > 0} />
       ) : useGroups ? (

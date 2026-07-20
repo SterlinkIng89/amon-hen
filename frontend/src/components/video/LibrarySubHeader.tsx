@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
 import { VideoFile } from "../../types";
-import { formatSize } from "../../utils/videoUtils";
+import StatsBar from "./StatsBar";
 
 type SortMode = "date" | "name" | "size";
 
@@ -26,39 +25,6 @@ function folderLabel(f: string): string {
   return last || normalized;
 }
 
-/** Animated counter that ticks from prev value to next value. */
-function AnimatedCounter({ value, className }: { value: number; className?: string }) {
-  const [display, setDisplay] = useState(value);
-  const prevRef = useRef(value);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    const start = prevRef.current;
-    const end = value;
-    if (start === end) return;
-    const duration = 600;
-    const startTime = performance.now();
-
-    const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(start + (end - start) * eased));
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      } else {
-        prevRef.current = end;
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [value]);
-
-  return <span className={className}>{display}</span>;
-}
-
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "date", label: "Date" },
   { value: "name", label: "A–Z" },
@@ -79,11 +45,6 @@ export default function LibrarySubHeader({
   onToggleFilterUploaded,
 }: LibrarySubHeaderProps) {
   if (folders.length === 0) return null;
-
-  const totalSize = allVideos.reduce((acc, v) => acc + v.size, 0);
-  const uploadedCount = allVideos.filter(v => v.youtubeId).length;
-  const pendingCount = allVideos.length - uploadedCount;
-  const uploadPct = allVideos.length > 0 ? Math.round((uploadedCount / allVideos.length) * 100) : 0;
 
   return (
     <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
@@ -224,78 +185,8 @@ export default function LibrarySubHeader({
         </div>
       </div>
 
-      {/* Bottom Row: Stats as chips */}
-      {allVideos.length > 0 && (
-        <div className="flex items-center gap-3 px-6 h-9 shrink-0 bg-elevated/20 border-t border-border-subtle text-xs text-text-secondary overflow-x-auto">
-
-          {/* Video count chip */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-elevated/60 border border-border-subtle rounded-md px-2.5 py-0.5">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
-              <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-              <line x1="7" y1="2" x2="7" y2="22" />
-              <line x1="17" y1="2" x2="17" y2="22" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <line x1="2" y1="7" x2="7" y2="7" />
-              <line x1="2" y1="17" x2="7" y2="17" />
-              <line x1="17" y1="7" x2="22" y2="7" />
-              <line x1="17" y1="17" x2="22" y2="17" />
-            </svg>
-            <span className="font-bold text-text-primary">{allVideos.length}</span>
-            <span className="text-text-muted">videos</span>
-          </div>
-
-          {/* Storage chip */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-elevated/60 border border-border-subtle rounded-md px-2.5 py-0.5">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
-              <ellipse cx="12" cy="5" rx="9" ry="3" />
-              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-            </svg>
-            <span className="font-bold text-text-primary">{formatSize(totalSize)}</span>
-            <span className="text-text-muted">on disk</span>
-          </div>
-
-          {/* Upload progress chip */}
-          <div className="flex items-center gap-2 shrink-0 bg-elevated/60 border border-border-subtle rounded-md px-2.5 py-0.5">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 shrink-0">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span>
-              <span className="font-bold text-text-primary">{uploadedCount}</span>
-              <span className="text-text-muted"> / {allVideos.length} uploaded</span>
-            </span>
-            {/* Progress bar */}
-            <div className="w-16 h-[5px] bg-surface rounded-full overflow-hidden border border-border-subtle">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${uploadPct}%`,
-                  background: uploadPct === 100 ? "#4ade80" : "var(--accent, #f97316)",
-                  boxShadow: uploadPct > 0 && uploadPct < 100 ? "0 0 6px 1px rgba(249,115,22,0.6)" : "none",
-                }}
-              />
-            </div>
-            <AnimatedCounter
-              value={uploadPct}
-              className="font-mono text-[10px] font-bold text-text-muted tabular-nums"
-            />
-            <span className="text-text-muted text-[10px]">%</span>
-          </div>
-
-          {/* Pending chip */}
-          {pendingCount > 0 && (
-            <div className="flex items-center gap-1.5 shrink-0 bg-amber-500/10 border border-amber-500/25 rounded-md px-2.5 py-0.5 text-amber-400">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span className="font-bold">{pendingCount}</span>
-              <span className="font-medium">pending</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Bottom Row: StatsBar */}
+      <StatsBar videos={allVideos} />
     </div>
   );
 }
