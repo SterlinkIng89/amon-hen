@@ -1,5 +1,5 @@
 import React from "react";
-import { VideoFile } from "../../types";
+import { VideoFile, GameProfile } from "../../types";
 import VideoPill from "./VideoPill";
 import InlinePlayer from "./InlinePlayer";
 import { QueueItem } from "../youtube/UploadQueue";
@@ -39,6 +39,15 @@ export default function PlayerView({
   onAddToQueue,
 }: PlayerViewProps) {
   const { queue } = useAppStore();
+  const [gameProfiles, setGameProfiles] = React.useState<Record<string, GameProfile>>({});
+
+  React.useEffect(() => {
+    import("../../../wailsjs/go/backend/App").then(({ LoadConfig }) => {
+      LoadConfig().then((cfg: any) => {
+        setGameProfiles(cfg.game_profiles || {});
+      }).catch(() => {});
+    });
+  }, []);
 
   const getUploadProgress = (path: string): number | undefined => {
     const item = queue.find(q => q.videoPath === path && q.status === "uploading");
@@ -61,6 +70,7 @@ export default function PlayerView({
                 onClick={(e) => onVideoClick(absoluteIdx, e)}
                 onUpload={() => onUploadTarget(video)}
                 uploadProgress={getUploadProgress(video.path)}
+                gameProfiles={gameProfiles}
               />
             );
           })}

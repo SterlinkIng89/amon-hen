@@ -47,17 +47,17 @@ export function generateYouTubeTitle(
 
   if (profile && profile.type === "multiplayer") {
     let template = profile.titleTemplate || "{event} - {gamemode} - {date}";
-    let res = template.replace(/{game}/g, game);
-    res = res.replace(/{event}/g, event || "Title");
-    res = res.replace(/{gamemode}/g, gameMode || "Mode");
-    res = res.replace(/{date}/g, datePart);
-    res = res.replace(/{episode}/g, (episode || 0).toString());
+    let res = template.replace(/\{game\}/gi, game);
+    res = res.replace(/\{event\}/gi, event || "Title");
+    res = res.replace(/\{gamemode\}/gi, gameMode || "Mode");
+    res = res.replace(/\{date\}/gi, datePart);
+    res = res.replace(/\{episode\}/gi, (episode || 0).toString());
     
     const detectedCustomVars = extractCustomVars(template);
     detectedCustomVars.forEach(k => {
       const v = customVars?.[k];
       const val = v || k.charAt(0).toUpperCase() + k.slice(1);
-      res = res.replace(new RegExp(`{${k}}`, 'g'), val);
+      res = res.replace(new RegExp(`\\{${k}\\}`, 'gi'), val);
     });
     
     // Cleanup multiple adjacent hyphens or spaces resulting from empty variables
