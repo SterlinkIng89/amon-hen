@@ -102,11 +102,16 @@ export default function Dashboard() {
     : filteredByFolder;
 
   const filteredVideos = searchQuery
-    ? filteredByUpload.filter(
-        (v) =>
-          v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (v.game && v.game.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
+    ? filteredByUpload.filter((v) => {
+        const sq = searchQuery.toLowerCase();
+        return (
+          v.name.toLowerCase().includes(sq) ||
+          (v.game && v.game.toLowerCase().includes(sq)) ||
+          (v.event && v.event.toLowerCase().includes(sq)) ||
+          (v.gameMode && v.gameMode.toLowerCase().includes(sq)) ||
+          (v.customVars && Object.values(v.customVars).some(val => val.toLowerCase().includes(sq)))
+        );
+      })
     : filteredByUpload;
 
   const groups = groupByDay(filteredVideos);
