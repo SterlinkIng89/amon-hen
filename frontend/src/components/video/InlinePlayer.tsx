@@ -22,6 +22,19 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   const STORAGE_VOLUME_KEY = "player_volume";
   const STORAGE_MUTED_KEY  = "player_muted";
+  const STORAGE_AUTOPLAY_KEY = "player_autoplay";
+  const STORAGE_AUTOREPEAT_KEY = "player_autorepeat";
+
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(() => localStorage.getItem(STORAGE_AUTOPLAY_KEY) === "true");
+  const [autoRepeatEnabled, setAutoRepeatEnabled] = useState(() => localStorage.getItem(STORAGE_AUTOREPEAT_KEY) === "true");
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_AUTOPLAY_KEY, String(autoPlayEnabled));
+  }, [autoPlayEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_AUTOREPEAT_KEY, String(autoRepeatEnabled));
+  }, [autoRepeatEnabled]);
 
   // Restore saved volume + mute when loading a new video
   useEffect(() => {
@@ -93,6 +106,14 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onPrev, onNext]);
+
+  const handleVideoEnded = () => {
+    // If auto-repeat is enabled, the `loop` attribute handles looping.
+    // If auto-repeat is disabled and auto-play is enabled, go to the next video.
+    if (!autoRepeatEnabled && autoPlayEnabled && onNext) {
+      onNext();
+    }
+  };
 
   // Info panel state
   const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, undefined, video.event, video.gameMode, video.customVars));
@@ -447,7 +468,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
         {/* Video */}
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[200px]">
           {!deleting ? (
-            <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay />
+            <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay loop={autoRepeatEnabled} onEnded={handleVideoEnded} />
           ) : (
             <div className="text-white/60">Deleting...</div>
           )}
@@ -481,6 +502,16 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
           {/* Center: Controls */}
           <div className="flex items-center gap-2">
             <button 
+              className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${autoRepeatEnabled ? "bg-[#3ea6ff]/20 text-[#3ea6ff]" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
+              onClick={() => {
+                setAutoRepeatEnabled(!autoRepeatEnabled);
+                if (!autoRepeatEnabled) setAutoPlayEnabled(false); // mutually exclusive
+              }}
+              title={autoRepeatEnabled ? "Auto-repeat is ON" : "Turn on Auto-repeat"}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+            </button>
+            <button 
               className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
               onClick={onPrev ?? undefined} 
               disabled={!onPrev} 
@@ -497,6 +528,22 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
             >
               Next
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
+            </button>
+            <button 
+              className={`relative flex items-center h-[26px] w-[46px] rounded-full transition-colors ml-2 ${autoPlayEnabled ? "bg-white" : "bg-white/20 hover:bg-white/30"}`}
+              onClick={() => {
+                setAutoPlayEnabled(!autoPlayEnabled);
+                if (!autoPlayEnabled) setAutoRepeatEnabled(false);
+              }}
+              title={autoPlayEnabled ? "Autoplay is on" : "Autoplay is off"}
+            >
+              <div
+                className={`absolute w-[20px] h-[20px] rounded-full flex items-center justify-center transition-transform ${autoPlayEnabled ? "translate-x-[22px] bg-black text-white" : "translate-x-[3px] bg-black text-white/70"}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="ml-[1.5px]">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
             </button>
           </div>
 
