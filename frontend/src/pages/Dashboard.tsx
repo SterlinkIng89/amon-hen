@@ -166,11 +166,20 @@ export default function Dashboard() {
     if (e.shiftKey) {
       const anchorIdx =
         lastSelectedIdx !== -1 ? lastSelectedIdx : selectedIndex !== -1 ? selectedIndex : 0;
-      const start = Math.min(anchorIdx, sortedIdx);
-      const end = Math.max(anchorIdx, sortedIdx);
-      for (let i = start; i <= end; i++) {
-        const p = sortedVideos[i].path;
-        if (!currentPaths.includes(p)) currentPaths.push(p);
+      
+      const anchorVideo = sortedVideos[anchorIdx];
+      const targetVideo = sortedVideos[sortedIdx];
+      
+      const visibleStartIdx = filteredVideos.findIndex(v => v.path === anchorVideo?.path);
+      const visibleEndIdx = filteredVideos.findIndex(v => v.path === targetVideo?.path);
+
+      if (visibleStartIdx !== -1 && visibleEndIdx !== -1) {
+        const start = Math.min(visibleStartIdx, visibleEndIdx);
+        const end = Math.max(visibleStartIdx, visibleEndIdx);
+        for (let i = start; i <= end; i++) {
+          const p = filteredVideos[i].path;
+          if (!currentPaths.includes(p)) currentPaths.push(p);
+        }
       }
       setSelectedPaths(currentPaths);
     } else if (e.ctrlKey || e.metaKey) {
@@ -239,6 +248,7 @@ export default function Dashboard() {
     await SaveVideoMetadata(
       video.path, video.game || "", opts.title, opts.description,
       opts.privacy, opts.playlistId || "", video.episode || 0,
+      video.event || "", video.gameMode || ""
     ).catch(console.error);
 
     handleAddToQueue({
@@ -260,6 +270,7 @@ export default function Dashboard() {
     await SaveVideoMetadata(
       video.path, video.game || "", opts.title, opts.description,
       opts.privacy, opts.playlistId || "", video.episode || 0,
+      video.event || "", video.gameMode || ""
     ).catch(console.error);
 
     setQueue((q) => [

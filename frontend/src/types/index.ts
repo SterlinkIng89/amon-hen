@@ -11,7 +11,28 @@ export interface VideoFile {
   youtubeId?: string;
   playlistId?: string;
   playlistTitle?: string;
-  episode?: number;
+	episode?: number;
+	event?: string;
+	gameMode?: string;
+	customVars?: Record<string, string>;
+}
+
+export interface GameProfile {
+	type: string; // "singleplayer" | "multiplayer"
+	titleTemplate: string;
+	modes?: string[]; // list of available game modes
+}
+
+export interface Config {
+	folders: string[];
+	youtube_client_id: string;
+	youtube_client_secret: string;
+	youtube_token_json?: string;
+	video_games: Record<string, string>;
+	video_metadata: Record<string, any>;
+	folder_settings: Record<string, FolderConfig>;
+	game_profiles: Record<string, GameProfile>;
+	watch_folder_enabled: boolean;
 }
 
 export interface YTVideo {

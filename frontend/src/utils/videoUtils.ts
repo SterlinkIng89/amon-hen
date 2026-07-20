@@ -1,4 +1,6 @@
-import { VideoFile, VideoGroup } from "../types";
+import { VideoFile, VideoGroup, GameProfile } from "../types";
+
+const STANDARD_VARS = ['game', 'date', 'episode', 'event', 'gamemode'];
 
 export function formatSize(b: number) {
   return b >= 1073741824 ? (b / 1073741824).toFixed(2) + " GB" : (b / 1048576).toFixed(2) + " MB";
@@ -19,10 +21,15 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
-// Detects OBS-style filenames: "YYYY-MM-DD HH-MM-SS.ext"
-// Returns a YouTube title template: "[game] - YYYY MM DD - [ep]"
-// The game slot and episode number are left blank for the user to fill in.
-export function generateYouTubeTitle(filename: string, game?: string, episode?: number): string {
+export function generateYouTubeTitle(
+  filename: string,
+  game?: string,
+  episode?: number,
+  profile?: GameProfile,
+  event?: string,
+  gameMode?: string,
+  customVars?: Record<string, string>
+): string {
   const obsPattern = /^(\d{4})-(\d{2})-(\d{2})/;
   const stem = filename.replace(/\.[^/.]+$/, "");
   const match = stem.match(obsPattern);
@@ -37,6 +44,29 @@ export function generateYouTubeTitle(filename: string, game?: string, episode?: 
   }
   
   if (!game) return datePart;
+
+  if (profile && profile.type === "multiplayer") {
+    let template = profile.titleTemplate || "{event} - {gamemode} - {date}";
+    let res = template.replace(/{game}/g, game);
+    res = res.replace(/{event}/g, event || "Title");
+    res = res.replace(/{gamemode}/g, gameMode || "Mode");
+    res = res.replace(/{date}/g, datePart);
+    res = res.replace(/{episode}/g, (episode || 0).toString());
+    
+    const detectedCustomVars = extractCustomVars(template);
+    detectedCustomVars.forEach(k => {
+      const v = customVars?.[k];
+      const val = v || k.charAt(0).toUpperCase() + k.slice(1);
+      res = res.replace(new RegExp(`{${k}}`, 'g'), val);
+    });
+    
+    // Cleanup multiple adjacent hyphens or spaces resulting from empty variables
+    res = res.replace(/(?:\s*-\s*){2,}/g, " - ");
+    res = res.replace(/^\s*-\s*/, "");
+    res = res.replace(/\s*-\s*$/, "");
+    
+    return res;
+  }
   
   const epSuffix = (episode && episode > 0) ? ` — ${episode}` : "";
   
@@ -66,4 +96,17 @@ export function groupByDay(videos: VideoFile[]): VideoGroup[] {
     map.get(k)!.push(v);
   }
   return Array.from(map.entries()).map(([dateKey, vs]) => ({ dateKey, label: formatGroupLabel(dateKey), videos: vs }));
+}
+
+export function extractCustomVars(template: string): string[] {
+  if (!template) return [];
+  const matches = [...template.matchAll(/\{([^}]+)\}/g)];
+  return Array.from(new Set(matches.map(m => m[1].toLowerCase()))).filter(v => !STANDARD_VARS.includes(v));
+}
+
+export function extractOrderedInputVars(template: string): string[] {
+  if (!template) return [];
+  const matches = [...template.matchAll(/\{([^}]+)\}/g)];
+  const allVars = matches.map(m => m[1].toLowerCase());
+  return Array.from(new Set(allVars)).filter(v => v !== 'game' && v !== 'date' && v !== 'episode');
 }

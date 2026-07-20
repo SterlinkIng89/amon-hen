@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { YTVideo, VideoFile } from "../../types";
+import { YTVideo, VideoFile, GameProfile } from "../../types";
 import {
   formatSize,
   formatDuration,
@@ -25,6 +25,7 @@ interface VideoPillProps {
   uploadProgress?: number; // 0-100 while uploading, undefined otherwise
   uploadSpeed?: number; // bytes per second while uploading
   readOnlyThumbnail?: boolean;
+  gameProfiles?: Record<string, GameProfile>;
 }
 
 export default function VideoPill({
@@ -39,6 +40,7 @@ export default function VideoPill({
   uploadProgress,
   uploadSpeed,
   readOnlyThumbnail = false,
+  gameProfiles = {},
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -57,9 +59,12 @@ export default function VideoPill({
   const isLocal = "path" in video;
 
   // Data normalization
+  const activeProfile = isLocal ? gameProfiles[(video as VideoFile).game || ""] : undefined;
   const title = isYT
     ? video.title
-    : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode);
+    : (activeProfile?.type === "multiplayer")
+      ? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode)
+      : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode);
   const subtitle = isLocal ? video.name : "";
   const thumbnail = isYT ? video.thumbnailUrl : thumb;
   const publishedAt = isYT

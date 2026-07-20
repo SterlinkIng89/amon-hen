@@ -238,7 +238,8 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 		if localCount == entry.remoteCount {
 			continue
 		}
-		a.syncPlaylistItems(svc, entry.id, syncTime)
+		// Fetch all items (videos) for this playlist
+		a.syncPlaylistItems(svc, entry.id)
 	}
 	return seenIDs, nil
 }
@@ -304,7 +305,7 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 	return err
 }
 
-func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string, syncTime int64) error {
+func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
 	pageToken := ""
 	for {
 		call := svc.PlaylistItems.List([]string{"snippet", "contentDetails"}).PlaylistId(playlistID).MaxResults(50)
@@ -544,9 +545,10 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 	offset := (page - 1) * limit
 
 	orderBy := "published_at DESC"
-	if sortBy == "title" {
+	switch sortBy {
+	case "title":
 		orderBy = "title ASC"
-	} else if sortBy == "views" {
+	case "views":
 		orderBy = "view_count DESC"
 	}
 
@@ -611,11 +613,12 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 	defer a.db.mu.Unlock()
 
 	orderBy := "published_at DESC"
-	if sortBy == "title" {
+	switch sortBy {
+	case "title":
 		orderBy = "title ASC"
-	} else if sortBy == "videos" {
+	case "videos":
 		orderBy = "video_count DESC"
-	} else if sortBy == "updated" {
+	case "updated":
 		// Sort by the most recently published video in the playlist (proxy for last modified)
 		orderBy = `(
 			SELECT MAX(v.published_at)
@@ -689,12 +692,14 @@ func (a *App) LinkLocalToYouTube(localPath, ytVideoId, gameTag string, episode i
 	}
 
 	// Update config as well
+	a.configMu.Lock()
 	if a.config.VideoMetadata == nil {
 		a.config.VideoMetadata = make(map[string]VideoMeta)
 	}
 	meta := a.config.VideoMetadata[localPath]
 	meta.YouTubeID = ytVideoId
 	a.config.VideoMetadata[localPath] = meta
+	a.configMu.Unlock()
 	return a.saveConfig()
 }
 
@@ -707,11 +712,14 @@ func (a *App) UnlinkLocalVideo(localPath string) error {
 		return err
 	}
 
+	a.configMu.Lock()
 	if meta, ok := a.config.VideoMetadata[localPath]; ok {
 		meta.YouTubeID = ""
 		a.config.VideoMetadata[localPath] = meta
+		a.configMu.Unlock()
 		return a.saveConfig()
 	}
+	a.configMu.Unlock()
 	return nil
 }
 

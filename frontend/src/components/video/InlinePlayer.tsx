@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
-import { formatSize, formatDuration, generateYouTubeTitle } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata } from "../../../wailsjs/go/backend/App";
+import { formatSize, formatDuration, generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import TagInput from "../ui/TagInput";
@@ -95,9 +95,12 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   }, [onPrev, onNext]);
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
+  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, undefined, video.event, video.gameMode, video.customVars));
   const [tagInput, setTagInput] = useState(video.game || "");
   const [episodeInput, setEpisodeInput] = useState<number | "">(video.episode || "");
+  const [eventInput, setEventInput] = useState(video.event || "");
+  const [gameModeInput, setGameModeInput] = useState(video.gameMode || "");
+  const [customVarsInput, setCustomVarsInput] = useState<Record<string, string>>(video.customVars || {});
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
     (video.privacy as "public" | "unlisted" | "private") || "unlisted"
@@ -110,19 +113,35 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
   const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] = useState(false);
   const [playlistCreateError, setPlaylistCreateError] = useState("");
+  const [gameProfiles, setGameProfiles] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    LoadConfig().then(cfg => {
+      setGameProfiles(cfg.game_profiles || {});
+    }).catch(() => {});
+  }, []);
+
+  const activeProfile = gameProfiles[tagInput];
 
   // Sync form state whenever the video prop itself changes (e.g. after a rescan or
   // when the user navigates to a different video with arrow keys).
   // Without this, ytTitle/tagInput etc. would stay stale from the previous mount.
   useEffect(() => {
-    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
+    const profile = gameProfiles[video.game || ""];
+    if (profile?.type === "multiplayer") {
+      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+    } else {
+      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+    }
     setTagInput(video.game || "");
     setEpisodeInput(video.episode || "");
+    setEventInput(video.event || "");
+    setGameModeInput(video.gameMode || "");
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
-  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId, video.episode]);
+  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId, video.episode, video.event, video.gameMode, gameProfiles]);
 
   useEffect(() => {
     if (playlistId && playlists.length > 0) {
@@ -191,8 +210,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   // formSnapshotRef is updated inline on EVERY render. When video.path changes
   // the component re-renders with old state (not yet reset), so the snapshot
   // still holds the previous video's form values at the time the effect cleanup runs.
-  const formSnapshotRef = useRef({ tagInput, ytTitle, episodeInput, description, privacy, playlistId });
-  formSnapshotRef.current = { tagInput, ytTitle, episodeInput, description, privacy, playlistId };
+  const formSnapshotRef = useRef({ tagInput, ytTitle, episodeInput, eventInput, gameModeInput, customVarsInput, description, privacy, playlistId });
+  formSnapshotRef.current = { tagInput, ytTitle, episodeInput, eventInput, gameModeInput, customVarsInput, description, privacy, playlistId };
 
   // Tracks the path this snapshot belongs to. Effect body runs AFTER cleanup,
   // so cleanup always reads the OLD path.
@@ -203,11 +222,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
       const path = autoSavePathRef.current;
       const s = formSnapshotRef.current;
       let ep = s.episodeInput !== "" ? Number(s.episodeInput) : 0;
-      if (!ep) {
+      if (!ep && !(gameProfiles[s.tagInput]?.type === "multiplayer")) {
         const m = s.ytTitle.match(/ [—\-] (\d+)$/);
         if (m) ep = parseInt(m[1], 10);
       }
-      SaveVideoMetadata(path, s.tagInput, s.ytTitle, s.description, s.privacy, s.playlistId, ep)
+      SaveVideoMetadata(path, s.tagInput, s.ytTitle, s.description, s.privacy, s.playlistId, ep, s.eventInput, s.gameModeInput, s.customVarsInput)
         .then(() => onTagSaved?.())
         .catch(console.error);
     };
@@ -215,9 +234,17 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   // Reset form when video changes
   useEffect(() => {
-    setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode));
+    const profile = gameProfiles[video.game || ""];
+    if (profile?.type === "multiplayer") {
+      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+    } else {
+      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+    }
     setTagInput(video.game || "");
     setEpisodeInput(video.episode || "");
+    setEventInput(video.event || "");
+    setGameModeInput(video.gameMode || "");
+    setCustomVarsInput(video.customVars || {});
     setDescription(video.description || "");
     setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
     setPlaylistId(video.playlistId || "");
@@ -225,18 +252,16 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setInfoSaved(false);
     setConfirmDelete(false);
     setDeleting(false);
-  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId, video.episode]);
+  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId, video.episode, video.event, video.gameMode, gameProfiles]);
 
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
     const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, gameProfiles[tagInput], eventInput, gameModeInput, customVarsInput);
     setTagInput(val);
     
-    // If current title is the one we auto-generated for the old tag, or if it matches the current video's saved title, update it
-    // This allows the title to "follow" the tag unless the user has typed something custom
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, val, currentEp));
+      setYtTitle(generateYouTubeTitle(video.name, val, currentEp, gameProfiles[val], eventInput, gameModeInput, customVarsInput));
     }
   };
 
@@ -246,10 +271,37 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (val !== "" && isNaN(num as number)) return; // ignore non-numeric input
     setEpisodeInput(num);
     const currentEp = num !== "" ? Number(num) : 0;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode);
-    // Only auto-update the title if it was auto-generated (not custom)
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode, activeProfile, eventInput, gameModeInput, customVarsInput);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp));
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput));
+    }
+  };
+
+  const handleEventChange = (val: string) => {
+    setEventInput(val);
+    const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, val, gameModeInput, customVarsInput));
+    }
+  };
+
+  const handleGameModeChange = (val: string) => {
+    setGameModeInput(val);
+    const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, val, customVarsInput));
+    }
+  };
+
+  const handleCustomVarChange = (key: string, val: string) => {
+    const newVars = { ...customVarsInput, [key]: val };
+    setCustomVarsInput(newVars);
+    const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, newVars));
     }
   };
 
@@ -280,7 +332,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     }
     try {
       // 1. Always save to local config / DB first
-      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode);
+      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode, eventInput, gameModeInput, customVarsInput);
       if (tagInput) addRecentTag(tagInput);
 
       // 2. If video is already on YouTube, push the metadata update to the API
@@ -336,8 +388,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setUploading(true);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0)).catch(console.error);
-    onTagSaved?.(); // Refresh UI in dashboard
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0), eventInput, gameModeInput, customVarsInput).catch(console.error);
+    onTagSaved?.();
 
     const item: QueueItem = {
       id: crypto.randomUUID(),
@@ -362,7 +414,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (tagInput) addRecentTag(tagInput);
     
     // Save metadata to local database first
-    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0)).catch(console.error);
+    await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0), eventInput, gameModeInput, customVarsInput).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -384,7 +436,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
   const isDirty = 
     tagInput !== (video.game || "") ||
-    ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game)) ||
+    ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, gameProfiles[video.game || ""], video.event, video.gameMode, video.customVars)) ||
     description !== (video.description || "") ||
     privacy !== (video.privacy || "unlisted") ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
@@ -490,9 +542,102 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
               {/* Form Content - Scrollable Middle */}
               <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-white/90">Game Tag</label>
-                  <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                    <label className="text-sm font-medium text-white/90">Game Profile</label>
+                    <select
+                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                      value={Object.keys(gameProfiles).includes(tagInput) ? tagInput : ""}
+                      onChange={(e) => {
+                        const tag = e.target.value;
+                        if (tag) handleTagChange(tag);
+                        else handleTagChange("");
+                      }}
+                      disabled={savingInfo}
+                    >
+                      <option value="">Singleplayer</option>
+                      {Object.keys(gameProfiles).map(pTag => (
+                        <option key={pTag} value={pTag}>{pTag}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                    <label className="text-sm font-medium text-white/90">Game Tag</label>
+                    <div className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} disabled={Object.keys(gameProfiles).includes(tagInput)} />
+                    </div>
+                  </div>
+                  {activeProfile?.type === "multiplayer" ? (
+                    <>
+                      {extractOrderedInputVars(activeProfile.titleTemplate).map(cv => {
+                        if (cv === 'event') {
+                          return (
+                            <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                              <label className="text-sm font-medium text-white/90">Event / Title</label>
+                              <input
+                                type="text"
+                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                value={eventInput}
+                                onChange={e => handleEventChange(e.target.value)}
+                                placeholder="Highlight..."
+                              />
+                            </div>
+                          )
+                        } else if (cv === 'gamemode') {
+                          return (
+                            <div key="gamemode" className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                              <label className="text-sm font-medium text-white/90">Game Mode</label>
+                              {activeProfile.modes && activeProfile.modes.length > 0 ? (
+                                <select
+                                  className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                                  value={gameModeInput}
+                                  onChange={e => handleGameModeChange(e.target.value)}
+                                >
+                                  <option value="">Mode...</option>
+                                  {activeProfile.modes.map((m: string) => (
+                                    <option key={m} value={m}>{m}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                  value={gameModeInput}
+                                  onChange={e => handleGameModeChange(e.target.value)}
+                                  placeholder="Mode..."
+                                />
+                              )}
+                            </div>
+                          )
+                        } else {
+                          return (
+                            <div key={cv} className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                              <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
+                              <input
+                                type="text"
+                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                value={customVarsInput[cv] || ""}
+                                onChange={e => handleCustomVarChange(cv, e.target.value)}
+                                placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
+                              />
+                            </div>
+                          )
+                        }
+                      })}
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2 w-24 shrink-0">
+                      <label className="text-sm font-medium text-white/90">Episode #</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                        value={episodeInput}
+                        onChange={e => handleEpisodeChange(e.target.value)}
+                        placeholder="—"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <div className="flex flex-col gap-2 flex-1">
@@ -502,19 +647,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                       setYtTitle(val);
                       // Auto-sync Episode # when user types "— N" at end of title
                       const epMatch = val.match(/ [—\-] (\d+)$/);
-                      if (epMatch) setEpisodeInput(parseInt(epMatch[1], 10));
+                      if (epMatch && !(activeProfile?.type === "multiplayer")) setEpisodeInput(parseInt(epMatch[1], 10));
                     }} maxLength={100} />
-                  </div>
-                  <div className="flex flex-col gap-2 w-24 shrink-0">
-                    <label className="text-sm font-medium text-white/90">Episode #</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
-                      value={episodeInput}
-                      onChange={e => handleEpisodeChange(e.target.value)}
-                      placeholder="—"
-                    />
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -658,9 +792,102 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
         isInfoExpanded && (
           <div className="bg-[#0f0f0f] border-t border-white/10 p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300 text-white">
             <div className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-white/90">Game Tag</label>
-                <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} />
+              <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                  <label className="text-sm font-medium text-white/90">Game Profile</label>
+                  <select
+                    className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                    value={Object.keys(gameProfiles).includes(tagInput) ? tagInput : ""}
+                    onChange={(e) => {
+                      const tag = e.target.value;
+                      if (tag) handleTagChange(tag);
+                      else handleTagChange("");
+                    }}
+                    disabled={savingInfo}
+                  >
+                    <option value="">Singleplayer</option>
+                    {Object.keys(gameProfiles).map(pTag => (
+                      <option key={pTag} value={pTag}>{pTag}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                  <label className="text-sm font-medium text-white/90">Game Tag</label>
+                  <div className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <TagInput value={tagInput} onChange={handleTagChange} onEnter={handleSaveInfo} disabled={Object.keys(gameProfiles).includes(tagInput)} />
+                  </div>
+                </div>
+                {activeProfile?.type === "multiplayer" ? (
+                  <>
+                    {extractOrderedInputVars(activeProfile.titleTemplate).map(cv => {
+                      if (cv === 'event') {
+                        return (
+                          <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                            <label className="text-sm font-medium text-white/90">Event / Title</label>
+                            <input
+                              type="text"
+                              className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                              value={eventInput}
+                              onChange={e => handleEventChange(e.target.value)}
+                              placeholder="Highlight..."
+                            />
+                          </div>
+                        )
+                      } else if (cv === 'gamemode') {
+                        return (
+                          <div key="gamemode" className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                            <label className="text-sm font-medium text-white/90">Game Mode</label>
+                            {activeProfile.modes && activeProfile.modes.length > 0 ? (
+                              <select
+                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                                value={gameModeInput}
+                                onChange={e => handleGameModeChange(e.target.value)}
+                              >
+                                <option value="">Mode...</option>
+                                {activeProfile.modes.map((m: string) => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                value={gameModeInput}
+                                onChange={e => handleGameModeChange(e.target.value)}
+                                placeholder="Mode..."
+                              />
+                            )}
+                          </div>
+                        )
+                      } else {
+                        return (
+                          <div key={cv} className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                            <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
+                            <input
+                              type="text"
+                              className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                              value={customVarsInput[cv] || ""}
+                              onChange={e => handleCustomVarChange(cv, e.target.value)}
+                              placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
+                            />
+                          </div>
+                        )
+                      }
+                    })}
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-2 w-24 shrink-0">
+                    <label className="text-sm font-medium text-white/90">Episode #</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                      value={episodeInput}
+                      onChange={e => handleEpisodeChange(e.target.value)}
+                      placeholder="—"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <div className="flex flex-col gap-2 flex-1">
@@ -670,19 +897,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     setYtTitle(val);
                     // Auto-sync Episode # when user types "— N" at end of title
                     const epMatch = val.match(/ [—\-] (\d+)$/);
-                    if (epMatch) setEpisodeInput(parseInt(epMatch[1], 10));
+                    if (epMatch && !(activeProfile?.type === "multiplayer")) setEpisodeInput(parseInt(epMatch[1], 10));
                   }} maxLength={100} />
-                </div>
-                <div className="flex flex-col gap-2 w-24 shrink-0">
-                  <label className="text-sm font-medium text-white/90">Episode #</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
-                    value={episodeInput}
-                    onChange={e => handleEpisodeChange(e.target.value)}
-                    placeholder="—"
-                  />
                 </div>
               </div>
               <div className="flex flex-col gap-2">

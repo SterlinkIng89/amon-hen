@@ -27,12 +27,16 @@ export function useRecentTags() {
     };
     window.addEventListener('storage', handleStorage);
     
-    // Also load all existing tags from config
+    // Also load all existing tags and game profiles from config
     LoadConfig().then((cfg) => {
+      let tags = new Set<string>();
       if (cfg.video_games) {
-        const unique = Array.from(new Set(Object.values(cfg.video_games))).filter(Boolean) as string[];
-        setAllTags(unique.sort());
+        Object.values(cfg.video_games).filter(Boolean).forEach(t => tags.add(t));
       }
+      if (cfg.game_profiles) {
+        Object.keys(cfg.game_profiles).forEach(t => tags.add(t));
+      }
+      setAllTags(Array.from(tags).sort());
     }).catch(console.error);
 
     return () => window.removeEventListener('storage', handleStorage);

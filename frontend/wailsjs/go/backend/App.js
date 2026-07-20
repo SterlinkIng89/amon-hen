@@ -22,6 +22,10 @@ export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }
 
+export function DeleteGameProfile(arg1) {
+  return window['go']['backend']['App']['DeleteGameProfile'](arg1);
+}
+
 export function DeletePlaylist(arg1) {
   return window['go']['backend']['App']['DeletePlaylist'](arg1);
 }
@@ -138,8 +142,12 @@ export function SaveFolders(arg1) {
   return window['go']['backend']['App']['SaveFolders'](arg1);
 }
 
-export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
-  return window['go']['backend']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+export function SaveGameProfile(arg1, arg2) {
+  return window['go']['backend']['App']['SaveGameProfile'](arg1, arg2);
+}
+
+export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  return window['go']['backend']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
 
 export function SaveYouTubeCredentials(arg1, arg2) {
@@ -154,8 +162,8 @@ export function SetTrayUploadProgress(arg1) {
   return window['go']['backend']['App']['SetTrayUploadProgress'](arg1);
 }
 
-export function SetVideoGames(arg1, arg2) {
-  return window['go']['backend']['App']['SetVideoGames'](arg1, arg2);
+export function SetVideoGames(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['backend']['App']['SetVideoGames'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SetVideosPlaylist(arg1, arg2, arg3) {

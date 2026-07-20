@@ -26,12 +26,19 @@ type VideoFile struct {
 	PlaylistID    string `json:"playlistId,omitempty"`
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
 	Episode       int    `json:"episode"`
+	Event         string            `json:"event,omitempty"`
+	GameMode      string            `json:"gameMode,omitempty"`
+	CustomVars    map[string]string `json:"customVars,omitempty"`
 }
 
-// generateYouTubeTitle builds the suggested upload title from filename, game tag and episode.
-func generateYouTubeTitle(filename string, game string, episode int) string {
+// generateYouTubeTitle builds the suggested upload title from video metadata and game profiles.
+func (a *App) generateYouTubeTitle(video VideoFile) string {
+	game := video.Game
+	episode := video.Episode
+	profile, hasProfile := a.config.GameProfiles[game]
+
 	re := regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})`)
-	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
+	stem := strings.TrimSuffix(video.Name, filepath.Ext(video.Name))
 	match := re.FindStringSubmatch(stem)
 
 	dateStr := ""
@@ -50,6 +57,33 @@ func generateYouTubeTitle(filename string, game string, episode int) string {
 
 	if game == "" {
 		return dateStr
+	}
+
+	if hasProfile && profile.Type == "multiplayer" {
+		template := profile.TitleTemplate
+		if template == "" {
+			template = "{event} - {gamemode} - {date}"
+		}
+		res := strings.ReplaceAll(template, "{game}", game)
+		res = strings.ReplaceAll(res, "{event}", video.Event)
+		res = strings.ReplaceAll(res, "{gamemode}", video.GameMode)
+		res = strings.ReplaceAll(res, "{date}", dateStr)
+		res = strings.ReplaceAll(res, "{episode}", fmt.Sprintf("%d", episode))
+		
+		if len(video.CustomVars) > 0 {
+			for k, v := range video.CustomVars {
+				val := v
+				if val == "" {
+					val = strings.Title(k)
+				}
+				res = strings.ReplaceAll(res, "{"+k+"}", val)
+			}
+		}
+		
+		// Clean up common issues if event/gamemode is missing
+		res = strings.ReplaceAll(res, " -  - ", " - ")
+		res = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(res), "-"))
+		return res
 	}
 
 	epSuffix := ""
@@ -187,23 +221,26 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				return nil
 			}
 
+			a.configMu.RLock()
 			meta := a.config.VideoMetadata[path]
+			a.configMu.RUnlock()
 
 			if fSettings.MaxDurationSecs > 0 {
 				if meta.DurationSecs == 0 {
 					dur, err := a.GetVideoDuration(path)
 					if err == nil && dur > 0 {
 						meta.DurationSecs = int(dur)
-						if a.config.VideoMetadata == nil {
-							a.config.VideoMetadata = make(map[string]VideoMeta)
-						}
-						a.config.VideoMetadata[path] = meta
-						configChanged = true
 					} else {
 						meta.DurationSecs = 999999
-						a.config.VideoMetadata[path] = meta
-						configChanged = true
 					}
+					
+					a.configMu.Lock()
+					if a.config.VideoMetadata == nil {
+						a.config.VideoMetadata = make(map[string]VideoMeta)
+					}
+					a.config.VideoMetadata[path] = meta
+					configChanged = true
+					a.configMu.Unlock()
 				}
 				if meta.DurationSecs > fSettings.MaxDurationSecs {
 					return nil
@@ -228,7 +265,10 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					}
 					return meta.PlaylistTitle
 				}(),
-				Episode: meta.Episode,
+				Episode:    meta.Episode,
+				Event:      meta.Event,
+				GameMode:   meta.GameMode,
+				CustomVars: meta.CustomVars,
 			})
 
 			vIdx := len(videos) - 1
@@ -291,17 +331,22 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			}
 		}
 
-		if videos[i].Episode == 0 {
-			localCounters[game]++
-			videos[i].Episode = localCounters[game]
+		profile, hasProfile := a.config.GameProfiles[game]
+		if hasProfile && profile.Type == "multiplayer" {
+			videos[i].Episode = 0
 		} else {
-			if videos[i].Episode > localCounters[game] {
-				localCounters[game] = videos[i].Episode
+			if videos[i].Episode == 0 {
+				localCounters[game]++
+				videos[i].Episode = localCounters[game]
+			} else {
+				if videos[i].Episode > localCounters[game] {
+					localCounters[game] = videos[i].Episode
+				}
 			}
 		}
 
 		if videos[i].YouTubeTitle == "" {
-			videos[i].YouTubeTitle = generateYouTubeTitle(videos[i].Name, videos[i].Game, videos[i].Episode)
+			videos[i].YouTubeTitle = a.generateYouTubeTitle(videos[i])
 		}
 	}
 

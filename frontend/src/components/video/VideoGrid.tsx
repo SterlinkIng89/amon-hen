@@ -1,9 +1,10 @@
-import React from "react";
-import { VideoFile, VideoGroup } from "../../types";
+import React, { useState, useEffect } from "react";
+import { VideoFile, VideoGroup, GameProfile } from "../../types";
 import VideoPill from "./VideoPill";
 import StatsBar from "./StatsBar";
 import { useAppStore } from "../../store/useAppStore";
 import { formatSize } from "../../utils/videoUtils";
+import { LoadConfig } from "../../../wailsjs/go/backend/App";
 
 type SortMode = "date" | "name" | "size";
 
@@ -145,8 +146,17 @@ export default function VideoGrid({
     return item ? item.progress : undefined;
   };
 
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+  useEffect(() => {
+    LoadConfig().then(cfg => {
+      setGameProfiles(cfg.game_profiles || {});
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base relative">
+      <StatsBar videos={allVideos} />
+
       {sortedVideos.length === 0 ? (
         <EmptyState hasFolders={folders.length > 0} />
       ) : useGroups ? (
@@ -167,6 +177,7 @@ export default function VideoGrid({
                       onClick={(e) => onOpenVideo(absoluteIdx, e)}
                       onUpload={() => onUploadTarget(video)}
                       uploadProgress={getUploadProgress(video.path)}
+                      gameProfiles={gameProfiles}
                     />
                   );
                 })}
@@ -189,6 +200,7 @@ export default function VideoGrid({
                   onClick={(e) => onOpenVideo(absoluteIdx, e)}
                   onUpload={() => onUploadTarget(video)}
                   uploadProgress={getUploadProgress(video.path)}
+                  gameProfiles={gameProfiles}
                 />
               );
             })}

@@ -118,6 +118,22 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class GameProfile {
+	    type: string;
+	    titleTemplate: string;
+	    modes: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.titleTemplate = source["titleTemplate"];
+	        this.modes = source["modes"];
+	    }
+	}
 	export class FolderConfig {
 	    recursive: boolean;
 	    max_duration_secs: number;
@@ -142,6 +158,8 @@ export namespace backend {
 	    playlistTitle?: string;
 	    episode: number;
 	    durationSecs?: number;
+	    event?: string;
+	    gameMode?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -158,6 +176,8 @@ export namespace backend {
 	        this.playlistTitle = source["playlistTitle"];
 	        this.episode = source["episode"];
 	        this.durationSecs = source["durationSecs"];
+	        this.event = source["event"];
+	        this.gameMode = source["gameMode"];
 	    }
 	}
 	export class Config {
@@ -168,6 +188,7 @@ export namespace backend {
 	    video_games: Record<string, string>;
 	    video_metadata: Record<string, VideoMeta>;
 	    folder_settings: Record<string, FolderConfig>;
+	    game_profiles: Record<string, GameProfile>;
 	    watch_folder_enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -183,6 +204,7 @@ export namespace backend {
 	        this.video_games = source["video_games"];
 	        this.video_metadata = this.convertValues(source["video_metadata"], VideoMeta, true);
 	        this.folder_settings = this.convertValues(source["folder_settings"], FolderConfig, true);
+	        this.game_profiles = this.convertValues(source["game_profiles"], GameProfile, true);
 	        this.watch_folder_enabled = source["watch_folder_enabled"];
 	    }
 	
@@ -207,6 +229,7 @@ export namespace backend {
 	
 	
 	
+	
 	export class VideoFile {
 	    name: string;
 	    path: string;
@@ -221,6 +244,8 @@ export namespace backend {
 	    playlistId?: string;
 	    playlistTitle?: string;
 	    episode: number;
+	    event?: string;
+	    gameMode?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -241,6 +266,8 @@ export namespace backend {
 	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
 	        this.episode = source["episode"];
+	        this.event = source["event"];
+	        this.gameMode = source["gameMode"];
 	    }
 	}
 	

@@ -13,6 +13,8 @@ export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<stri
 
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
+export function DeleteGameProfile(arg1:string):Promise<void>;
+
 export function DeletePlaylist(arg1:string):Promise<void>;
 
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
@@ -71,7 +73,9 @@ export function SaveFolderSettings(arg1:string,arg2:backend.FolderConfig):Promis
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;
 
-export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number):Promise<void>;
+export function SaveGameProfile(arg1:string,arg2:backend.GameProfile):Promise<void>;
+
+export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string,arg9:string,arg10:Record<string, string>):Promise<void>;
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
@@ -79,7 +83,7 @@ export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetTrayUploadProgress(arg1:number):Promise<void>;
 
-export function SetVideoGames(arg1:Array<string>,arg2:string):Promise<void>;
+export function SetVideoGames(arg1:Array<string>,arg2:string,arg3:string,arg4:string,arg5:Record<string, string>):Promise<void>;
 
 export function SetVideosPlaylist(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 

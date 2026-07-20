@@ -16,6 +16,7 @@ type App struct {
 	cacheDir   string
 	configPath string
 	config     Config
+	configMu   sync.RWMutex
 	db         *DB
 	// Cached YouTube service — reused across API calls to avoid redundant token refreshes
 	ytSvc   *youtube.Service
