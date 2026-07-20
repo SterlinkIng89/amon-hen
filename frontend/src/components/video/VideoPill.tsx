@@ -63,8 +63,8 @@ export default function VideoPill({
   const title = isYT
     ? video.title
     : (activeProfile?.type === "multiplayer")
-      ? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode)
-      : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode);
+      ? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars)
+      : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars);
   const subtitle = isLocal ? video.name : "";
   const thumbnail = isYT ? video.thumbnailUrl : thumb;
   const publishedAt = isYT
