@@ -111,6 +111,12 @@ export default function VideoPill({
     }
   }, [inView, isLocal, (video as VideoFile).path]);
 
+  useEffect(() => {
+    if (selected && ref.current && viewMode === "list") {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selected, viewMode]);
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!sprite || !hovered) return;
     const r = e.currentTarget.getBoundingClientRect();
