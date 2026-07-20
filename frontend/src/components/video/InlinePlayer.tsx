@@ -620,7 +620,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                         if (cv === 'event') {
                           return (
                             <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                              <label className="text-sm font-medium text-white/90">Event / Title</label>
+                              <label className="text-sm font-medium text-white/90">Title</label>
                               <input
                                 type="text"
                                 className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
@@ -870,7 +870,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                       if (cv === 'event') {
                         return (
                           <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                            <label className="text-sm font-medium text-white/90">Event / Title</label>
+                            <label className="text-sm font-medium text-white/90">Title</label>
                             <input
                               type="text"
                               className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"

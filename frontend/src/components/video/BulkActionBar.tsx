@@ -300,7 +300,7 @@ export default function BulkActionBar({
                       key="event"
                       type="text"
                       className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                      placeholder="Event / Title"
+                      placeholder="Title"
                       value={event}
                       onChange={e => setEvent(e.target.value)}
                       disabled={saving}
