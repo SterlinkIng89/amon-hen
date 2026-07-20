@@ -6,7 +6,7 @@ type SortMode = "date" | "name" | "size";
 interface LibrarySubHeaderProps {
   folders: string[];
   activeFolders: string[];
-  allVideos: VideoFile[];
+  filteredVideos: VideoFile[];
   searchQuery: string;
   sortMode: SortMode;
   onSearchChange: (q: string) => void;
@@ -34,7 +34,7 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 export default function LibrarySubHeader({
   folders,
   activeFolders,
-  allVideos,
+  filteredVideos,
   searchQuery,
   sortMode,
   onSearchChange,
@@ -186,7 +186,7 @@ export default function LibrarySubHeader({
       </div>
 
       {/* Bottom Row: StatsBar */}
-      <StatsBar videos={allVideos} />
+      <StatsBar videos={filteredVideos} />
     </div>
   );
 }

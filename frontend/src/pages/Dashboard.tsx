@@ -248,7 +248,7 @@ export default function Dashboard() {
     await SaveVideoMetadata(
       video.path, video.game || "", opts.title, opts.description,
       opts.privacy, opts.playlistId || "", video.episode || 0,
-      video.event || "", video.gameMode || ""
+      video.event || "", video.gameMode || "", video.customVars || {}
     ).catch(console.error);
 
     handleAddToQueue({
@@ -270,7 +270,7 @@ export default function Dashboard() {
     await SaveVideoMetadata(
       video.path, video.game || "", opts.title, opts.description,
       opts.privacy, opts.playlistId || "", video.episode || 0,
-      video.event || "", video.gameMode || ""
+      video.event || "", video.gameMode || "", video.customVars || {}
     ).catch(console.error);
 
     setQueue((q) => [
@@ -338,7 +338,7 @@ export default function Dashboard() {
         <LibrarySubHeader
           folders={folders}
           activeFolders={activeFolders}
-          allVideos={sortedVideos}
+          filteredVideos={filteredVideos}
           searchQuery={searchQuery}
           sortMode={sortMode as SortMode}
           onSearchChange={setSearchQuery}
