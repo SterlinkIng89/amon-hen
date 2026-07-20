@@ -623,7 +623,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                               <label className="text-sm font-medium text-white/90">Event / Title</label>
                               <input
                                 type="text"
-                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                 value={eventInput}
                                 onChange={e => handleEventChange(e.target.value)}
                                 placeholder="Highlight..."
@@ -636,7 +636,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                               <label className="text-sm font-medium text-white/90">Game Mode</label>
                               {activeProfile.modes && activeProfile.modes.length > 0 ? (
                                 <select
-                                  className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] appearance-none cursor-pointer"
                                   value={gameModeInput}
                                   onChange={e => handleGameModeChange(e.target.value)}
                                 >
@@ -648,7 +648,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                               ) : (
                                 <input
                                   type="text"
-                                  className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                   value={gameModeInput}
                                   onChange={e => handleGameModeChange(e.target.value)}
                                   placeholder="Mode..."
@@ -662,7 +662,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                               <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
                               <input
                                 type="text"
-                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                 value={customVarsInput[cv] || ""}
                                 onChange={e => handleCustomVarChange(cv, e.target.value)}
                                 placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
@@ -678,7 +678,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                       <input
                         type="number"
                         min={0}
-                        className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] text-center"
                         value={episodeInput}
                         onChange={e => handleEpisodeChange(e.target.value)}
                         placeholder="—"
@@ -689,7 +689,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 <div className="flex gap-3">
                   <div className="flex flex-col gap-2 flex-1">
                     <label className="text-sm font-medium text-white/90">YouTube Title</label>
-                    <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => {
+                    <input type="text" className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" value={ytTitle} onChange={e => {
                       const val = e.target.value;
                       setYtTitle(val);
                       // Auto-sync Episode # when user types "— N" at end of title
@@ -700,13 +700,13 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium text-white/90">Description</label>
-                  <textarea className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors resize-y min-h-[140px]" value={description} onChange={e => setDescription(e.target.value)} rows={5} />
+                  <textarea className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] resize-y min-h-[140px]" value={description} onChange={e => setDescription(e.target.value)} rows={5} />
                 </div>
                 <div className="flex flex-col gap-3">
                   <label className="text-sm font-medium text-white/90">Privacy</label>
                   <div className="flex gap-2">
                     {(["public", "unlisted", "private"] as const).map(p => (
-                      <button key={p} className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${privacy === p ? "bg-white text-black" : "bg-[#272727] text-white/90 hover:bg-[#3f3f3f]"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                      <button key={p} className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent shadow-[0_0_0_1px_rgba(249,115,22,0.5)]" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
                     ))}
                   </div>
                 </div>
@@ -730,8 +730,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                   {isCreatingPlaylist ? (
                     <div className="flex flex-col gap-2">
                       <div className="flex gap-2">
-                        <input className="flex-1 bg-[#272727] border border-transparent rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                        <button className="bg-white text-black hover:bg-gray-200 rounded-full px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                        <input className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                        <button className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
                           {isCreatingPlaylistLoading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : "Create"}
                         </button>
                       </div>
@@ -740,7 +740,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     </div>
                   ) : (
                     <div className="relative">
-                      <input className="w-full bg-[#272727] border border-transparent rounded-lg pl-10 pr-10 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
+                      <input className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                       </div>
@@ -843,7 +843,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
                   <label className="text-sm font-medium text-white/90">Game Profile</label>
                   <select
-                    className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] appearance-none cursor-pointer"
                     value={Object.keys(gameProfiles).includes(tagInput) ? tagInput : ""}
                     onChange={(e) => {
                       const tag = e.target.value;
@@ -873,7 +873,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                             <label className="text-sm font-medium text-white/90">Event / Title</label>
                             <input
                               type="text"
-                              className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                              className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                               value={eventInput}
                               onChange={e => handleEventChange(e.target.value)}
                               placeholder="Highlight..."
@@ -886,7 +886,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                             <label className="text-sm font-medium text-white/90">Game Mode</label>
                             {activeProfile.modes && activeProfile.modes.length > 0 ? (
                               <select
-                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
+                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] appearance-none cursor-pointer"
                                 value={gameModeInput}
                                 onChange={e => handleGameModeChange(e.target.value)}
                               >
@@ -898,7 +898,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                             ) : (
                               <input
                                 type="text"
-                                className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                 value={gameModeInput}
                                 onChange={e => handleGameModeChange(e.target.value)}
                                 placeholder="Mode..."
@@ -912,7 +912,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                             <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
                             <input
                               type="text"
-                              className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors"
+                              className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                               value={customVarsInput[cv] || ""}
                               onChange={e => handleCustomVarChange(cv, e.target.value)}
                               placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
@@ -928,7 +928,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                     <input
                       type="number"
                       min={0}
-                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors text-center"
+                      className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] text-center"
                       value={episodeInput}
                       onChange={e => handleEpisodeChange(e.target.value)}
                       placeholder="—"
@@ -939,7 +939,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
               <div className="flex gap-3">
                 <div className="flex flex-col gap-2 flex-1">
                   <label className="text-sm font-medium text-white/90">YouTube Title</label>
-                  <input type="text" className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" value={ytTitle} onChange={e => {
+                  <input type="text" className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" value={ytTitle} onChange={e => {
                     const val = e.target.value;
                     setYtTitle(val);
                     // Auto-sync Episode # when user types "— N" at end of title
@@ -950,13 +950,13 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-white/90">Description</label>
-                <textarea className="w-full bg-[#272727] border border-transparent rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors resize-y min-h-[100px]" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+                <textarea className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] resize-y min-h-[100px]" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
               </div>
               <div className="flex flex-col gap-3">
                 <label className="text-sm font-medium text-white/90">Privacy</label>
                 <div className="flex gap-2">
                   {(["public", "unlisted", "private"] as const).map(p => (
-                    <button key={p} className={`px-6 py-2 rounded-full text-sm font-medium transition-colors ${privacy === p ? "bg-white text-black" : "bg-[#272727] text-white/90 hover:bg-[#3f3f3f]"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+                    <button key={p} className={`px-6 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent shadow-[0_0_0_1px_rgba(249,115,22,0.5)]" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
                   ))}
                 </div>
               </div>
@@ -970,8 +970,8 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                 {isCreatingPlaylist ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex gap-2">
-                      <input className="flex-1 bg-[#272727] border border-transparent rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
-                      <button className="bg-white text-black hover:bg-gray-200 rounded-full px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
+                      <input className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" type="text" value={newPlaylistTitle} onChange={e => setNewPlaylistTitle(e.target.value)} placeholder="Playlist name..." autoFocus disabled={isCreatingPlaylistLoading} onKeyDown={e => e.key === "Enter" && handleCreatePlaylist()} />
+                      <button className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors" onClick={handleCreatePlaylist} disabled={!newPlaylistTitle.trim() || isCreatingPlaylistLoading}>
                         {isCreatingPlaylistLoading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : "Create"}
                       </button>
                     </div>
@@ -979,7 +979,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                   </div>
                 ) : (
                   <div className="relative">
-                    <input className="w-full bg-[#272727] border border-transparent rounded-lg pl-10 pr-10 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
+                    <input className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]" type="text" value={playlistSearch} onChange={e => { setPlaylistSearch(e.target.value); setIsPlaylistDropdownOpen(true); if(!e.target.value) setPlaylistId(""); }} onFocus={() => setIsPlaylistDropdownOpen(true)} placeholder={playlistId ? playlists.find(p => p.id === playlistId)?.title : "Select playlist..."} />
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     </div>
