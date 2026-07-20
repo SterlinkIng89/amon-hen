@@ -47,6 +47,7 @@ type Config struct {
 	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
 	GameProfiles        map[string]GameProfile  `json:"game_profiles"`
 	WatchFolderEnabled  bool                    `json:"watch_folder_enabled"`
+	RecentFieldValues   map[string][]string     `json:"recent_field_values,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -319,6 +320,14 @@ func (a *App) DeleteGameProfile(game string) error {
 	if a.config.GameProfiles != nil {
 		delete(a.config.GameProfiles, game)
 	}
+	a.configMu.Unlock()
+	return a.saveConfig()
+}
+
+// SaveRecentFieldValues persists the recent field values for autocomplete caching
+func (a *App) SaveRecentFieldValues(values map[string][]string) error {
+	a.configMu.Lock()
+	a.config.RecentFieldValues = values
 	a.configMu.Unlock()
 	return a.saveConfig()
 }

@@ -75,6 +75,8 @@ export function SaveFolders(arg1:Array<string>):Promise<void>;
 
 export function SaveGameProfile(arg1:string,arg2:backend.GameProfile):Promise<void>;
 
+export function SaveRecentFieldValues(arg1:Record<string, Array<string>>):Promise<void>;
+
 export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string,arg9:string,arg10:Record<string, string>):Promise<void>;
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;

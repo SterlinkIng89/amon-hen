@@ -146,6 +146,10 @@ export function SaveGameProfile(arg1, arg2) {
   return window['go']['backend']['App']['SaveGameProfile'](arg1, arg2);
 }
 
+export function SaveRecentFieldValues(arg1) {
+  return window['go']['backend']['App']['SaveRecentFieldValues'](arg1);
+}
+
 export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
   return window['go']['backend']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }

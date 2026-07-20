@@ -160,6 +160,7 @@ export namespace backend {
 	    durationSecs?: number;
 	    event?: string;
 	    gameMode?: string;
+	    customVars?: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoMeta(source);
@@ -178,6 +179,7 @@ export namespace backend {
 	        this.durationSecs = source["durationSecs"];
 	        this.event = source["event"];
 	        this.gameMode = source["gameMode"];
+	        this.customVars = source["customVars"];
 	    }
 	}
 	export class Config {
@@ -190,6 +192,7 @@ export namespace backend {
 	    folder_settings: Record<string, FolderConfig>;
 	    game_profiles: Record<string, GameProfile>;
 	    watch_folder_enabled: boolean;
+	    recent_field_values?: Record<string, Array<string>>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -206,6 +209,7 @@ export namespace backend {
 	        this.folder_settings = this.convertValues(source["folder_settings"], FolderConfig, true);
 	        this.game_profiles = this.convertValues(source["game_profiles"], GameProfile, true);
 	        this.watch_folder_enabled = source["watch_folder_enabled"];
+	        this.recent_field_values = source["recent_field_values"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -246,6 +250,7 @@ export namespace backend {
 	    episode: number;
 	    event?: string;
 	    gameMode?: string;
+	    customVars?: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoFile(source);
@@ -268,6 +273,7 @@ export namespace backend {
 	        this.episode = source["episode"];
 	        this.event = source["event"];
 	        this.gameMode = source["gameMode"];
+	        this.customVars = source["customVars"];
 	    }
 	}
 	

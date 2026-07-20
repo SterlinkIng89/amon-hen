@@ -4,7 +4,9 @@ import { formatSize, formatDuration, generateYouTubeTitle, extractCustomVars, ex
 import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
+import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import TagInput from "../ui/TagInput";
+import FieldInput from "../ui/FieldInput";
 
 interface InlinePlayerProps {
   video: VideoFile;
@@ -226,6 +228,7 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const isWide = aspectRatio >= 2.0;
 
   const { addRecentTag } = useRecentTags();
+  const { getRecentValues, addRecentValue } = useRecentFieldValues();
 
   // --- Auto-save on navigation ---
   // formSnapshotRef is updated inline on EVERY render. When video.path changes
@@ -621,11 +624,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                           return (
                             <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
                               <label className="text-sm font-medium text-white/90">Title</label>
-                              <input
-                                type="text"
+                              <FieldInput
+                                fieldKey="event"
                                 className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                 value={eventInput}
-                                onChange={e => handleEventChange(e.target.value)}
+                                onChange={handleEventChange}
                                 placeholder="Highlight..."
                               />
                             </div>
@@ -660,11 +663,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                           return (
                             <div key={cv} className="flex flex-col gap-2 flex-1 min-w-[140px]">
                               <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
-                              <input
-                                type="text"
+                              <FieldInput
+                                fieldKey={cv}
                                 className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                                 value={customVarsInput[cv] || ""}
-                                onChange={e => handleCustomVarChange(cv, e.target.value)}
+                                onChange={val => handleCustomVarChange(cv, val)}
                                 placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
                               />
                             </div>
@@ -871,11 +874,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                         return (
                           <div key="event" className="flex flex-col gap-2 flex-1 min-w-[140px]">
                             <label className="text-sm font-medium text-white/90">Title</label>
-                            <input
-                              type="text"
+                            <FieldInput
+                              fieldKey="event"
                               className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                               value={eventInput}
-                              onChange={e => handleEventChange(e.target.value)}
+                              onChange={handleEventChange}
                               placeholder="Highlight..."
                             />
                           </div>
@@ -910,11 +913,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
                         return (
                           <div key={cv} className="flex flex-col gap-2 flex-1 min-w-[140px]">
                             <label className="text-sm font-medium text-white/90 capitalize">{cv}</label>
-                            <input
-                              type="text"
+                            <FieldInput
+                              fieldKey={cv}
                               className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
                               value={customVarsInput[cv] || ""}
-                              onChange={e => handleCustomVarChange(cv, e.target.value)}
+                              onChange={val => handleCustomVarChange(cv, val)}
                               placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
                             />
                           </div>

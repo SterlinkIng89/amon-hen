@@ -8,9 +8,11 @@ import {
   LoadConfig,
 } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
+import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import { generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
 import TagInput from "../ui/TagInput";
+import FieldInput from "../ui/FieldInput";
 import { QueueItem } from "../youtube/UploadQueue";
 
 interface Props {
@@ -38,6 +40,7 @@ export default function BulkActionBar({
   const [event, setEvent] = useState("");
   const [gameMode, setGameMode] = useState("");
   const [customVars, setCustomVars] = useState<Record<string, string>>({});
+  
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -296,15 +299,16 @@ export default function BulkActionBar({
               {extractOrderedInputVars(profiles[selectedProfileTag].titleTemplate).map(cv => {
                 if (cv === 'event') {
                   return (
-                    <input
-                      key="event"
-                      type="text"
-                      className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                      placeholder="Title"
-                      value={event}
-                      onChange={e => setEvent(e.target.value)}
-                      disabled={saving}
-                    />
+                    <React.Fragment key="event">
+                      <FieldInput
+                        fieldKey="event"
+                        className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
+                        placeholder="Title"
+                        value={event}
+                        onChange={setEvent}
+                        disabled={saving}
+                      />
+                    </React.Fragment>
                   )
                 } else if (cv === 'gamemode') {
                   return profiles[selectedProfileTag].modes && profiles[selectedProfileTag].modes!.length > 0 ? (
@@ -333,15 +337,16 @@ export default function BulkActionBar({
                   )
                 } else {
                   return (
-                    <input
-                      key={cv}
-                      type="text"
-                      className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] capitalize"
-                      placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
-                      value={customVars[cv] || ""}
-                      onChange={e => setCustomVars(prev => ({ ...prev, [cv]: e.target.value }))}
-                      disabled={saving}
-                    />
+                    <React.Fragment key={cv}>
+                      <FieldInput
+                        fieldKey={cv}
+                        className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
+                        placeholder={cv.charAt(0).toUpperCase() + cv.slice(1)}
+                        value={customVars[cv] || ""}
+                        onChange={val => setCustomVars(prev => ({ ...prev, [cv]: val }))}
+                        disabled={saving}
+                      />
+                    </React.Fragment>
                   )
                 }
               })}
