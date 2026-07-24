@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { GetChannelAnalytics } from "../../../wailsjs/go/backend/App";
+import ContributionHeatmap from "./ContributionHeatmap";
 
 // ── Types matching the Go structs ───────────────────────────────────────────
 
@@ -18,6 +19,11 @@ interface MonthlyCount {
   count: number;
 }
 
+interface DailyCount {
+  date: string;
+  count: number;
+}
+
 interface ChannelAnalytics {
   totalVideos: number;
   totalViews: number;
@@ -31,6 +37,8 @@ interface ChannelAnalytics {
   privateCount: number;
   topVideos: TopVideo[];
   uploadTrend: MonthlyCount[];
+  dailyTrend: DailyCount[];
+  titleDailyTrend: DailyCount[];
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -311,6 +319,7 @@ export default function ChannelAnalytics({ refreshKey = 0 }: ChannelAnalyticsPro
   const [data, setData] = useState<ChannelAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [heatmapSource, setHeatmapSource] = useState<"upload" | "title">("title");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -420,7 +429,36 @@ export default function ChannelAnalytics({ refreshKey = 0 }: ChannelAnalyticsPro
         />
       </div>
 
-      {/* ── Row 2: Top Videos + Side panels ─────────────────────────────── */}
+      {/* ── Row 2: Contribution Heatmap ─────────────────────────────────────────────── */}
+      {(data.dailyTrend?.length > 0 || data.titleDailyTrend?.length > 0) && (
+        <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+              {heatmapSource === "upload" ? "Upload Activity" : "Recording Activity"}
+            </span>
+            <div className="flex items-center gap-1 bg-elevated rounded-lg p-0.5 border border-border-subtle">
+              <button
+                onClick={() => setHeatmapSource("upload")}
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-colors ${heatmapSource === "upload" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"}`}
+              >
+                Upload Date
+              </button>
+              <button
+                onClick={() => setHeatmapSource("title")}
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-colors ${heatmapSource === "title" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"}`}
+              >
+                Recording Date
+              </button>
+            </div>
+          </div>
+          <ContributionHeatmap 
+            stats={heatmapSource === "upload" ? data.dailyTrend : (data.titleDailyTrend || [])} 
+            label={heatmapSource === "upload" ? "upload" : "recording"} 
+          />
+        </div>
+      )}
+
+      {/* ── Row 3: Top Videos + Side panels ─────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Top Videos (takes 2/3) */}

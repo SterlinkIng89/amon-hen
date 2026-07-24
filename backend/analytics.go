@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -24,6 +25,10 @@ type ChannelAnalytics struct {
 
 	// Monthly upload counts for the sparkline (last 12 months)
 	UploadTrend []MonthlyCount `json:"uploadTrend"`
+
+	// Daily upload counts for the heatmap (last 365 days)
+	DailyTrend      []DailyCount `json:"dailyTrend"`
+	TitleDailyTrend []DailyCount `json:"titleDailyTrend"`
 }
 
 // TopVideo represents a single entry in the top-viewed videos list.
@@ -40,6 +45,12 @@ type TopVideo struct {
 // MonthlyCount holds the number of videos uploaded in a given month.
 type MonthlyCount struct {
 	Month string `json:"month"` // "YYYY-MM"
+	Count int    `json:"count"`
+}
+
+// DailyCount holds the number of videos uploaded in a given day.
+type DailyCount struct {
+	Date  string `json:"date"` // "YYYY-MM-DD"
 	Count int    `json:"count"`
 }
 
@@ -129,6 +140,43 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 			}
 		}
 		trendRows.Close()
+	}
+
+	// ── 6. Daily Trends (Upload vs Title Dates) ──────────────────────────────
+	rows, err := a.db.conn.Query(`SELECT title, substr(published_at, 1, 10) FROM yt_videos`)
+	if err == nil {
+		uploadCounts := make(map[string]int)
+		titleCounts := make(map[string]int)
+
+		// Regex to find DD/MM/YY
+		re := regexp.MustCompile(`(\d{2})/(\d{2})/(\d{2})`)
+
+		for rows.Next() {
+			var title, pubDate string
+			if err := rows.Scan(&title, &pubDate); err == nil {
+				// Upload Date count
+				if pubDate != "" {
+					uploadCounts[pubDate]++
+				}
+
+				// Title Date count
+				matches := re.FindStringSubmatch(title)
+				if len(matches) == 4 {
+					// DD = matches[1], MM = matches[2], YY = matches[3]
+					// Convert to YYYY-MM-DD
+					titleDate := fmt.Sprintf("20%s-%s-%s", matches[3], matches[2], matches[1])
+					titleCounts[titleDate]++
+				}
+			}
+		}
+		rows.Close()
+
+		for date, count := range uploadCounts {
+			result.DailyTrend = append(result.DailyTrend, DailyCount{Date: date, Count: count})
+		}
+		for date, count := range titleCounts {
+			result.TitleDailyTrend = append(result.TitleDailyTrend, DailyCount{Date: date, Count: count})
+		}
 	}
 
 	return result, nil
