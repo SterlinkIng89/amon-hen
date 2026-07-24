@@ -4,12 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	youtube "google.golang.org/api/youtube/v3"
 )
+
+var titleDateRegex = regexp.MustCompile(`(\d{2})/(\d{2})/(\d{2})`)
 
 type YTVideo struct {
 	ID            string `json:"id"`
@@ -557,6 +561,80 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 	if search != "" {
 		where = "title LIKE ?"
 		args = append(args, "%"+search+"%")
+	}
+
+	// If sorting by title_date, we fetch all, sort in memory, then paginate
+	if sortBy == "title_date" {
+		query := fmt.Sprintf(`
+			SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
+			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
+			FROM yt_videos v
+			WHERE %s`, where)
+
+		rows, err := a.db.conn.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var allVideos []YTVideo
+		for rows.Next() {
+			var v YTVideo
+			var localFile sql.NullString
+			var playlistTitle sql.NullString
+			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle); err != nil {
+				continue
+			}
+			if localFile.Valid {
+				v.LocalFile = localFile.String
+			}
+			if playlistTitle.Valid {
+				v.PlaylistTitle = playlistTitle.String
+			}
+			allVideos = append(allVideos, v)
+		}
+
+		// Sort in memory
+		sort.Slice(allVideos, func(i, j int) bool {
+			getDate := func(title string) string {
+				match := titleDateRegex.FindStringSubmatch(title)
+				if len(match) == 4 {
+					// match[1]=DD, match[2]=MM, match[3]=YY
+					return fmt.Sprintf("20%s-%s-%s", match[3], match[2], match[1])
+				}
+				return ""
+			}
+			dateI := getDate(allVideos[i].Title)
+			dateJ := getDate(allVideos[j].Title)
+			
+			if dateI != dateJ {
+				return dateI > dateJ // Descending
+			}
+			// Fallback to published_at if dates are the same or missing
+			return allVideos[i].PublishedAt > allVideos[j].PublishedAt
+		})
+
+		total := len(allVideos)
+		
+		// Paginate
+		start := offset
+		if start > total {
+			start = total
+		}
+		end := start + limit
+		if end > total {
+			end = total
+		}
+		
+		paginatedVideos := allVideos[start:end]
+		if paginatedVideos == nil {
+			paginatedVideos = []YTVideo{}
+		}
+
+		return map[string]interface{}{
+			"videos": paginatedVideos,
+			"total":  total,
+		}, nil
 	}
 
 	query := fmt.Sprintf(`

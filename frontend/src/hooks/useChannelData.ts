@@ -6,7 +6,7 @@ import {
   GetPlaylistVideos,
 } from "../../wailsjs/go/backend/App";
 
-type VideoSort = "recent" | "title" | "views";
+type VideoSort = "recent" | "title" | "views" | "title_date";
 type PlaylistSort = "recent" | "title" | "videos" | "updated";
 
 interface UseChannelDataOptions {
@@ -53,6 +53,20 @@ export function useChannelData({
           sorted.sort((a, b) => a.title.localeCompare(b.title));
         } else if (videoSort === "views") {
           sorted.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
+        } else if (videoSort === "title_date") {
+          sorted.sort((a, b) => {
+            const getDate = (title: string) => {
+              const match = title.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+              if (match) {
+                return `20${match[3]}-${match[2]}-${match[1]}`;
+              }
+              return "";
+            };
+            const dateA = getDate(a.title);
+            const dateB = getDate(b.title);
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+          });
         } else {
           sorted.sort(
             (a, b) =>

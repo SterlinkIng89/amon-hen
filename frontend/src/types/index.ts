@@ -65,6 +65,12 @@ export interface VideoGroup {
   videos: VideoFile[];
 }
 
+export interface VideoGroupYT {
+  label: string;
+  dateKey: string;
+  videos: YTVideo[];
+}
+
 export interface FolderConfig {
   recursive: boolean;
   max_duration_secs: number;

@@ -1,4 +1,4 @@
-import { VideoFile, VideoGroup, GameProfile } from "../types";
+import { VideoFile, VideoGroup, GameProfile, YTVideo, VideoGroupYT } from "../types";
 
 const STANDARD_VARS = ['game', 'date', 'episode', 'event', 'gamemode'];
 
@@ -97,6 +97,29 @@ export function groupByDay(videos: VideoFile[]): VideoGroup[] {
   }
   return Array.from(map.entries()).map(([dateKey, vs]) => ({ dateKey, label: formatGroupLabel(dateKey), videos: vs }));
 }
+
+export function groupByDayYT(videos: YTVideo[], sortMode: string): VideoGroupYT[] {
+  const map = new Map<string, YTVideo[]>();
+  for (const v of videos) {
+    let k = "";
+    if (sortMode === "title_date") {
+      const match = v.title.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+      if (match) {
+        k = `20${match[3]}-${match[2]}-${match[1]}`;
+      } else {
+        k = toLocalDateKey(new Date(v.publishedAt).getTime());
+      }
+    } else {
+      k = toLocalDateKey(new Date(v.publishedAt).getTime());
+    }
+    
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(v);
+  }
+  // formatGroupLabel expects YYYY-MM-DD
+  return Array.from(map.entries()).map(([dateKey, vs]) => ({ dateKey, label: formatGroupLabel(dateKey), videos: vs }));
+}
+
 
 export function extractCustomVars(template: string): string[] {
   if (!template) return [];

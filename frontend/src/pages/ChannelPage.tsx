@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { YTVideo, YTPlaylist } from "../types";
+import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
 import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { groupByDayYT } from "../utils/videoUtils";
 
 import VideoPill from "../components/video/VideoPill";
 import PlaylistCard from "../components/youtube/PlaylistCard";
@@ -15,7 +16,7 @@ export default function ChannelPage() {
   const [playlistSort, setPlaylistSort] = useState<"recent" | "title" | "videos" | "updated">(
     () => (localStorage.getItem("ch:playlistSort_v2") as any) || "updated"
   );
-  const [videoSort, setVideoSort] = useState<"recent" | "title" | "views">(
+  const [videoSort, setVideoSort] = useState<"recent" | "title" | "views" | "title_date">(
     () => (localStorage.getItem("ch:videoSort") as any) || "recent"
   );
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -184,6 +185,10 @@ export default function ChannelPage() {
     if (idx > 0) setSelectedVideo(playerVideos[idx - 1]);
   };
 
+  const ytGroups = (activeTab === "videos" && !selectedPlaylist && (videoSort === "recent" || videoSort === "title_date"))
+    ? groupByDayYT(videos, videoSort)
+    : [];
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
       {/* ── Sticky sub-header — row 1: title / tabs / search ─────────────────── */}
@@ -320,6 +325,7 @@ export default function ChannelPage() {
               {activeTab === "videos" || selectedPlaylist ? (
                 <>
                   <option value="recent">Most recent</option>
+                  <option value="title_date">Date in title</option>
                   <option value="views">Most viewed</option>
                   <option value="title">A–Z title</option>
                 </>
@@ -553,14 +559,45 @@ export default function ChannelPage() {
                 <p>No videos found. Try syncing your channel.</p>
               </div>
             ) : (
-              <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
-                {videos.map((v) => (
-                  <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
-                    <VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} />
+              <div className="flex flex-col">
+                {viewMode === "grid" && ytGroups.length > 0 ? (
+                  ytGroups.map((group) => (
+                    <section key={group.dateKey} className="mb-8 last:mb-0">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center gap-2 bg-elevated border border-border-subtle rounded-full px-3 py-0.5 shrink-0">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                          </svg>
+                          <span className="font-bold text-text-primary text-[13px]">{group.label}</span>
+                        </div>
+                        <span className="text-xs text-text-muted font-semibold bg-elevated/80 border border-border-subtle px-2 py-0.5 rounded-full shrink-0">
+                          {group.videos.length} video{group.videos.length !== 1 ? "s" : ""}
+                        </span>
+                        <div className="flex-1 h-px shrink-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.07) 0%, transparent 100%)" }} />
+                      </div>
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                        {group.videos.map((v) => (
+                          <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
+                            <VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))
+                ) : (
+                  <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
+                    {videos.map((v) => (
+                      <div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}>
+                        <VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
                 {/* Infinite scroll sentinel */}
-                <div ref={loadMoreRef} className="col-span-full h-12 flex items-center justify-center">
+                <div ref={loadMoreRef} className="col-span-full h-12 flex items-center justify-center shrink-0 mt-4">
                   {loadingMore && <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />}
                 </div>
               </div>
