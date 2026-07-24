@@ -56,9 +56,10 @@ export function useChannelData({
         } else if (videoSort === "title_date") {
           sorted.sort((a, b) => {
             const getDate = (title: string) => {
-              const match = title.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+              const match = title.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
               if (match) {
-                return `20${match[3]}-${match[2]}-${match[1]}`;
+                const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+                return `${year}-${match[2]}-${match[1]}`;
               }
               return "";
             };

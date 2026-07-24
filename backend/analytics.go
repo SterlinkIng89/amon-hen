@@ -148,8 +148,8 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 		uploadCounts := make(map[string]int)
 		titleCounts := make(map[string]int)
 
-		// Regex to find DD/MM/YY
-		re := regexp.MustCompile(`(\d{2})/(\d{2})/(\d{2})`)
+		// Regex to find DD/MM/YY or DD/MM/YYYY
+		re := regexp.MustCompile(`(\d{2})/(\d{2})/(\d{2,4})`)
 
 		for rows.Next() {
 			var title, pubDate string
@@ -164,7 +164,11 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 				if len(matches) == 4 {
 					// DD = matches[1], MM = matches[2], YY = matches[3]
 					// Convert to YYYY-MM-DD
-					titleDate := fmt.Sprintf("20%s-%s-%s", matches[3], matches[2], matches[1])
+					year := matches[3]
+					if len(year) == 2 {
+						year = "20" + year
+					}
+					titleDate := fmt.Sprintf("%s-%s-%s", year, matches[2], matches[1])
 					titleCounts[titleDate]++
 				}
 			}

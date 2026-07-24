@@ -28,6 +28,20 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class DailyCount {
+	    date: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DailyCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.count = source["count"];
+	    }
+	}
 	export class MonthlyCount {
 	    month: string;
 	    count: number;
@@ -79,6 +93,8 @@ export namespace backend {
 	    privateCount: number;
 	    topVideos: TopVideo[];
 	    uploadTrend: MonthlyCount[];
+	    dailyTrend: DailyCount[];
+	    titleDailyTrend: DailyCount[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ChannelAnalytics(source);
@@ -98,6 +114,8 @@ export namespace backend {
 	        this.privateCount = source["privateCount"];
 	        this.topVideos = this.convertValues(source["topVideos"], TopVideo);
 	        this.uploadTrend = this.convertValues(source["uploadTrend"], MonthlyCount);
+	        this.dailyTrend = this.convertValues(source["dailyTrend"], DailyCount);
+	        this.titleDailyTrend = this.convertValues(source["titleDailyTrend"], DailyCount);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -230,6 +248,7 @@ export namespace backend {
 		    return a;
 		}
 	}
+	
 	
 	
 	

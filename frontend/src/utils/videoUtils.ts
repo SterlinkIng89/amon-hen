@@ -103,9 +103,10 @@ export function groupByDayYT(videos: YTVideo[], sortMode: string): VideoGroupYT[
   for (const v of videos) {
     let k = "";
     if (sortMode === "title_date") {
-      const match = v.title.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+      const match = v.title.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
       if (match) {
-        k = `20${match[3]}-${match[2]}-${match[1]}`;
+        const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+        k = `${year}-${match[2]}-${match[1]}`;
       } else {
         k = toLocalDateKey(new Date(v.publishedAt).getTime());
       }

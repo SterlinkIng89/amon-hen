@@ -39,17 +39,28 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     return 0;
   };
 
-  // Show 52 weeks
-  const NUM_WEEKS = 52;
-  const NUM_DAYS = NUM_WEEKS * 7;
+  let endDate = new Date();
+  endDate.setHours(23, 59, 59, 999);
   
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  
-  // Start date: NUM_DAYS - 1 days ago
-  let startDate = new Date(today);
-  startDate.setDate(today.getDate() - (NUM_DAYS - 1));
+  let startDate = new Date(endDate);
+  startDate.setFullYear(startDate.getFullYear() - 1);
   startDate.setHours(0, 0, 0, 0);
+
+  if (stats && stats.length > 0) {
+    const dates = stats.map(s => new Date(s.date).getTime()).filter(t => !isNaN(t));
+    if (dates.length > 0) {
+      const minDate = new Date(Math.min(...dates));
+      const maxDate = new Date(Math.max(...dates));
+      
+      endDate = new Date(Math.max(endDate.getTime(), maxDate.getTime()));
+      endDate.setHours(23, 59, 59, 999);
+
+      if (minDate < startDate) {
+        startDate = new Date(minDate);
+        startDate.setHours(0, 0, 0, 0);
+      }
+    }
+  }
 
   // Adjust start date to the beginning of the week (Sunday = 0)
   if (startDate.getDay() !== 0) {
@@ -66,7 +77,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     return `${y}-${m}-${day}`;
   };
 
-  while (currentDay <= today) {
+  while (currentDay <= endDate) {
     days.push({ date: new Date(currentDay), key: formatDate(currentDay) });
     currentDay.setDate(currentDay.getDate() + 1);
   }
@@ -125,9 +136,13 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     if (firstValidDay && firstValidDay.date) {
       const month = firstValidDay.date.getMonth();
       if (month !== lastMonth) {
+        let lbl = monthNames[month];
+        if (month === 0 && firstValidDay.date.getFullYear() !== endDate.getFullYear()) {
+          lbl = String(firstValidDay.date.getFullYear());
+        }
         monthLabels.push({
           x: labelPadX + wi * cellSize + cellSize / 2,
-          label: monthNames[month],
+          label: lbl,
         });
         lastMonth = month;
       }
@@ -171,7 +186,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
           ))}
           {weeks.map((week, wi) =>
             week.map((d, di) => {
-              if (!d.date || d.date > today) return null;
+              if (!d.date || d.date > endDate) return null;
               const x = labelPadX + wi * cellSize;
               const y = labelPadY + di * cellSize;
               const uploads = calendarData[d.key] ?? 0;
