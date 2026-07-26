@@ -431,29 +431,12 @@ export default function ChannelAnalytics({ refreshKey = 0 }: ChannelAnalyticsPro
 
       {/* ── Row 2: Contribution Heatmap ─────────────────────────────────────────────── */}
       {(data.dailyTrend?.length > 0 || data.titleDailyTrend?.length > 0) && (
-        <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-              {heatmapSource === "upload" ? "Upload Activity" : "Recording Activity"}
-            </span>
-            <div className="flex items-center gap-1 bg-elevated rounded-lg p-0.5 border border-border-subtle">
-              <button
-                onClick={() => setHeatmapSource("upload")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-colors ${heatmapSource === "upload" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"}`}
-              >
-                Upload Date
-              </button>
-              <button
-                onClick={() => setHeatmapSource("title")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-colors ${heatmapSource === "title" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"}`}
-              >
-                Recording Date
-              </button>
-            </div>
-          </div>
-          <ContributionHeatmap 
-            stats={heatmapSource === "upload" ? data.dailyTrend : (data.titleDailyTrend || [])} 
-            label={heatmapSource === "upload" ? "upload" : "recording"} 
+        <div className="bg-elevated rounded-2xl p-5 border-0 shadow-sm flex flex-col gap-4">
+          <ContributionHeatmap
+            stats={heatmapSource === "upload" ? data.dailyTrend : (data.titleDailyTrend || [])}
+            label={heatmapSource === "upload" ? "upload" : "recording"}
+            metricSource={heatmapSource}
+            onMetricChange={setHeatmapSource}
           />
         </div>
       )}
