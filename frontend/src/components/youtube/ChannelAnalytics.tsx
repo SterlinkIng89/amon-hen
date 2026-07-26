@@ -313,9 +313,10 @@ function TopVideoRow({
 interface ChannelAnalyticsProps {
   /** Trigger re-fetch when this changes (e.g. after a sync) */
   refreshKey?: number;
+  onDateFilter?: (date: string) => void;
 }
 
-export default function ChannelAnalytics({ refreshKey = 0 }: ChannelAnalyticsProps) {
+export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: ChannelAnalyticsProps) {
   const [data, setData] = useState<ChannelAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +438,7 @@ export default function ChannelAnalytics({ refreshKey = 0 }: ChannelAnalyticsPro
             label={heatmapSource === "upload" ? "upload" : "recording"}
             metricSource={heatmapSource}
             onMetricChange={setHeatmapSource}
+            onDateClick={onDateFilter}
           />
         </div>
       )}

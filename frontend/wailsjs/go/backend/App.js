@@ -50,8 +50,8 @@ export function GetChannelPlaylists(arg1) {
   return window['go']['backend']['App']['GetChannelPlaylists'](arg1);
 }
 
-export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4) {
-  return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4);
+export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function GetFolderSettings(arg1) {

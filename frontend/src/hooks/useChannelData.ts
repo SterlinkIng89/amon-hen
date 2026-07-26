@@ -16,6 +16,7 @@ interface UseChannelDataOptions {
   playlistSort: PlaylistSort;
   debouncedSearch: string;
   selectedPlaylist: YTPlaylist | null;
+  dateFilter?: string; // YYYY-MM-DD — filter videos to this specific date
 }
 
 export function useChannelData({
@@ -24,6 +25,7 @@ export function useChannelData({
   playlistSort,
   debouncedSearch,
   selectedPlaylist,
+  dateFilter,
 }: UseChannelDataOptions) {
   const [videos, setVideos] = useState<YTVideo[]>([]);
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
@@ -75,7 +77,8 @@ export function useChannelData({
           pageToLoad,
           40,
           videoSort,
-          debouncedSearch
+          debouncedSearch,
+          dateFilter || ""
         );
         const newVideos = res.videos || [];
         if (reset) {
@@ -112,7 +115,7 @@ export function useChannelData({
   // Reload when any filter changes
   useEffect(() => {
     loadData(true);
-  }, [activeTab, videoSort, playlistSort, debouncedSearch, selectedPlaylist]);
+  }, [activeTab, videoSort, playlistSort, debouncedSearch, selectedPlaylist, dateFilter]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -146,11 +149,24 @@ export function useChannelData({
     };
   }, [hasMore, loading, loadingMore, activeTab, selectedPlaylist]);
 
-  const filteredVideos = selectedPlaylist
+  let filteredVideos = selectedPlaylist
     ? playlistVideos.filter((v) =>
         v.title.toLowerCase().includes(debouncedSearch.toLowerCase())
       )
     : videos;
+
+  // Apply date filter: match against publishedAt (upload date) or title date
+  if (dateFilter) {
+    filteredVideos = filteredVideos.filter((v) => {
+      // Check upload date
+      const uploadDate = v.publishedAt?.substring(0, 10);
+      if (uploadDate === dateFilter) return true;
+      // Check title date
+      const titleDate = extractTitleDate(v.title);
+      if (titleDate === dateFilter) return true;
+      return false;
+    });
+  }
 
   return {
     videos,

@@ -11,6 +11,7 @@ interface ContributionHeatmapProps {
   label?: string;
   metricSource?: "upload" | "title";
   onMetricChange?: (source: "upload" | "title") => void;
+  onDateClick?: (date: string) => void;
 }
 
 const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
@@ -18,6 +19,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
   label = "upload",
   metricSource,
   onMetricChange,
+  onDateClick,
 }) => {
   const calendarData = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -357,7 +359,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
                     fill={color}
                     rx={2}
                     ry={2}
-                    className="transition-colors duration-150 hover:stroke-white hover:stroke-[1.5px]"
+                    className={`transition-colors duration-150 hover:stroke-white hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
+                    onClick={() => { if (uploads > 0 && onDateClick) onDateClick(d.key); }}
                     onMouseEnter={(e) => {
                       const rect = (e.target as SVGRectElement).getBoundingClientRect();
                       const approxWidth = Math.max(tooltipContent.length * 7.5, 90);

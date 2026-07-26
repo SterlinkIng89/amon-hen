@@ -27,7 +27,7 @@ export function GetChannelAnalytics():Promise<backend.ChannelAnalytics>;
 
 export function GetChannelPlaylists(arg1:string):Promise<Array<backend.YTPlaylist>>;
 
-export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
+export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<Record<string, any>>;
 
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
 

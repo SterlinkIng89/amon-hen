@@ -540,7 +540,7 @@ func isInsufficientPermissions(err error) bool {
 }
 
 // GetChannelVideos returns a paginated list of videos from SQLite
-func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) (map[string]interface{}, error) {
+func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFilter string) (map[string]interface{}, error) {
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
@@ -557,12 +557,12 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 	where := "1=1"
 	args := []interface{}{}
 	if search != "" {
-		where = "title LIKE ?"
+		where += " AND title LIKE ?"
 		args = append(args, "%"+search+"%")
 	}
 
-	// If sorting by title_date, we fetch all, sort in memory, then paginate
-	if sortBy == "title_date" {
+	// If sorting by title_date OR filtering by a specific date, fetch all matching search, filter & sort in memory
+	if sortBy == "title_date" || dateFilter != "" {
 		query := fmt.Sprintf(`
 			SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
 			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
@@ -589,20 +589,45 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 			if playlistTitle.Valid {
 				v.PlaylistTitle = playlistTitle.String
 			}
+
+			if dateFilter != "" {
+				uploadDate := ""
+				if len(v.PublishedAt) >= 10 {
+					uploadDate = v.PublishedAt[:10]
+				}
+				titleDate := extractTitleDate(v.Title)
+				if uploadDate != dateFilter && titleDate != dateFilter {
+					continue // Skip video if neither upload date nor extracted title date matches
+				}
+			}
+
 			allVideos = append(allVideos, v)
 		}
 
-		// Sort in memory using the shared robust date extractor
-		sort.Slice(allVideos, func(i, j int) bool {
-			dateI := extractTitleDate(allVideos[i].Title)
-			dateJ := extractTitleDate(allVideos[j].Title)
+		// Sort in memory
+		if sortBy == "title_date" {
+			sort.Slice(allVideos, func(i, j int) bool {
+				dateI := extractTitleDate(allVideos[i].Title)
+				dateJ := extractTitleDate(allVideos[j].Title)
 
-			if dateI != dateJ {
-				return dateI > dateJ // Descending
-			}
-			// Fallback to published_at if dates are the same or missing
-			return allVideos[i].PublishedAt > allVideos[j].PublishedAt
-		})
+				if dateI != dateJ {
+					return dateI > dateJ // Descending
+				}
+				return allVideos[i].PublishedAt > allVideos[j].PublishedAt
+			})
+		} else if sortBy == "title" {
+			sort.Slice(allVideos, func(i, j int) bool {
+				return strings.ToLower(allVideos[i].Title) < strings.ToLower(allVideos[j].Title)
+			})
+		} else if sortBy == "views" {
+			sort.Slice(allVideos, func(i, j int) bool {
+				return allVideos[i].ViewCount > allVideos[j].ViewCount
+			})
+		} else {
+			sort.Slice(allVideos, func(i, j int) bool {
+				return allVideos[i].PublishedAt > allVideos[j].PublishedAt
+			})
+		}
 
 		total := len(allVideos)
 		
