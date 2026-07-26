@@ -5,6 +5,7 @@ import {
   GetChannelPlaylists,
   GetPlaylistVideos,
 } from "../../wailsjs/go/backend/App";
+import { extractTitleDate } from "../utils/videoUtils";
 
 type VideoSort = "recent" | "title" | "views" | "title_date";
 type PlaylistSort = "recent" | "title" | "videos" | "updated";
@@ -55,16 +56,8 @@ export function useChannelData({
           sorted.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
         } else if (videoSort === "title_date") {
           sorted.sort((a, b) => {
-            const getDate = (title: string) => {
-              const match = title.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
-              if (match) {
-                const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-                return `${year}-${match[2]}-${match[1]}`;
-              }
-              return "";
-            };
-            const dateA = getDate(a.title);
-            const dateB = getDate(b.title);
+            const dateA = extractTitleDate(a.title);
+            const dateB = extractTitleDate(b.title);
             if (dateA !== dateB) return dateB.localeCompare(dateA);
             return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
           });

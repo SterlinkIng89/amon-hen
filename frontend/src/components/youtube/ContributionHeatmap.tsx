@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 export interface DailyCount {
@@ -24,6 +24,22 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     return acc;
   }, [stats]);
 
+  const availableYears = useMemo(() => {
+    if (!stats || stats.length === 0) return [new Date().getFullYear()];
+    const years = new Set(stats.map((s) => parseInt(s.date.substring(0, 4))));
+    years.add(new Date().getFullYear()); // always include current year
+    return Array.from(years).sort((a, b) => b - a); // descending
+  }, [stats]);
+
+  type YearOption = number | "All";
+  const [selectedYear, setSelectedYear] = useState<YearOption>(availableYears[0]);
+
+  useEffect(() => {
+    if (selectedYear !== "All" && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears, selectedYear]);
+
   // Custom colors: 0 = gray, 1 = dark orange, 2 = orange, 3 = bright brand orange
   const customPanelColors = [
     "#2E2E31", // 0 games (inactive)
@@ -39,36 +55,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     return 0;
   };
 
-  let endDate = new Date();
-  endDate.setHours(23, 59, 59, 999);
-  
-  let startDate = new Date(endDate);
-  startDate.setFullYear(startDate.getFullYear() - 1);
-  startDate.setHours(0, 0, 0, 0);
-
-  if (stats && stats.length > 0) {
-    const dates = stats.map(s => new Date(s.date).getTime()).filter(t => !isNaN(t));
-    if (dates.length > 0) {
-      const minDate = new Date(Math.min(...dates));
-      const maxDate = new Date(Math.max(...dates));
-      
-      endDate = new Date(Math.max(endDate.getTime(), maxDate.getTime()));
-      endDate.setHours(23, 59, 59, 999);
-
-      if (minDate < startDate) {
-        startDate = new Date(minDate);
-        startDate.setHours(0, 0, 0, 0);
-      }
-    }
-  }
-
-  // Adjust start date to the beginning of the week (Sunday = 0)
-  if (startDate.getDay() !== 0) {
-    startDate.setDate(startDate.getDate() - startDate.getDay());
-  }
-
-  const days: { date: Date; key: string }[] = [];
-  let currentDay = new Date(startDate);
+  const weeks: { date: Date | null; key: string }[][] = [];
   
   const formatDate = (d: Date) => {
     const y = d.getFullYear();
@@ -77,34 +64,67 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     return `${y}-${m}-${day}`;
   };
 
-  while (currentDay <= endDate) {
-    days.push({ date: new Date(currentDay), key: formatDate(currentDay) });
-    currentDay.setDate(currentDay.getDate() + 1);
-  }
+  const yearsToRender = selectedYear === "All" ? [...availableYears].reverse() : [selectedYear as number];
 
-  const weeks: { date: Date | null; key: string }[][] = [];
-  let week: { date: Date | null; key: string }[] = [];
-  
-  days.forEach((d) => {
-    const dayOfWeek = d.date.getDay();
-    if (week.length === 0 && dayOfWeek !== 0) {
-      for (let i = 0; i < dayOfWeek; i++) {
-        week.push({ date: null, key: `empty-${weeks.length}-${i}` });
+  yearsToRender.forEach((year, index) => {
+    let yearStart = new Date(year, 0, 1, 0, 0, 0, 0);
+    let yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    if (selectedYear === "All") {
+      if (year === new Date().getFullYear()) {
+        yearEnd = new Date();
+        yearEnd.setHours(23, 59, 59, 999);
       }
+      if (index === 0 && stats && stats.length > 0) {
+         const dates = stats.map(s => new Date(s.date).getTime()).filter(t => !isNaN(t));
+         if (dates.length > 0) {
+           const minDate = new Date(Math.min(...dates));
+           yearStart = new Date(minDate);
+           yearStart.setHours(0,0,0,0);
+         }
+      }
+    } else if (selectedYear === new Date().getFullYear()) {
+      // Show rolling 365 days up to today
+      yearEnd = new Date();
+      yearEnd.setHours(23, 59, 59, 999);
+      yearStart = new Date(yearEnd);
+      yearStart.setFullYear(yearStart.getFullYear() - 1);
+      yearStart.setHours(0, 0, 0, 0);
     }
-    week.push(d);
-    if (week.length === 7) {
+
+    let currentDay = new Date(yearStart);
+    if (currentDay.getDay() !== 0) {
+      currentDay.setDate(currentDay.getDate() - currentDay.getDay());
+    }
+
+    let week: { date: Date | null; key: string }[] = [];
+    
+    while (currentDay <= yearEnd) {
+      if (currentDay < yearStart) {
+        week.push({ date: null, key: `pad-start-${year}-${currentDay.getTime()}` });
+      } else {
+        week.push({ date: new Date(currentDay), key: formatDate(currentDay) });
+      }
+
+      if (week.length === 7) {
+        weeks.push(week);
+        week = [];
+      }
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    if (week.length > 0) {
+      while (week.length < 7) {
+        week.push({ date: null, key: `pad-end-${year}-${week.length}` });
+      }
       weeks.push(week);
-      week = [];
+    }
+
+    // Add a gap column between years if in "All" mode and not the last year
+    if (selectedYear === "All" && index < yearsToRender.length - 1) {
+       weeks.push(Array(7).fill({ date: null, key: `gap1-${year}` }));
     }
   });
-  
-  if (week.length > 0) {
-    while (week.length < 7) {
-      week.push({ date: null, key: `empty-last-${week.length}` });
-    }
-    weeks.push(week);
-  }
 
   const [tooltip, setTooltip] = useState<{
     x: number;
@@ -128,6 +148,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
 
   const monthLabels: { x: number; label: string }[] = [];
   let lastMonth = -1;
+  let lastYear = -1;
   
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -135,33 +156,61 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
     const firstValidDay = week.find((d) => d.date !== null);
     if (firstValidDay && firstValidDay.date) {
       const month = firstValidDay.date.getMonth();
-      if (month !== lastMonth) {
+      const year = firstValidDay.date.getFullYear();
+      
+      if (month !== lastMonth || year !== lastYear) {
         let lbl = monthNames[month];
-        if (month === 0 && firstValidDay.date.getFullYear() !== endDate.getFullYear()) {
-          lbl = String(firstValidDay.date.getFullYear());
+        
+        if (year !== lastYear && selectedYear === "All") {
+           lbl = String(year);
+        } else if (month === 0) {
+           lbl = String(year);
         }
+
         monthLabels.push({
           x: labelPadX + wi * cellSize + cellSize / 2,
           label: lbl,
         });
         lastMonth = month;
+        lastYear = year;
       }
     }
   });
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const today = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   return (
-    <div className="flex w-full relative justify-center items-center overflow-x-auto custom-scrollbar py-2">
-      <div>
-        <svg
-          ref={svgRef}
-          width={svgWidth}
-          height={svgHeight}
-          style={{ height: svgHeight, display: "block", margin: "0 auto" }}
-        >
+    <div className="flex flex-col w-full gap-2 relative">
+      {/* Year Selector */}
+      {availableYears.length > 1 && (
+        <div className="flex flex-wrap gap-2 w-full justify-end px-2">
+          {["All", ...availableYears].map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setSelectedYear(opt as YearOption)}
+              className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${
+                selectedYear === opt 
+                  ? "bg-accent text-white" 
+                  : "bg-elevated text-text-muted hover:text-text-primary border border-border-subtle"
+              }`}
+            >
+              {opt === "All" ? "All Time" : opt}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1 w-full overflow-x-auto custom-scrollbar py-2">
+        <div className="min-w-max flex justify-center mx-auto">
+          <svg
+            ref={svgRef}
+            width={svgWidth}
+            height={svgHeight}
+            style={{ height: svgHeight, display: "block" }}
+          >
           {monthLabels.map((m, i) => (
             <text
               key={m.label + i}
@@ -186,7 +235,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
           ))}
           {weeks.map((week, wi) =>
             week.map((d, di) => {
-              if (!d.date || d.date > endDate) return null;
+              if (!d.date || d.date > today) return null;
               const x = labelPadX + wi * cellSize;
               const y = labelPadY + di * cellSize;
               const uploads = calendarData[d.key] ?? 0;
@@ -254,7 +303,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({ st
           )}
       </div>
     </div>
-  );
+  </div>
+);
 });
 
 export default ContributionHeatmap;

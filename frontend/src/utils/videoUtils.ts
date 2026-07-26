@@ -98,18 +98,64 @@ export function groupByDay(videos: VideoFile[]): VideoGroup[] {
   return Array.from(map.entries()).map(([dateKey, vs]) => ({ dateKey, label: formatGroupLabel(dateKey), videos: vs }));
 }
 
+// extractTitleDate attempts to parse a recording date from a video title.
+// Returns a zero-padded "YYYY-MM-DD" string, or "" if no date is found.
+// Priority: ISO (YYYY-MM-DD) → compact (YYYYMMDD) → space (YYYY MM DD) → DD/MM/YY
+export function extractTitleDate(title: string): string {
+  // 1. Explicit ISO: YYYY-MM-DD
+  const isoMatch = title.match(/\b(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b/);
+  if (isoMatch) {
+    const [, y, mo, d] = isoMatch;
+    const yi = parseInt(y), moi = parseInt(mo), di = parseInt(d);
+    if (yi >= 2000 && yi <= 2099 && moi >= 1 && moi <= 12 && di >= 1 && di <= 31) {
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+
+  // 2. Compact YYYYMMDD (8 consecutive digits at word boundary)
+  const compactMatch = title.match(/\b(\d{4})(\d{2})(\d{2})\b/);
+  if (compactMatch) {
+    const [, y, mo, d] = compactMatch;
+    const yi = parseInt(y), moi = parseInt(mo), di = parseInt(d);
+    if (yi >= 2000 && yi <= 2099 && moi >= 1 && moi <= 12 && di >= 1 && di <= 31) {
+      return `${y}-${mo}-${d}`;
+    }
+  }
+
+  // 3. Space-separated YYYY MM DD
+  const spaceMatch = title.match(/\b(\d{4})\s+(\d{1,2})\s+(\d{1,2})\b/);
+  if (spaceMatch) {
+    const [, y, mo, d] = spaceMatch;
+    const yi = parseInt(y), moi = parseInt(mo), di = parseInt(d);
+    if (yi >= 2000 && yi <= 2099 && moi >= 1 && moi <= 12 && di >= 1 && di <= 31) {
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+
+  // 4. DD/MM/YY or DD/MM/YYYY with various separators
+  // Use matchAll to try all occurrences — skip any where the "day" is 4 digits (that's a year)
+  const dmyRe = /\b(\d{1,2})[/／∕⁄.\-](\d{1,2})[/／∕⁄.\-](\d{2,4})\b/g;
+  for (const m of title.matchAll(dmyRe)) {
+    const [, part1, part2, part3] = m;
+    if (part1.length === 4) continue; // skip YYYY-first false matches
+    const day = part1, month = part2;
+    const year = part3.length === 2 ? `20${part3}` : part3;
+    const yi = parseInt(year), moi = parseInt(month), di = parseInt(day);
+    if (yi >= 2000 && yi <= 2099 && moi >= 1 && moi <= 12 && di >= 1 && di <= 31) {
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+
+  return "";
+}
+
 export function groupByDayYT(videos: YTVideo[], sortMode: string): VideoGroupYT[] {
   const map = new Map<string, YTVideo[]>();
   for (const v of videos) {
     let k = "";
     if (sortMode === "title_date") {
-      const match = v.title.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
-      if (match) {
-        const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-        k = `${year}-${match[2]}-${match[1]}`;
-      } else {
-        k = toLocalDateKey(new Date(v.publishedAt).getTime());
-      }
+      const parsed = extractTitleDate(v.title);
+      k = parsed !== "" ? parsed : toLocalDateKey(new Date(v.publishedAt).getTime());
     } else {
       k = toLocalDateKey(new Date(v.publishedAt).getTime());
     }

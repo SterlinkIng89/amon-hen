@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -13,7 +12,6 @@ import (
 	youtube "google.golang.org/api/youtube/v3"
 )
 
-var titleDateRegex = regexp.MustCompile(`(\d{2})/(\d{2})/(\d{2,4})`)
 
 type YTVideo struct {
 	ID            string `json:"id"`
@@ -594,22 +592,11 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search string) 
 			allVideos = append(allVideos, v)
 		}
 
-		// Sort in memory
+		// Sort in memory using the shared robust date extractor
 		sort.Slice(allVideos, func(i, j int) bool {
-			getDate := func(title string) string {
-				match := titleDateRegex.FindStringSubmatch(title)
-				if len(match) == 4 {
-					year := match[3]
-					if len(year) == 2 {
-						year = "20" + year
-					}
-					return fmt.Sprintf("%s-%s-%s", year, match[2], match[1])
-				}
-				return ""
-			}
-			dateI := getDate(allVideos[i].Title)
-			dateJ := getDate(allVideos[j].Title)
-			
+			dateI := extractTitleDate(allVideos[i].Title)
+			dateJ := extractTitleDate(allVideos[j].Title)
+
 			if dateI != dateJ {
 				return dateI > dateJ // Descending
 			}
