@@ -314,9 +314,10 @@ interface ChannelAnalyticsProps {
   /** Trigger re-fetch when this changes (e.g. after a sync) */
   refreshKey?: number;
   onDateFilter?: (date: string) => void;
+  heatmapOnly?: boolean;
 }
 
-export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: ChannelAnalyticsProps) {
+export default function ChannelAnalytics({ refreshKey = 0, onDateFilter, heatmapOnly = false }: ChannelAnalyticsProps) {
   const [data, setData] = useState<ChannelAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -382,7 +383,8 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: Chann
     <div className="flex flex-col gap-5 p-5 animate-fadeIn">
 
       {/* ── Row 1: KPI Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {!heatmapOnly && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Total Views"
           value={formatNum(data.totalViews)}
@@ -429,10 +431,11 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: Chann
           }
         />
       </div>
+      )}
 
       {/* ── Row 2: Contribution Heatmap ─────────────────────────────────────────────── */}
       {(data.dailyTrend?.length > 0 || data.titleDailyTrend?.length > 0) && (
-        <div className="bg-elevated rounded-2xl p-5 border-0 shadow-sm flex flex-col gap-4">
+        <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-4">
           <ContributionHeatmap
             stats={heatmapSource === "upload" ? data.dailyTrend : (data.titleDailyTrend || [])}
             label={heatmapSource === "upload" ? "upload" : "recording"}
@@ -444,7 +447,8 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: Chann
       )}
 
       {/* ── Row 3: Top Videos + Side panels ─────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {!heatmapOnly && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Top Videos (takes 2/3) */}
         <div className="lg:col-span-2 bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
@@ -487,6 +491,7 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter }: Chann
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

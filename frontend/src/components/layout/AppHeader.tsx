@@ -147,6 +147,17 @@ export default function AppHeader({
           </button>
         )}
         {ytAuthed && (
+          <button
+            className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-1.5 ${view === "stats" ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
+            onClick={() => onSetView("stats")}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={view === "stats" ? "text-accent" : ""}>
+              <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
+            </svg>
+            Stats
+          </button>
+        )}
+        {ytAuthed && (
           <div className="relative h-full flex items-center">
             <button
               className={`relative text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center overflow-hidden ${isQueueView ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary hover:bg-elevated/30"}`}

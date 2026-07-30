@@ -76,4 +76,4 @@ export interface FolderConfig {
   max_duration_secs: number;
 }
 
-export type ViewMode = "grid" | "player" | "channel" | "queue";
+export type ViewMode = "grid" | "player" | "channel" | "queue" | "stats";

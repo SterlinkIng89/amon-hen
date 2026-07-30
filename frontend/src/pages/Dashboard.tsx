@@ -23,6 +23,7 @@ import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
 import ChannelPage from "./ChannelPage";
 import QueuePage from "./QueuePage";
+import StatsPage from "./StatsPage";
 import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 
@@ -133,7 +134,7 @@ export default function Dashboard() {
     if (view === "player" && selectedIndex >= 0 && selectedIndex < sortedVideos.length) {
       // Already restored from store — nothing to do
     } else {
-      setView(view === "channel" ? "channel" : view === "player" ? "grid" : view);
+      setView(view === "channel" ? "channel" : view === "stats" ? "stats" : view === "player" ? "grid" : view);
     }
   }, [videos]);
 
@@ -415,6 +416,12 @@ export default function Dashboard() {
         {view === "channel" && (
           <ErrorBoundary area="Channel">
             <ChannelPage />
+          </ErrorBoundary>
+        )}
+
+        {view === "stats" && (
+          <ErrorBoundary area="Stats">
+            <StatsPage />
           </ErrorBoundary>
         )}
 
