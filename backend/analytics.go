@@ -28,6 +28,16 @@ type ChannelAnalytics struct {
 	// Daily upload counts for the heatmap (last 365 days)
 	DailyTrend      []DailyCount `json:"dailyTrend"`
 	TitleDailyTrend []DailyCount `json:"titleDailyTrend"`
+
+	// All historical videos for rich frontend aggregations
+	AllHistoricalVideos []HistoricalVideo `json:"allHistoricalVideos"`
+}
+
+// HistoricalVideo holds basic info for a video to be aggregated on the frontend.
+type HistoricalVideo struct {
+	Title     string `json:"title"`
+	Published string `json:"published"`
+	Duration  string `json:"duration"`
 }
 
 // TopVideo represents a single entry in the top-viewed videos list.
@@ -141,15 +151,15 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 		trendRows.Close()
 	}
 
-	// ── 6. Daily Trends (Upload vs Title Dates) ──────────────────────────────
-	rows, err := a.db.conn.Query(`SELECT title, substr(published_at, 1, 10) FROM yt_videos`)
+	// ── 6. Daily Trends (Upload vs Title Dates) & Historical ────────────────────────
+	rows, err := a.db.conn.Query(`SELECT title, substr(published_at, 1, 10), COALESCE(duration, '') FROM yt_videos`)
 	if err == nil {
 		uploadCounts := make(map[string]int)
 		titleCounts := make(map[string]int)
 
 		for rows.Next() {
-			var title, pubDate string
-			if err := rows.Scan(&title, &pubDate); err == nil {
+			var title, pubDate, duration string
+			if err := rows.Scan(&title, &pubDate, &duration); err == nil {
 				// Upload Date count
 				if pubDate != "" {
 					uploadCounts[pubDate]++
@@ -159,6 +169,12 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 				if titleDate := extractTitleDate(title); titleDate != "" {
 					titleCounts[titleDate]++
 				}
+
+				result.AllHistoricalVideos = append(result.AllHistoricalVideos, HistoricalVideo{
+					Title:     title,
+					Published: pubDate,
+					Duration:  duration,
+				})
 			}
 		}
 		rows.Close()

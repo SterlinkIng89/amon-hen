@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import ChannelAnalytics from "../components/youtube/ChannelAnalytics";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
+import MostPlayedGames from "../components/stats/MostPlayedGames";
 
 export default function StatsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -30,9 +31,13 @@ export default function StatsPage() {
       </div>
 
       {/* ── Full-page analytics ───────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-0">
         <ErrorBoundary area="Stats Analytics">
           <ChannelAnalytics refreshKey={refreshKey} heatmapOnly={true} />
+        </ErrorBoundary>
+        
+        <ErrorBoundary area="Most Played Games">
+          <MostPlayedGames />
         </ErrorBoundary>
       </div>
     </div>
