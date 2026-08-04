@@ -28,6 +28,22 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class HistoricalVideo {
+	    title: string;
+	    published: string;
+	    duration: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HistoricalVideo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.published = source["published"];
+	        this.duration = source["duration"];
+	    }
+	}
 	export class DailyCount {
 	    date: string;
 	    count: number;
@@ -95,6 +111,7 @@ export namespace backend {
 	    uploadTrend: MonthlyCount[];
 	    dailyTrend: DailyCount[];
 	    titleDailyTrend: DailyCount[];
+	    allHistoricalVideos: HistoricalVideo[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ChannelAnalytics(source);
@@ -116,6 +133,7 @@ export namespace backend {
 	        this.uploadTrend = this.convertValues(source["uploadTrend"], MonthlyCount);
 	        this.dailyTrend = this.convertValues(source["dailyTrend"], DailyCount);
 	        this.titleDailyTrend = this.convertValues(source["titleDailyTrend"], DailyCount);
+	        this.allHistoricalVideos = this.convertValues(source["allHistoricalVideos"], HistoricalVideo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -248,6 +266,7 @@ export namespace backend {
 		    return a;
 		}
 	}
+	
 	
 	
 	

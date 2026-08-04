@@ -1,24 +1,8 @@
-import { useState, useEffect } from "react";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import ChannelAnalytics from "../components/youtube/ChannelAnalytics";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 import MostPlayedGames from "../components/stats/MostPlayedGames";
+import LocalRecordingActivity from "../components/stats/LocalRecordingActivity";
 
 export default function StatsPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Refresh stats when syncs or uploads complete
-  useEffect(() => {
-    const bump = () => setRefreshKey((k) => k + 1);
-
-    EventsOn("youtube:sync-done", bump);
-    EventsOn("youtube:done", bump);
-
-    return () => {
-      EventsOff("youtube:sync-done");
-      EventsOff("youtube:done");
-    };
-  }, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
@@ -33,7 +17,7 @@ export default function StatsPage() {
       {/* ── Full-page analytics ───────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-0">
         <ErrorBoundary area="Stats Analytics">
-          <ChannelAnalytics refreshKey={refreshKey} heatmapOnly={true} />
+          <LocalRecordingActivity />
         </ErrorBoundary>
         
         <ErrorBoundary area="Most Played Games">
