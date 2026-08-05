@@ -8,12 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// initCache sets up the on-disk cache directory
+// initCache sets up the on-disk cache directory and the thumbnail semaphore.
 func (a *App) initCache() {
 	base, err := os.UserCacheDir()
 	if err != nil {
@@ -23,6 +24,15 @@ func (a *App) initCache() {
 	os.MkdirAll(filepath.Join(a.cacheDir, "thumbs"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "previews"), 0755)
 	fmt.Println("Cache directory:", a.cacheDir)
+
+	// Limit concurrent ffmpeg/ffprobe processes to half the available CPU cores
+	// (minimum 2) so opening a large folder doesn't saturate the CPU.
+	workers := runtime.NumCPU() / 2
+	if workers < 2 {
+		workers = 2
+	}
+	a.thumbSem = make(chan struct{}, workers)
+	fmt.Printf("Thumbnail worker limit: %d (of %d CPUs)\n", workers, runtime.NumCPU())
 }
 
 // cacheKey builds a unique filename from path + mod time
@@ -54,7 +64,8 @@ func writeCached(cachePath string, data []byte) {
 	}
 }
 
-// GetThumbnail returns a base64 PNG thumbnail for a video file
+// GetThumbnail returns a base64 PNG thumbnail for a video file.
+// It respects the global thumbSem semaphore to cap concurrent ffmpeg processes.
 func (a *App) GetThumbnail(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -63,9 +74,14 @@ func (a *App) GetThumbnail(path string) (string, error) {
 	key := cacheKey(path, info.ModTime())
 	cachePath := filepath.Join(a.cacheDir, "thumbs", key+".png")
 
+	// Cache hit — no ffmpeg needed, skip semaphore.
 	if cached, ok := readCached(cachePath, "image/png"); ok {
 		return cached, nil
 	}
+
+	// Acquire a worker slot before spawning ffmpeg.
+	a.thumbSem <- struct{}{}
+	defer func() { <-a.thumbSem }()
 
 	cmd := exec.Command(
 		"ffmpeg",
@@ -109,7 +125,8 @@ func (a *App) RegenerateThumbnail(path string) (string, error) {
 	return a.GetThumbnail(path)
 }
 
-// GetVideoPreview generates a 5x5 sprite sheet preview for a video file
+// GetVideoPreview generates a 5x5 sprite sheet preview for a video file.
+// It respects the global thumbSem semaphore to cap concurrent ffmpeg processes.
 func (a *App) GetVideoPreview(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -118,9 +135,14 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 	key := cacheKey(path, info.ModTime())
 	cachePath := filepath.Join(a.cacheDir, "previews", key+".jpg")
 
+	// Cache hit — no ffmpeg needed, skip semaphore.
 	if cached, ok := readCached(cachePath, "image/jpeg"); ok {
 		return cached, nil
 	}
+
+	// Acquire a worker slot before spawning ffmpeg.
+	a.thumbSem <- struct{}{}
+	defer func() { <-a.thumbSem }()
 
 	cmd := exec.Command(
 		"ffmpeg",
@@ -144,8 +166,13 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 	return "data:image/jpeg;base64," + encoded, nil
 }
 
-// GetVideoDuration returns the duration of the video in seconds using ffprobe
+// GetVideoDuration returns the duration of the video in seconds using ffprobe.
+// It respects the global thumbSem semaphore to cap concurrent ffprobe processes.
 func (a *App) GetVideoDuration(path string) (float64, error) {
+	// Acquire a worker slot before spawning ffprobe.
+	a.thumbSem <- struct{}{}
+	defer func() { <-a.thumbSem }()
+
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
 	hideWindow(cmd)
 	var out bytes.Buffer

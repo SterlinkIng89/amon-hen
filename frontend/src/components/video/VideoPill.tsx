@@ -7,6 +7,7 @@ import {
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
+import { enqueueThumb } from "../../hooks/useThumbnailQueue";
 import {
   GetThumbnail,
   GetVideoPreview,
@@ -98,14 +99,14 @@ export default function VideoPill({
 
   useEffect(() => {
     if (isLocal && inView) {
-      GetThumbnail(video.path).then((d) => {
+      enqueueThumb(() => GetThumbnail(video.path)).then((d) => {
         if (d) setThumb(d);
         setThumbLoaded(true);
       });
-      GetVideoPreview(video.path).then((d) => {
+      enqueueThumb(() => GetVideoPreview(video.path)).then((d) => {
         if (d) setSprite(d);
       });
-      GetVideoDuration(video.path).then((s) => {
+      enqueueThumb(() => GetVideoDuration(video.path)).then((s) => {
         if (s > 0) setLocalDuration(s);
       });
     }

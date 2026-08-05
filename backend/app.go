@@ -26,6 +26,9 @@ type App struct {
 	// Active uploads tracking
 	uploadsMu sync.Mutex
 	uploads   map[string]context.CancelFunc
+	// thumbSem limits concurrent ffmpeg/ffprobe processes for thumbnail generation.
+	// Prevents CPU saturation when many clips are loaded at once.
+	thumbSem chan struct{}
 }
 
 // NewApp creates a new App application struct
