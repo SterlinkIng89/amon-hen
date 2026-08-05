@@ -73,20 +73,30 @@
 
 
 /* Fullscreen video fix for Wails/WebView2 */
-video:fullscreen {
+/* Remove all size constraints when the video element itself is in fullscreen. */
+video:fullscreen,
+video:-webkit-full-screen,
+video:-moz-full-screen,
+video:-ms-fullscreen {
   max-height: none !important;
+  max-width: none !important;
   width: 100vw !important;
   height: 100vh !important;
   object-fit: contain;
   background-color: black;
 }
-video:-webkit-full-screen {
+
+/* When any ancestor is fullscreen (WebView2 puts the whole document in FS) */
+:fullscreen video,
+:-webkit-full-screen video {
   max-height: none !important;
-  width: 100vw !important;
-  height: 100vh !important;
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
   object-fit: contain;
   background-color: black;
 }
+
 
 /* Queue badge slot-machine ticker */
 @keyframes badgeNumOut {

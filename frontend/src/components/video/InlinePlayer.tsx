@@ -62,19 +62,51 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     return () => el.removeEventListener("volumechange", onVolumeChange);
   }, []);
 
-  // Handle true fullscreen
+  // Handle true fullscreen — save window geometry before entering and restore on exit.
+  // WindowUnfullscreen() alone doesn't restore position/size in Wails v2, so we
+  // capture them first and call WindowSetSize + WindowSetPosition on exit.
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    const onFSChange = () => {
+
+    // Snapshot of window state captured just before entering fullscreen.
+    let savedX = 0;
+    let savedY = 0;
+    let savedW = 0;
+    let savedH = 0;
+
+    const onFSChange = async () => {
+      const rt = (window as any).runtime;
+      if (!rt) return;
+
       if (document.fullscreenElement === el) {
-        // @ts-ignore
-        window.runtime?.WindowFullscreen();
+        // --- Entering fullscreen ---
+        // Save current position and size so we can restore them on exit.
+        try {
+          const pos = await rt.WindowGetPosition();
+          const size = await rt.WindowGetSize();
+          savedX = pos?.x ?? 0;
+          savedY = pos?.y ?? 0;
+          savedW = size?.w ?? 0;
+          savedH = size?.h ?? 0;
+        } catch (_) {
+          // If the runtime calls fail, we'll just skip restoration.
+        }
+        rt.WindowFullscreen();
       } else {
-        // @ts-ignore
-        window.runtime?.WindowUnfullscreen();
+        // --- Exiting fullscreen ---
+        rt.WindowUnfullscreen();
+        // Restore the window to its pre-fullscreen geometry.
+        if (savedW > 0 && savedH > 0) {
+          // Small delay to let Wails finish unfullscreening before resizing.
+          setTimeout(() => {
+            rt.WindowSetSize(savedW, savedH);
+            rt.WindowSetPosition(savedX, savedY);
+          }, 80);
+        }
       }
     };
+
     el.addEventListener("fullscreenchange", onFSChange);
     el.addEventListener("webkitfullscreenchange", onFSChange);
     return () => {
