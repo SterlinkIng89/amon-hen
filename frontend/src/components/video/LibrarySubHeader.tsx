@@ -1,5 +1,7 @@
 import { VideoFile } from "../../types";
 import StatsBar from "./StatsBar";
+import AdvancedFilters, { ActiveFilterChips } from "../ui/AdvancedFilters";
+import type { AdvancedFiltersValue } from "../ui/AdvancedFilters";
 
 type SortMode = "date" | "name" | "size";
 
@@ -15,6 +17,9 @@ interface LibrarySubHeaderProps {
   onOpenFolderSettings: (path: string) => void;
   filterUploaded: boolean;
   onToggleFilterUploaded: () => void;
+  // Advanced filters
+  advancedFilters: AdvancedFiltersValue;
+  onAdvancedFiltersChange: (v: AdvancedFiltersValue) => void;
 }
 
 function folderLabel(f: string): string {
@@ -43,8 +48,12 @@ export default function LibrarySubHeader({
   onOpenFolderSettings,
   filterUploaded,
   onToggleFilterUploaded,
+  advancedFilters,
+  onAdvancedFiltersChange,
 }: LibrarySubHeaderProps) {
   if (folders.length === 0) return null;
+
+  const hasActiveFilters = advancedFilters.dateFrom || advancedFilters.dateTo || advancedFilters.excludeWords.length > 0;
 
   return (
     <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
@@ -71,12 +80,7 @@ export default function LibrarySubHeader({
                       className="flex items-center gap-1.5 px-3 h-full bg-transparent border-none text-inherit cursor-pointer transition-colors"
                       onClick={() => onToggleFolder(f)}
                     >
-                      {/* Folder icon */}
-                      <svg
-                        width="11" height="11" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        className="shrink-0 opacity-80"
-                      >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-80">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                       </svg>
                       {active && (
@@ -120,10 +124,7 @@ export default function LibrarySubHeader({
 
           {/* Search Bar */}
           <div className="relative group">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors"
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-            >
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
@@ -135,10 +136,7 @@ export default function LibrarySubHeader({
               onChange={(e) => onSearchChange(e.target.value)}
             />
             {searchQuery && (
-              <button
-                onClick={() => onSearchChange("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
-              >
+              <button onClick={() => onSearchChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             )}
@@ -156,12 +154,29 @@ export default function LibrarySubHeader({
             }`}
             title={filterUploaded ? "Showing only not-uploaded videos" : "Show only videos not yet uploaded"}
           >
-            {/* Filter funnel icon */}
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
             </svg>
             Hide Uploaded
           </button>
+
+          <div className="h-4 w-px bg-border-subtle" />
+
+          {/* Advanced Filters */}
+          <AdvancedFilters
+            value={advancedFilters}
+            onChange={onAdvancedFiltersChange}
+            align="left"
+            excludeLabel="Exclude Words"
+            excludePlaceholder="e.g. short, test…"
+          />
+
+          {/* Active chips */}
+          <ActiveFilterChips
+            value={advancedFilters}
+            onClearDateRange={() => onAdvancedFiltersChange({ ...advancedFilters, dateFrom: "", dateTo: "" })}
+            onClearExcludeWords={() => onAdvancedFiltersChange({ ...advancedFilters, excludeWords: [] })}
+          />
         </div>
 
         {/* Segmented Sort Control */}

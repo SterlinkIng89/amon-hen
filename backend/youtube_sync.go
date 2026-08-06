@@ -540,7 +540,7 @@ func isInsufficientPermissions(err error) bool {
 }
 
 // GetChannelVideos returns a paginated list of videos from SQLite
-func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFilter string) (map[string]interface{}, error) {
+func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFrom, dateTo string) (map[string]interface{}, error) {
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
@@ -561,8 +561,10 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFil
 		args = append(args, "%"+search+"%")
 	}
 
-	// If sorting by title_date OR filtering by a specific date, fetch all matching search, filter & sort in memory
-	if sortBy == "title_date" || dateFilter != "" {
+	hasDateFilter := dateFrom != "" || dateTo != ""
+
+	// If sorting by title_date OR filtering by date range, fetch all matching search, filter & sort in memory
+	if sortBy == "title_date" || hasDateFilter {
 		query := fmt.Sprintf(`
 			SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
 			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
@@ -590,14 +592,32 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFil
 				v.PlaylistTitle = playlistTitle.String
 			}
 
-			if dateFilter != "" {
+			if hasDateFilter {
 				uploadDate := ""
 				if len(v.PublishedAt) >= 10 {
 					uploadDate = v.PublishedAt[:10]
 				}
 				titleDate := extractTitleDate(v.Title)
-				if uploadDate != dateFilter && titleDate != dateFilter {
-					continue // Skip video if neither upload date nor extracted title date matches
+				// Use the best representative date for this video (upload date preferred)
+				effectiveDate := uploadDate
+				if effectiveDate == "" {
+					effectiveDate = titleDate
+				}
+
+				// Check lower bound
+				if dateFrom != "" && effectiveDate < dateFrom {
+					// Also check titleDate as fallback
+					if titleDate == "" || titleDate < dateFrom {
+						continue
+					}
+					effectiveDate = titleDate
+				}
+				// Check upper bound
+				if dateTo != "" && effectiveDate > dateTo {
+					// Also check titleDate as fallback
+					if titleDate == "" || titleDate > dateTo {
+						continue
+					}
 				}
 			}
 
@@ -630,7 +650,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFil
 		}
 
 		total := len(allVideos)
-		
+
 		// Paginate
 		start := offset
 		if start > total {
@@ -640,7 +660,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFil
 		if end > total {
 			end = total
 		}
-		
+
 		paginatedVideos := allVideos[start:end]
 		if paginatedVideos == nil {
 			paginatedVideos = []YTVideo{}

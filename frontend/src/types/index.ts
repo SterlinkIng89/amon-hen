@@ -33,6 +33,7 @@ export interface Config {
 	folder_settings: Record<string, FolderConfig>;
 	game_profiles: Record<string, GameProfile>;
 	watch_folder_enabled: boolean;
+	title_separator?: string;
 }
 
 export interface YTVideo {

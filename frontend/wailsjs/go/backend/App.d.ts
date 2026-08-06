@@ -27,7 +27,7 @@ export function GetChannelAnalytics():Promise<backend.ChannelAnalytics>;
 
 export function GetChannelPlaylists(arg1:string):Promise<Array<backend.YTPlaylist>>;
 
-export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<Record<string, any>>;
+export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string,arg6:string):Promise<Record<string, any>>;
 
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
 
@@ -82,6 +82,8 @@ export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:strin
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
+
+export function SetTitleSeparator(arg1:string):Promise<void>;
 
 export function SetTrayUploadProgress(arg1:number):Promise<void>;
 

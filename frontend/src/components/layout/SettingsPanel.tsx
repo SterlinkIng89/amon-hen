@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled, SaveGameProfile, DeleteGameProfile } from "../../../wailsjs/go/backend/App";
+import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled, SaveGameProfile, DeleteGameProfile, SetTitleSeparator } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { GameProfile } from "../../types";
 
@@ -24,6 +24,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
   const [watchFolder, setWatchFolder] = useState(false);
   const [watchFolderSaving, setWatchFolderSaving] = useState(false);
+  const [titleSeparator, setTitleSeparator] = useState(" - ");
+  const [titleSepSaving, setTitleSepSaving] = useState(false);
 
   // Game Profiles state
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
@@ -47,6 +49,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
     LoadConfig().then(cfg => {
       setCredsLoaded(!!cfg.youtube_client_id);
       setGameProfiles(cfg.game_profiles || {});
+      setTitleSeparator(cfg.title_separator || " - ");
     }).catch(() => setCredsLoaded(false));
     // Load auto-launch state
     GetAutoLaunch().then(setAutoLaunch).catch(() => {});
@@ -230,6 +233,64 @@ export default function SettingsPanel({ open, onClose }: Props) {
                   }`}
                 />
               </button>
+            </div>
+          </section>
+
+          {/* Title Separator section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-text-muted">
+                <path d="M4 6h16v2H4zm4 5h12v2H8zm5 5h7v2h-7z"/>
+              </svg>
+              Title Format
+            </div>
+            <div className="flex flex-col gap-2 p-3 bg-elevated border border-border-subtle rounded-md">
+              <p className="text-xs font-medium text-text-primary">Auto-name separator</p>
+              <p className="text-[10px] text-text-secondary mt-0.5">Used between segments in auto-generated titles (e.g. Game<span className="font-mono bg-white/10 px-1 rounded">{titleSeparator}</span>Date)</p>
+              <div className="flex gap-2 mt-1 items-center">
+                {[" - ", " — ", " | ", " : "].map(preset => (
+                  <button
+                    key={preset}
+                    title={`Use "${preset}" as separator`}
+                    onClick={async () => {
+                      setTitleSepSaving(true);
+                      try {
+                        await SetTitleSeparator(preset);
+                        setTitleSeparator(preset);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setTitleSepSaving(false);
+                      }
+                    }}
+                    disabled={titleSepSaving}
+                    className={`px-2 py-1 rounded text-xs font-mono border transition-colors ${
+                      titleSeparator === preset
+                        ? "bg-accent/20 border-accent text-white"
+                        : "bg-black/20 border-white/10 text-text-secondary hover:border-white/30 hover:text-text-primary"
+                    }`}
+                  >
+                    {`"${preset}"`}
+                  </button>
+                ))}
+                <input
+                  type="text"
+                  value={titleSeparator}
+                  onChange={e => setTitleSeparator(e.target.value)}
+                  onBlur={async () => {
+                    setTitleSepSaving(true);
+                    try {
+                      await SetTitleSeparator(titleSeparator);
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setTitleSepSaving(false);
+                    }
+                  }}
+                  placeholder=" - "
+                  className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs font-mono text-text-primary outline-none focus:border-accent"
+                />
+              </div>
             </div>
           </section>
 

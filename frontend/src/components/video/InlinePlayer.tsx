@@ -321,12 +321,37 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     }
   };
 
-  // Auto-update YT title when episode number changes
+  // Auto-update YT title when episode number changes.
+  // Instead of regenerating the full title (which would wipe any custom suffix
+  // the user added after the episode number, e.g. "— Campaign End"), we
+  // surgically replace only the "— N" part inside the current title.
   const handleEpisodeChange = (val: string) => {
     const num = val === "" ? "" : parseInt(val, 10);
     if (val !== "" && isNaN(num as number)) return; // ignore non-numeric input
     setEpisodeInput(num);
     const currentEp = num !== "" ? Number(num) : 0;
+
+    // Episode suffix pattern: " — <digits>" or " - <digits>" NOT followed by a date
+    // separator (/ or -), to avoid confusing the date segment "— 28/07/26" with an episode.
+    // We look for " — N" where N is pure digits and is NOT followed by "/" (date separator).
+    const epRe = /( [—\-] )(\d+)(?![\d/])(.*)?$/;
+
+    if (ytTitle) {
+      const m = ytTitle.match(epRe);
+      if (m) {
+        // Title already has an episode number — replace it, keep anything after it.
+        const customSuffix = m[3] ?? "";
+        const separator = m[1];
+        setYtTitle(
+          ytTitle.slice(0, m.index!) +
+          (currentEp > 0 ? `${separator}${currentEp}${customSuffix}` : customSuffix)
+        );
+        return;
+      }
+    }
+
+    // No episode number in the current title yet — fall back to full regeneration
+    // only if the title is still the auto-generated one (user hasn't customised it).
     const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode, activeProfile, eventInput, gameModeInput, customVarsInput);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
       setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput));

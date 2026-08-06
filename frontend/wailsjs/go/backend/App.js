@@ -50,8 +50,8 @@ export function GetChannelPlaylists(arg1) {
   return window['go']['backend']['App']['GetChannelPlaylists'](arg1);
 }
 
-export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4, arg5);
+export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function GetFolderSettings(arg1) {
@@ -160,6 +160,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
 
 export function SetAutoLaunch(arg1) {
   return window['go']['backend']['App']['SetAutoLaunch'](arg1);
+}
+
+export function SetTitleSeparator(arg1) {
+  return window['go']['backend']['App']['SetTitleSeparator'](arg1);
 }
 
 export function SetTrayUploadProgress(arg1) {

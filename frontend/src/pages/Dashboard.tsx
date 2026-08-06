@@ -16,6 +16,7 @@ import { useAppStore } from "../store/useAppStore";
 
 // Hooks
 import { useVideoLibrary } from "../hooks/useVideoLibrary";
+import { useAdvancedFilters } from "../components/ui/AdvancedFilters";
 
 // UI
 import AppHeader from "../components/layout/AppHeader";
@@ -78,6 +79,9 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
 
+  // ── Advanced library filters ─────────────────────────────────────────────────
+  const libFilters = useAdvancedFilters();
+
   const restoredIndexRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [listRoot, setListRoot] = useState<HTMLElement | null>(null);
@@ -102,7 +106,7 @@ export default function Dashboard() {
     ? filteredByFolder.filter((v) => !v.youtubeId)
     : filteredByFolder;
 
-  const filteredVideos = searchQuery
+  const filteredBySearch = searchQuery
     ? filteredByUpload.filter((v) => {
         const sq = searchQuery.toLowerCase();
         return (
@@ -114,6 +118,30 @@ export default function Dashboard() {
         );
       })
     : filteredByUpload;
+
+  // Apply date range filter (uses modTime unix timestamp → date string)
+  const filteredByDate = (libFilters.dateFrom || libFilters.dateTo)
+    ? filteredBySearch.filter((v) => {
+        const d = new Date(v.modTime * 1000).toISOString().substring(0, 10);
+        if (libFilters.dateFrom && d < libFilters.dateFrom) return false;
+        if (libFilters.dateTo && d > libFilters.dateTo) return false;
+        return true;
+      })
+    : filteredBySearch;
+
+  // Apply exclude words filter (name, game, event)
+  const filteredVideos = libFilters.excludeWords.length > 0
+    ? filteredByDate.filter((v) => {
+        const lowerWords = libFilters.excludeWords.map(w => w.toLowerCase());
+        const haystack = [
+          v.name,
+          v.game || "",
+          v.event || "",
+          v.gameMode || "",
+        ].join(" ").toLowerCase();
+        return !lowerWords.some(w => haystack.includes(w));
+      })
+    : filteredByDate;
 
   const groups = groupByDay(filteredVideos);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
@@ -353,6 +381,8 @@ export default function Dashboard() {
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
           onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
+          advancedFilters={libFilters.value}
+          onAdvancedFiltersChange={libFilters.onChange}
         />
       )}
 

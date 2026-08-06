@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -81,70 +80,40 @@ func (a *App) generateYouTubeTitle(video VideoFile) string {
 		}
 		
 		// Clean up common issues if event/gamemode is missing
-		res = strings.ReplaceAll(res, " -  - ", " - ")
-		res = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(res), "-"))
+		sep := a.titleSep()
+		res = strings.ReplaceAll(res, sep+" "+sep, sep)
+		res = strings.ReplaceAll(res, " -  - ", " - ") // legacy fallback
+		res = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(res), strings.TrimSpace(sep)))
 		return res
 	}
 
+	sep := a.titleSep()
 	epSuffix := ""
 	if episode > 0 {
-		epSuffix = fmt.Sprintf(" — %d", episode)
+		epSuffix = fmt.Sprintf("%s%d", sep, episode)
 	}
 
-	return fmt.Sprintf("%s — %s%s", game, dateStr, epSuffix)
+	return fmt.Sprintf("%s%s%s%s", game, sep, dateStr, epSuffix)
 }
 
 // episodeCountForTag returns the highest episode number already used for a tag
-// by querying yt_videos. It parses the trailing "— N" from titles (covers
-// uploaded videos with no explicit episode column) and also checks the episode
-// column directly. Falls back to COUNT when no episode suffix is found.
+// by querying the episode column in yt_videos directly (exact game_tag match).
+// This replaces the old LIKE-on-title approach which caused cross-series
+// contamination when two series shared a common name prefix (e.g. "Halo" and
+// "Halo: Campaign Evolved" would count each other's videos).
 func (a *App) episodeCountForTag(tag string) int {
 	if tag == "" {
 		return 0
 	}
 
-	titlePatternHyphen := tag + " - %"
-	titlePatternDash := tag + " \u2014 %"
-
-	epRe := regexp.MustCompile(` (?:—|-) (\d+)$`)
-
-	maxFromTitles := 0
-	titleCount := 0
-
-	rows, err := a.db.conn.Query(
-		`SELECT title FROM yt_videos WHERE title LIKE ? OR title LIKE ?`,
-		titlePatternHyphen, titlePatternDash,
-	)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var title string
-			if rows.Scan(&title) != nil {
-				continue
-			}
-			titleCount++
-			if m := epRe.FindStringSubmatch(title); m != nil {
-				if n, err := strconv.Atoi(m[1]); err == nil && n > maxFromTitles {
-					maxFromTitles = n
-				}
-			}
-		}
-	}
-
-	titleMax := maxFromTitles
-	if titleMax == 0 {
-		titleMax = titleCount
-	}
-
 	var maxEpisode int
 	a.db.conn.QueryRow(
-		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0 AND local_file IS NOT NULL AND local_file != ''`, tag,
+		`SELECT COALESCE(MAX(episode), 0) FROM yt_videos
+		 WHERE game_tag = ? AND episode IS NOT NULL AND episode > 0`,
+		tag,
 	).Scan(&maxEpisode)
 
-	if maxEpisode > titleMax {
-		return maxEpisode
-	}
-	return titleMax
+	return maxEpisode
 }
 
 // GetVideosFromFolders scans multiple directories and returns a merged result.
@@ -299,17 +268,28 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		return videos[i].ModTime < videos[j].ModTime
 	})
 
-	// Pre-scan: find the highest explicit episode set in config per tag.
-	// Local explicit episodes take priority over the DB count as the counter base.
-	localMaxExplicit := make(map[string]int)
+	// Pre-scan: determine per-tag whether there are ANY explicit (manually set)
+	// episodes among the local files. This drives which numbering mode to use:
+	//
+	//   "anchor mode"  — at least one local video has episode > 0.
+	//                    We ignore the DB count entirely and number purely
+	//                    in chronological order, using explicit values as anchors.
+	//                    Free videos (episode == 0) receive the next integer after
+	//                    the most recent anchor that preceded them chronologically.
+	//
+	//   "db-base mode" — no local video has an explicit episode.
+	//                    We start the counter from episodeCountForTag(DB) as before,
+	//                    so newly-recorded videos continue from the last uploaded ep.
+	//                    This preserves the original behavior for series in progress.
+	hasLocalAnchor := make(map[string]bool)
 	for i := range videos {
 		if videos[i].Game != "" && videos[i].Episode > 0 {
-			if videos[i].Episode > localMaxExplicit[videos[i].Game] {
-				localMaxExplicit[videos[i].Game] = videos[i].Episode
-			}
+			hasLocalAnchor[videos[i].Game] = true
 		}
 	}
 
+	// localCounters tracks the running episode counter per tag.
+	// Initialized lazily on first encounter of each tag.
 	localCounters := make(map[string]int)
 
 	for i := range videos {
@@ -318,31 +298,32 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			continue
 		}
 
+		// Initialize counter on first encounter of this tag.
 		if _, seen := localCounters[game]; !seen {
-			a.db.mu.Lock()
-			dbBase := a.episodeCountForTag(game)
-			a.db.mu.Unlock()
-
-			localBase := localMaxExplicit[game]
-			if localBase > 0 {
-				localCounters[game] = localBase
+			if hasLocalAnchor[game] {
+				// Anchor mode: start at 0 so the first anchor sets the real position.
+				localCounters[game] = 0
 			} else {
-				localCounters[game] = dbBase
+				// DB-base mode: continue from the highest episode already on YouTube.
+				a.db.mu.Lock()
+				localCounters[game] = a.episodeCountForTag(game)
+				a.db.mu.Unlock()
 			}
 		}
 
 		profile, hasProfile := a.config.GameProfiles[game]
 		if hasProfile && profile.Type == "multiplayer" {
+			// Multiplayer series never use sequential episode numbers.
 			videos[i].Episode = 0
+		} else if videos[i].Episode > 0 {
+			// This video has an explicit (manually set) episode — it acts as an
+			// anchor. Advance the counter to this position so subsequent free
+			// videos are numbered from here onward.
+			localCounters[game] = videos[i].Episode
 		} else {
-			if videos[i].Episode == 0 {
-				localCounters[game]++
-				videos[i].Episode = localCounters[game]
-			} else {
-				if videos[i].Episode > localCounters[game] {
-					localCounters[game] = videos[i].Episode
-				}
-			}
+			// Free video: assign the next sequential number.
+			localCounters[game]++
+			videos[i].Episode = localCounters[game]
 		}
 
 		if videos[i].YouTubeTitle == "" {

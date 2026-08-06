@@ -48,6 +48,10 @@ type Config struct {
 	GameProfiles        map[string]GameProfile  `json:"game_profiles"`
 	WatchFolderEnabled  bool                    `json:"watch_folder_enabled"`
 	RecentFieldValues   map[string][]string     `json:"recent_field_values,omitempty"`
+	// TitleSeparator is the separator used between segments in auto-generated
+	// YouTube titles (e.g. "Game — 1/08/26" vs "Game - 1/08/26").
+	// Defaults to " - " when empty.
+	TitleSeparator string `json:"title_separator,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -330,4 +334,21 @@ func (a *App) SaveRecentFieldValues(values map[string][]string) error {
 	a.config.RecentFieldValues = values
 	a.configMu.Unlock()
 	return a.saveConfig()
+}
+
+// SetTitleSeparator updates the separator used in auto-generated YouTube titles.
+// An empty string resets it to the default " - ".
+func (a *App) SetTitleSeparator(sep string) error {
+	a.configMu.Lock()
+	a.config.TitleSeparator = sep
+	a.configMu.Unlock()
+	return a.saveConfig()
+}
+
+// titleSep returns the configured separator, falling back to " - ".
+func (a *App) titleSep() string {
+	if s := a.config.TitleSeparator; s != "" {
+		return s
+	}
+	return " - "
 }

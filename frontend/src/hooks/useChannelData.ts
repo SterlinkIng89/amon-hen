@@ -16,7 +16,14 @@ interface UseChannelDataOptions {
   playlistSort: PlaylistSort;
   debouncedSearch: string;
   selectedPlaylist: YTPlaylist | null;
-  dateFilter?: string; // YYYY-MM-DD — filter videos to this specific date
+  /** Exact date from analytics click — maps to dateFrom=dateTo (legacy compat) */
+  dateFilter?: string;
+  /** Range start date YYYY-MM-DD */
+  dateFrom?: string;
+  /** Range end date YYYY-MM-DD */
+  dateTo?: string;
+  /** Words that must NOT appear in the video title */
+  excludeWords?: string[];
 }
 
 export function useChannelData({
@@ -26,6 +33,9 @@ export function useChannelData({
   debouncedSearch,
   selectedPlaylist,
   dateFilter,
+  dateFrom: rawDateFrom,
+  dateTo: rawDateTo,
+  excludeWords = [],
 }: UseChannelDataOptions) {
   const [videos, setVideos] = useState<YTVideo[]>([]);
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
@@ -36,6 +46,10 @@ export function useChannelData({
   const [hasMore, setHasMore] = useState(true);
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Resolve effective date range — legacy dateFilter takes precedence
+  const effectiveDateFrom = dateFilter || rawDateFrom || "";
+  const effectiveDateTo = dateFilter || rawDateTo || "";
 
   const loadData = async (reset = false) => {
     if (loading || (loadingMore && !reset)) return;
@@ -78,21 +92,19 @@ export function useChannelData({
           40,
           videoSort,
           debouncedSearch,
-          dateFilter || ""
+          effectiveDateFrom,
+          effectiveDateTo,
         );
         const newVideos = res.videos || [];
         if (reset) {
           setVideos(newVideos);
           setPage(2);
-          // No more pages if we got everything, or fewer than a full page
           setHasMore(newVideos.length > 0 && newVideos.length < res.total);
         } else {
           if (newVideos.length === 0) {
-            // Empty page — definitely at the end, stop immediately
             setHasMore(false);
           } else {
-            // Capture the next combined length before the async setState
-            const nextCount = pageToLoad * 40; // upper bound of what we now have
+            const nextCount = pageToLoad * 40;
             setVideos((prev) => [...prev, ...newVideos]);
             setPage((prev) => prev + 1);
             setHasMore(newVideos.length === 40 && nextCount < res.total);
@@ -115,11 +127,10 @@ export function useChannelData({
   // Reload when any filter changes
   useEffect(() => {
     loadData(true);
-  }, [activeTab, videoSort, playlistSort, debouncedSearch, selectedPlaylist, dateFilter]);
+  }, [activeTab, videoSort, playlistSort, debouncedSearch, selectedPlaylist, effectiveDateFrom, effectiveDateTo]);
 
   // Infinite scroll observer
   useEffect(() => {
-    // Guard against rapid re-fires when the sentinel is always visible (short list)
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const obs = new IntersectionObserver(
@@ -132,7 +143,7 @@ export function useChannelData({
           activeTab === "videos" &&
           !selectedPlaylist
         ) {
-          if (debounceTimer) return; // already scheduled — skip
+          if (debounceTimer) return;
           debounceTimer = setTimeout(() => {
             debounceTimer = null;
             loadData(false);
@@ -155,16 +166,28 @@ export function useChannelData({
       )
     : videos;
 
-  // Apply date filter: match against publishedAt (upload date) or title date
-  if (dateFilter) {
+  // Apply client-side date filter for playlist videos
+  if (selectedPlaylist && (effectiveDateFrom || effectiveDateTo)) {
     filteredVideos = filteredVideos.filter((v) => {
-      // Check upload date
-      const uploadDate = v.publishedAt?.substring(0, 10);
-      if (uploadDate === dateFilter) return true;
-      // Check title date
+      const uploadDate = v.publishedAt?.substring(0, 10) ?? "";
       const titleDate = extractTitleDate(v.title);
-      if (titleDate === dateFilter) return true;
-      return false;
+      const effective = uploadDate || titleDate;
+      if (effectiveDateFrom && effective < effectiveDateFrom) {
+        if (!titleDate || titleDate < effectiveDateFrom) return false;
+      }
+      if (effectiveDateTo && effective > effectiveDateTo) {
+        if (!titleDate || titleDate > effectiveDateTo) return false;
+      }
+      return true;
+    });
+  }
+
+  // Apply exclude words filter (frontend-only, case-insensitive)
+  if (excludeWords.length > 0) {
+    const lowerWords = excludeWords.map((w) => w.toLowerCase());
+    filteredVideos = filteredVideos.filter((v) => {
+      const lowerTitle = v.title.toLowerCase();
+      return !lowerWords.some((word) => lowerTitle.includes(word));
     });
   }
 
