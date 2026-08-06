@@ -150,12 +150,12 @@ export default function VideoPill({
       }}
       className={`group flex select-none rounded-xl overflow-hidden transition-all duration-300 ${onClick ? "cursor-pointer" : "cursor-default"} shrink-0 ${
         isList ? "flex-row" : "flex-col"
-      } ${heightClass} ${
+      } ${heightClass} border ${
         multiSelected
-          ? "bg-accent/10 ring-2 ring-accent/50"
+          ? "bg-accent/10 border-accent/50"
           : selected
-            ? "bg-accent/10 ring-2 ring-accent"
-            : "bg-card border border-transparent hover:border-accent/30 hover:bg-elevated"
+            ? "bg-accent/10 border-accent"
+            : "bg-card border-transparent hover:border-accent/30 hover:bg-elevated"
       }`}
     >
       {/* Thumbnail Area */}
