@@ -119,7 +119,7 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 
 	// ── 4. Top 8 most-viewed videos ──────────────────────────────────────────
 	topRows, topErr := a.db.conn.Query(`
-		SELECT id, title, COALESCE(thumbnail_url,''), view_count, like_count, COALESCE(duration,''), COALESCE(privacy,'')
+		SELECT id, COALESCE(title, ''), COALESCE(thumbnail_url,''), COALESCE(view_count, 0), COALESCE(like_count, 0), COALESCE(duration,''), COALESCE(privacy,'')
 		FROM yt_videos
 		ORDER BY view_count DESC
 		LIMIT 8`)

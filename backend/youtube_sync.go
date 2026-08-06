@@ -566,7 +566,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 	// If sorting by title_date OR filtering by date range, fetch all matching search, filter & sort in memory
 	if sortBy == "title_date" || hasDateFilter {
 		query := fmt.Sprintf(`
-			SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
+			SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
 			FROM yt_videos v
 			WHERE %s`, where)
@@ -673,7 +673,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 	}
 
 	query := fmt.Sprintf(`
-		SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, v.view_count, v.like_count, v.duration, v.privacy, v.local_file,
+		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
 		FROM yt_videos v
 		WHERE %s
@@ -767,8 +767,8 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 	defer a.db.mu.Unlock()
 
 	rows, err := a.db.conn.Query(`
-		SELECT v.id, v.title, v.description, v.published_at, v.thumbnail_url, 
-		       v.view_count, v.like_count, v.duration, v.privacy, v.local_file
+		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), 
+		       COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file
 		FROM yt_videos v
 		JOIN yt_playlist_items pi ON v.id = pi.video_id
 		WHERE pi.playlist_id = ?
