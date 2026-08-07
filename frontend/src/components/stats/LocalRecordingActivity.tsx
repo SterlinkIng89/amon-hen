@@ -73,7 +73,7 @@ export default function LocalRecordingActivity({ filters, selectedYear, onYearCh
   const notExcluded = (text: string) => {
     if (excludeWords.length === 0) return true;
     const lower = text.toLowerCase();
-    return !excludeWords.some((w) => lower.includes(w.toLowerCase()));
+    return !excludeWords.some((w: string) => lower.includes(w.toLowerCase()));
   };
 
   // ── Aggregate local videos → DailyCount[] ──────────────────────────────────
