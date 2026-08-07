@@ -12,6 +12,8 @@ interface ContributionHeatmapProps {
   metricSource?: "upload" | "title";
   onMetricChange?: (source: "upload" | "title") => void;
   onDateClick?: (date: string) => void;
+  title?: React.ReactNode | false;
+  extraControls?: React.ReactNode;
 }
 
 const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
@@ -20,6 +22,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
   metricSource,
   onMetricChange,
   onDateClick,
+  title,
+  extraControls,
 }) => {
   const calendarData = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -210,11 +214,15 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
     <div className="flex flex-col w-full gap-4 relative">
       {/* Unified Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-        <h3 className="text-sm font-semibold text-text-primary">
-          {metricSource === "upload" ? "Upload activity" : "Recording activity"}
-        </h3>
+        {title !== false && (
+          <h3 className="text-sm font-semibold text-text-primary">
+            {title || (metricSource === "upload" ? "Upload activity" : "Recording activity")}
+          </h3>
+        )}
 
         <div className="flex items-center gap-2">
+          {extraControls}
+
           {/* Metric Switcher */}
           {onMetricChange && (
             <div className="flex items-center bg-[#141418] p-1 rounded-lg border-0">

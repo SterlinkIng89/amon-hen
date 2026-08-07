@@ -15,6 +15,7 @@ export default function LocalRecordingActivity() {
   const [rawYtVideos, setRawYtVideos] = useState<YTVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<Source>("all");
+  const [metricSource, setMetricSource] = useState<"upload" | "title">("title");
 
   // ── Advanced filters ────────────────────────────────────────────────────────
   const filters = useAdvancedFilters();
@@ -91,14 +92,18 @@ export default function LocalRecordingActivity() {
     for (const v of rawYtVideos) {
       const titleDate  = extractTitleDate(v.title);
       const uploadDate = v.publishedAt?.substring(0, 10) ?? "";
-      const dateKey    = titleDate || uploadDate;
+      
+      const dateKey = metricSource === "title" 
+        ? (titleDate || uploadDate) 
+        : uploadDate;
+
       if (!dateKey) continue;
       if (!matchesDate(dateKey)) continue;
       if (!notExcluded(v.title)) continue;
       counts[dateKey] = (counts[dateKey] || 0) + 1;
     }
     return Object.entries(counts).map(([date, count]) => ({ date, count }));
-  }, [rawYtVideos, dateFrom, dateTo, excludeWords]);
+  }, [rawYtVideos, dateFrom, dateTo, excludeWords, metricSource]);
 
   // ── Merge ──────────────────────────────────────────────────────────────────
   const mergedData = useMemo<DailyCount[]>(() => {
@@ -133,42 +138,6 @@ export default function LocalRecordingActivity() {
     <div className="p-5 flex flex-col gap-0 animate-fadeIn">
       <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-4">
 
-        {/* Header row: title + source toggle + filters */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className="text-sm font-bold text-text-primary">Recording activity</span>
-
-          <div className="flex items-center gap-2">
-            {/* Source toggle */}
-            <div className="flex items-center bg-[#141418] p-1 rounded-lg">
-              {SOURCES.map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => setSource(s.key)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                    source === s.key
-                      ? "bg-accent text-white font-semibold shadow-sm"
-                      : "text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Advanced filters — date + exclude words */}
-            <AdvancedFilters
-              value={filters.value}
-              onChange={filters.onChange}
-              showExcludeWords={true}
-              showDateShortcuts={true}
-              dateLabel="Date Range"
-              excludeLabel="Exclude Words"
-              excludePlaceholder="e.g. short, clip…"
-              align="right"
-            />
-          </div>
-        </div>
-
         {/* Active filter chips */}
         {hasActiveFilters && (
           <div className="flex items-center gap-2 flex-wrap -mt-2">
@@ -182,7 +151,41 @@ export default function LocalRecordingActivity() {
 
         <ContributionHeatmap
           stats={activeData}
-          label="recording"
+          label={metricSource === "upload" ? "upload" : "recording"}
+          metricSource={metricSource}
+          onMetricChange={setMetricSource}
+          extraControls={
+            <>
+              {/* Source toggle */}
+              <div className="flex items-center bg-[#141418] p-1 rounded-lg">
+                {SOURCES.map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSource(s.key)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                      source === s.key
+                        ? "bg-accent text-white font-semibold shadow-sm"
+                        : "text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Advanced filters — date + exclude words */}
+              <AdvancedFilters
+                value={filters.value}
+                onChange={filters.onChange}
+                showExcludeWords={true}
+                showDateShortcuts={true}
+                dateLabel="Date Range"
+                excludeLabel="Exclude Words"
+                excludePlaceholder="e.g. short, clip…"
+                align="right"
+              />
+            </>
+          }
         />
       </div>
     </div>
