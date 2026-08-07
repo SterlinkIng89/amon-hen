@@ -14,6 +14,8 @@ interface ContributionHeatmapProps {
   onDateClick?: (date: string) => void;
   title?: React.ReactNode | false;
   extraControls?: React.ReactNode;
+  selectedYear?: string;
+  onYearChange?: (year: string) => void;
 }
 
 const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
@@ -24,6 +26,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
   onDateClick,
   title,
   extraControls,
+  selectedYear: externalSelectedYear,
+  onYearChange: externalOnYearChange,
 }) => {
   const calendarData = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -36,20 +40,29 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
   }, [stats]);
 
   const availableYears = useMemo(() => {
-    if (!stats || stats.length === 0) return [new Date().getFullYear()];
-    const years = new Set(stats.map((s) => parseInt(s.date.substring(0, 4))));
-    years.add(new Date().getFullYear());
-    return Array.from(years).sort((a, b) => b - a);
+    if (!stats || stats.length === 0) return [new Date().getFullYear().toString()];
+    const years = new Set(stats.map((s) => s.date.substring(0, 4)));
+    years.add(new Date().getFullYear().toString());
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [stats]);
 
-  type YearOption = number | "All";
-  const [selectedYear, setSelectedYear] = useState<YearOption>("All");
+  const [internalSelectedYear, setInternalSelectedYear] = useState<string>("All");
+  
+  const currentSelectedYear = externalSelectedYear !== undefined ? externalSelectedYear : internalSelectedYear;
+
+  const handleYearChange = (year: string) => {
+    if (externalOnYearChange) {
+      externalOnYearChange(year);
+    } else {
+      setInternalSelectedYear(year);
+    }
+  };
 
   useEffect(() => {
-    if (selectedYear !== "All" && !availableYears.includes(selectedYear as number)) {
-      setSelectedYear("All");
+    if (currentSelectedYear !== "All" && !availableYears.includes(currentSelectedYear)) {
+      handleYearChange("All");
     }
-  }, [availableYears, selectedYear]);
+  }, [availableYears, currentSelectedYear]);
 
   const customPanelColors = [
     "#202024", // 0 uploads (inactive)
@@ -91,7 +104,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
     const yearDividers: number[] = [];
     const monthLabels: { x: number; label: string }[] = [];
 
-    yearsToRender.forEach((yr, yrIndex) => {
+    yearsToRender.forEach((yrStr, yrIndex) => {
+      const yr = parseInt(yrStr, 10);
       if (yrIndex > 0) {
         currentX += 5;
         yearDividers.push(currentX);
@@ -190,15 +204,15 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
   }, [stats, layout.svgWidth]);
 
   // Smooth scroll to target year when button clicked
-  const handleYearClick = (yearOption: YearOption) => {
-    setSelectedYear(yearOption);
+  const handleYearClick = (yearOption: string) => {
+    handleYearChange(yearOption);
     const container = scrollContainerRef.current;
     if (!container) return;
 
     if (yearOption === "All") {
       container.scrollTo({ left: container.scrollWidth, behavior: "smooth" });
     } else {
-      const target = layout.yearLabels.find((yl) => yl.year === yearOption);
+      const target = layout.yearLabels.find((yl) => yl.year === parseInt(yearOption, 10));
       if (target) {
         const targetX = Math.max(0, target.x - labelPadX);
         container.scrollTo({ left: targetX, behavior: "smooth" });
@@ -253,11 +267,11 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
           {availableYears.length > 1 && (
             <div className="flex items-center bg-[#141418] p-1 rounded-lg border-0">
               {["All", ...availableYears].map((opt) => {
-                const isActive = selectedYear === opt;
+                const isActive = currentSelectedYear === opt;
                 return (
                   <button
                     key={opt}
-                    onClick={() => handleYearClick(opt as YearOption)}
+                    onClick={() => handleYearClick(opt)}
                     className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                       isActive
                         ? "bg-accent text-white font-semibold shadow-sm"
@@ -282,7 +296,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(({
             style={{ height: layout.svgHeight, display: "block" }}
           >
             {layout.yearLabels.map((yl) => {
-              const isSelected = selectedYear === yl.year;
+              const isSelected = currentSelectedYear === yl.year.toString();
               return (
                 <text
                   key={yl.year}

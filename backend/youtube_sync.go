@@ -12,7 +12,6 @@ import (
 	youtube "google.golang.org/api/youtube/v3"
 )
 
-
 type YTVideo struct {
 	ID            string `json:"id"`
 	Title         string `json:"title"`
@@ -523,7 +522,6 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 	return nil
 }
 
-
 func isInsufficientPermissions(err error) bool {
 	if err == nil {
 		return false
@@ -625,7 +623,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		}
 
 		// Sort in memory
-		if sortBy == "title_date" {
+		switch sortBy {
+		case "title_date":
 			sort.Slice(allVideos, func(i, j int) bool {
 				dateI := extractTitleDate(allVideos[i].Title)
 				dateJ := extractTitleDate(allVideos[j].Title)
@@ -635,15 +634,15 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 				}
 				return allVideos[i].PublishedAt > allVideos[j].PublishedAt
 			})
-		} else if sortBy == "title" {
+		case "title":
 			sort.Slice(allVideos, func(i, j int) bool {
 				return strings.ToLower(allVideos[i].Title) < strings.ToLower(allVideos[j].Title)
 			})
-		} else if sortBy == "views" {
+		case "views":
 			sort.Slice(allVideos, func(i, j int) bool {
 				return allVideos[i].ViewCount > allVideos[j].ViewCount
 			})
-		} else {
+		default:
 			sort.Slice(allVideos, func(i, j int) bool {
 				return allVideos[i].PublishedAt > allVideos[j].PublishedAt
 			})

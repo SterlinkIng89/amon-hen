@@ -4,21 +4,24 @@ import { GetVideosFromFolders, LoadConfig, GetChannelVideosPaginated } from "../
 import ContributionHeatmap from "../youtube/ContributionHeatmap";
 import type { DailyCount } from "../youtube/ContributionHeatmap";
 import { toLocalDateKey, extractTitleDate } from "../../utils/videoUtils";
-import AdvancedFilters, { ActiveFilterChips, useAdvancedFilters } from "../ui/AdvancedFilters";
+import AdvancedFilters, { ActiveFilterChips } from "../ui/AdvancedFilters";
 import type { VideoFile, YTVideo } from "../../types";
 
 type Source = "all" | "local" | "youtube";
 
-export default function LocalRecordingActivity() {
+interface LocalRecordingActivityProps {
+  filters: any; 
+  selectedYear?: string;
+  onYearChange?: (year: string) => void;
+}
+
+export default function LocalRecordingActivity({ filters, selectedYear, onYearChange }: LocalRecordingActivityProps) {
   // Raw unfiltered data (videos individually so we can filter)
   const [rawLocalVideos, setRawLocalVideos] = useState<VideoFile[]>([]);
   const [rawYtVideos, setRawYtVideos] = useState<YTVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<Source>("all");
   const [metricSource, setMetricSource] = useState<"upload" | "title">("title");
-
-  // ── Advanced filters ────────────────────────────────────────────────────────
-  const filters = useAdvancedFilters();
 
   const load = async () => {
     setLoading(true);
@@ -154,6 +157,8 @@ export default function LocalRecordingActivity() {
           label={metricSource === "upload" ? "upload" : "recording"}
           metricSource={metricSource}
           onMetricChange={setMetricSource}
+          selectedYear={selectedYear}
+          onYearChange={onYearChange}
           extraControls={
             <>
               {/* Source toggle */}

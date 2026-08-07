@@ -1,8 +1,12 @@
+import { useState } from "react";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 import MostPlayedGames from "../components/stats/MostPlayedGames";
 import LocalRecordingActivity from "../components/stats/LocalRecordingActivity";
+import { useAdvancedFilters } from "../components/ui/AdvancedFilters";
 
 export default function StatsPage() {
+  const filters = useAdvancedFilters();
+  const [globalYear, setGlobalYear] = useState<string>("All");
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
@@ -17,11 +21,18 @@ export default function StatsPage() {
       {/* ── Full-page analytics ───────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-0">
         <ErrorBoundary area="Stats Analytics">
-          <LocalRecordingActivity />
+          <LocalRecordingActivity 
+            filters={filters} 
+            selectedYear={globalYear} 
+            onYearChange={setGlobalYear} 
+          />
         </ErrorBoundary>
         
         <ErrorBoundary area="Most Played Games">
-          <MostPlayedGames />
+          <MostPlayedGames 
+            filters={filters} 
+            globalYear={globalYear} 
+          />
         </ErrorBoundary>
       </div>
     </div>
