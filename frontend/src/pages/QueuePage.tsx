@@ -288,13 +288,13 @@ function QueueRow({
           {item.status === "uploading" && (item.progress ?? 0) >= 100 && (
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-[10px] font-bold text-accent tabular-nums">100%</span>
-              <span className="text-[9px] text-text-muted">Procesando…</span>
+              <span className="text-[9px] text-text-muted">Processing...</span>
             </div>
           )}
           {/* Upload duration — shown once done */}
           {item.status === "done" && item.startedAt && item.completedAt && (
             <span className="text-[9px] text-green-400/70 tabular-nums">
-              Subido en {formatDuration(item.completedAt - item.startedAt)}
+              Uploaded in {formatDuration(item.completedAt - item.startedAt)}
             </span>
           )}
           {item.status === "done" && item.url && (
