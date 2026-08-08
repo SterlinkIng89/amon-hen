@@ -29,6 +29,8 @@ export interface QueueItem {
   error?: string;
   url?: string;
   uploadSpeed?: number;
+  startedAt?: number;   // ms timestamp when upload began
+  completedAt?: number; // ms timestamp when upload finished
 }
 
 interface Props {
@@ -76,7 +78,7 @@ export default function UploadQueue({
     const updatedQueue = [...currentQueue];
     itemsToStart.forEach(item => {
       const idx = updatedQueue.findIndex(i => i.id === item.id);
-      if (idx !== -1) updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading" };
+      if (idx !== -1) updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading", startedAt: Date.now() };
       UploadToYouTube(
         item.videoPath, item.title, item.description, item.privacy,
         item.playlistId || "", item.gameTag || "", item.episode || 0,
@@ -104,7 +106,7 @@ export default function UploadQueue({
     EventsOn("youtube:done", (data: { path: string; url: string }) => {
       const updated = queueRef.current.map(item =>
         item.videoPath === data.path
-          ? { ...item, status: "done" as const, progress: 100, url: data.url }
+          ? { ...item, status: "done" as const, progress: 100, url: data.url, completedAt: Date.now() }
           : item,
       );
       onUpdateQueue(updated);
@@ -112,8 +114,17 @@ export default function UploadQueue({
       const doneItem = queueRef.current.find(i => i.videoPath === data.path);
       const videoTitle = doneItem?.title || doneItem?.videoName || "Video";
       ShowUploadNotification("Upload complete!", videoTitle).catch(() => {});
-      processQueue(updated);
+
+      // Notify parent immediately so it can trigger a YT refresh per-video
       onUploadDoneRef.current?.();
+
+      // Check if the full batch is now complete (no more uploading or pending)
+      const stillActive = updated.filter(i => i.status === "uploading" || i.status === "pending").length;
+      if (stillActive === 0) {
+        onSetRunning(false);
+      } else {
+        processQueue(updated);
+      }
     });
 
     EventsOn("youtube:error", (data: { path: string; message: string }) => {
@@ -124,7 +135,14 @@ export default function UploadQueue({
       );
       onUpdateQueue(updated);
       SetTrayUploadProgress(-1).catch(() => {});
-      processQueue(updated);
+
+      // Check if the full batch is now complete
+      const stillActive = updated.filter(i => i.status === "uploading" || i.status === "pending").length;
+      if (stillActive === 0) {
+        onSetRunning(false);
+      } else {
+        processQueue(updated);
+      }
     });
 
     return () => { EventsOff("youtube:progress", "youtube:done", "youtube:error"); };

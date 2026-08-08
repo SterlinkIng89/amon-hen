@@ -54,7 +54,7 @@ function StatusIcon({ status }: { status: QueueItem["status"] }) {
   );
 }
 
-// ── ETA helper ───────────────────────────────────────────────────────────────
+// ── ETA / duration helpers ──────────────────────────────────────────────────
 
 function formatEta(bytesRemaining: number, speed: number): string {
   if (!speed || speed <= 0) return "";
@@ -62,6 +62,17 @@ function formatEta(bytesRemaining: number, speed: number): string {
   if (secs < 60) return `~${Math.round(secs)}s`;
   if (secs < 3600) return `~${Math.round(secs / 60)}m`;
   return `~${(secs / 3600).toFixed(1)}h`;
+}
+
+function formatDuration(ms: number): string {
+  const totalSecs = Math.round(ms / 1000);
+  if (totalSecs < 60) return `${totalSecs}s`;
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hrs}h ${remMins}m` : `${hrs}h`;
 }
 
 // ── Inline edit form ─────────────────────────────────────────────────────────
@@ -232,8 +243,8 @@ function QueueRow({
 
         {/* Right: status + speed + actions */}
         <div className="flex flex-col items-end justify-between gap-1 shrink-0 min-w-[80px]">
-          {/* Speed + ETA */}
-          {item.status === "uploading" && (
+          {/* Speed + ETA — only while uploading AND transfer not yet complete */}
+          {item.status === "uploading" && (item.progress ?? 0) < 100 && (
             <div className="flex flex-col items-end gap-0.5">
               {item.uploadSpeed && item.uploadSpeed > 0 && (
                 <span className="text-[10px] font-semibold text-accent tabular-nums">
@@ -245,6 +256,19 @@ function QueueRow({
               )}
               <span className="text-[10px] font-bold text-accent tabular-nums">{item.progress}%</span>
             </div>
+          )}
+          {/* Processing indicator — transfer done but YouTube still processing */}
+          {item.status === "uploading" && (item.progress ?? 0) >= 100 && (
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-[10px] font-bold text-accent tabular-nums">100%</span>
+              <span className="text-[9px] text-text-muted">Procesando…</span>
+            </div>
+          )}
+          {/* Upload duration — shown once done */}
+          {item.status === "done" && item.startedAt && item.completedAt && (
+            <span className="text-[9px] text-green-400/70 tabular-nums">
+              Subido en {formatDuration(item.completedAt - item.startedAt)}
+            </span>
           )}
           {item.status === "done" && item.url && (
             <a
