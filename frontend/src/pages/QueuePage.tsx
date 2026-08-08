@@ -26,6 +26,16 @@ function StatusIcon({ status }: { status: QueueItem["status"] }) {
       </div>
     );
   }
+  if (status === "processing") {
+    return (
+      <div className="relative w-5 h-5 shrink-0">
+        <svg className="animate-spin-slow w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2" />
+          <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
   if (status === "done") {
     return (
       <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center shrink-0">
@@ -153,6 +163,7 @@ interface QueueRowProps {
   onEdit: (id: string | null) => void;
   onSaveEdit: (id: string, patch: Partial<QueueItem>) => void;
   onRemove: (id: string) => void;
+  onRetry: (id: string) => void;
   onCancel: (id: string, path: string) => void;
   onMoveUp: (i: number) => void;
   onMoveDown: (i: number) => void;
@@ -164,9 +175,15 @@ interface QueueRowProps {
 
 function QueueRow({
   item, index, total, editingId, draggingId, dragOverId,
-  onEdit, onSaveEdit, onRemove, onCancel, onMoveUp, onMoveDown,
+  onEdit,
+  onSaveEdit,
+  onRemove,
+  onRetry,
+  onCancel,
+  onMoveUp, onMoveDown,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }: QueueRowProps) {
+  const [thumbBase64, setThumbBase64] = useState<string | null>(null);
   const isDragging = draggingId === item.id;
   const isDragOver = dragOverId === item.id && draggingId !== item.id;
   const isPending = item.status === "pending";
@@ -194,7 +211,7 @@ function QueueRow({
       onDragOver={(e) => { e.preventDefault(); onDragOver(item.id); }}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`flex flex-col gap-2 p-3 rounded-xl border transition-all duration-200 ${
+      className={`relative overflow-hidden flex flex-col gap-2 p-3 rounded-xl border transition-all duration-200 ${
         isDragging
           ? "opacity-40 border-accent/30 bg-accent/5"
           : isDragOver
@@ -208,7 +225,16 @@ function QueueRow({
           : "border-border-subtle bg-elevated/50 hover:border-border-medium hover:bg-elevated"
       }`}
     >
-      <div className="flex gap-3 items-stretch group/row">
+      {thumbBase64 && (
+        <div
+          className="absolute inset-0 bg-cover bg-center blur-[12px] saturate-[1.4] pointer-events-none transition-opacity duration-400"
+          style={{
+            backgroundImage: `url(${thumbBase64})`,
+            opacity: item.status === "uploading" ? 0.10 : item.status === "done" ? 0.06 : 0.08,
+          }}
+        />
+      )}
+      <div className="relative z-10 flex gap-3 items-stretch group/row">
         {/* Drag handle — only for pending */}
         {isPending && (
           <div
@@ -231,6 +257,7 @@ function QueueRow({
             uploadProgress={item.status === "uploading" ? item.progress : undefined}
             uploadSpeed={item.status === "uploading" ? item.uploadSpeed : undefined}
             readOnlyThumbnail={true}
+            onThumbLoaded={setThumbBase64}
           />
           {item.status === "error" && (
             <div className="absolute inset-0 bg-red-500/20 border border-red-500/40 rounded-xl pointer-events-none flex items-center justify-center backdrop-blur-[1px]">
@@ -299,7 +326,7 @@ function QueueRow({
                 </svg>
               </button>
             )}
-            {item.status === "uploading" ? (
+            {item.status === "uploading" || item.status === "processing" ? (
               <button
                 className="p-1 rounded bg-transparent border-none text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 title="Cancel upload"
@@ -307,6 +334,23 @@ function QueueRow({
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
               </button>
+            ) : item.status === "error" ? (
+              <>
+                <button
+                  className="p-1 rounded bg-transparent border-none text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors"
+                  title="Retry"
+                  onClick={() => onRetry(item.id)}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                </button>
+                <button
+                  className="p-1 rounded bg-transparent border-none text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title="Remove"
+                  onClick={() => onRemove(item.id)}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+              </>
             ) : (
               <button
                 className="p-1 rounded bg-transparent border-none text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -399,6 +443,10 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
   const handleRemove = (id: string) => {
     onUpdateQueue(queue.filter(i => i.id !== id));
     if (editingId === id) setEditingId(null);
+  };
+
+  const handleRetry = (id: string) => {
+    onUpdateQueue(queue.map(i => i.id === id ? { ...i, status: "pending", error: undefined, uploadSpeed: undefined, progress: 0 } : i));
   };
 
   const handleCancelUpload = async (_id: string, path: string) => {
@@ -522,6 +570,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
                       onEdit={setEditingId}
                       onSaveEdit={handleSaveEdit}
                       onRemove={handleRemove}
+                      onRetry={handleRetry}
                       onCancel={handleCancelUpload}
                       onMoveUp={handleMoveUp}
                       onMoveDown={handleMoveDown}
@@ -555,6 +604,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
                       onEdit={setEditingId}
                       onSaveEdit={handleSaveEdit}
                       onRemove={handleRemove}
+                      onRetry={handleRetry}
                       onCancel={handleCancelUpload}
                       onMoveUp={handleMoveUp}
                       onMoveDown={handleMoveDown}
@@ -587,6 +637,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
                       onEdit={setEditingId}
                       onSaveEdit={handleSaveEdit}
                       onRemove={handleRemove}
+                      onRetry={handleRetry}
                       onCancel={handleCancelUpload}
                       onMoveUp={handleMoveUp}
                       onMoveDown={handleMoveDown}
@@ -619,6 +670,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
                       onEdit={setEditingId}
                       onSaveEdit={handleSaveEdit}
                       onRemove={handleRemove}
+                      onRetry={handleRetry}
                       onCancel={handleCancelUpload}
                       onMoveUp={handleMoveUp}
                       onMoveDown={handleMoveDown}

@@ -21,7 +21,7 @@ export interface QueueItem {
   title: string;
   description: string;
   privacy: "public" | "unlisted" | "private";
-  status: "pending" | "uploading" | "done" | "error";
+  status: "pending" | "uploading" | "processing" | "done" | "error";
   progress: number;
   playlistId?: string;
   gameTag?: string;

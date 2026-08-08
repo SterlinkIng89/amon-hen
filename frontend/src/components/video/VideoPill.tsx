@@ -27,6 +27,7 @@ interface VideoPillProps {
   uploadSpeed?: number; // bytes per second while uploading
   readOnlyThumbnail?: boolean;
   gameProfiles?: Record<string, GameProfile>;
+  onThumbLoaded?: (url: string) => void;
 }
 
 export default function VideoPill({
@@ -42,6 +43,7 @@ export default function VideoPill({
   uploadSpeed,
   readOnlyThumbnail = false,
   gameProfiles = {},
+  onThumbLoaded,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -100,7 +102,10 @@ export default function VideoPill({
   useEffect(() => {
     if (isLocal && inView) {
       enqueueThumb(() => GetThumbnail(video.path)).then((d) => {
-        if (d) setThumb(d);
+        if (d) {
+          setThumb(d);
+          if (onThumbLoaded) onThumbLoaded(d);
+        }
         setThumbLoaded(true);
       });
       enqueueThumb(() => GetVideoPreview(video.path)).then((d) => {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";
+import { QueueItem } from "./UploadQueue";
 import {
   GetChannelPlaylists,
   GetOrCreatePlaylist,
@@ -16,7 +17,7 @@ export interface UploadOptions {
 interface Props {
   video: VideoFile;
   /** Current status of this file in the queue, if any */
-  queueStatus?: "pending" | "uploading" | "done" | "error";
+  queueStatus?: QueueItem["status"];
   onClose: () => void;
   onUploadNow: (opts: UploadOptions) => void;
   onAddToQueue: (opts: UploadOptions) => void;
@@ -30,7 +31,10 @@ export default function UploadDialog({
   onAddToQueue,
 }: Props) {
   // Block uploading the same file while it is already active
-  const isAlreadyActive = queueStatus === "pending" || queueStatus === "uploading";
+  const isAlreadyActive =
+    queueStatus === "pending" ||
+    queueStatus === "uploading" ||
+    queueStatus === "processing";
   const [title, setTitle] = useState(
     video.youtubeTitle || generateYouTubeTitle(video.name, video.game),
   );
