@@ -60,7 +60,7 @@ func readCached(cachePath string, mimeType string) (string, bool) {
 // writeCached writes raw image bytes to a cache file
 func writeCached(cachePath string, data []byte) {
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
-		fmt.Println("Cache write error:", err)
+		appLog("[Cache] Cache write error for %s: %v", filepath.Base(cachePath), err)
 	}
 }
 
@@ -69,6 +69,7 @@ func writeCached(cachePath string, data []byte) {
 func (a *App) GetThumbnail(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
+		appLog("[Media] GetThumbnail failed (file not found): %s", path)
 		return "", fmt.Errorf("file not found: %w", err)
 	}
 	key := cacheKey(path, info.ModTime())
@@ -97,6 +98,7 @@ func (a *App) GetThumbnail(path string) (string, error) {
 	var buffer bytes.Buffer
 	cmd.Stdout = &buffer
 	if err := cmd.Run(); err != nil {
+		appLog("[Media] GetThumbnail failed for %s: ffmpeg error: %v", filepath.Base(path), err)
 		return "", fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
 	raw := buffer.Bytes()
@@ -130,6 +132,7 @@ func (a *App) RegenerateThumbnail(path string) (string, error) {
 func (a *App) GetVideoPreview(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
+		appLog("[Media] GetVideoPreview failed (file not found): %s", path)
 		return "", fmt.Errorf("file not found: %w", err)
 	}
 	key := cacheKey(path, info.ModTime())
@@ -158,6 +161,7 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 	var buffer bytes.Buffer
 	cmd.Stdout = &buffer
 	if err := cmd.Run(); err != nil {
+		appLog("[Media] GetVideoPreview failed for %s: ffmpeg error: %v", filepath.Base(path), err)
 		return "", fmt.Errorf("failed to generate preview: %w", err)
 	}
 	raw := buffer.Bytes()
@@ -178,6 +182,7 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
+		appLog("[Media] GetVideoDuration failed for %s: ffprobe error: %v", filepath.Base(path), err)
 		return 0, err
 	}
 	durStr := strings.TrimSpace(out.String())

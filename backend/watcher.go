@@ -1,7 +1,6 @@
 package backend
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +53,7 @@ func (a *App) stopWatcher() {
 		a.watcher.watcher = nil
 	}
 	a.watcher = nil
+	appLog("[Watcher] Stopped")
 }
 
 // startWatcher starts watching all configured folders for new video files.
@@ -71,7 +71,7 @@ func (a *App) startWatcher() {
 
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Println("Failed to create folder watcher:", err)
+		appLog("[Watcher] Failed to create folder watcher: %v", err)
 		return
 	}
 
@@ -90,13 +90,13 @@ func (a *App) startWatcher() {
 					return nil
 				}
 				if addErr := w.Add(path); addErr != nil {
-					fmt.Printf("Watcher: cannot watch %s: %v\n", path, addErr)
+					appLog("[Watcher] Cannot watch %s: %v", path, addErr)
 				}
 				return nil
 			})
 		} else {
 			if addErr := w.Add(folder); addErr != nil {
-				fmt.Printf("Watcher: cannot watch %s: %v\n", folder, addErr)
+				appLog("[Watcher] Cannot watch %s: %v", folder, addErr)
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func (a *App) startWatcher() {
 					// Verify the file is still there before emitting
 					if _, statErr := os.Stat(name); statErr == nil {
 						runtime.EventsEmit(a.ctx, "files:new", name)
-						fmt.Printf("Watcher: new video detected: %s\n", name)
+						appLog("[Watcher] New video detected: %s", name)
 					}
 					dmu.Lock()
 					delete(debounce, name)
@@ -147,7 +147,7 @@ func (a *App) startWatcher() {
 				if !ok {
 					return
 				}
-				fmt.Println("Watcher error:", watchErr)
+				appLog("[Watcher] Error: %v", watchErr)
 
 			case <-fw.stopCh:
 				// Cancel all pending debounce timers
@@ -161,5 +161,5 @@ func (a *App) startWatcher() {
 		}
 	}()
 
-	fmt.Printf("Folder watcher started — watching %d root(s)\n", len(a.config.Folders))
+	appLog("[Watcher] Started — watching %d root(s)", len(a.config.Folders))
 }

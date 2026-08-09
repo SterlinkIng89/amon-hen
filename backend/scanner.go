@@ -343,15 +343,33 @@ func (a *App) GetVideos(dirPath string) ([]VideoFile, error) {
 func (a *App) DeleteFiles(paths []string) error {
 	var errs []string
 	for _, p := range paths {
-		info, statErr := os.Stat(p)
+		// 1. Check if it was linked to a YouTube ID (for logging)
+		var ytID string
+		if a.db != nil {
+			a.db.mu.Lock()
+			a.db.conn.QueryRow(`SELECT id FROM yt_videos WHERE local_file = ?`, p).Scan(&ytID)
+			a.db.mu.Unlock()
+		}
 
+		// 2. Delete the physical file
+		info, statErr := os.Stat(p)
 		err := os.Remove(p)
 		if err != nil {
 			if !os.IsNotExist(err) {
+				appLog("[DeleteFiles] Failed to delete file %s: %v", filepath.Base(p), err)
 				errs = append(errs, fmt.Sprintf("failed to delete %s: %v", filepath.Base(p), err))
+			} else {
+				appLog("[DeleteFiles] File already deleted or missing: %s", p)
+			}
+		} else {
+			if ytID != "" {
+				appLog("[DeleteFiles] Successfully deleted %s (Was linked to YouTube ID: %s)", filepath.Base(p), ytID)
+			} else {
+				appLog("[DeleteFiles] Successfully deleted %s", filepath.Base(p))
 			}
 		}
 
+		// 3. Clean up cache
 		if statErr == nil {
 			key := cacheKey(p, info.ModTime())
 			thumbPath := filepath.Join(a.cacheDir, "thumbs", key+".png")
@@ -360,14 +378,14 @@ func (a *App) DeleteFiles(paths []string) error {
 			os.Remove(previewPath)
 		}
 
+		// 4. Unlink from database
 		if a.db != nil {
 			a.db.mu.Lock()
-			a.db.conn.Exec(
-				`UPDATE yt_videos SET local_file = NULL WHERE local_file = ?`, p,
-			)
+			a.db.conn.Exec(`UPDATE yt_videos SET local_file = NULL WHERE local_file = ?`, p)
 			a.db.mu.Unlock()
 		}
 
+		// 5. Remove from config
 		delete(a.config.VideoGames, p)
 		delete(a.config.VideoMetadata, p)
 	}
