@@ -76,3 +76,9 @@ func (a *App) Startup(ctx context.Context) {
 func (a *App) Shutdown(_ context.Context) {
 	closeSessionLogger()
 }
+
+// LogFrontendEvent allows the frontend (React) to write directly to the session log file.
+// This is exposed to Wails.
+func (a *App) LogFrontendEvent(msg string) {
+	appLog("[Frontend] %s", msg)
+}

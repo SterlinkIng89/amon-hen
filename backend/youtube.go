@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -86,9 +87,11 @@ func (a *App) ImportYouTubeJSON() error {
 	}
 
 	if id == "" || key == "" {
+		appLog("[YouTube Auth] Failed to import JSON: missing client_id or client_secret")
 		return fmt.Errorf("could not find client_id or client_secret in JSON")
 	}
 
+	appLog("[YouTube Auth] Credentials imported successfully from JSON")
 	return a.SaveYouTubeCredentials(id, key)
 }
 
@@ -114,6 +117,7 @@ func (a *App) StartYouTubeAuth() error {
 	authURL := cfg.AuthCodeURL("amon-hen", oauth2.AccessTypeOffline, oauth2.ApprovalForce, oauth2.SetAuthURLParam("prompt", "select_account"))
 
 	// Open browser to Google consent page
+	appLog("[YouTube Auth] Starting OAuth flow in browser")
 	runtime.BrowserOpenURL(a.ctx, authURL)
 
 	// Start local callback server
@@ -122,6 +126,7 @@ func (a *App) StartYouTubeAuth() error {
 
 	listener, err := net.Listen("tcp", "127.0.0.1:8085")
 	if err != nil {
+		appLog("[YouTube Auth] Failed to start local callback server: %v", err)
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
 
@@ -162,14 +167,17 @@ func (a *App) StartYouTubeAuth() error {
 		a.ytSvc = nil
 		a.ytSvcMu.Unlock()
 		runtime.EventsEmit(a.ctx, "youtube:auth-complete", nil)
+		appLog("[YouTube Auth] Authorization successful, token saved")
 		return nil
 
 	case err := <-errCh:
 		server.Close()
+		appLog("[YouTube Auth] Authorization failed: %v", err)
 		return err
 
 	case <-time.After(5 * time.Minute):
 		server.Close()
+		appLog("[YouTube Auth] Authorization timed out (5 minutes)")
 		return fmt.Errorf("authorization timed out")
 	}
 }
@@ -480,6 +488,7 @@ func (a *App) CancelUpload(path string) error {
 	a.uploadsMu.Lock()
 	defer a.uploadsMu.Unlock()
 	if cancel, ok := a.uploads[path]; ok {
+		appLog("[Queue] Cancelling active upload for: %s", filepath.Base(path))
 		cancel()
 		delete(a.uploads, path)
 		return nil
@@ -509,6 +518,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 
 	f, err := os.Open(path)
 	if err != nil {
+		appLog("[Queue] Failed to open local file %s: %v", filepath.Base(path), err)
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
 		return err
 	}
@@ -516,8 +526,11 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 
 	info, err := f.Stat()
 	if err != nil {
+		appLog("[Queue] Failed to stat local file %s: %v", filepath.Base(path), err)
 		return err
 	}
+
+	appLog("[Queue] Started uploading '%s' (Size: %d bytes)", title, info.Size())
 
 	pr := &progressReader{
 		r:          f,
@@ -550,18 +563,25 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	a.logAPICall("videos.insert", "", title, QuotaVideosInsert, start, err)
 	if err != nil {
 		if ctx.Err() == context.Canceled {
+			appLog("[Queue] Upload cancelled by user: '%s'", title)
 			runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": "Upload cancelled"})
 			return fmt.Errorf("upload cancelled")
 		}
 		
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "quotaExceeded") || strings.Contains(errMsg, "RATE_LIMIT_EXCEEDED") {
+			appLog("[Queue] FATAL: YouTube Quota Exceeded while uploading '%s'. Wait 24h.", title)
 			errMsg = "Daily YouTube upload limit reached (~6 videos/day). Please wait 24h or request a quota increase in Google Cloud Console."
+		} else {
+			appLog("[Queue] Upload failed for '%s': %v", title, err)
 		}
 		
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": errMsg})
 		return err
 	}
+
+	elapsed := time.Since(start)
+	appLog("[Queue] Successfully uploaded '%s' (ID: %s, Time taken: %s)", title, result.Id, elapsed.Round(time.Second).String())
 
 	// Save YouTube ID locally
 	a.LinkLocalToYouTube(path, result.Id, gameTag, episode)
@@ -586,6 +606,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	// Add to playlist if specified
 	if playlistID != "" {
 		if plErr := a.AddVideoToPlaylist(playlistID, result.Id); plErr != nil {
+			appLog("[Queue] Warning: Failed to add video '%s' to playlist %s: %v", result.Id, playlistID, plErr)
 			// Emit a warning but do not fail the whole upload
 			runtime.EventsEmit(a.ctx, "youtube:playlist-error", map[string]string{
 				"videoId":    result.Id,

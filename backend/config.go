@@ -2,7 +2,6 @@ package backend
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -69,7 +68,13 @@ func (a *App) initConfig() {
 
 	data, err := os.ReadFile(a.configPath)
 	if err == nil {
-		json.Unmarshal(data, &a.config)
+		if unmarshalErr := json.Unmarshal(data, &a.config); unmarshalErr != nil {
+			appLog("[Config] Error parsing config.json: %v", unmarshalErr)
+		} else {
+			appLog("[Config] Loaded configuration from %s", a.configPath)
+		}
+	} else {
+		appLog("[Config] No existing config found or error reading (using defaults): %v", err)
 	}
 
 	if a.config.VideoGames == nil {
@@ -97,13 +102,13 @@ func (a *App) initConfig() {
 	if a.config.YouTubeClientID == "" {
 		a.config.YouTubeClientID = os.Getenv("client_id")
 		if a.config.YouTubeClientID != "" {
-			fmt.Println("YouTube Client ID loaded from .env")
+			appLog("[Config] YouTube Client ID loaded from .env")
 		}
 	}
 	if a.config.YouTubeClientSecret == "" {
 		a.config.YouTubeClientSecret = os.Getenv("client_secret")
 		if a.config.YouTubeClientSecret != "" {
-			fmt.Println("YouTube Client Secret loaded from .env")
+			appLog("[Config] YouTube Client Secret loaded from .env")
 		}
 	}
 }
@@ -114,9 +119,16 @@ func (a *App) saveConfig() error {
 	data, err := json.MarshalIndent(a.config, "", "  ")
 	a.configMu.RUnlock()
 	if err != nil {
+		appLog("[Config] Failed to serialize config: %v", err)
 		return err
 	}
-	return os.WriteFile(a.configPath, data, 0644)
+	if writeErr := os.WriteFile(a.configPath, data, 0644); writeErr != nil {
+		appLog("[Config] Failed to write config to disk: %v", writeErr)
+		return writeErr
+	}
+	// Avoid logging every single save since it might be noisy, 
+	// but we log errors above.
+	return nil
 }
 
 // LoadConfig returns the current app configuration to the frontend

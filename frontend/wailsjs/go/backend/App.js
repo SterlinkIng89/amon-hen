@@ -122,6 +122,10 @@ export function LoadConfig() {
   return window['go']['backend']['App']['LoadConfig']();
 }
 
+export function LogFrontendEvent(arg1) {
+  return window['go']['backend']['App']['LogFrontendEvent'](arg1);
+}
+
 export function OpenFolderDialog() {
   return window['go']['backend']['App']['OpenFolderDialog']();
 }

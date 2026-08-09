@@ -63,6 +63,8 @@ export function LinkLocalToYouTube(arg1:string,arg2:string,arg3:string,arg4:numb
 
 export function LoadConfig():Promise<backend.Config>;
 
+export function LogFrontendEvent(arg1:string):Promise<void>;
+
 export function OpenFolderDialog():Promise<string>;
 
 export function RegenerateThumbnail(arg1:string):Promise<string>;

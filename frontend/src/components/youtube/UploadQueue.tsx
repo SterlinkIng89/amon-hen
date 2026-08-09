@@ -11,6 +11,7 @@ import {
   ShowUploadNotification,
   SetTrayUploadProgress,
   CancelUpload,
+  LogFrontendEvent,
 } from "../../../wailsjs/go/backend/App";
 
 export interface QueueItem {
@@ -67,6 +68,10 @@ export default function UploadQueue({
 
     const pendingItems = currentQueue.filter(i => i.status === "pending");
     if (pendingItems.length === 0 && uploadingCount === 0) {
+      // If we were running, log that we finished
+      if (runningRef.current) {
+        LogFrontendEvent("[Queue] Queue completely finished. All uploads done.");
+      }
       onSetRunning(false);
       return;
     }
@@ -78,7 +83,10 @@ export default function UploadQueue({
     const updatedQueue = [...currentQueue];
     itemsToStart.forEach(item => {
       const idx = updatedQueue.findIndex(i => i.id === item.id);
-      if (idx !== -1) updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading", startedAt: Date.now() };
+      if (idx !== -1) {
+        updatedQueue[idx] = { ...updatedQueue[idx], status: "uploading", startedAt: Date.now() };
+        LogFrontendEvent(`[Queue] Initiating upload for: '${item.title}'`);
+      }
       UploadToYouTube(
         item.videoPath, item.title, item.description, item.privacy,
         item.playlistId || "", item.gameTag || "", item.episode || 0,
@@ -121,8 +129,10 @@ export default function UploadQueue({
       // Check if the full batch is now complete (no more uploading or pending)
       const stillActive = updated.filter(i => i.status === "uploading" || i.status === "pending").length;
       if (stillActive === 0) {
+        LogFrontendEvent(`[Queue] Queue completely finished after '${videoTitle}'.`);
         onSetRunning(false);
       } else {
+        LogFrontendEvent(`[Queue] Videos remaining in queue: ${stillActive}`);
         processQueue(updated);
       }
     });
@@ -139,8 +149,10 @@ export default function UploadQueue({
       // Check if the full batch is now complete
       const stillActive = updated.filter(i => i.status === "uploading" || i.status === "pending").length;
       if (stillActive === 0) {
+        LogFrontendEvent("[Queue] Queue completely finished with errors on last item.");
         onSetRunning(false);
       } else {
+        LogFrontendEvent(`[Queue] Videos remaining in queue: ${stillActive}`);
         processQueue(updated);
       }
     });
@@ -148,6 +160,15 @@ export default function UploadQueue({
     return () => { EventsOff("youtube:progress", "youtube:done", "youtube:error"); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Track manual start/stop of the queue via the running prop
+  useEffect(() => {
+    if (running) {
+      LogFrontendEvent(`[Queue] Queue started manually (Total items: ${queueRef.current.length})`);
+    } else if (!running && runningRef.current) {
+      LogFrontendEvent("[Queue] Queue paused or stopped manually");
+    }
+  }, [running]);
 
   // This component renders nothing — it's purely a logic/event driver
   return null;

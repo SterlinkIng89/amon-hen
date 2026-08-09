@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig } from "../../../wailsjs/go/backend/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig, LogFrontendEvent } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
@@ -92,9 +92,11 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
         } catch (_) {
           // If the runtime calls fail, we'll just skip restoration.
         }
+        LogFrontendEvent(`Video player entering fullscreen. Original window: ${savedW}x${savedH} at ${savedX},${savedY}`);
         rt.WindowFullscreen();
       } else {
         // --- Exiting fullscreen ---
+        LogFrontendEvent("Video player exiting fullscreen, restoring window size");
         rt.WindowUnfullscreen();
         // Restore the window to its pre-fullscreen geometry.
         if (savedW > 0 && savedH > 0) {
