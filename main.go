@@ -52,6 +52,7 @@ func main() {
 		// Closing the window hides it instead of quitting — the tray keeps the app alive.
 		HideWindowOnClose: true,
 		OnStartup:         startupWithTray,
+		OnShutdown:        app.Shutdown,
 		Bind: []interface{}{
 			app,
 		},

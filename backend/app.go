@@ -40,6 +40,7 @@ func NewApp() *App {
 
 // Startup is called when the app starts
 func (a *App) Startup(ctx context.Context) {
+	initSessionLogger()
 	a.ctx = ctx
 	a.initConfig()
 	if err := a.initDB(); err != nil {
@@ -48,6 +49,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.initCache()
 	a.startStreamServer()
 	a.startWatcher()
+
+	appLog("[App] Startup complete")
 
 	// Auto-sync in background — but only if last sync was more than 12 hours ago
 	// to avoid burning YouTube API quota on every app launch.
@@ -67,4 +70,9 @@ func (a *App) Startup(ctx context.Context) {
 		}
 		a.SyncChannelData()
 	}()
+}
+
+// Shutdown is called when the app is closing.
+func (a *App) Shutdown(_ context.Context) {
+	closeSessionLogger()
 }

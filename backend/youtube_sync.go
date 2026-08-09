@@ -46,6 +46,7 @@ func (a *App) SyncChannelData() error {
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
+		appLog("[SyncChannelData] Failed to get YouTube client: %v", err)
 		return err
 	}
 
@@ -57,14 +58,17 @@ func (a *App) SyncChannelData() error {
 	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
 	if err != nil {
 		if isInsufficientPermissions(err) {
+			appLog("[SyncChannelData] Insufficient permissions on channels.list — triggering re-auth: %v", err)
 			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Re-authentication required. Please press Sync again after authorizing.")
 			go a.StartYouTubeAuth()
 			return fmt.Errorf("insufficient permissions, please re-auth and try again")
 		}
+		appLog("[SyncChannelData] Error on channels.list: %v", err)
 		return err
 	}
 
 	if len(channelsResp.Items) == 0 {
+		appLog("[SyncChannelData] No channel found for authenticated user")
 		return fmt.Errorf("no channel found")
 	}
 
@@ -75,13 +79,14 @@ func (a *App) SyncChannelData() error {
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing playlists...")
 	seenPlaylists, err := a.syncPlaylists(svc, now)
 	if err != nil {
-		fmt.Println("Error syncing playlists:", err)
+		appLog("[SyncChannelData] Error syncing playlists: %v", err)
 	}
 
 	// 3. Fetch all videos from uploads playlist
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing videos...")
 	seenVideos, err := a.syncVideos(svc, uploadsPlaylistID, now)
 	if err != nil {
+		appLog("[SyncChannelData] Error syncing videos: %v", err)
 		return err
 	}
 
@@ -89,10 +94,10 @@ func (a *App) SyncChannelData() error {
 	// This handles videos/playlists the user deleted via the YouTube website.
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Cleaning up deleted items...")
 	if err := a.purgeDeletedVideos(seenVideos); err != nil {
-		fmt.Println("Error purging deleted videos:", err)
+		appLog("[SyncChannelData] Error purging deleted videos: %v", err)
 	}
 	if err := a.purgeDeletedPlaylists(seenPlaylists); err != nil {
-		fmt.Println("Error purging deleted playlists:", err)
+		appLog("[SyncChannelData] Error purging deleted playlists: %v", err)
 	}
 
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
@@ -126,12 +131,17 @@ func (a *App) purgeDeletedVideos(seenIDs map[string]bool) error {
 
 	tx, err := a.db.conn.Begin()
 	if err != nil {
+		appLog("[purgeDeletedVideos] Failed to begin transaction: %v", err)
 		return err
 	}
 	for _, id := range toDelete {
-		tx.Exec("DELETE FROM yt_videos WHERE id = ?", id)
-		tx.Exec("DELETE FROM yt_playlist_items WHERE video_id = ?", id)
-		fmt.Printf("Purged deleted video: %s\n", id)
+		if _, e := tx.Exec("DELETE FROM yt_videos WHERE id = ?", id); e != nil {
+			appLog("[purgeDeletedVideos] Failed to delete video %s: %v", id, e)
+		}
+		if _, e := tx.Exec("DELETE FROM yt_playlist_items WHERE video_id = ?", id); e != nil {
+			appLog("[purgeDeletedVideos] Failed to delete playlist items for video %s: %v", id, e)
+		}
+		appLog("[purgeDeletedVideos] Purged video no longer on YouTube: %s", id)
 	}
 	return tx.Commit()
 }
@@ -166,12 +176,17 @@ func (a *App) purgeDeletedPlaylists(seenIDs map[string]bool) error {
 
 	tx, err := a.db.conn.Begin()
 	if err != nil {
+		appLog("[purgeDeletedPlaylists] Failed to begin transaction: %v", err)
 		return err
 	}
 	for _, id := range toDelete {
-		tx.Exec("DELETE FROM yt_playlists WHERE id = ?", id)
-		tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", id)
-		fmt.Printf("Purged deleted playlist: %s\n", id)
+		if _, e := tx.Exec("DELETE FROM yt_playlists WHERE id = ?", id); e != nil {
+			appLog("[purgeDeletedPlaylists] Failed to delete playlist %s: %v", id, e)
+		}
+		if _, e := tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", id); e != nil {
+			appLog("[purgeDeletedPlaylists] Failed to delete items for playlist %s: %v", id, e)
+		}
+		appLog("[purgeDeletedPlaylists] Purged playlist no longer on YouTube: %s", id)
 	}
 	return tx.Commit()
 }
@@ -196,6 +211,7 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 		resp, err := call.Do()
 		a.logAPICall("playlists.list", "", "mine", QuotaPlaylistsList, start, err)
 		if err != nil {
+			appLog("[syncPlaylists] Error on playlists.list (page=%q): %v", pageToken, err)
 			return seenIDs, err
 		}
 
@@ -291,6 +307,7 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 	_, err = svc.Videos.Update([]string{"snippet", "status"}, video).Do()
 	a.logAPICall("videos.update", videoID, finalTitle, QuotaVideosUpdate, start, err)
 	if err != nil {
+		appLog("[UpdateYouTubeVideoMetadata] Error updating video %s (%q): %v", videoID, finalTitle, err)
 		return err
 	}
 
@@ -317,6 +334,7 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
 		resp, err := call.Do()
 		a.logAPICall("playlistItems.list", playlistID, playlistID, QuotaPlaylistItemsList, start, err)
 		if err != nil {
+			appLog("[syncPlaylistItems] Error on playlistItems.list for playlist %s (page=%q): %v", playlistID, pageToken, err)
 			return err
 		}
 
@@ -351,6 +369,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 		resp, err := call.Do()
 		a.logAPICall("playlistItems.list", uploadsPlaylistID, "uploads", QuotaPlaylistItemsList, start, err)
 		if err != nil {
+			appLog("[syncVideos] Error on playlistItems.list for uploads (page=%q): %v", pageToken, err)
 			return seenIDs, err
 		}
 
@@ -367,6 +386,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 			vidResp, err := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...).Do()
 			a.logAPICall("videos.list", strings.Join(videoIDs, ","), fmt.Sprintf("%d videos", len(videoIDs)), QuotaVideosList, start2, err)
 			if err != nil {
+				appLog("[syncVideos] Error on videos.list for batch of %d IDs (page=%q): %v", len(videoIDs), pageToken, err)
 				return seenIDs, err
 			}
 
@@ -421,6 +441,7 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
+		appLog("[SyncRecentVideos] Failed to get YouTube client: %v", err)
 		return err
 	}
 
@@ -432,13 +453,16 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 	a.logAPICall("channels.list", "", "mine", QuotaChannelsList, start, err)
 	if err != nil {
 		if isInsufficientPermissions(err) {
+			appLog("[SyncRecentVideos] Insufficient permissions on channels.list — triggering re-auth: %v", err)
 			runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Re-authentication required.")
 			go a.StartYouTubeAuth()
 			return fmt.Errorf("insufficient permissions, please re-auth and try again")
 		}
+		appLog("[SyncRecentVideos] Error on channels.list: %v", err)
 		return err
 	}
 	if len(channelsResp.Items) == 0 {
+		appLog("[SyncRecentVideos] No channel found for authenticated user")
 		return fmt.Errorf("no channel found")
 	}
 	uploadsPlaylistID := channelsResp.Items[0].ContentDetails.RelatedPlaylists.Uploads
@@ -462,6 +486,7 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 		resp, err := call.Do()
 		a.logAPICall("playlistItems.list", uploadsPlaylistID, "recent", QuotaPlaylistItemsList, start2, err)
 		if err != nil {
+			appLog("[SyncRecentVideos] Error on playlistItems.list for recent videos (page=%q): %v", pageToken, err)
 			return err
 		}
 		for _, item := range resp.Items {
@@ -479,6 +504,7 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 		vidResp, err := svc.Videos.List([]string{"snippet", "contentDetails", "statistics", "status"}).Id(videoIDs...).Do()
 		a.logAPICall("videos.list", strings.Join(videoIDs, ","), fmt.Sprintf("%d recent videos", len(videoIDs)), QuotaVideosList, start3, err)
 		if err != nil {
+			appLog("[SyncRecentVideos] Error on videos.list for %d recent video IDs: %v", len(videoIDs), err)
 			return err
 		}
 
@@ -511,10 +537,10 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 	runtime.EventsEmit(a.ctx, "youtube:sync-progress", "Syncing playlists...")
 	seenPlaylists, err := a.syncPlaylists(svc, syncTime)
 	if err != nil {
-		fmt.Println("Error syncing playlists during quick refresh:", err)
+		appLog("[SyncRecentVideos] Error syncing playlists during light sync: %v", err)
 	} else {
 		if purgeErr := a.purgeDeletedPlaylists(seenPlaylists); purgeErr != nil {
-			fmt.Println("Error purging deleted playlists:", purgeErr)
+			appLog("[SyncRecentVideos] Error purging deleted playlists during light sync: %v", purgeErr)
 		}
 	}
 
