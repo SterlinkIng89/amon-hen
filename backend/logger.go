@@ -99,7 +99,7 @@ func closeSessionLogger() {
 // Usage: appLog("[SyncRecentVideos] Error: %v", err)
 func appLog(format string, args ...interface{}) {
 	if sessionLogger != nil {
-		sessionLogger.Printf(format+"\n", args...)
+		sessionLogger.Printf(format, args...)
 	} else {
 		fmt.Printf(format+"\n", args...)
 	}
