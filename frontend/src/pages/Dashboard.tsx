@@ -152,8 +152,8 @@ export default function Dashboard() {
     GetStreamPort().then(setStreamPort).catch(console.error);
     IsYouTubeAuthed().then(setYtAuthed).catch(() => {});
 
-    EventsOn("youtube:auth-complete", () => setYtAuthed(true));
-    return () => { EventsOff("youtube:auth-complete"); };
+    const unsub = EventsOn("youtube:auth-complete", () => setYtAuthed(true));
+    return () => { unsub(); };
   }, []);
 
   // ── Restore selectedIndex once videos are loaded (once only) ─────────────────

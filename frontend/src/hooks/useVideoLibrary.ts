@@ -51,7 +51,7 @@ export function useVideoLibrary() {
       .catch(console.error);
 
     // Listen for new files detected by the folder watcher
-    EventsOn("files:new", (_path: string) => {
+    const unsub = EventsOn("files:new", (_path: string) => {
       setFolders((currentFolders) => {
         scanFolders(currentFolders);
         return currentFolders;
@@ -60,7 +60,7 @@ export function useVideoLibrary() {
     });
 
     return () => {
-      EventsOff("files:new");
+      unsub();
     };
   }, []);
 

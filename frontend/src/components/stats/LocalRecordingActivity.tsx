@@ -51,13 +51,13 @@ export default function LocalRecordingActivity({ filters, selectedYear, onYearCh
 
   useEffect(() => {
     load();
-    EventsOn("files:new", load);
-    EventsOn("youtube:sync-done", load);
-    EventsOn("youtube:done", load);
+    const unsub1 = EventsOn("files:new", load);
+    const unsub2 = EventsOn("youtube:sync-done", load);
+    const unsub3 = EventsOn("youtube:done", load);
     return () => {
-      EventsOff("files:new");
-      EventsOff("youtube:sync-done");
-      EventsOff("youtube:done");
+      unsub1();
+      unsub2();
+      unsub3();
     };
   }, []);
 

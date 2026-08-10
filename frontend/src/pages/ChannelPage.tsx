@@ -84,21 +84,23 @@ export default function ChannelPage() {
 
   // Sync events
   useEffect(() => {
-    EventsOn("youtube:sync-progress", (msg: string) => setSyncStatus(msg));
-    EventsOn("youtube:sync-done", () => {
-      setIsSyncing(false);
+    const unsub1 = EventsOn("youtube:sync-progress", (data: { count: number; total: number; stage: string }) => {
+      setSyncStatus(`Syncing: ${data.stage} (${data.count}/${data.total})`);
+    });
+    const unsub2 = EventsOn("youtube:sync-done", () => {
       setSyncStatus("Sync complete!");
       setTimeout(() => setSyncStatus(""), 3000);
       loadData(true);
       setAnalyticsRefreshKey((k) => k + 1);
     });
-    EventsOn("youtube:done", () => {
+    const unsub3 = EventsOn("youtube:done", () => {
       loadData(true);
       setAnalyticsRefreshKey((k) => k + 1);
     });
     return () => {
-      EventsOff("youtube:sync-progress");
-      EventsOff("youtube:sync-done");
+      unsub1();
+      unsub2();
+      unsub3();
     };
   }, [loadData]);
 

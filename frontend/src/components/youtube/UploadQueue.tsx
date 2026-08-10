@@ -100,7 +100,7 @@ export default function UploadQueue({
   (UploadQueue as any).__processQueue = processQueue;
 
   useEffect(() => {
-    EventsOn("youtube:progress", (data: { path: string; percent: number; speed?: number }) => {
+    const unsub1 = EventsOn("youtube:progress", (data: { path: string; percent: number; speed?: number }) => {
       SetTrayUploadProgress(data.percent).catch(() => {});
       onUpdateQueue(
         queueRef.current.map(item =>
@@ -111,7 +111,7 @@ export default function UploadQueue({
       );
     });
 
-    EventsOn("youtube:done", (data: { path: string; url: string }) => {
+    const unsub2 = EventsOn("youtube:done", (data: { path: string; url: string }) => {
       const updated = queueRef.current.map(item =>
         item.videoPath === data.path
           ? { ...item, status: "done" as const, progress: 100, url: data.url, completedAt: Date.now() }
@@ -137,7 +137,7 @@ export default function UploadQueue({
       }
     });
 
-    EventsOn("youtube:error", (data: { path: string; message: string }) => {
+    const unsub3 = EventsOn("youtube:error", (data: { path: string; message: string }) => {
       const updated = queueRef.current.map(item =>
         item.videoPath === data.path
           ? { ...item, status: "error" as const, error: data.message }
@@ -157,7 +157,11 @@ export default function UploadQueue({
       }
     });
 
-    return () => { EventsOff("youtube:progress", "youtube:done", "youtube:error"); };
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

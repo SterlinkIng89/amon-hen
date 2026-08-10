@@ -58,7 +58,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
   }, [open]);
 
   useEffect(() => {
-    EventsOn("youtube:auth-complete", async () => {
+    const unsub = EventsOn("youtube:auth-complete", async () => {
       setAuthed(true);
       setConnecting(false);
       try {
@@ -66,7 +66,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
         setChannel(info);
       } catch {}
     });
-    return () => { EventsOff("youtube:auth-complete"); };
+    return () => { unsub(); };
   }, []);
 
   const handleConnect = async () => {
