@@ -12,6 +12,7 @@ import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import { generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
 import TagInput from "../ui/TagInput";
+import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -65,11 +66,14 @@ export default function BulkActionBar({
   const { suggestions, addRecentTag } = useRecentTags();
 
   const [profiles, setProfiles] = useState<Record<string, GameProfile>>({});
+  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [selectedProfileTag, setSelectedProfileTag] = useState("");
+  const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(null);
 
   useEffect(() => {
     LoadConfig().then(cfg => {
       setProfiles(cfg.game_profiles || {});
+      setTagPlaylists(cfg.tag_playlists || {});
     }).catch(console.error);
   }, []);
 
@@ -123,10 +127,28 @@ export default function BulkActionBar({
 
   const handleSave = async () => {
     if (!game.trim()) return;
+
+    // Check if we need to show the playlist linking modal
+    const hasExistingTags = selectedVideos.some(v => v.game === game);
+    const isNewTagForTheseVideos = !hasExistingTags;
+    if (isNewTagForTheseVideos && tagPlaylists[game] === undefined) {
+      setPendingTagForModal(game);
+      return;
+    }
+
+    await performSave();
+  };
+
+  const performSave = async () => {
+    if (!game.trim()) return;
     setSaving(true);
     try {
       await SetVideoGames(selectedPaths, game, event, gameMode, customVars);
       if (game) addRecentTag(game);
+      
+      const cfg = await LoadConfig();
+      setTagPlaylists(cfg.tag_playlists || {});
+
       // Don't clear state — keep selection visible so user sees it applied
       // Rescan to update video data but keep selection so user can chain more actions
       onRescanOnly();
@@ -521,6 +543,17 @@ export default function BulkActionBar({
           </button>
         )}
       </div>
+      
+      {pendingTagForModal && (
+        <TagPlaylistModal
+          tag={pendingTagForModal}
+          onClose={() => setPendingTagForModal(null)}
+          onSaved={() => {
+            setPendingTagForModal(null);
+            performSave();
+          }}
+        />
+      )}
     </div>
   );
 }

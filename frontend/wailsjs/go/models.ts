@@ -227,6 +227,7 @@ export namespace backend {
 	    video_metadata: Record<string, VideoMeta>;
 	    folder_settings: Record<string, FolderConfig>;
 	    game_profiles: Record<string, GameProfile>;
+	    tag_playlists: Record<string, string>;
 	    watch_folder_enabled: boolean;
 	    recent_field_values?: Record<string, Array<string>>;
 	    title_separator?: string;
@@ -245,6 +246,7 @@ export namespace backend {
 	        this.video_metadata = this.convertValues(source["video_metadata"], VideoMeta, true);
 	        this.folder_settings = this.convertValues(source["folder_settings"], FolderConfig, true);
 	        this.game_profiles = this.convertValues(source["game_profiles"], GameProfile, true);
+	        this.tag_playlists = source["tag_playlists"];
 	        this.watch_folder_enabled = source["watch_folder_enabled"];
 	        this.recent_field_values = source["recent_field_values"];
 	        this.title_separator = source["title_separator"];

@@ -85,6 +85,8 @@ export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
+export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
+
 export function SetTitleSeparator(arg1:string):Promise<void>;
 
 export function SetTrayUploadProgress(arg1:number):Promise<void>;

@@ -166,6 +166,10 @@ export function SetAutoLaunch(arg1) {
   return window['go']['backend']['App']['SetAutoLaunch'](arg1);
 }
 
+export function SetTagPlaylist(arg1, arg2) {
+  return window['go']['backend']['App']['SetTagPlaylist'](arg1, arg2);
+}
+
 export function SetTitleSeparator(arg1) {
   return window['go']['backend']['App']['SetTitleSeparator'](arg1);
 }

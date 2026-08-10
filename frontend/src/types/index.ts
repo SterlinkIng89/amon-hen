@@ -32,6 +32,7 @@ export interface Config {
 	video_metadata: Record<string, any>;
 	folder_settings: Record<string, FolderConfig>;
 	game_profiles: Record<string, GameProfile>;
+	tag_playlists: Record<string, string>;
 	watch_folder_enabled: boolean;
 	title_separator?: string;
 }

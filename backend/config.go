@@ -2,6 +2,7 @@ package backend
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -45,6 +46,7 @@ type Config struct {
 	VideoMetadata       map[string]VideoMeta    `json:"video_metadata"` // Maps path to metadata
 	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
 	GameProfiles        map[string]GameProfile  `json:"game_profiles"`
+	TagPlaylists        map[string]string       `json:"tag_playlists"` // Maps tag to YouTube playlist ID
 	WatchFolderEnabled  bool                    `json:"watch_folder_enabled"`
 	RecentFieldValues   map[string][]string     `json:"recent_field_values,omitempty"`
 	// TitleSeparator is the separator used between segments in auto-generated
@@ -236,6 +238,10 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 			meta.YouTubeTitle = "" // Force re-generation so it gets the new tag + episode
 			if tagChanged {
 				meta.Episode = 0
+				// Auto-assign playlist if linked
+				if plId, ok := a.config.TagPlaylists[game]; ok && plId != "none" {
+					meta.PlaylistID = plId
+				}
 			}
 			a.config.VideoMetadata[p] = meta
 		}
@@ -252,6 +258,31 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 		}
 	}
 	a.configMu.Unlock()
+
+	// After updating config, check if any videos need to be added to YouTube playlists
+	for _, p := range paths {
+		meta := a.config.VideoMetadata[p]
+		if meta.Game != "" && meta.YouTubeID != "" && meta.PlaylistID != "" {
+			go func(ytId, plId string) {
+				a.AddVideoToPlaylist(plId, ytId)
+			}(meta.YouTubeID, meta.PlaylistID)
+		}
+	}
+
+	return a.saveConfig()
+}
+
+// SetTagPlaylist links a game tag to a YouTube playlist ID
+func (a *App) SetTagPlaylist(tag string, playlistID string) error {
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	a.configMu.Lock()
+	if a.config.TagPlaylists == nil {
+		a.config.TagPlaylists = make(map[string]string)
+	}
+	a.config.TagPlaylists[tag] = playlistID
+	a.configMu.Unlock()
 	return a.saveConfig()
 }
 
@@ -265,10 +296,19 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		a.config.VideoMetadata = make(map[string]VideoMeta)
 	}
 
+	prevMeta := a.config.VideoMetadata[path]
+	tagChanged := prevMeta.Game != game
+
 	if game == "" {
 		delete(a.config.VideoGames, path)
 	} else {
 		a.config.VideoGames[path] = game
+		// Auto-assign playlist if tag changed and we have a linked playlist (and user didn't explicitly override it with another playlist right now)
+		if tagChanged && playlistId == prevMeta.PlaylistID {
+			if plId, ok := a.config.TagPlaylists[game]; ok && plId != "none" {
+				playlistId = plId
+			}
+		}
 	}
 
 	a.config.VideoMetadata[path] = VideoMeta{
@@ -282,7 +322,17 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		GameMode:     gameMode,
 		CustomVars:   customVars,
 	}
+	// Copy YouTubeID from prevMeta so we don't lose it
+	meta := a.config.VideoMetadata[path]
+	meta.YouTubeID = prevMeta.YouTubeID
+	a.config.VideoMetadata[path] = meta
 	a.configMu.Unlock()
+
+	if game != "" && meta.YouTubeID != "" && meta.PlaylistID != "" {
+		go func(ytId, plId string) {
+			a.AddVideoToPlaylist(plId, ytId)
+		}(meta.YouTubeID, meta.PlaylistID)
+	}
 
 	return a.saveConfig()
 }

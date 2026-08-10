@@ -6,6 +6,7 @@ import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import TagInput from "../ui/TagInput";
+import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
 
 interface InlinePlayerProps {
@@ -171,10 +172,13 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
   const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] = useState(false);
   const [playlistCreateError, setPlaylistCreateError] = useState("");
   const [gameProfiles, setGameProfiles] = useState<Record<string, any>>({});
+  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
+  const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(null);
 
   useEffect(() => {
     LoadConfig().then(cfg => {
       setGameProfiles(cfg.game_profiles || {});
+      setTagPlaylists(cfg.tag_playlists || {});
     }).catch(() => {});
   }, []);
 
@@ -394,6 +398,17 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
 
     const tagChanged = tagInput !== (video.game || "");
 
+    // If tag changed and it's not in our tag_playlists map, ask the user to link it first
+    if (tagChanged && tagInput && tagPlaylists[tagInput] === undefined) {
+      setSavingInfo(false);
+      setPendingTagForModal(tagInput);
+      return;
+    }
+
+    await performSaveInfo(tagChanged);
+  };
+
+  const performSaveInfo = async (tagChanged: boolean) => {
     // Resolve episode: prefer explicit Episode # field, then parse from title
     // text (supports the old workflow where users edit "— N" in the title),
     // then fall back to the original prop episode.
@@ -413,10 +428,16 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     if (tagChanged) {
       setYtTitle(""); // will be re-populated after the next rescan
     }
+    
+    setSavingInfo(true);
     try {
       // 1. Always save to local config / DB first
       await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode, eventInput, gameModeInput, customVarsInput);
       if (tagInput) addRecentTag(tagInput);
+
+      // Reload config just in case to sync tagPlaylists
+      const cfg = await LoadConfig();
+      setTagPlaylists(cfg.tag_playlists || {});
 
       // 2. If video is already on YouTube, push the metadata update to the API
       if (video.youtubeId) {
