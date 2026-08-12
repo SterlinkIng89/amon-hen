@@ -46,7 +46,8 @@ export default function UploadDialog({
       gameProfiles && video.game ? gameProfiles[video.game] : undefined,
       video.event,
       video.gameMode,
-      video.customVars
+      video.customVars,
+      video.modTime
     ),
   );
   const [description, setDescription] = useState(video.description || "");

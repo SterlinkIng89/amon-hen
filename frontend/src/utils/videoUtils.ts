@@ -28,19 +28,36 @@ export function generateYouTubeTitle(
   profile?: GameProfile,
   event?: string,
   gameMode?: string,
-  customVars?: Record<string, string>
+  customVars?: Record<string, string>,
+  modTime?: number
 ): string {
-  const obsPattern = /^(\d{4})-(\d{2})-(\d{2})/;
   const stem = filename.replace(/\.[^/.]+$/, "");
-  const match = stem.match(obsPattern);
   
   let datePart = "";
-  if (match) {
-    const [, year, month, day] = match;
-    datePart = `${parseInt(day)}/${month}/${year.slice(-2)}`;
+  
+  // 1. OBS Pattern (YYYY-MM-DD)
+  const obsPattern = /(?:^|_|-|\s)(\d{4})-(\d{2})-(\d{2})(?:_|-|\s|$)/;
+  const obsMatch = stem.match(obsPattern);
+  
+  // 2. US/EU Pattern (MM-DD-YYYY or DD-MM-YYYY)
+  const usPattern = /(?:^|_|-|\s)(\d{1,2})-(\d{1,2})-(\d{4})(?:_|-|\s|$)/;
+  const usMatch = stem.match(usPattern);
+  
+  if (obsMatch) {
+    const [, year, month, day] = obsMatch;
+    datePart = `${parseInt(day)}/${month.padStart(2, '0')}/${year.slice(-2)}`;
+  } else if (usMatch) {
+    const [, p1, p2, year] = usMatch;
+    let day = p2;
+    let month = p1;
+    if (parseInt(p1) > 12) {
+      day = p1;
+      month = p2;
+    }
+    datePart = `${parseInt(day)}/${month.padStart(2, '0')}/${year.slice(-2)}`;
   } else {
-    const now = new Date();
-    datePart = `${now.getDate()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)}`;
+    const d = modTime ? new Date(modTime) : new Date();
+    datePart = `${d.getDate()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
   }
   
   if (!game) return datePart;

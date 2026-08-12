@@ -154,7 +154,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
   };
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, undefined, video.event, video.gameMode, video.customVars));
+  const [ytTitle, setYtTitle] = useState(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, undefined, video.event, video.gameMode, video.customVars, video.modTime));
   const [tagInput, setTagInput] = useState(video.game || "");
   const [episodeInput, setEpisodeInput] = useState<number | "">(video.episode || "");
   const [eventInput, setEventInput] = useState(video.event || "");
@@ -191,9 +191,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
   useEffect(() => {
     const profile = gameProfiles[video.game || ""];
     if (profile?.type === "multiplayer") {
-      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars, video.modTime));
     } else {
-      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars, video.modTime));
     }
     setTagInput(video.game || "");
     setEpisodeInput(video.episode || "");
@@ -299,9 +299,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
   useEffect(() => {
     const profile = gameProfiles[video.game || ""];
     if (profile?.type === "multiplayer") {
-      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+      setYtTitle(generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars, video.modTime));
     } else {
-      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars));
+      setYtTitle(video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, profile, video.event, video.gameMode, video.customVars, video.modTime));
     }
     setTagInput(video.game || "");
     setEpisodeInput(video.episode || "");
@@ -320,11 +320,11 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
     const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, gameProfiles[tagInput], eventInput, gameModeInput, customVarsInput);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, gameProfiles[tagInput], eventInput, gameModeInput, customVarsInput, video.modTime);
     setTagInput(val);
     
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, val, currentEp, gameProfiles[val], eventInput, gameModeInput, customVarsInput));
+      setYtTitle(generateYouTubeTitle(video.name, val, currentEp, gameProfiles[val], eventInput, gameModeInput, customVarsInput, video.modTime));
     }
   };
 
@@ -359,27 +359,27 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
 
     // No episode number in the current title yet — fall back to full regeneration
     // only if the title is still the auto-generated one (user hasn't customised it).
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode, activeProfile, eventInput, gameModeInput, customVarsInput);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, video.episode, activeProfile, eventInput, gameModeInput, customVarsInput, video.modTime);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput));
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput, video.modTime));
     }
   };
 
   const handleEventChange = (val: string) => {
     setEventInput(val);
     const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput, video.modTime);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, val, gameModeInput, customVarsInput));
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, val, gameModeInput, customVarsInput, video.modTime));
     }
   };
 
   const handleGameModeChange = (val: string) => {
     setGameModeInput(val);
     const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput, video.modTime);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, val, customVarsInput));
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, val, customVarsInput, video.modTime));
     }
   };
 
@@ -387,9 +387,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
     const newVars = { ...customVarsInput, [key]: val };
     setCustomVarsInput(newVars);
     const currentEp = episodeInput !== "" ? Number(episodeInput) : video.episode;
-    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput);
+    const oldGenerated = generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, customVarsInput, video.modTime);
     if (ytTitle === oldGenerated || ytTitle === (video.youtubeTitle || "") || !ytTitle) {
-      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, newVars));
+      setYtTitle(generateYouTubeTitle(video.name, tagInput, currentEp, activeProfile, eventInput, gameModeInput, newVars, video.modTime));
     }
   };
 
@@ -548,7 +548,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
 
   const isDirty = 
     tagInput !== (video.game || "") ||
-    ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, gameProfiles[video.game || ""], video.event, video.gameMode, video.customVars)) ||
+    ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, gameProfiles[video.game || ""], video.event, video.gameMode, video.customVars, video.modTime)) ||
     description !== (video.description || "") ||
     privacy !== (video.privacy || "unlisted") ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
