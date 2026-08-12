@@ -28,6 +28,7 @@ interface VideoPillProps {
   readOnlyThumbnail?: boolean;
   gameProfiles?: Record<string, GameProfile>;
   onThumbLoaded?: (url: string) => void;
+  onSelectToggle?: (e: React.MouseEvent) => void;
 }
 
 export default function VideoPill({
@@ -44,6 +45,7 @@ export default function VideoPill({
   readOnlyThumbnail = false,
   gameProfiles = {},
   onThumbLoaded,
+  onSelectToggle,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -169,6 +171,28 @@ export default function VideoPill({
         style={{ width: isList ? thumbWidth : "100%" }}
         onMouseMove={handleMouseMove}
       >
+        {/* Selection Checkbox */}
+        <div 
+          className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${
+            multiSelected ? "opacity-100" : hovered ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={(e) => {
+            if (onSelectToggle) {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectToggle(e);
+            }
+          }}
+        >
+          <div className={`w-5 h-5 rounded border shadow-sm flex items-center justify-center transition-colors ${
+            multiSelected ? "bg-accent border-accent text-white" : "bg-black/40 border-white/40 text-transparent hover:border-white/80 backdrop-blur-sm"
+          }`}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+        </div>
+
         {isLocal && !thumbLoaded && (
           <div className="absolute inset-0 bg-elevated bg-[length:200%_100%] animate-shimmer bg-gradient-to-r from-elevated via-card to-elevated" />
         )}

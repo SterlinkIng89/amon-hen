@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
-import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed } from "../../wailsjs/go/backend/App";
+import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { groupByDayYT } from "../utils/videoUtils";
 
@@ -11,6 +11,8 @@ import ErrorBoundary from "../components/ui/ErrorBoundary";
 import { useChannelData } from "../hooks/useChannelData";
 import ChannelAnalytics from "../components/youtube/ChannelAnalytics";
 import AdvancedFilters, { ActiveFilterChips, useAdvancedFilters } from "../components/ui/AdvancedFilters";
+import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
+import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 
 export default function ChannelPage() {
   const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
@@ -23,6 +25,10 @@ export default function ChannelPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<YTVideo | null>(null);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; playlistId: string; playlistName: string; duplicates: string[]; targetVideoIds: string[] } | null>(null);
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const lastSelectedId = useRef<string | null>(null);
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -55,6 +61,8 @@ export default function ChannelPage() {
   useEffect(() => {
     setSelectedPlaylist(null);
     setSelectedVideo(null);
+    setSelectedVideoIds(new Set());
+    lastSelectedId.current = null;
     setViewType("grid");
     filters.clearAll();
     setAnalyticsDate("");
@@ -63,6 +71,8 @@ export default function ChannelPage() {
 
   // Reset filters when playlist changes
   useEffect(() => {
+    setSelectedVideoIds(new Set());
+    lastSelectedId.current = null;
     filters.clearAll();
     setAnalyticsDate("");
     setSearchQuery("");
@@ -176,6 +186,122 @@ export default function ChannelPage() {
     if (!selectedVideo) return;
     const idx = playerVideos.findIndex((v) => v.id === selectedVideo.id);
     if (idx > 0) setSelectedVideo(playerVideos[idx - 1]);
+  };
+
+  const handleVideoClick = (video: YTVideo, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = new Set(selectedVideoIds);
+      if (next.has(video.id)) next.delete(video.id);
+      else next.add(video.id);
+      setSelectedVideoIds(next);
+      lastSelectedId.current = video.id;
+      return;
+    }
+
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const anchorId = lastSelectedId.current || filteredVideos[0]?.id;
+      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+      const lastIndex = filteredVideos.findIndex(v => v.id === anchorId);
+      
+      if (currentIndex !== -1 && lastIndex !== -1) {
+        const start = Math.min(currentIndex, lastIndex);
+        const end = Math.max(currentIndex, lastIndex);
+        const next = new Set(selectedVideoIds);
+        for (let i = start; i <= end; i++) {
+          next.add(filteredVideos[i].id);
+        }
+        setSelectedVideoIds(next);
+      }
+      return;
+    }
+
+    // Normal click
+    if (selectedVideoIds.size > 0) {
+      // If we are in selection mode, a normal click selects/deselects
+      e.preventDefault();
+      e.stopPropagation();
+      const next = new Set(selectedVideoIds);
+      if (next.has(video.id)) next.delete(video.id);
+      else next.add(video.id);
+      setSelectedVideoIds(next);
+      lastSelectedId.current = video.id;
+      return;
+    }
+
+    lastSelectedId.current = video.id;
+    setSelectedVideo(video);
+    setViewType("player");
+  };
+
+  const handleSelectToggle = (video: YTVideo) => {
+    const next = new Set(selectedVideoIds);
+    if (next.has(video.id)) next.delete(video.id);
+    else next.add(video.id);
+    setSelectedVideoIds(next);
+    lastSelectedId.current = video.id;
+  };
+
+  const handleAddToPlaylist = async (playlistId: string) => {
+    if (selectedVideoIds.size === 0) return;
+    const targetVideoIds = Array.from(selectedVideoIds);
+    setBulkAdding(true);
+    try {
+      const existingVideos = await GetPlaylistVideos(playlistId);
+      const existingIds = new Set(existingVideos.map(v => v.id));
+      const duplicates = targetVideoIds.filter(id => existingIds.has(id));
+
+      if (duplicates.length > 0) {
+        const p = playlists.find(p => p.id === playlistId);
+        setDuplicateWarning({
+          isOpen: true,
+          playlistId,
+          playlistName: p?.title || "Unknown Playlist",
+          duplicates,
+          targetVideoIds
+        });
+        setBulkAdding(false);
+        return;
+      }
+
+      await processAddVideos(playlistId, targetVideoIds, []);
+    } catch (e) {
+      console.error("Error checking playlist:", e);
+      setBulkAdding(false);
+    }
+  };
+
+  const processAddVideos = async (playlistId: string, allTargets: string[], skipDuplicates: string[]) => {
+    const toAdd = allTargets.filter(id => !skipDuplicates.includes(id));
+    if (toAdd.length === 0) {
+      // Nothing to add
+      setSelectedVideoIds(new Set());
+      setDuplicateWarning(null);
+      setBulkAdding(false);
+      return;
+    }
+
+    setBulkAdding(true);
+    setSyncStatus(`Adding ${toAdd.length} video(s) to playlist...`);
+    try {
+      for (const id of toAdd) {
+        await AddVideoToPlaylist(playlistId, id);
+      }
+      setSyncStatus("Added successfully!");
+      setSelectedVideoIds(new Set());
+      setDuplicateWarning(null);
+      setTimeout(() => setSyncStatus(""), 3000);
+      loadData(true);
+    } catch (e) {
+      console.error("Failed to add videos to playlist", e);
+      setSyncStatus("Failed to add videos.");
+      setTimeout(() => setSyncStatus(""), 3000);
+    } finally {
+      setBulkAdding(false);
+    }
   };
 
   const ytGroups = (activeTab === "videos" && !selectedPlaylist && (videoSort === "recent" || videoSort === "title_date"))
@@ -422,7 +548,7 @@ export default function ChannelPage() {
               </div>
             ) : (
               <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
-                {filteredVideos.map((v) => (<div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}><VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} /></div>))}
+                {filteredVideos.map((v) => (<div key={v.id} onClick={(e) => handleVideoClick(v, e)}><VideoPill video={v} multiSelected={selectedVideoIds.has(v.id)} onUpdate={() => loadData(true)} viewMode={viewMode} onSelectToggle={() => handleSelectToggle(v)} /></div>))}
               </div>
             )
           ) : activeTab === "videos" ? (
@@ -446,13 +572,13 @@ export default function ChannelPage() {
                         <div className="flex-1 h-px shrink-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.07) 0%, transparent 100%)" }} />
                       </div>
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                        {group.videos.map((v) => (<div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}><VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} /></div>))}
+                        {group.videos.map((v) => (<div key={v.id} onClick={(e) => handleVideoClick(v, e)}><VideoPill video={v} multiSelected={selectedVideoIds.has(v.id)} onUpdate={() => loadData(true)} viewMode={viewMode} onSelectToggle={(e) => handleSelectToggle(v)} /></div>))}
                       </div>
                     </section>
                   ))
                 ) : (
                   <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
-                    {filteredVideos.map((v) => (<div key={v.id} onClick={() => { setSelectedVideo(v); setViewType("player"); }}><VideoPill video={v} onUpdate={() => loadData(true)} viewMode={viewMode} /></div>))}
+                    {filteredVideos.map((v) => (<div key={v.id} onClick={(e) => handleVideoClick(v, e)}><VideoPill video={v} multiSelected={selectedVideoIds.has(v.id)} onUpdate={() => loadData(true)} viewMode={viewMode} onSelectToggle={(e) => handleSelectToggle(v)} /></div>))}
                   </div>
                 )}
                 <div ref={loadMoreRef} className="col-span-full h-12 flex items-center justify-center shrink-0 mt-4">
@@ -473,6 +599,37 @@ export default function ChannelPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Bulk Action Bar */}
+      <ChannelBulkActionBar 
+        selectedCount={selectedVideoIds.size} 
+        playlists={playlists} 
+        onClearSelection={() => {
+          setSelectedVideoIds(new Set());
+          lastSelectedId.current = null;
+        }}
+        onAddToPlaylist={handleAddToPlaylist}
+      />
+
+      {/* Duplicate Warning Dialog */}
+      {duplicateWarning && (
+        <DuplicateWarningDialog
+          isOpen={duplicateWarning.isOpen}
+          playlistName={duplicateWarning.playlistName}
+          duplicateCount={duplicateWarning.duplicates.length}
+          totalCount={duplicateWarning.targetVideoIds.length}
+          onAddAll={() => {
+            processAddVideos(duplicateWarning.playlistId, duplicateWarning.targetVideoIds, []);
+          }}
+          onAddNewOnly={() => {
+            processAddVideos(duplicateWarning.playlistId, duplicateWarning.targetVideoIds, duplicateWarning.duplicates);
+          }}
+          onCancel={() => {
+            setDuplicateWarning(null);
+            setBulkAdding(false);
+          }}
+        />
       )}
     </div>
   );

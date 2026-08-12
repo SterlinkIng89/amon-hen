@@ -87,6 +87,14 @@ export function useChannelData({
         setPlaylistVideos(sorted);
       } else if (activeTab === "videos") {
         const pageToLoad = reset ? 1 : page;
+
+        // Ensure playlists are loaded for the bulk action bar
+        if (reset || playlists.length === 0) {
+          GetChannelPlaylists(String(playlistSort || "recent"))
+            .then(pRes => setPlaylists(pRes || []))
+            .catch(console.error);
+        }
+
         const res: any = await GetChannelVideosPaginated(
           pageToLoad,
           40,
