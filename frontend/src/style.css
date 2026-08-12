@@ -34,6 +34,9 @@
   .btn-primary {
     @apply bg-accent text-white hover:enabled:bg-accent-hover;
   }
+  .btn-secondary {
+    @apply bg-elevated text-text-primary border-border-subtle hover:enabled:bg-card hover:enabled:border-border-medium;
+  }
   .btn-ghost {
     @apply bg-elevated text-text-secondary border-border-subtle hover:enabled:bg-card hover:enabled:text-text-primary hover:enabled:border-border-medium;
   }

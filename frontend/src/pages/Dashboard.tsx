@@ -5,11 +5,12 @@ import {
   SaveVideoMetadata,
   SyncRecentVideos,
   UploadToYouTube,
+  LoadConfig,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 // Types & Utils
-import { VideoFile, ViewMode } from "../types";
+import { VideoFile, ViewMode, GameProfile } from "../types";
 import { groupByDay } from "../utils/videoUtils";
 
 // Global store
@@ -79,6 +80,13 @@ export default function Dashboard() {
   const [devLogsOpen, setDevLogsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+
+  useEffect(() => {
+    LoadConfig().then(cfg => {
+      setGameProfiles(cfg.game_profiles || {});
+    }).catch(() => {});
+  }, []);
 
   // ── Advanced library filters ─────────────────────────────────────────────────
   const libFilters = useAdvancedFilters();
@@ -184,8 +192,12 @@ export default function Dashboard() {
   }, [selectedPaths.length, searchQuery]);
 
   // ── Video click handler ──────────────────────────────────────────────────────
-  const handleVideoClick = (sortedIdx: number, e: React.MouseEvent) => {
-    const video = sortedVideos[sortedIdx];
+  const handleVideoClick = (filteredIdx: number, e: React.MouseEvent) => {
+    const video = filteredVideos[filteredIdx];
+    if (!video) return;
+
+    // selectedIndex always tracks position in sortedVideos (the full list)
+    const sortedIdx = sortedVideos.findIndex(v => v.path === video.path);
 
     let currentPaths = [...selectedPaths];
     if (
@@ -193,20 +205,17 @@ export default function Dashboard() {
       currentPaths.length === 0 &&
       (e.shiftKey || e.ctrlKey || e.metaKey)
     ) {
-      if (selectedIndex !== -1) {
+      if (selectedIndex !== -1 && sortedVideos[selectedIndex]) {
         currentPaths.push(sortedVideos[selectedIndex].path);
       }
     }
 
     if (e.shiftKey) {
-      const anchorIdx =
-        lastSelectedIdx !== -1 ? lastSelectedIdx : selectedIndex !== -1 ? selectedIndex : 0;
-      
-      const anchorVideo = sortedVideos[anchorIdx];
-      const targetVideo = sortedVideos[sortedIdx];
+      const anchorSortedIdx = lastSelectedIdx !== -1 ? lastSelectedIdx : selectedIndex !== -1 ? selectedIndex : 0;
+      const anchorVideo = sortedVideos[anchorSortedIdx];
       
       const visibleStartIdx = filteredVideos.findIndex(v => v.path === anchorVideo?.path);
-      const visibleEndIdx = filteredVideos.findIndex(v => v.path === targetVideo?.path);
+      const visibleEndIdx = filteredIdx;
 
       if (visibleStartIdx !== -1 && visibleEndIdx !== -1) {
         const start = Math.min(visibleStartIdx, visibleEndIdx);
@@ -494,6 +503,7 @@ export default function Dashboard() {
         <UploadDialog
           video={uploadTarget}
           queueStatus={queue.find(i => i.videoPath === uploadTarget.path)?.status}
+          gameProfiles={gameProfiles}
           onClose={() => setUploadTarget(null)}
           onUploadNow={(opts) => handleUploadNow(uploadTarget, opts)}
           onAddToQueue={(opts) => handleAddToQueueModal(uploadTarget, opts)}

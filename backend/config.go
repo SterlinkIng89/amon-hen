@@ -234,7 +234,14 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 			// When using bulk action, we always want to apply the provided event and gameMode.
 			meta.Event = event
 			meta.GameMode = gameMode
-			meta.CustomVars = customVars
+			if customVars != nil {
+				meta.CustomVars = make(map[string]string)
+				for k, v := range customVars {
+					meta.CustomVars[k] = v
+				}
+			} else {
+				meta.CustomVars = nil
+			}
 			meta.YouTubeTitle = "" // Force re-generation so it gets the new tag + episode
 			if tagChanged {
 				meta.Episode = 0

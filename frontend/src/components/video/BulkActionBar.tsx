@@ -10,10 +10,10 @@ import {
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
-import { generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
+import { generateYouTubeTitle, extractCustomVars } from "../../utils/videoUtils";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
-import FieldInput from "../ui/FieldInput";
+
 import { QueueItem } from "../youtube/UploadQueue";
 
 interface Props {
@@ -109,9 +109,10 @@ export default function BulkActionBar({
       if (allSameGame && profiles[firstGame]) {
         setSelectedProfileTag(firstGame);
         setGame(firstGame);
-        // Also pre-fill event/gameMode from the first video if available
+        // Also pre-fill event/gameMode/customVars from the first video if available
         setEvent(selectedVideos[0]?.event || "");
         setGameMode(selectedVideos[0]?.gameMode || "");
+        setCustomVars(selectedVideos[0]?.customVars || {});
       } else if (!allSameGame) {
         setSelectedProfileTag("");
         setGame("");
@@ -227,7 +228,15 @@ export default function BulkActionBar({
         videoPath: v.path,
         videoName: v.name,
         size: v.size,
-        title: v.youtubeTitle || generateYouTubeTitle(v.name, v.game, v.episode),
+        title: v.youtubeTitle || generateYouTubeTitle(
+          v.name, 
+          v.game, 
+          v.episode, 
+          v.game ? profiles[v.game] : undefined, 
+          v.event, 
+          v.gameMode, 
+          v.customVars
+        ),
         description: v.description || "",
         privacy: (v.privacy as "public" | "unlisted" | "private") || "unlisted",
         status: "pending" as const,
@@ -316,68 +325,23 @@ export default function BulkActionBar({
             placeholder="Game Tag"
           />
 
-          {profiles[selectedProfileTag]?.type === "multiplayer" && (
-            <div className="flex items-center gap-2 ml-2">
-              {extractOrderedInputVars(profiles[selectedProfileTag].titleTemplate).map(cv => {
-                if (cv === 'event') {
-                  return (
-                    <React.Fragment key="event">
-                      <FieldInput
-                        fieldKey="event"
-                        className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                        placeholder="Title"
-                        value={event}
-                        onChange={setEvent}
-                        disabled={saving}
-                      />
-                    </React.Fragment>
-                  )
-                } else if (cv === 'gamemode') {
-                  return profiles[selectedProfileTag].modes && profiles[selectedProfileTag].modes!.length > 0 ? (
-                    <select
-                      key="gamemode"
-                      className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)] appearance-none cursor-pointer"
-                      value={gameMode}
-                      onChange={e => setGameMode(e.target.value)}
-                      disabled={saving}
-                    >
-                      <option value="">Mode...</option>
-                      {profiles[selectedProfileTag].modes!.map((m: string) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      key="gamemode"
-                      type="text"
-                      className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                      placeholder="Mode..."
-                      value={gameMode}
-                      onChange={e => setGameMode(e.target.value)}
-                      disabled={saving}
-                    />
-                  )
-                } else {
-                  return (
-                    <React.Fragment key={cv}>
-                      <FieldInput
-                        fieldKey={cv}
-                        className="w-[120px] bg-elevated border border-border-subtle rounded-sm px-2 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:shadow-[0_0_0_2px_rgba(249,115,22,0.15)]"
-                        placeholder={cv.charAt(0).toUpperCase() + cv.slice(1)}
-                        value={customVars[cv] || ""}
-                        onChange={val => setCustomVars(prev => ({ ...prev, [cv]: val }))}
-                        disabled={saving}
-                      />
-                    </React.Fragment>
-                  )
-                }
-              })}
-            </div>
-          )}
-
           <button className="btn btn-primary btn-sm ml-2" onClick={handleSave} disabled={saving || !game.trim()}>
             {saving ? "Saving..." : "Apply"}
           </button>
+
+          {/* When the current tag has playlist=none (user skipped), offer a quick way to re-link */}
+          {game.trim() && tagPlaylists[game.trim()] === "none" && (
+            <button
+              className="flex items-center gap-1 px-2 py-1 rounded-sm border border-border-subtle bg-transparent text-[10px] text-text-muted hover:text-accent hover:border-accent/40 transition-colors"
+              title={`"${game}" has no linked playlist. Click to link one.`}
+              onClick={() => setPendingTagForModal(game.trim())}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
+              </svg>
+              Link playlist
+            </button>
+          )}
         </div>
 
         <div className="w-px h-5 bg-white/10" />
@@ -550,6 +514,8 @@ export default function BulkActionBar({
           onClose={() => setPendingTagForModal(null)}
           onSaved={() => {
             setPendingTagForModal(null);
+            // Reload tag_playlists so the "Link playlist" indicator refreshes
+            LoadConfig().then(cfg => setTagPlaylists(cfg.tag_playlists || {})).catch(() => {});
             performSave();
           }}
         />

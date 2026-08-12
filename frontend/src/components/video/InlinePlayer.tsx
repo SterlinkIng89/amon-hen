@@ -12,6 +12,7 @@ import FieldInput from "../ui/FieldInput";
 interface InlinePlayerProps {
   video: VideoFile;
   streamPort: number;
+  selectedPaths?: string[];
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
   onAddToQueue: (item: QueueItem) => void;
@@ -19,7 +20,7 @@ interface InlinePlayerProps {
   onDelete?: () => void;
 }
 
-export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddToQueue, onTagSaved, onDelete }: InlinePlayerProps) {
+export default function InlinePlayer({ video, streamPort, selectedPaths = [], onPrev, onNext, onAddToQueue, onTagSaved, onDelete }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
 
@@ -432,7 +433,14 @@ export default function InlinePlayer({ video, streamPort, onPrev, onNext, onAddT
     setSavingInfo(true);
     try {
       // 1. Always save to local config / DB first
-      await SaveVideoMetadata(video.path, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode, eventInput, gameModeInput, customVarsInput);
+      const pathsToSave = selectedPaths.length > 1 && selectedPaths.includes(video.path) 
+        ? selectedPaths 
+        : [video.path];
+      
+      for (const p of pathsToSave) {
+        await SaveVideoMetadata(p, tagInput, titleToSave, description, privacy, playlistId, resolvedEpisode, eventInput, gameModeInput, customVarsInput);
+      }
+      
       if (tagInput) addRecentTag(tagInput);
 
       // Reload config just in case to sync tagPlaylists

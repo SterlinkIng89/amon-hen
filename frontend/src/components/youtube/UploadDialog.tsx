@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { VideoFile, YTPlaylist } from "../../types";
+import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";
 import { QueueItem } from "./UploadQueue";
 import {
   GetChannelPlaylists,
   GetOrCreatePlaylist,
+  LoadConfig,
 } from "../../../wailsjs/go/backend/App";
 
 export interface UploadOptions {
@@ -18,6 +19,7 @@ interface Props {
   video: VideoFile;
   /** Current status of this file in the queue, if any */
   queueStatus?: QueueItem["status"];
+  gameProfiles?: Record<string, GameProfile>;
   onClose: () => void;
   onUploadNow: (opts: UploadOptions) => void;
   onAddToQueue: (opts: UploadOptions) => void;
@@ -26,6 +28,7 @@ interface Props {
 export default function UploadDialog({
   video,
   queueStatus,
+  gameProfiles,
   onClose,
   onUploadNow,
   onAddToQueue,
@@ -36,7 +39,15 @@ export default function UploadDialog({
     queueStatus === "uploading" ||
     queueStatus === "processing";
   const [title, setTitle] = useState(
-    video.youtubeTitle || generateYouTubeTitle(video.name, video.game),
+    video.youtubeTitle || generateYouTubeTitle(
+      video.name,
+      video.game,
+      video.episode,
+      gameProfiles && video.game ? gameProfiles[video.game] : undefined,
+      video.event,
+      video.gameMode,
+      video.customVars
+    ),
   );
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
@@ -50,6 +61,34 @@ export default function UploadDialog({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
   const [playlistError, setPlaylistError] = useState("");
+
+  const [profiles, setProfiles] = useState<Record<string, GameProfile>>(gameProfiles || {});
+
+  useEffect(() => {
+    if (gameProfiles) {
+      setProfiles(gameProfiles);
+    } else {
+      LoadConfig().then((cfg) => {
+        if (cfg.game_profiles) setProfiles(cfg.game_profiles);
+      }).catch(() => {});
+    }
+  }, [gameProfiles]);
+
+  useEffect(() => {
+    if (!video.youtubeTitle && video.game && profiles[video.game]) {
+      setTitle(
+        generateYouTubeTitle(
+          video.name,
+          video.game,
+          video.episode,
+          profiles[video.game],
+          video.event,
+          video.gameMode,
+          video.customVars
+        )
+      );
+    }
+  }, [profiles, video]);
 
   const refreshPlaylists = () =>
     GetChannelPlaylists("recent")

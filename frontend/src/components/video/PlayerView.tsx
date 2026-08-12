@@ -57,17 +57,16 @@ export default function PlayerView({
     <div className="flex-1 flex overflow-hidden">
       <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 flex flex-col gap-2.5 custom-scrollbar" ref={listRef}>
-          {sortedVideos.map((video) => {
-            const absoluteIdx = allVideos.findIndex(v => v.path === video.path);
+          {sortedVideos.map((video, idx) => {
             return (
               <VideoPill
                 key={video.path}
                 video={video}
-                selected={absoluteIdx === selectedIndex && selectedPaths.length === 0}
+                selected={idx === selectedIndex && selectedPaths.length === 0}
                 multiSelected={selectedPaths.includes(video.path)}
                 viewMode="list"
                 compact={true}
-                onClick={(e) => onVideoClick(absoluteIdx, e)}
+                onClick={(e) => onVideoClick(idx, e)}
                 onUpload={() => onUploadTarget(video)}
                 uploadProgress={getUploadProgress(video.path)}
                 gameProfiles={gameProfiles}
@@ -83,16 +82,16 @@ export default function PlayerView({
           const handlePrev = () => {
             if (currentFilteredIdx > 0) {
               const prevVideo = sortedVideos[currentFilteredIdx - 1];
-              const absIdx = allVideos.findIndex(v => v.path === prevVideo.path);
-              onGoTo(absIdx);
+              const sortedIdx = sortedVideos.findIndex(v => v.path === prevVideo.path);
+              onGoTo(sortedIdx);
             }
           };
 
           const handleNext = () => {
             if (currentFilteredIdx >= 0 && currentFilteredIdx < sortedVideos.length - 1) {
               const nextVideo = sortedVideos[currentFilteredIdx + 1];
-              const absIdx = allVideos.findIndex(v => v.path === nextVideo.path);
-              onGoTo(absIdx);
+              const sortedIdx = sortedVideos.findIndex(v => v.path === nextVideo.path);
+              onGoTo(sortedIdx);
             }
           };
 
@@ -100,6 +99,7 @@ export default function PlayerView({
             <InlinePlayer
               video={selectedVideo}
               streamPort={streamPort}
+              selectedPaths={selectedPaths}
               onPrev={currentFilteredIdx > 0 ? handlePrev : null}
               onNext={currentFilteredIdx >= 0 && currentFilteredIdx < sortedVideos.length - 1 ? handleNext : null}
               onAddToQueue={onAddToQueue}
