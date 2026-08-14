@@ -74,6 +74,10 @@ func (db *DB) migrate() error {
 			quota_cost INTEGER NOT NULL DEFAULT 0,
 			duration_ms INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS steam_app_cache (
+			game_name TEXT PRIMARY KEY,
+			app_id TEXT NOT NULL
+		)`,
 	}
 	
 	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)

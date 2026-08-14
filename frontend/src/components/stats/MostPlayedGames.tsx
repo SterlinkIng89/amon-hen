@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { GetChannelAnalytics } from "../../../wailsjs/go/backend/App";
+import { GetChannelAnalytics, GetSteamAppID } from "../../../wailsjs/go/backend/App";
 import { extractTitleDate } from "../../utils/videoUtils";
 
 interface HistoricalVideo {
@@ -314,53 +314,173 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
 
         <div className="h-px w-full bg-border-subtle my-2" />
 
-        {/* Leaderboard List */}
-        <div className="flex flex-col gap-4">
-          <h3 className="text-xs font-bold text-text-secondary">{listTitle}</h3>
+        {/* Leaderboard & Highlight 2-Column Container */}
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-start">
           
-          <div className="flex flex-col gap-3">
-            {gamesToDisplay.length === 0 ? (
-              <div className="py-8 flex flex-col items-center justify-center gap-2 text-text-muted">
-                <p className="text-sm">No playtime recorded.</p>
-              </div>
+          {/* Left Column: Top Game Highlight (fixed compact card) */}
+          <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-text-secondary">
+              #1 Game of the {viewMode === "year" ? "Year" : "Month"}
+            </h3>
+            {gamesToDisplay.length > 0 ? (
+              <TopGameHighlight game={gamesToDisplay[0]} />
             ) : (
-              gamesToDisplay.map((g, idx) => {
-                const progressWidth = `${(g.hours / maxGameHours) * 100}%`;
-                const isTop = idx === 0;
-                
-                return (
-                  <div 
-                    key={g.game} 
-                    className="group relative flex items-center justify-between p-3 rounded-lg overflow-hidden transition-all hover:bg-surface/50 border border-transparent hover:border-border-subtle z-0"
-                  >
-                    {/* Progress Background */}
-                    <div 
-                      className={`absolute left-0 top-0 bottom-0 -z-10 opacity-10 transition-all duration-700 ease-out ${isTop ? "bg-accent" : "bg-text-muted"}`}
-                      style={{ width: progressWidth }}
-                    />
-                    
-                    <div className="flex items-center gap-3">
-                      <span className={`w-5 text-center text-xs font-black ${isTop ? "text-accent" : "text-text-muted group-hover:text-text-secondary"}`}>
-                        {idx + 1}
-                      </span>
-                      <span className={`text-sm font-semibold ${isTop ? "text-text-primary" : "text-text-secondary group-hover:text-text-primary"} transition-colors truncate max-w-[200px] sm:max-w-xs md:max-w-md`}>
-                        {g.game}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-xs font-bold tabular-nums ${isTop ? "text-text-primary" : "text-text-secondary"}`}>
-                        {g.hours < 0.1 ? "<0.1" : g.hours.toFixed(1)}
-                      </span>
-                      <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider">hrs</span>
-                    </div>
-                  </div>
-                );
-              })
+              <div className="bg-surface/30 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
+                No game to highlight
+              </div>
             )}
           </div>
+
+          {/* Right Column: Leaderboard List (constrained width to prevent excessive stretching) */}
+          <div className="flex-1 w-full max-w-3xl flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-text-secondary">{listTitle}</h3>
+            
+            <div className="flex flex-col gap-2.5">
+              {gamesToDisplay.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-text-muted">
+                  <p className="text-sm">No playtime recorded.</p>
+                </div>
+              ) : (
+                gamesToDisplay.map((g, idx) => (
+                  <GameRow key={g.game} game={g.game} hours={g.hours} index={idx} maxGameHours={maxGameHours} />
+                ))
+              )}
+            </div>
+          </div>
+
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: number, index: number, maxGameHours: number }) {
+  const [appId, setAppId] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    GetSteamAppID(game).then((id: any) => {
+      if (mounted && id && id !== "NOT_FOUND") {
+        setAppId(id);
+      }
+    }).catch(console.error);
+    return () => { mounted = false; };
+  }, [game]);
+
+  const progressWidth = `${(hours / maxGameHours) * 100}%`;
+  const isTop = index === 0;
+
+  const bgImage = appId ? `url('https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg')` : 'none';
+
+  return (
+    <div 
+      className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all hover:scale-[1.01] border border-border-subtle hover:border-border-medium z-0 h-[64px] shadow-sm"
+    >
+      {/* Layer 1: Blurred Color Bleed (Dominant color effect) */}
+      {appId ? (
+        <div 
+          className="absolute inset-0 -z-30 bg-cover bg-center opacity-40 group-hover:opacity-60 blur-xl transition-opacity duration-500 scale-110"
+          style={{ backgroundImage: bgImage }}
+        />
+      ) : (
+        <div className="absolute inset-0 -z-30 bg-surface" />
+      )}
+
+      {/* Layer 2: Darkening overlay for text readability on the left */}
+      <div className="absolute inset-0 -z-20 bg-gradient-to-r from-surface via-surface/80 to-transparent" />
+
+      {/* Layer 3: Sharp Image on the right half */}
+      {appId && (
+        <div 
+          className="absolute inset-y-0 right-0 w-1/2 max-w-[450px] -z-10 bg-cover bg-left opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+          style={{ 
+            backgroundImage: bgImage,
+            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 25%)",
+            maskImage: "linear-gradient(to right, transparent 0%, black 25%)"
+          }}
+        />
+      )}
+
+      {/* Progress Background Fill */}
+      <div 
+        className={`absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent/15" : "bg-accent/5 opacity-50 group-hover:opacity-100"}`}
+        style={{ width: progressWidth }}
+      />
+      
+      {/* Thicker Progress Bar at the bottom */}
+      <div 
+        className={`absolute bottom-0 left-0 h-[4px] -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent shadow-[0_0_8px_rgba(249,115,22,0.8)]" : "bg-accent/60 group-hover:bg-accent shadow-[0_0_6px_rgba(249,115,22,0.5)]"}`}
+        style={{ width: progressWidth }}
+      />
+      
+      <div className="flex items-center gap-3 z-10 w-2/3">
+        <span className={`w-5 shrink-0 text-center text-base font-black ${isTop ? "text-accent drop-shadow-[0_0_6px_rgba(249,115,22,0.8)]" : "text-text-muted group-hover:text-text-primary transition-colors"}`}>
+          {index + 1}
+        </span>
+        <span className={`text-sm font-bold ${isTop ? "text-white" : "text-text-primary"} transition-colors truncate drop-shadow-md`}>
+          {game}
+        </span>
+      </div>
+      
+      <div className="flex items-center gap-1 shrink-0 z-10 bg-surface/80 backdrop-blur-md px-2 py-1 rounded-md border border-border-subtle shadow-sm group-hover:border-border-medium transition-colors">
+        <span className={`text-xs font-black tabular-nums ${isTop ? "text-accent drop-shadow-[0_0_4px_rgba(249,115,22,0.4)]" : "text-text-primary"}`}>
+          {hours < 0.1 ? "<0.1" : hours.toFixed(1)}
+        </span>
+        <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">hrs</span>
+      </div>
+    </div>
+  );
+}
+
+function TopGameHighlight({ game }: { game: GameStat }) {
+  const [appId, setAppId] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    GetSteamAppID(game.game).then((id: any) => {
+      if (mounted && id && id !== "NOT_FOUND") {
+        setAppId(id);
+      }
+    }).catch(console.error);
+    return () => { mounted = false; };
+  }, [game.game]);
+
+  // library_600x900_2x.jpg is the vertical high-res cover (capsule).
+  const posterUrl = appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg` : "";
+
+  return (
+    <div className="relative w-full max-w-[280px] aspect-[2/3] rounded-xl overflow-hidden border border-border-subtle shadow-lg group bg-surface">
+      {/* Background Poster */}
+      {appId ? (
+        <div 
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-[1.03]"
+          style={{ backgroundImage: `url('${posterUrl}')` }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center p-4 text-center opacity-50">
+          <span className="text-3xl font-black text-text-muted/30 mb-2">#1</span>
+          <span className="text-sm font-bold text-text-primary">{game.game}</span>
+        </div>
+      )}
+
+      {/* Gradient Overlay for bottom text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent opacity-95 group-hover:opacity-100 transition-opacity" />
+
+      {/* Content */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-1.5 z-10">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1 shadow-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shadow-[0_0_6px_rgba(249,115,22,0.8)]" />
+          <span className="text-[9px] font-black uppercase tracking-wider text-accent drop-shadow-md">Top Played</span>
+        </span>
+        <h4 className="text-lg font-black text-white leading-snug drop-shadow-lg line-clamp-2">{game.game}</h4>
+        
+        <div className="flex items-end gap-1 mt-1">
+          <span className="text-2xl sm:text-3xl font-black text-accent drop-shadow-[0_0_12px_rgba(249,115,22,0.6)] tabular-nums">
+            {game.hours < 0.1 ? "<0.1" : game.hours.toFixed(1)}
+          </span>
+          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">hrs</span>
+        </div>
       </div>
     </div>
   );

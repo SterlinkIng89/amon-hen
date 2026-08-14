@@ -2,6 +2,7 @@ import { useState } from "react";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 import MostPlayedGames from "../components/stats/MostPlayedGames";
 import LocalRecordingActivity from "../components/stats/LocalRecordingActivity";
+import GamingInsights from "../components/stats/GamingInsights";
 import { useAdvancedFilters } from "../components/ui/AdvancedFilters";
 
 export default function StatsPage() {
@@ -33,6 +34,10 @@ export default function StatsPage() {
             filters={filters} 
             globalYear={globalYear} 
           />
+        </ErrorBoundary>
+
+        <ErrorBoundary area="Gaming Insights">
+          <GamingInsights filters={filters} />
         </ErrorBoundary>
       </div>
     </div>

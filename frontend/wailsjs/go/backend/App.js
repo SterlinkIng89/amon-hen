@@ -70,6 +70,10 @@ export function GetQuotaUsedToday() {
   return window['go']['backend']['App']['GetQuotaUsedToday']();
 }
 
+export function GetSteamAppID(arg1) {
+  return window['go']['backend']['App']['GetSteamAppID'](arg1);
+}
+
 export function GetStreamPort() {
   return window['go']['backend']['App']['GetStreamPort']();
 }

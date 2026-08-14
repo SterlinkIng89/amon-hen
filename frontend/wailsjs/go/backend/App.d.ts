@@ -37,6 +37,8 @@ export function GetPlaylistVideos(arg1:string):Promise<Array<backend.YTVideo>>;
 
 export function GetQuotaUsedToday():Promise<number>;
 
+export function GetSteamAppID(arg1:string):Promise<string>;
+
 export function GetStreamPort():Promise<number>;
 
 export function GetSyncStatus():Promise<Record<string, any>>;
