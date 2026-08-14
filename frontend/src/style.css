@@ -11,6 +11,17 @@
     @apply h-screen flex flex-col overflow-hidden;
   }
 
+  /* ── Performance: GPU compositing for scroll containers ─────────────────────
+   * Promotes scrollable areas to their own compositor layer so that window
+   * moves / resizes don't trigger synchronous main-thread rasterization.
+   * This eliminates stutter when ffmpeg is generating thumbnails in parallel. */
+  [data-scroll-layer] {
+    will-change: transform;
+    transform: translateZ(0);
+    contain: strict;
+    backface-visibility: hidden;
+  }
+
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;

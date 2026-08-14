@@ -14,7 +14,7 @@
  * (thumbnails appear top-to-bottom rather than all at once).
  */
 
-const CONCURRENCY = 6;
+const CONCURRENCY = 3;
 
 let active = 0;
 const queue: Array<() => void> = [];

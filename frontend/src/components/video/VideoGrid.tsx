@@ -158,7 +158,7 @@ export default function VideoGrid({
         <EmptyState hasFolders={folders.length > 0} />
       ) : useGroups ? (
         /* Date-grouped layout */
-        <div className="flex-1 overflow-y-auto p-5 pb-10">
+        <div className="flex-1 overflow-y-auto p-5 pb-10" data-scroll-layer>
           {groups.map(group => (
             <section key={group.dateKey} className="mb-8 last:mb-0">
               <GroupHeader group={group} />
@@ -185,7 +185,7 @@ export default function VideoGrid({
         </div>
       ) : (
         /* Flat layout for name/size sort */
-        <div className="flex-1 overflow-y-auto p-5 pb-10">
+        <div className="flex-1 overflow-y-auto p-5 pb-10" data-scroll-layer>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
             {sortedVideos.map((video, idx) => {
               const isSelected = selectedPaths.includes(video.path);

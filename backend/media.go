@@ -23,6 +23,7 @@ func (a *App) initCache() {
 	a.cacheDir = filepath.Join(base, "AmonHen", "cache")
 	os.MkdirAll(filepath.Join(a.cacheDir, "thumbs"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "previews"), 0755)
+	os.MkdirAll(filepath.Join(a.cacheDir, "durations"), 0755)
 	fmt.Println("Cache directory:", a.cacheDir)
 
 	// Limit concurrent ffmpeg/ffprobe processes to half the available CPU cores
@@ -212,8 +213,22 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 }
 
 // GetVideoDuration returns the duration of the video in seconds using ffprobe.
-// It respects the global thumbSem semaphore to cap concurrent ffprobe processes.
+// Results are cached to disk so repeated calls (e.g. after rescan) are free.
 func (a *App) GetVideoDuration(path string) (float64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, fmt.Errorf("file not found: %w", err)
+	}
+	key := cacheKey(path, info.ModTime())
+	cachePath := filepath.Join(a.cacheDir, "durations", key+".txt")
+
+	// Cache hit — skip ffprobe entirely.
+	if data, readErr := os.ReadFile(cachePath); readErr == nil {
+		if dur, parseErr := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); parseErr == nil {
+			return dur, nil
+		}
+	}
+
 	// Acquire a worker slot before spawning ffprobe.
 	a.thumbSem <- struct{}{}
 	defer func() { <-a.thumbSem }()
@@ -234,5 +249,7 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Persist to disk for future calls.
+	_ = os.WriteFile(cachePath, []byte(durStr), 0644)
 	return duration, nil
 }
