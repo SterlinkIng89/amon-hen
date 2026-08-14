@@ -147,10 +147,47 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 	a.thumbSem <- struct{}{}
 	defer func() { <-a.thumbSem }()
 
+	// Determine how many seconds apart to sample frames so we always get ~25
+	// frames regardless of video length. Using select=not(mod(n,N)) is
+	// frame-count based and produces *zero* frames for short clips (< N frames),
+	// which causes ffmpeg to crash. Instead we use the fps filter with a
+	// time-based interval derived from the video duration.
+	//
+	// We already hold the semaphore, so run ffprobe under it too.
+	interval := 10.0 // default: one frame every 10 s (good for long recordings)
+	{
+		probeCmd := exec.Command(
+			"ffprobe",
+			"-v", "error",
+			"-show_entries", "format=duration",
+			"-of", "default=noprint_wrappers=1:nokey=1",
+			path,
+		)
+		hideWindow(probeCmd)
+		var probeOut bytes.Buffer
+		probeCmd.Stdout = &probeOut
+		if probeErr := probeCmd.Run(); probeErr == nil {
+			if dur, parseErr := strconv.ParseFloat(strings.TrimSpace(probeOut.String()), 64); parseErr == nil && dur > 0 {
+				// interval = duration / 25 but at least 1 s so very long videos
+				// don't sample too densely and waste time.
+				interval = dur / 25.0
+				if interval < 1.0 {
+					interval = 1.0
+				}
+			}
+		}
+	}
+
+	// Build a filter that always samples at evenly-spaced wall-clock intervals.
+	// "fps=1/N" picks one frame per N seconds; tile=5x5 collects up to 25 of
+	// them into a sprite sheet. nb_frames=25 caps the tile so ffmpeg doesn't
+	// wait for more frames than the video contains.
+	vf := fmt.Sprintf("fps=1/%.3f,scale=160:-1,tile=5x5:nb_frames=25", interval)
+
 	cmd := exec.Command(
 		"ffmpeg",
 		"-i", path,
-		"-vf", "select=not(mod(n,100)),scale=160:-1,tile=5x5",
+		"-vf", vf,
 		"-frames:v", "1",
 		"-q:v", "5",
 		"-f", "image2",
@@ -165,6 +202,10 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 		return "", fmt.Errorf("failed to generate preview: %w", err)
 	}
 	raw := buffer.Bytes()
+	if len(raw) == 0 {
+		appLog("[Media] GetVideoPreview: ffmpeg produced empty output for %s", filepath.Base(path))
+		return "", fmt.Errorf("ffmpeg produced no preview data")
+	}
 	writeCached(cachePath, raw)
 	encoded := base64.StdEncoding.EncodeToString(raw)
 	return "data:image/jpeg;base64," + encoded, nil
