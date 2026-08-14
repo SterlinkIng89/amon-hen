@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
-import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist } from "../../wailsjs/go/backend/App";
+import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist, PurgePlaylistDuplicates } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { groupByDayYT } from "../utils/videoUtils";
 
@@ -28,6 +28,7 @@ export default function ChannelPage() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; playlistId: string; playlistName: string; duplicates: string[]; targetVideoIds: string[] } | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
+  const [purgingDuplicates, setPurgingDuplicates] = useState(false);
   const lastSelectedId = useRef<string | null>(null);
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
@@ -304,6 +305,27 @@ export default function ChannelPage() {
     }
   };
 
+  const handlePurgeDuplicates = async () => {
+    if (!selectedPlaylist || purgingDuplicates) return;
+    setPurgingDuplicates(true);
+    setSyncStatus("Scanning for duplicates...");
+    try {
+      const removed = await PurgePlaylistDuplicates(selectedPlaylist.id);
+      if (removed === 0) {
+        setSyncStatus("No duplicates found ✓");
+      } else {
+        setSyncStatus(`Removed ${removed} duplicate${removed !== 1 ? "s" : ""} ✓`);
+        loadData(true);
+      }
+      setTimeout(() => setSyncStatus(""), 4000);
+    } catch (e: any) {
+      setSyncStatus("Failed to purge duplicates");
+      setTimeout(() => setSyncStatus(""), 4000);
+    } finally {
+      setPurgingDuplicates(false);
+    }
+  };
+
   const ytGroups = (activeTab === "videos" && !selectedPlaylist && (videoSort === "recent" || videoSort === "title_date"))
     ? groupByDayYT(filteredVideos, videoSort)
     : [];
@@ -325,6 +347,33 @@ export default function ChannelPage() {
                 <span className="text-[9px] font-bold text-accent leading-none mb-0.5 group-hover:text-accent/80 transition-colors">Playlist</span>
                 <h1 className="text-sm font-bold text-text-primary leading-none truncate max-w-[260px] group-hover:text-accent transition-colors">{selectedPlaylist.title}</h1>
               </div>
+              {/* Purge duplicates button */}
+              <button
+                onClick={handlePurgeDuplicates}
+                disabled={purgingDuplicates}
+                title="Remove duplicate videos from this playlist on YouTube"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all active:scale-95 shrink-0 ${
+                  purgingDuplicates
+                    ? "bg-orange-500/10 border-orange-500/30 text-orange-400 cursor-wait"
+                    : "bg-elevated/50 border-border-subtle text-text-secondary hover:text-orange-400 hover:border-orange-500/40 hover:bg-orange-500/10"
+                } disabled:opacity-60 disabled:active:scale-100`}
+              >
+                {purgingDuplicates ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin shrink-0" />
+                    Purging...
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                    Purge Duplicates
+                  </>
+                )}
+              </button>
             </div>
           ) : (
             <div className={`flex items-center gap-2 shrink-0 ${viewType === "player" ? "cursor-pointer group" : ""}`}

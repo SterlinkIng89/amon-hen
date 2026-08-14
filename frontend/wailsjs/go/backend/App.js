@@ -130,6 +130,10 @@ export function OpenFolderDialog() {
   return window['go']['backend']['App']['OpenFolderDialog']();
 }
 
+export function PurgePlaylistDuplicates(arg1) {
+  return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
+}
+
 export function RegenerateThumbnail(arg1) {
   return window['go']['backend']['App']['RegenerateThumbnail'](arg1);
 }

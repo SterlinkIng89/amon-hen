@@ -635,3 +635,104 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	})
 	return nil
 }
+
+// PurgePlaylistDuplicates fetches every playlistItem from YouTube for the given
+// playlist, finds video IDs that appear more than once, and deletes every
+// duplicate entry (keeping only the first occurrence by position).
+// Returns the number of duplicate entries removed.
+func (a *App) PurgePlaylistDuplicates(playlistID string) (int, error) {
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// --- 1. Fetch all playlist items from YouTube API ---
+	type item struct {
+		itemID  string // playlistItem ID (used to delete)
+		videoID string
+	}
+	var items []item
+
+	pageToken := ""
+	for {
+		call := svc.PlaylistItems.List([]string{"snippet"}).
+			PlaylistId(playlistID).
+			MaxResults(50)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		start := time.Now()
+		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", playlistID, playlistID, QuotaPlaylistItemsList, start, err)
+		if err != nil {
+			return 0, fmt.Errorf("failed to list playlist items: %w", err)
+		}
+		for _, it := range resp.Items {
+			items = append(items, item{
+				itemID:  it.Id,
+				videoID: it.Snippet.ResourceId.VideoId,
+			})
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	// --- 2. Find duplicates: keep first occurrence, queue the rest for deletion ---
+	seen := make(map[string]bool)
+	var toDelete []string
+	for _, it := range items {
+		if seen[it.videoID] {
+			toDelete = append(toDelete, it.itemID)
+		} else {
+			seen[it.videoID] = true
+		}
+	}
+
+	if len(toDelete) == 0 {
+		return 0, nil
+	}
+
+	// --- 3. Delete each duplicate playlistItem via the API ---
+	// playlistItems.delete costs 50 quota units each — warn in logs.
+	for _, itemID := range toDelete {
+		start := time.Now()
+		delErr := svc.PlaylistItems.Delete(itemID).Do()
+		a.logAPICall("playlistItems.delete", itemID, itemID, 50, start, delErr)
+		if delErr != nil {
+			appLog("[PurgePlaylistDuplicates] Failed to delete playlistItem %s: %v", itemID, delErr)
+			// Continue trying the others even if one fails.
+		}
+	}
+
+	// --- 4. Update local DB: remove duplicate video_id rows so counts stay correct ---
+	if a.db != nil {
+		a.db.mu.Lock()
+		// Re-build yt_playlist_items from the de-duped seen set.
+		// Simplest approach: delete all rows for this playlist and re-insert
+		// the survivors (one row per unique video_id).
+		tx, txErr := a.db.conn.Begin()
+		if txErr == nil {
+			tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", playlistID)
+			pos := 0
+			for videoID := range seen {
+				tx.Exec(
+					"INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES (?, ?, ?)",
+					playlistID, videoID, pos,
+				)
+				pos++
+			}
+			// Update video_count to reflect the actual de-duped size.
+			tx.Exec(
+				"UPDATE yt_playlists SET video_count = ? WHERE id = ?",
+				len(seen), playlistID,
+			)
+			tx.Commit()
+		}
+		a.db.mu.Unlock()
+	}
+
+	return len(toDelete), nil
+}
