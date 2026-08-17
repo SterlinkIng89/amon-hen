@@ -103,21 +103,27 @@ export default function VideoPill({
 
   useEffect(() => {
     if (isLocal && inView) {
-      enqueueThumb(() => GetThumbnail(video.path)).then((d) => {
-        if (d) {
-          setThumb(d);
-          if (onThumbLoaded) onThumbLoaded(d);
-        }
-        setThumbLoaded(true);
-      });
-      enqueueThumb(() => GetVideoPreview(video.path)).then((d) => {
-        if (d) setSprite(d);
-      });
-      enqueueThumb(() => GetVideoDuration(video.path)).then((s) => {
-        if (s > 0) setLocalDuration(s);
-      });
+      if (!thumbLoaded) {
+        enqueueThumb(() => GetThumbnail(video.path)).then((d) => {
+          if (d) {
+            setThumb(d);
+            if (onThumbLoaded) onThumbLoaded(d);
+          }
+          setThumbLoaded(true);
+        });
+      }
+      if (!sprite) {
+        enqueueThumb(() => GetVideoPreview(video.path)).then((d) => {
+          if (d) setSprite(d);
+        });
+      }
+      if (localDuration === null) {
+        enqueueThumb(() => GetVideoDuration(video.path)).then((s) => {
+          if (s > 0) setLocalDuration(s);
+        });
+      }
     }
-  }, [inView, isLocal, (video as VideoFile).path]);
+  }, [inView, isLocal, (video as VideoFile).path, thumbLoaded, sprite, localDuration]);
 
   useEffect(() => {
     if (selected && ref.current && viewMode === "list") {

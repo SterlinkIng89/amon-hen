@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -81,4 +82,9 @@ func (a *App) Shutdown(_ context.Context) {
 // This is exposed to Wails.
 func (a *App) LogFrontendEvent(msg string) {
 	appLog("[Frontend] %s", msg)
+}
+
+// CacheHandler exposes the cache directory over HTTP to the Wails frontend.
+func (a *App) CacheHandler() http.Handler {
+	return http.StripPrefix("/cache/", http.FileServer(http.Dir(a.cacheDir)))
 }
