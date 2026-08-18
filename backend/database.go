@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -78,6 +79,35 @@ func (db *DB) migrate() error {
 			game_name TEXT PRIMARY KEY,
 			app_id TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS steam_games (
+			appid INTEGER PRIMARY KEY,
+			name TEXT,
+			playtime_forever INTEGER,
+			playtime_2weeks INTEGER,
+			header_url TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_game_details (
+			appid INTEGER PRIMARY KEY,
+			developers TEXT,
+			publishers TEXT,
+			synced_at INTEGER
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_tags (
+			appid INTEGER,
+			tag TEXT,
+			PRIMARY KEY (appid, tag)
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_achievements (
+			appid INTEGER PRIMARY KEY,
+			total_achievements INTEGER,
+			achieved INTEGER,
+			progress_percent REAL
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_publishers (
+			appid INTEGER,
+			publisher TEXT,
+			PRIMARY KEY (appid, publisher)
+		)`,
 	}
 	
 	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)
@@ -90,5 +120,33 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("failed to execute migration: %v - error: %w", q, err)
 		}
 	}
+
+	// Backfill steam_publishers a partir de steam_game_details
+	pRows, err := db.conn.Query("SELECT appid, publishers FROM steam_game_details WHERE publishers != ''")
+	if err == nil {
+		type backfillItem struct {
+			appid int
+			pubs  string
+		}
+		var items []backfillItem
+		for pRows.Next() {
+			var appid int
+			var pubs string
+			if err := pRows.Scan(&appid, &pubs); err == nil {
+				items = append(items, backfillItem{appid: appid, pubs: pubs})
+			}
+		}
+		pRows.Close()
+
+		for _, item := range items {
+			for _, p := range strings.Split(item.pubs, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					db.conn.Exec("INSERT OR IGNORE INTO steam_publishers (appid, publisher) VALUES (?, ?)", item.appid, p)
+				}
+			}
+		}
+	}
+
 	return nil
 }

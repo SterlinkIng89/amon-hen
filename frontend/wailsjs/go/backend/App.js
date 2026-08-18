@@ -10,6 +10,10 @@ export function AddVideoToPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['AddVideoToPlaylist'](arg1, arg2);
 }
 
+export function CacheHandler() {
+  return window['go']['backend']['App']['CacheHandler']();
+}
+
 export function CancelUpload(arg1) {
   return window['go']['backend']['App']['CancelUpload'](arg1);
 }
@@ -28,6 +32,10 @@ export function DeleteGameProfile(arg1) {
 
 export function DeletePlaylist(arg1) {
   return window['go']['backend']['App']['DeletePlaylist'](arg1);
+}
+
+export function DisconnectSteam() {
+  return window['go']['backend']['App']['DisconnectSteam']();
 }
 
 export function GetAPILogs(arg1) {
@@ -70,8 +78,44 @@ export function GetQuotaUsedToday() {
   return window['go']['backend']['App']['GetQuotaUsedToday']();
 }
 
+export function GetSteamAPIKey() {
+  return window['go']['backend']['App']['GetSteamAPIKey']();
+}
+
 export function GetSteamAppID(arg1) {
   return window['go']['backend']['App']['GetSteamAppID'](arg1);
+}
+
+export function GetSteamDeveloperStats(arg1) {
+  return window['go']['backend']['App']['GetSteamDeveloperStats'](arg1);
+}
+
+export function GetSteamGamesByDeveloper(arg1) {
+  return window['go']['backend']['App']['GetSteamGamesByDeveloper'](arg1);
+}
+
+export function GetSteamGamesByPublisher(arg1) {
+  return window['go']['backend']['App']['GetSteamGamesByPublisher'](arg1);
+}
+
+export function GetSteamGamesByTag(arg1) {
+  return window['go']['backend']['App']['GetSteamGamesByTag'](arg1);
+}
+
+export function GetSteamID() {
+  return window['go']['backend']['App']['GetSteamID']();
+}
+
+export function GetSteamOverallStats() {
+  return window['go']['backend']['App']['GetSteamOverallStats']();
+}
+
+export function GetSteamPublisherStats(arg1) {
+  return window['go']['backend']['App']['GetSteamPublisherStats'](arg1);
+}
+
+export function GetSteamTagStats(arg1) {
+  return window['go']['backend']['App']['GetSteamTagStats'](arg1);
 }
 
 export function GetStreamPort() {
@@ -114,6 +158,10 @@ export function ImportYouTubeJSON() {
   return window['go']['backend']['App']['ImportYouTubeJSON']();
 }
 
+export function IsSteamSyncing() {
+  return window['go']['backend']['App']['IsSteamSyncing']();
+}
+
 export function IsYouTubeAuthed() {
   return window['go']['backend']['App']['IsYouTubeAuthed']();
 }
@@ -128,6 +176,10 @@ export function LoadConfig() {
 
 export function LogFrontendEvent(arg1) {
   return window['go']['backend']['App']['LogFrontendEvent'](arg1);
+}
+
+export function LoginSteam() {
+  return window['go']['backend']['App']['LoginSteam']();
 }
 
 export function OpenFolderDialog() {
@@ -160,6 +212,10 @@ export function SaveGameProfile(arg1, arg2) {
 
 export function SaveRecentFieldValues(arg1) {
   return window['go']['backend']['App']['SaveRecentFieldValues'](arg1);
+}
+
+export function SaveSteamAPIKey(arg1) {
+  return window['go']['backend']['App']['SaveSteamAPIKey'](arg1);
 }
 
 export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
@@ -216,6 +272,10 @@ export function SyncChannelData() {
 
 export function SyncRecentVideos(arg1) {
   return window['go']['backend']['App']['SyncRecentVideos'](arg1);
+}
+
+export function SyncSteamData() {
+  return window['go']['backend']['App']['SyncSteamData']();
 }
 
 export function UnlinkLocalVideo(arg1) {

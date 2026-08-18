@@ -154,9 +154,19 @@ export default function AppHeader({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={view === "stats" ? "text-accent" : ""}>
               <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
             </svg>
-            Stats
+            YT Stats
           </button>
         )}
+        <button
+          className={`text-sm font-bold tracking-tight transition-colors h-full px-2 border-b-2 flex items-center gap-1.5 ${view === "steam" ? "text-text-primary border-accent" : "text-text-secondary border-transparent hover:text-text-primary"}`}
+          onClick={() => onSetView("steam" as ViewMode)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className={view === "steam" ? "text-accent" : ""}>
+            <path d="M11.979 0C5.353 0 0 5.373 0 12c0 6.628 5.353 12 11.979 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm6.604 17.581c-.244-.122-1.396-.612-1.396-.612l-.93-1.425c.37-.123.69-.328.947-.6.284-.301.442-.693.442-1.1s-.158-.799-.442-1.1c-.283-.301-.663-.468-1.077-.468-.415 0-.794.167-1.078.468-.283.301-.442.699-.442 1.1s.159.799.442 1.1c.219.232.502.413.82.528l.942 1.455c-.201.096-.423.167-.659.206-.689.117-1.42-.034-1.956-.376l-1.98 1.054c.148.431.137.904-.038 1.332-.239.585-.71.996-1.309 1.144-.6.148-1.229.006-1.722-.387-.492-.393-.787-.976-.816-1.611-.029-.635.211-1.246.66-1.685.45-.439 1.066-.644 1.687-.56l3.32-3.155c-.006-.064-.01-.129-.01-.194 0-1.258.989-2.284 2.203-2.284 1.215 0 2.203 1.026 2.203 2.284 0 .914-.51 1.7-1.245 2.067l.951 1.455c.677.309 1.305.808 1.83 1.463l-1.408.86z"/>
+          </svg>
+          Steam
+        </button>
+
         {ytAuthed && (
           <div className="relative h-full flex items-center">
             <button

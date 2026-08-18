@@ -27,6 +27,7 @@ import PlayerView from "../components/video/PlayerView";
 import ChannelPage from "./ChannelPage";
 import QueuePage from "./QueuePage";
 import StatsPage from "./StatsPage";
+import SteamStats from "./SteamStats";
 import UploadDialog, { UploadOptions } from "../components/youtube/UploadDialog";
 import UploadQueue, { QueueItem } from "../components/youtube/UploadQueue";
 
@@ -470,6 +471,12 @@ export default function Dashboard() {
         {view === "stats" && (
           <ErrorBoundary area="Stats">
             <StatsPage />
+          </ErrorBoundary>
+        )}
+
+        {view === "steam" && (
+          <ErrorBoundary area="SteamStats">
+            <SteamStats />
           </ErrorBoundary>
         )}
 

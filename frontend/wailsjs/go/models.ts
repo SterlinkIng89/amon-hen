@@ -231,6 +231,8 @@ export namespace backend {
 	    watch_folder_enabled: boolean;
 	    recent_field_values?: Record<string, Array<string>>;
 	    title_separator?: string;
+	    steam_api_key?: string;
+	    steam_id?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -250,6 +252,8 @@ export namespace backend {
 	        this.watch_folder_enabled = source["watch_folder_enabled"];
 	        this.recent_field_values = source["recent_field_values"];
 	        this.title_separator = source["title_separator"];
+	        this.steam_api_key = source["steam_api_key"];
+	        this.steam_id = source["steam_id"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -275,6 +279,80 @@ export namespace backend {
 	
 	
 	
+	export class SteamDevPubStats {
+	    name: string;
+	    totalHours: number;
+	    gamesCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamDevPubStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.totalHours = source["totalHours"];
+	        this.gamesCount = source["gamesCount"];
+	    }
+	}
+	export class SteamGameItem {
+	    appid: number;
+	    name: string;
+	    playtimeHours: number;
+	    playtimeForever: number;
+	    playtime2Weeks: number;
+	    headerUrl: string;
+	    achievementsPct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamGameItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appid = source["appid"];
+	        this.name = source["name"];
+	        this.playtimeHours = source["playtimeHours"];
+	        this.playtimeForever = source["playtimeForever"];
+	        this.playtime2Weeks = source["playtime2Weeks"];
+	        this.headerUrl = source["headerUrl"];
+	        this.achievementsPct = source["achievementsPct"];
+	    }
+	}
+	export class SteamOverallStats {
+	    totalGames: number;
+	    totalHours: number;
+	    totalAchievements: number;
+	    unlockedAchievements: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamOverallStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalGames = source["totalGames"];
+	        this.totalHours = source["totalHours"];
+	        this.totalAchievements = source["totalAchievements"];
+	        this.unlockedAchievements = source["unlockedAchievements"];
+	    }
+	}
+	export class SteamTagStats {
+	    tag: string;
+	    totalHours: number;
+	    gamesCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamTagStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tag = source["tag"];
+	        this.totalHours = source["totalHours"];
+	        this.gamesCount = source["gamesCount"];
+	    }
+	}
 	
 	export class VideoFile {
 	    name: string;

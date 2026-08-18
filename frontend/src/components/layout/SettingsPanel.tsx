@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { IsYouTubeAuthed, StartYouTubeAuth, LoadConfig, GetYouTubeChannelInfo, GetAutoLaunch, SetAutoLaunch, GetWatchFolderEnabled, SetWatchFolderEnabled, SaveGameProfile, DeleteGameProfile, SetTitleSeparator } from "../../../wailsjs/go/backend/App";
+// @ts-ignore
+import { GetSteamAPIKey, GetSteamID, SaveSteamAPIKey, LoginSteam, DisconnectSteam } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { GameProfile } from "../../types";
 
@@ -20,6 +22,12 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [credsLoaded, setCredsLoaded] = useState(true);
   const [error, setError] = useState("");
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
+
+  // Steam Auth state
+  const [steamApiKey, setSteamApiKey] = useState("");
+  const [steamId, setSteamId] = useState("");
+  const [steamConnecting, setSteamConnecting] = useState(false);
+
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
   const [watchFolder, setWatchFolder] = useState(false);
@@ -50,6 +58,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
       setCredsLoaded(!!cfg.youtube_client_id);
       setGameProfiles(cfg.game_profiles || {});
       setTitleSeparator(cfg.title_separator || " - ");
+      if (cfg.steam_api_key) setSteamApiKey(cfg.steam_api_key);
+      if (cfg.steam_id) setSteamId(cfg.steam_id);
     }).catch(() => setCredsLoaded(false));
     // Load auto-launch state
     GetAutoLaunch().then(setAutoLaunch).catch(() => {});
@@ -77,6 +87,34 @@ export default function SettingsPanel({ open, onClose }: Props) {
     } catch (e: any) {
       setError(e?.message ?? String(e));
       setConnecting(false);
+    }
+  };
+
+  const handleSteamConnect = async () => {
+    if (!steamApiKey) {
+      setError("Please enter a Steam Web API Key first");
+      return;
+    }
+    setSteamConnecting(true);
+    setError("");
+    try {
+      await SaveSteamAPIKey(steamApiKey);
+      const id = await LoginSteam();
+      setSteamId(id as string);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setSteamConnecting(false);
+    }
+  };
+
+  const handleSteamDisconnect = async () => {
+    try {
+      await DisconnectSteam();
+      setSteamApiKey("");
+      setSteamId("");
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
     }
   };
 
@@ -156,6 +194,55 @@ export default function SettingsPanel({ open, onClose }: Props) {
             )}
 
             {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+          </section>
+
+          {/* Steam Account Section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#66c0f4">
+                <path d="M11.979 0C5.353 0 0 5.373 0 12c0 6.628 5.353 12 11.979 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm6.604 17.581c-.244-.122-1.396-.612-1.396-.612l-.93-1.425c.37-.123.69-.328.947-.6.284-.301.442-.693.442-1.1s-.158-.799-.442-1.1c-.283-.301-.663-.468-1.077-.468-.415 0-.794.167-1.078.468-.283.301-.442.699-.442 1.1s.159.799.442 1.1c.219.232.502.413.82.528l.942 1.455c-.201.096-.423.167-.659.206-.689.117-1.42-.034-1.956-.376l-1.98 1.054c.148.431.137.904-.038 1.332-.239.585-.71.996-1.309 1.144-.6.148-1.229.006-1.722-.387-.492-.393-.787-.976-.816-1.611-.029-.635.211-1.246.66-1.685.45-.439 1.066-.644 1.687-.56l3.32-3.155c-.006-.064-.01-.129-.01-.194 0-1.258.989-2.284 2.203-2.284 1.215 0 2.203 1.026 2.203 2.284 0 .914-.51 1.7-1.245 2.067l.951 1.455c.677.309 1.305.808 1.83 1.463l-1.408.86zM9.988 18.06c-.347.086-.711.003-1-.228-.288-.231-.462-.572-.479-.944-.017-.373.123-.732.385-.989.262-.257.624-.378.971-.329s.642.345.811.687c.168.343.161.75-.02 1.085-.181.336-.505.577-.868.665-.038.009-.076.014-.113.018-.285.034-.572-.008-.887-1.065zm2.753-3.66l-3.32 3.155c.006.064.01.129.01.194 0 1.258-.989 2.284-2.203 2.284-.047 0-.094-.001-.141-.004l-2.029-4.225c.191-.123.411-.214.654-.268.689-.117 1.42.034 1.956.376l1.98-1.054c-.148-.431-.137-.904.038-1.332.239-.585.71-.996 1.309-1.144.6-.148 1.229-.006 1.722.387.492.393.787.976.816 1.611.029.635-.211 1.246-.66 1.685-.45.439-1.066.644-1.687.56l-2.029-4.225c.191-.123.411-.214.654-.268z"/>
+              </svg>
+              Steam Account
+            </div>
+
+            <div className="flex flex-col gap-3 p-4 bg-elevated border border-border-subtle rounded-md items-start">
+              <label className="text-xs font-semibold text-text-primary">Steam Web API Key</label>
+              <input
+                type="password"
+                className="input input-sm input-bordered w-full text-xs"
+                placeholder="Enter Steam Web API Key"
+                value={steamApiKey}
+                onChange={(e) => setSteamApiKey(e.target.value)}
+              />
+
+              {steamId ? (
+                <div className="w-full flex items-center justify-between mt-2 pt-3 border-t border-border-subtle">
+                  <div className="flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#4ade80">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                    </svg>
+                    <span className="text-xs text-text-primary">Steam Connected</span>
+                  </div>
+                  <button
+                    className="btn btn-ghost btn-xs text-red-400"
+                    onClick={handleSteamDisconnect}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="flex items-center justify-center gap-2 w-full py-2 bg-[#171a21] text-[#c6d4df] font-semibold text-xs rounded-sm border border-[#2a475e] hover:bg-[#2a475e] hover:text-white transition-colors disabled:opacity-50"
+                  onClick={handleSteamConnect}
+                  disabled={steamConnecting}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11.979 0C5.353 0 0 5.373 0 12c0 6.628 5.353 12 11.979 12 6.628 0 12-5.372 12-12 0-6.627-5.372-12-12-12zm6.604 17.581c-.244-.122-1.396-.612-1.396-.612l-.93-1.425c.37-.123.69-.328.947-.6.284-.301.442-.693.442-1.1s-.158-.799-.442-1.1c-.283-.301-.663-.468-1.077-.468-.415 0-.794.167-1.078.468-.283.301-.442.699-.442 1.1s.159.799.442 1.1c.219.232.502.413.82.528l.942 1.455c-.201.096-.423.167-.659.206-.689.117-1.42-.034-1.956-.376l-1.98 1.054c.148.431.137.904-.038 1.332-.239.585-.71.996-1.309 1.144-.6.148-1.229.006-1.722-.387-.492-.393-.787-.976-.816-1.611-.029-.635.211-1.246.66-1.685.45-.439 1.066-.644 1.687-.56l3.32-3.155c-.006-.064-.01-.129-.01-.194 0-1.258.989-2.284 2.203-2.284 1.215 0 2.203 1.026 2.203 2.284 0 .914-.51 1.7-1.245 2.067l.951 1.455c.677.309 1.305.808 1.83 1.463l-1.408.86zM9.988 18.06c-.347.086-.711.003-1-.228-.288-.231-.462-.572-.479-.944-.017-.373.123-.732.385-.989.262-.257.624-.378.971-.329s.642.345.811.687c.168.343.161.75-.02 1.085-.181.336-.505.577-.868.665-.038.009-.076.014-.113.018-.285.034-.572-.008-.887-1.065zm2.753-3.66l-3.32 3.155c.006.064.01.129.01.194 0 1.258-.989 2.284-2.203 2.284-.047 0-.094-.001-.141-.004l-2.029-4.225c.191-.123.411-.214.654-.268.689-.117 1.42.034 1.956.376l1.98-1.054c-.148-.431-.137-.904.038-1.332.239-.585.71-.996 1.309-1.144.6-.148 1.229-.006 1.722.387.492.393.787.976.816 1.611.029.635-.211 1.246-.66 1.685-.45.439-1.066.644-1.687.56l-2.029-4.225c.191-.123.411-.214.654-.268z"/>
+                  </svg>
+                  {steamConnecting ? "Waiting for login..." : "Connect with Steam"}
+                </button>
+              )}
+            </div>
           </section>
 
           {/* Auto-launch section */}

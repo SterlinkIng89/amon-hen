@@ -53,6 +53,8 @@ type Config struct {
 	// YouTube titles (e.g. "Game — 1/08/26" vs "Game - 1/08/26").
 	// Defaults to " - " when empty.
 	TitleSeparator string `json:"title_separator,omitempty"`
+	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
+	SteamID             string                  `json:"steam_id,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
