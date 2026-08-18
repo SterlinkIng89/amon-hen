@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +36,11 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{
+	a := &App{
 		uploads: make(map[string]context.CancelFunc),
 	}
+	a.initCache()
+	return a
 }
 
 // Startup is called when the app starts
@@ -86,5 +90,13 @@ func (a *App) LogFrontendEvent(msg string) {
 
 // CacheHandler exposes the cache directory over HTTP to the Wails frontend.
 func (a *App) CacheHandler() http.Handler {
-	return http.StripPrefix("/cache/", http.FileServer(http.Dir(a.cacheDir)))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/cache/") {
+			rel := strings.TrimPrefix(r.URL.Path, "/cache/")
+			filePath := filepath.Join(a.cacheDir, filepath.FromSlash(rel))
+			http.ServeFile(w, r, filePath)
+			return
+		}
+		http.NotFound(w, r)
+	})
 }
