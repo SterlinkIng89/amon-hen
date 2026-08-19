@@ -115,6 +115,12 @@ func (a *App) initConfig() {
 			appLog("[Config] YouTube Client Secret loaded from .env")
 		}
 	}
+	if a.config.SteamAPIKey == "" {
+		a.config.SteamAPIKey = os.Getenv("STEAM_API_KEY")
+		if a.config.SteamAPIKey != "" {
+			appLog("[Config] Steam API Key loaded from .env")
+		}
+	}
 }
 
 // saveConfig persists the current config to disk
