@@ -435,12 +435,18 @@ function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: nu
 
 function TopGameHighlight({ game }: { game: GameStat }) {
   const [appId, setAppId] = useState<string>("");
+  const [achievementsPct, setAchievementsPct] = useState<number>(0);
 
   useEffect(() => {
     let mounted = true;
-    GetSteamAppID(game.game).then((id: any) => {
+    GetSteamAppID(game.game).then(async (id: any) => {
       if (mounted && id && id !== "NOT_FOUND") {
         setAppId(id);
+        // @ts-ignore
+        const pct = await window.go.backend.App.GetSteamGameAchievementPct(id);
+        if (mounted && pct > 0) {
+          setAchievementsPct(pct);
+        }
       }
     }).catch(console.error);
     return () => { mounted = false; };
@@ -481,6 +487,21 @@ function TopGameHighlight({ game }: { game: GameStat }) {
           </span>
           <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">hrs</span>
         </div>
+
+        {/* Achievements */}
+        {achievementsPct > 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden shadow-inner">
+              <div 
+                className="h-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] transition-all duration-1000 ease-out" 
+                style={{ width: `${achievementsPct}%` }} 
+              />
+            </div>
+            <span className="text-[10px] font-black text-emerald-400 tabular-nums">
+              {Math.round(achievementsPct)}%
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

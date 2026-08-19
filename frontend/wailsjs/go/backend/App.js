@@ -289,3 +289,7 @@ export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
 export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['backend']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
+
+export function GetSteamGameAchievementPct(arg1) {
+  return window['go']['backend']['App']['GetSteamGameAchievementPct'](arg1);
+}
