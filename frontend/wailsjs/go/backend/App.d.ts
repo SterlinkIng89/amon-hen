@@ -147,3 +147,5 @@ export function UnlinkLocalVideo(arg1:string):Promise<void>;
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number):Promise<void>;
+
+export function GetSteamGameAchievementPct(arg1:string):Promise<number>;

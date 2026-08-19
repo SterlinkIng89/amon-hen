@@ -80,3 +80,21 @@ func (a *App) GetSteamAppID(gameName string) string {
 
 	return ""
 }
+
+// GetSteamGameAchievementPct returns the achievement percentage for a given app ID.
+func (a *App) GetSteamGameAchievementPct(appId string) float64 {
+	if a.db == nil || appId == "" || appId == "NOT_FOUND" {
+		return 0
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	var pct float64
+	err := a.db.conn.QueryRow(`SELECT progress_percent FROM steam_achievements WHERE appid = ?`, appId).Scan(&pct)
+	if err != nil {
+		return 0
+	}
+
+	return pct
+}
