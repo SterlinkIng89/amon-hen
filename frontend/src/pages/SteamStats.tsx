@@ -130,11 +130,21 @@ export default function SteamStats() {
       setError(errMsg);
     });
 
+    const unsubAuth = EventsOn("steam:auth-complete", () => {
+      loadData(true);
+    });
+
+    const unsubDisconnect = EventsOn("steam:auth-disconnected", () => {
+      loadData(false);
+    });
+
     return () => {
       unsubProgress();
       unsubGamesUpdated();
       unsubDone();
       unsubError();
+      unsubAuth();
+      unsubDisconnect();
     };
   }, [loadData]);
 

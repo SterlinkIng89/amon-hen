@@ -14,25 +14,35 @@ import (
 
 // SaveSteamAPIKey saves the user's Steam Web API Key
 func (a *App) SaveSteamAPIKey(key string) error {
+	a.configMu.Lock()
 	a.config.SteamAPIKey = strings.TrimSpace(key)
+	a.configMu.Unlock()
 	return a.saveConfig()
 }
 
 // GetSteamAPIKey returns the current API key
 func (a *App) GetSteamAPIKey() string {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	return a.config.SteamAPIKey
 }
 
 // GetSteamID returns the current Steam ID
 func (a *App) GetSteamID() string {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	return a.config.SteamID
 }
 
 // DisconnectSteam clears Steam credentials
 func (a *App) DisconnectSteam() error {
+	a.configMu.Lock()
 	a.config.SteamAPIKey = ""
 	a.config.SteamID = ""
-	return a.saveConfig()
+	a.configMu.Unlock()
+	err := a.saveConfig()
+	runtime.EventsEmit(a.ctx, "steam:auth-disconnected")
+	return err
 }
 
 // LoginSteam starts the OpenID flow and blocks until completion or error
@@ -128,8 +138,11 @@ func (a *App) LoginSteam() (string, error) {
 	select {
 	case steamID := <-resultCh:
 		server.Shutdown(context.Background())
+		a.configMu.Lock()
 		a.config.SteamID = steamID
+		a.configMu.Unlock()
 		a.saveConfig()
+		runtime.EventsEmit(a.ctx, "steam:auth-complete")
 		return steamID, nil
 	case err := <-errCh:
 		server.Shutdown(context.Background())
