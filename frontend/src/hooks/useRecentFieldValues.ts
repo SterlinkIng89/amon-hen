@@ -4,54 +4,54 @@ import { LoadConfig, SaveRecentFieldValues } from '../../wailsjs/go/backend/App'
 const STORAGE_KEY = 'amon_hen_recent_field_values';
 
 export function useRecentFieldValues(maxItems = 10) {
-  const [recentValues, setRecentValues] = useState<Record<string, string[]>>({});
+ const [recentValues, setRecentValues] = useState<Record<string, string[]>>({});
 
-  useEffect(() => {
-    const loadValues = async () => {
-      try {
-        const cfg = await LoadConfig();
-        if (cfg && cfg.recent_field_values) {
-          setRecentValues(cfg.recent_field_values);
-        }
-      } catch (e) {
-        console.error("Failed to load recent field values from backend", e);
-      }
-    };
+ useEffect(() => {
+ const loadValues = async () => {
+ try {
+ const cfg = await LoadConfig();
+ if (cfg && cfg.recent_field_values) {
+ setRecentValues(cfg.recent_field_values);
+ }
+ } catch (e) {
+ console.error("Failed to load recent field values from backend", e);
+ }
+ };
 
-    loadValues();
+ loadValues();
 
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) loadValues();
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+ const handleStorage = (e: StorageEvent) => {
+ if (e.key === STORAGE_KEY) loadValues();
+ };
+ window.addEventListener('storage', handleStorage);
+ return () => window.removeEventListener('storage', handleStorage);
+ }, []);
 
-  const addRecentValue = useCallback((fieldKey: string, newValue: string) => {
-    if (!newValue.trim()) return;
-    const val = newValue.trim();
-    
-    setRecentValues(prev => {
-      const current = prev[fieldKey] || [];
-      const filtered = current.filter(t => t !== val);
-      const updated = [val, ...filtered].slice(0, maxItems);
-      
-      const newCache = { ...prev, [fieldKey]: updated };
-      
-      // Save to backend asynchronously
-      SaveRecentFieldValues(newCache).catch(e => {
-        console.error("Failed to save recent field values to backend", e);
-      });
-      
-      window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
-      
-      return newCache;
-    });
-  }, [maxItems]);
+ const addRecentValue = useCallback((fieldKey: string, newValue: string) => {
+ if (!newValue.trim()) return;
+ const val = newValue.trim();
+ 
+ setRecentValues(prev => {
+ const current = prev[fieldKey] || [];
+ const filtered = current.filter(t => t !== val);
+ const updated = [val, ...filtered].slice(0, maxItems);
+ 
+ const newCache = { ...prev, [fieldKey]: updated };
+ 
+ // Save to backend asynchronously
+ SaveRecentFieldValues(newCache).catch(e => {
+ console.error("Failed to save recent field values to backend", e);
+ });
+ 
+ window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+ 
+ return newCache;
+ });
+ }, [maxItems]);
 
-  const getRecentValues = useCallback((fieldKey: string) => {
-    return recentValues[fieldKey] || [];
-  }, [recentValues]);
+ const getRecentValues = useCallback((fieldKey: string) => {
+ return recentValues[fieldKey] || [];
+ }, [recentValues]);
 
-  return { getRecentValues, addRecentValue };
+ return { getRecentValues, addRecentValue };
 }
