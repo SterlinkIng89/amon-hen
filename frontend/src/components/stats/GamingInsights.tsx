@@ -243,7 +243,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  {count} days
  </div>
  <div 
- className="w-full max-w-[24px] rounded-t-sm transition-all duration-500 ease-out bg-border-subtle group-hover:bg-accent group-hover:"
+ className="w-full max-w-[24px] rounded-t-sm transition-all duration-500 ease-out bg-border-subtle group-hover:bg-accent"
  style={{ height: `${heightPercent}%` }}
  />
  </div>
