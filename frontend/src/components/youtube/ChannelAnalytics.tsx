@@ -113,7 +113,7 @@ function StatCard({
  <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-accent/10 blur-2xl pointer-events-none" />
  )}
  <div className="flex items-center justify-between">
- <span className={`text-[10px] font-bold uppercase tracking-widest ${accent ? "text-accent/70" : "text-text-muted"}`}>
+ <span className={`text-[10px] font-bold tracking-widest ${accent ? "text-accent/70" : "text-text-muted"}`}>
  {label}
  </span>
  <span className={`${accent ? "text-accent" : "text-text-muted"} opacity-60 group-hover:opacity-90 transition-opacity`}>
@@ -137,7 +137,7 @@ function UploadSparkline({ data }: { data: MonthlyCount[] }) {
 
  return (
  <div className="flex flex-col gap-2">
- <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+ <span className="text-[10px] font-bold tracking-widest text-text-muted">
  Upload Trend — last 12 months
  </span>
  <div className="flex items-end gap-1 h-16">
@@ -301,7 +301,7 @@ function TopVideoRow({
  <span className="text-[11px] font-bold text-text-primary tabular-nums">
  {formatNum(video.viewCount)}
  </span>
- <span className={`text-[9px] font-bold uppercase ${privColor}`}>
+ <span className={`text-[9px] font-bold ${privColor}`}>
  {video.privacy || "—"}
  </span>
  </div>
@@ -497,7 +497,7 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter, heatmap
  {/* Top Videos (takes 2/3) */}
  <div className="lg:col-span-2 bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
  <div className="flex items-center justify-between">
- <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+ <span className="text-[10px] font-bold tracking-widest text-text-muted">
  Top Videos by Views
  </span>
  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-text-muted">
@@ -516,7 +516,7 @@ export default function ChannelAnalytics({ refreshKey = 0, onDateFilter, heatmap
 
  {/* Privacy donut */}
  <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-3">
- <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+ <span className="text-[10px] font-bold tracking-widest text-text-muted">
  Privacy Distribution
  </span>
  <PrivacyDonut

@@ -178,7 +178,7 @@ export default function AdvancedFilters({
  <line x1="8" y1="2" x2="8" y2="6" />
  <line x1="3" y1="10" x2="21" y2="10" />
  </svg>
- <span className="text-[10px] font-black text-text-primary uppercase tracking-wider">{dateLabel}</span>
+ <span className="text-[10px] font-black text-text-primary tracking-wider">{dateLabel}</span>
  {(dateFrom || dateTo || analyticsDate) && (
  <button
  onClick={clearDate}
@@ -211,7 +211,7 @@ export default function AdvancedFilters({
  ) : (
  <div className="grid grid-cols-2 gap-2">
  <div>
- <label className="text-[9px] font-bold text-text-muted uppercase tracking-wider block mb-1">From</label>
+ <label className="text-[9px] font-bold text-text-muted tracking-wider block mb-1">From</label>
  <input
  type="date"
  value={dateFrom}
@@ -221,7 +221,7 @@ export default function AdvancedFilters({
  />
  </div>
  <div>
- <label className="text-[9px] font-bold text-text-muted uppercase tracking-wider block mb-1">To</label>
+ <label className="text-[9px] font-bold text-text-muted tracking-wider block mb-1">To</label>
  <input
  type="date"
  value={dateTo}
@@ -268,7 +268,7 @@ export default function AdvancedFilters({
  <circle cx="12" cy="12" r="10" />
  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
  </svg>
- <span className="text-[10px] font-black text-text-primary uppercase tracking-wider">{excludeLabel}</span>
+ <span className="text-[10px] font-black text-text-primary tracking-wider">{excludeLabel}</span>
  {excludeWords.length > 0 && (
  <button
  onClick={() => set({ excludeWords: [] })}

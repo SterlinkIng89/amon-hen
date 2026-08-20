@@ -247,7 +247,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  style={{ height: `${heightPercent}%` }}
  />
  </div>
- <span className="text-[10px] uppercase font-bold tracking-wider text-text-muted group-hover:text-text-secondary">
+ <span className="text-[10px] font-bold tracking-wider text-text-muted group-hover:text-text-secondary">
  {daysLabels[idx]}
  </span>
  </div>
@@ -278,7 +278,7 @@ function StatCard({ title, value, subtitle, highlight = false }: { title: string
  <div className={`flex flex-col gap-1 p-4 rounded-xl border transition-colors ${highlight ? 'bg-accent/10 border-accent/30' : 'bg-surface/50 border-border-subtle hover:border-border-medium'}`}>
  <span className="text-xs font-semibold text-text-muted">{title}</span>
  <span className={`text-2xl font-black tracking-tight ${highlight ? 'text-accent ' : 'text-text-primary'}`}>{value}</span>
- <span className="text-[10px] uppercase tracking-wider font-bold text-text-secondary">{subtitle}</span>
+ <span className="text-[10px] tracking-wider font-bold text-text-secondary">{subtitle}</span>
  </div>
  );
 }

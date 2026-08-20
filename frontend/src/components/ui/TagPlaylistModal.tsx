@@ -96,7 +96,7 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
 
  <div className="flex items-center gap-4">
  <div className="h-px bg-border-subtle flex-1" />
- <span className="text-xs text-text-muted font-bold uppercase tracking-wider">or link one</span>
+ <span className="text-xs text-text-muted font-bold tracking-wider">or link one</span>
  <div className="h-px bg-border-subtle flex-1" />
  </div>
 

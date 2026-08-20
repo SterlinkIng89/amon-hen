@@ -20,12 +20,12 @@ let active = 0;
 const queue: Array<() => void> = [];
 
 function release() {
-  active--;
-  if (queue.length > 0) {
-    const next = queue.shift()!;
-    active++;
-    next();
-  }
+ active--;
+ if (queue.length > 0) {
+ const next = queue.shift()!;
+ active++;
+ next();
+ }
 }
 
 /**
@@ -33,19 +33,19 @@ function release() {
  * Returns a Promise that resolves/rejects with the result of `fn`.
  */
 export function enqueueThumb<T>(fn: () => Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const run = () => {
-      fn()
-        .then(resolve)
-        .catch(reject)
-        .finally(release);
-    };
+ return new Promise<T>((resolve, reject) => {
+ const run = () => {
+ fn()
+ .then(resolve)
+ .catch(reject)
+ .finally(release);
+ };
 
-    if (active < CONCURRENCY) {
-      active++;
-      run();
-    } else {
-      queue.push(run);
-    }
-  });
+ if (active < CONCURRENCY) {
+ active++;
+ run();
+ } else {
+ queue.push(run);
+ }
+ });
 }

@@ -63,7 +63,7 @@ export default function LibrarySubHeader({
 
  {/* Folders */}
  <div className="flex items-center gap-2">
- <span className="text-[10px] font-bold text-text-muted uppercase tracking-wide">Folders</span>
+ <span className="text-[10px] font-bold text-text-muted tracking-wide">Folders</span>
  <div className="flex items-center gap-2 flex-wrap">
  {folders.map(f => {
  const active = activeFolders.includes(f);
@@ -181,7 +181,7 @@ export default function LibrarySubHeader({
 
  {/* Segmented Sort Control */}
  <div className="flex items-center gap-2">
- <span className="text-[10px] font-bold text-text-muted uppercase tracking-wide">Sort</span>
+ <span className="text-[10px] font-bold text-text-muted tracking-wide">Sort</span>
  <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
  {SORT_OPTIONS.map(opt => (
  <button

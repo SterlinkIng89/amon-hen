@@ -304,7 +304,7 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
  style={{ height: `${heightPercent}%` }}
  />
  </div>
- <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? "text-text-primary" : "text-text-muted group-hover:text-text-secondary"}`}>
+ <span className={`text-[10px] font-bold tracking-wider ${isSelected ? "text-text-primary" : "text-text-muted group-hover:text-text-secondary"}`}>
  {d.label}
  </span>
  </div>
@@ -427,7 +427,7 @@ function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: nu
  <span className={`text-xs font-black tabular-nums ${isTop ? "text-accent " : "text-text-primary"}`}>
  {hours < 0.1 ? "<0.1" : hours.toFixed(1)}
  </span>
- <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">hrs</span>
+ <span className="text-[9px] text-text-muted font-bold tracking-wider">hrs</span>
  </div>
  </div>
  );
@@ -477,7 +477,7 @@ function TopGameHighlight({ game }: { game: GameStat }) {
  <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-1.5 z-10">
  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1 shadow-md">
  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse " />
- <span className="text-[9px] font-black uppercase tracking-wider text-accent ">Top Played</span>
+ <span className="text-[9px] font-black tracking-wider text-accent ">Top Played</span>
  </span>
  <h4 className="text-lg font-black text-white leading-snug line-clamp-2">{game.game}</h4>
  
@@ -485,7 +485,7 @@ function TopGameHighlight({ game }: { game: GameStat }) {
  <span className="text-2xl sm:text-3xl font-black text-accent tabular-nums">
  {game.hours < 0.1 ? "<0.1" : game.hours.toFixed(1)}
  </span>
- <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">hrs</span>
+ <span className="text-[10px] font-bold text-text-muted tracking-widest mb-1">hrs</span>
  </div>
 
  {/* Achievements */}

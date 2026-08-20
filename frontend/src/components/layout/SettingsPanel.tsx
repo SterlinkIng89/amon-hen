@@ -134,7 +134,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
 
  <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6">
  <section className="flex flex-col gap-4">
- <div className="text-xs font-semibold text-text-primary uppercase tracking-wider flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+ <div className="text-xs font-semibold text-text-primary tracking-wider flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
  {/* YouTube icon */}
  <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff4444">
  <path d="M21.8 8s-.2-1.4-.8-2c-.8-.8-1.6-.8-2-.9C16.8 5 12 5 12 5s-4.8 0-7 .1c-.4.1-1.3.1-2 .9-.6.6-.8 2-.8 2S2 9.6 2 11.2v1.5c0 1.6.2 3.2.2 3.2s.2 1.4.8 2c.8.8 1.8.8 2.2.8C6.8 19 12 19 12 19s4.8 0 7-.2c.4-.1 1.3-.1 2-.8.6-.6.8-2 .8-2s.2-1.6.2-3.2v-1.5C22 9.6 21.8 8 21.8 8zM9.8 14.5V9l5.4 2.8-5.4 2.7z" />

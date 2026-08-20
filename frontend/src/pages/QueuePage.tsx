@@ -554,7 +554,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
  {/* Section: uploading */}
  {uploadingCount > 0 && (
  <div className="mb-2">
- <p className="text-[10px] font-semibold text-text-muted uppercase tracking-widest mb-2 px-1">
+ <p className="text-[10px] font-semibold text-text-muted tracking-widest mb-2 px-1">
  Uploading ({uploadingCount})
  </p>
  <div className="flex flex-col gap-2">
@@ -587,7 +587,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
  {/* Section: pending */}
  {pendingCount > 0 && (
  <div className="mb-2">
- <p className="text-[10px] font-semibold text-text-muted uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
+ <p className="text-[10px] font-semibold text-text-muted tracking-widest mb-2 px-1 flex items-center gap-2">
  <span>Pending ({pendingCount})</span>
  <span className="text-[9px] text-text-muted/50 normal-case tracking-normal">— drag to reorder</span>
  </p>
@@ -621,7 +621,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
  {/* Section: done */}
  {doneCount > 0 && (
  <div className="mb-2">
- <p className="text-[10px] font-semibold text-text-muted uppercase tracking-widest mb-2 px-1">
+ <p className="text-[10px] font-semibold text-text-muted tracking-widest mb-2 px-1">
  Done ({doneCount})
  </p>
  <div className="flex flex-col gap-2">
@@ -654,7 +654,7 @@ export default function QueuePage({ queue, running, onUpdateQueue, onSetRunning,
  {/* Section: errors */}
  {errorCount > 0 && (
  <div className="mb-2">
- <p className="text-[10px] font-semibold text-red-400/70 uppercase tracking-widest mb-2 px-1">
+ <p className="text-[10px] font-semibold text-red-400/70 tracking-widest mb-2 px-1">
  Errors ({errorCount})
  </p>
  <div className="flex flex-col gap-2">

@@ -360,7 +360,7 @@ export default function SteamStats() {
  </svg>
  </div>
  <div className="relative z-10">
- <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">{stat.label}</div>
+ <div className="text-xs font-bold text-white/40 tracking-widest mb-2">{stat.label}</div>
  <div className="text-4xl font-black text-white tracking-tight">{stat.value}</div>
  
  {stat.progress !== undefined && (
