@@ -69,6 +69,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
 
  const daysMap: Record<string, { count: number; hours: number }> = {};
  const dayOfWeekCount = [0, 0, 0, 0, 0, 0, 0]; // Sun(0) to Sat(6)
+ const dayOfWeekHours = [0, 0, 0, 0, 0, 0, 0];
  const yearMap: Record<string, { count: number; hours: number }> = {};
  const monthMap: Record<string, { count: number; hours: number }> = {};
  
@@ -153,13 +154,19 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  }
  }
 
- // Populate dayOfWeekCount using unique days
+ // Populate dayOfWeekCount and dayOfWeekHours using unique days
  uniqueDates.forEach(dateStr => {
  // Must parse properly to avoid timezone shifts! (e.g. YYYY-MM-DD to local date)
  const parts = dateStr.split("-");
  const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
- dayOfWeekCount[d.getDay()]++;
+ const dayIdx = d.getDay();
+ dayOfWeekCount[dayIdx]++;
+ dayOfWeekHours[dayIdx] += daysMap[dateStr].hours;
  });
+
+ const dayOfWeekAvgHours = dayOfWeekCount.map((count, idx) =>
+ count > 0 ? dayOfWeekHours[idx] / count : 0
+ );
 
  // Records
  let peakDayVideos = { date: "", count: 0 };
@@ -185,6 +192,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  totalHours,
  totalVideos,
  uniqueDaysCount: uniqueDates.length,
+ avgHoursPerDay: totalHours / (uniqueDates.length || 1),
  avgSessionLength: totalHours / (uniqueDates.length || 1),
  currentStreak,
  longestStreak,
@@ -193,7 +201,9 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  bestMonth,
  mostActiveYear,
  mostHoursYear,
- dayOfWeekCount
+ dayOfWeekCount,
+ dayOfWeekAvgHours,
+ dayOfWeekHours
  };
 
  }, [videos, filters?.value]);
@@ -221,7 +231,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
 
  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
  <StatCard title="Total Time" value={`${Math.round(insights.totalHours)}h`} subtitle={`${insights.totalVideos} videos`} />
- <StatCard title="Avg Session" value={`${insights.avgSessionLength.toFixed(1)}h`} subtitle="per active day" />
+ <StatCard title="Avg Hours / Day" value={`${insights.avgHoursPerDay.toFixed(1)}h`} subtitle="per day played" />
  <StatCard title="Current Streak" value={`${insights.currentStreak}d`} subtitle="consecutive days" highlight={insights.currentStreak > 0} />
  <StatCard title="Longest Streak" value={`${insights.longestStreak}d`} subtitle="all-time best" highlight={insights.longestStreak >= 7} />
  </div>
@@ -240,7 +250,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  <div key={idx} className="flex-1 flex flex-col justify-end items-center gap-2 group cursor-pointer h-full">
  <div className="w-full flex justify-center h-full items-end relative">
  <div className="absolute -top-8 bg-surface border border-border-subtle text-text-primary text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
- {count} days
+ {count} days · {insights.dayOfWeekAvgHours[idx].toFixed(1)}h avg
  </div>
  <div 
  className="w-full max-w-[24px] rounded-t-sm transition-all duration-500 ease-out bg-border-subtle group-hover:bg-accent"
