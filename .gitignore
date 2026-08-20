@@ -38,3 +38,9 @@ config.json
 *.db
 *.heapsnapshot
 test.exe
+
+# Agents / Customizations
+.agents/
+.agent/
+.gemini/
+
