@@ -184,7 +184,7 @@ export default function BulkActionBar({
  setCreatingNewLoading(true);
  try {
  // Use GetOrCreatePlaylist to avoid duplicate playlists with the same name
- const newId = await GetOrCreatePlaylist(title, "", "unlisted");
+ const newId = await GetOrCreatePlaylist(title, "", "public");
  if (newId) {
  await handleSavePlaylist(newId, title);
  setNewPlaylistTitle("");

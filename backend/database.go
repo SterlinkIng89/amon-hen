@@ -56,7 +56,8 @@ func (db *DB) migrate() error {
 			video_count INTEGER,
 			thumbnail_url TEXT,
 			published_at TEXT,
-			synced_at INTEGER
+			synced_at INTEGER,
+			privacy TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS yt_playlist_items (
 			playlist_id TEXT,
@@ -112,6 +113,7 @@ func (db *DB) migrate() error {
 	
 	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)
 	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN published_at TEXT")
+	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN privacy TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN game_tag TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN episode INTEGER")
 

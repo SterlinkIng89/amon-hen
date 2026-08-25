@@ -404,6 +404,7 @@ export namespace backend {
 	    videoCount: number;
 	    thumbnailUrl: string;
 	    publishedAt: string;
+	    privacy: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new YTPlaylist(source);
@@ -417,6 +418,7 @@ export namespace backend {
 	        this.videoCount = source["videoCount"];
 	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.publishedAt = source["publishedAt"];
+	        this.privacy = source["privacy"];
 	    }
 	}
 	export class YTVideo {
@@ -465,6 +467,23 @@ export namespace backend {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.thumbnail = source["thumbnail"];
+	    }
+	}
+
+}
+
+export namespace sql {
+	
+	export class DB {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new DB(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
 	    }
 	}
 

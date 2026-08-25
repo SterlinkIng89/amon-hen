@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
@@ -114,3 +115,22 @@ func (a *App) CacheHandler() http.Handler {
 		http.NotFound(w, r)
 	})
 }
+
+// InitTestDB initializes a database at a specific path for testing
+func (a *App) InitTestDB(dbPath string) error {
+	conn, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open test database: %w", err)
+	}
+	a.db = &DB{conn: conn}
+	return a.db.migrate()
+}
+
+// GetDB returns the underlying SQL DB connection (primarily for testing and internal operations)
+func (a *App) GetDB() *sql.DB {
+	if a.db == nil {
+		return nil
+	}
+	return a.db.conn
+}
+

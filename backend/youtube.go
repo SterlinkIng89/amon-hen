@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -314,6 +315,11 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 
 // CreatePlaylist creates a new YouTube playlist and saves it to the local DB.
 func (a *App) CreatePlaylist(title, description, privacy string) (string, error) {
+	normPrivacy, err := ValidatePrivacyStatus(privacy)
+	if err != nil {
+		normPrivacy = "public"
+	}
+
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
@@ -326,7 +332,7 @@ func (a *App) CreatePlaylist(title, description, privacy string) (string, error)
 			Description: description,
 		},
 		Status: &youtube.PlaylistStatus{
-			PrivacyStatus: privacy,
+			PrivacyStatus: normPrivacy,
 		},
 	}
 
@@ -342,10 +348,10 @@ func (a *App) CreatePlaylist(title, description, privacy string) (string, error)
 	if a.db != nil {
 		a.db.mu.Lock()
 		a.db.conn.Exec(`
-			INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at)
-			VALUES (?, ?, ?, 0, '', ?, ?)
-			ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description`,
-			res.Id, title, description, res.Snippet.PublishedAt, time.Now().Unix())
+			INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at, privacy)
+			VALUES (?, ?, ?, 0, '', ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description, privacy=excluded.privacy`,
+			res.Id, title, description, res.Snippet.PublishedAt, time.Now().Unix(), normPrivacy)
 		a.db.mu.Unlock()
 	}
 
@@ -383,7 +389,7 @@ func (a *App) GetOrCreatePlaylist(title, description, privacy string) (string, e
 
 	pageToken := ""
 	for {
-		call := svc.Playlists.List([]string{"snippet"}).Mine(true).MaxResults(50)
+		call := svc.Playlists.List([]string{"snippet", "status"}).Mine(true).MaxResults(50)
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -403,11 +409,15 @@ func (a *App) GetOrCreatePlaylist(title, description, privacy string) (string, e
 					if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
 						thumb = item.Snippet.Thumbnails.Medium.Url
 					}
+					itemPrivacy := "public"
+					if item.Status != nil && item.Status.PrivacyStatus != "" {
+						itemPrivacy = item.Status.PrivacyStatus
+					}
 					a.db.conn.Exec(`
-						INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at)
-						VALUES (?, ?, ?, 0, ?, ?, ?)
-						ON CONFLICT(id) DO UPDATE SET title=excluded.title`,
-						item.Id, item.Snippet.Title, item.Snippet.Description, thumb, item.Snippet.PublishedAt, time.Now().Unix())
+						INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at, privacy)
+						VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+						ON CONFLICT(id) DO UPDATE SET title=excluded.title, privacy=excluded.privacy`,
+						item.Id, item.Snippet.Title, item.Snippet.Description, thumb, item.Snippet.PublishedAt, time.Now().Unix(), itemPrivacy)
 					a.db.mu.Unlock()
 				}
 				return item.Id, nil
@@ -481,6 +491,107 @@ func (a *App) DeletePlaylist(playlistID string) error {
 	}
 
 	return nil
+}
+
+// ValidatePrivacyStatus checks and normalizes the privacy status string.
+func ValidatePrivacyStatus(privacy string) (string, error) {
+	norm := strings.ToLower(strings.TrimSpace(privacy))
+	switch norm {
+	case "public", "unlisted", "private":
+		return norm, nil
+	default:
+		return "", fmt.Errorf("invalid privacy status %q: must be 'public', 'unlisted', or 'private'", privacy)
+	}
+}
+
+// UpdatePlaylistVisibility updates a playlist's privacy status on YouTube and SQLite.
+func (a *App) UpdatePlaylistVisibility(playlistID, privacy string) error {
+	normPrivacy, err := ValidatePrivacyStatus(privacy)
+	if err != nil {
+		return err
+	}
+
+	if !a.IsYouTubeAuthed() {
+		return fmt.Errorf("not authenticated")
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Fetch title and description from local DB to populate required snippet fields
+	var title, desc string
+	if a.db != nil {
+		a.db.mu.Lock()
+		var t, d sql.NullString
+		a.db.conn.QueryRow("SELECT title, description FROM yt_playlists WHERE id = ?", playlistID).Scan(&t, &d)
+		a.db.mu.Unlock()
+		if t.Valid {
+			title = t.String
+		}
+		if d.Valid {
+			desc = d.String
+		}
+	}
+
+	playlist := &youtube.Playlist{
+		Id: playlistID,
+		Snippet: &youtube.PlaylistSnippet{
+			Title:       title,
+			Description: desc,
+		},
+		Status: &youtube.PlaylistStatus{
+			PrivacyStatus: normPrivacy,
+		},
+	}
+
+	start := time.Now()
+	_, err = svc.Playlists.Update([]string{"snippet", "status"}, playlist).Do()
+	a.logAPICall("playlists.update", playlistID, title, 50, start, err)
+	if err != nil {
+		appLog("[UpdatePlaylistVisibility] Error updating playlist %s (%s): %v", playlistID, normPrivacy, err)
+		return err
+	}
+
+	if a.db != nil {
+		a.db.mu.Lock()
+		a.db.conn.Exec("UPDATE yt_playlists SET privacy = ? WHERE id = ?", normPrivacy, playlistID)
+		a.db.mu.Unlock()
+	}
+
+	return nil
+}
+
+// UpdatePlaylistsVisibility updates privacy status for multiple playlists in bulk.
+// Returns the number of successfully updated playlists.
+func (a *App) UpdatePlaylistsVisibility(playlistIDs []string, privacy string) (int, error) {
+	normPrivacy, err := ValidatePrivacyStatus(privacy)
+	if err != nil {
+		return 0, err
+	}
+
+	updatedCount := 0
+	var lastErr error
+
+	for _, id := range playlistIDs {
+		if id == "" {
+			continue
+		}
+		if err := a.UpdatePlaylistVisibility(id, normPrivacy); err != nil {
+			appLog("[UpdatePlaylistsVisibility] Failed to update playlist %s: %v", id, err)
+			lastErr = err
+		} else {
+			updatedCount++
+		}
+	}
+
+	if updatedCount == 0 && lastErr != nil {
+		return 0, lastErr
+	}
+
+	return updatedCount, lastErr
 }
 
 // CancelUpload cancels an ongoing video upload by its path

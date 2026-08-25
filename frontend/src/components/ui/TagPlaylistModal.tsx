@@ -33,11 +33,11 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
  setIsCreating(true);
  setError("");
  try {
- const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", "unlisted");
+ const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", "public");
  await SetTagPlaylist(tag, id);
  onSaved();
- } catch (e: any) {
- setError(e.toString());
+ } catch (e: unknown) {
+ setError(e instanceof Error ? e.message : String(e));
  setIsCreating(false);
  }
  };

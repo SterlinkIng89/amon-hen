@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
-import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist, PurgePlaylistDuplicates } from "../../wailsjs/go/backend/App";
+import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist, PurgePlaylistDuplicates, UpdatePlaylistsVisibility } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { groupByDayYT } from "../utils/videoUtils";
 
@@ -12,72 +12,99 @@ import { useChannelData } from "../hooks/useChannelData";
 import ChannelAnalytics from "../components/youtube/ChannelAnalytics";
 import AdvancedFilters, { ActiveFilterChips, useAdvancedFilters } from "../components/ui/AdvancedFilters";
 import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
+import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 
 export default function ChannelPage() {
- const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
- const [playlistSort, setPlaylistSort] = useState<"recent" | "title" | "videos" | "updated">(
- () => (localStorage.getItem("ch:playlistSort_v2") as any) || "updated"
- );
- const [videoSort, setVideoSort] = useState<"recent" | "title" | "views" | "title_date">(
- () => (localStorage.getItem("ch:videoSort") as any) || "recent"
- );
- const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
- const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(null);
- const [selectedVideo, setSelectedVideo] = useState<YTVideo | null>(null);
- const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
- const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; playlistId: string; playlistName: string; duplicates: string[]; targetVideoIds: string[] } | null>(null);
- const [bulkAdding, setBulkAdding] = useState(false);
- const [purgingDuplicates, setPurgingDuplicates] = useState(false);
- const lastSelectedId = useRef<string | null>(null);
- const [viewType, setViewType] = useState<"grid" | "player">("grid");
- const [searchQuery, setSearchQuery] = useState("");
- const [debouncedSearch, setDebouncedSearch] = useState("");
- const [autoplay, setAutoplay] = useState(true);
- const [isSyncing, setIsSyncing] = useState(false);
- const [syncStatus, setSyncStatus] = useState("");
- const [sidebarSearch, setSidebarSearch] = useState("");
- const [showAnalytics, setShowAnalytics] = useState(false);
- const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
- const [showSyncMenu, setShowSyncMenu] = useState(false);
- const syncMenuRef = useRef<HTMLDivElement>(null);
- const sidebarRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
+  const [playlistSort, setPlaylistSort] = useState<"recent" | "title" | "videos" | "updated">(
+    () => (localStorage.getItem("ch:playlistSort_v2") as any) || "updated"
+  );
+  const [videoSort, setVideoSort] = useState<"recent" | "title" | "views" | "title_date">(
+    () => (localStorage.getItem("ch:videoSort") as any) || "recent"
+  );
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<YTVideo | null>(null);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
+  const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; playlistId: string; playlistName: string; duplicates: string[]; targetVideoIds: string[] } | null>(null);
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
+  const [purgingDuplicates, setPurgingDuplicates] = useState(false);
+  const lastSelectedId = useRef<string | null>(null);
+  const lastSelectedPlaylistId = useRef<string | null>(null);
+  const [viewType, setViewType] = useState<"grid" | "player">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [autoplay, setAutoplay] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("");
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
- // ── Advanced filters ───────────────────────────────────────────────────────
- const filters = useAdvancedFilters();
- const [analyticsDate, setAnalyticsDate] = useState("");
+  // ── Advanced filters ───────────────────────────────────────────────────────
+  const filters = useAdvancedFilters();
+  const [analyticsDate, setAnalyticsDate] = useState("");
 
- const allActiveCount = filters.activeCount + (analyticsDate ? 1 : 0);
+  const allActiveCount = filters.activeCount + (analyticsDate ? 1 : 0);
 
- // Debounce search
- useEffect(() => {
- const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
- return () => clearTimeout(timer);
- }, [searchQuery]);
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
- useEffect(() => { localStorage.setItem("ch:playlistSort_v2", playlistSort); }, [playlistSort]);
- useEffect(() => { localStorage.setItem("ch:videoSort", videoSort); }, [videoSort]);
+  useEffect(() => { localStorage.setItem("ch:playlistSort_v2", playlistSort); }, [playlistSort]);
+  useEffect(() => { localStorage.setItem("ch:videoSort", videoSort); }, [videoSort]);
 
- // Reset state when tab changes
- useEffect(() => {
- setSelectedPlaylist(null);
- setSelectedVideo(null);
- setSelectedVideoIds(new Set());
- lastSelectedId.current = null;
- setViewType("grid");
- filters.clearAll();
- setAnalyticsDate("");
- setSearchQuery("");
- }, [activeTab]);
+  // Reset state when tab changes
+  useEffect(() => {
+    setSelectedPlaylist(null);
+    setSelectedVideo(null);
+    setSelectedVideoIds(new Set());
+    setSelectedPlaylistIds(new Set());
+    lastSelectedId.current = null;
+    lastSelectedPlaylistId.current = null;
+    setViewType("grid");
+    filters.clearAll();
+    setAnalyticsDate("");
+    setSearchQuery("");
+  }, [activeTab]);
 
- // Reset filters when playlist changes
- useEffect(() => {
- setSelectedVideoIds(new Set());
- lastSelectedId.current = null;
- filters.clearAll();
- setAnalyticsDate("");
- setSearchQuery("");
- }, [selectedPlaylist]);
+  // Reset filters when playlist changes
+  useEffect(() => {
+    setSelectedVideoIds(new Set());
+    setSelectedPlaylistIds(new Set());
+    lastSelectedId.current = null;
+    lastSelectedPlaylistId.current = null;
+    filters.clearAll();
+    setAnalyticsDate("");
+    setSearchQuery("");
+  }, [selectedPlaylist]);
+
+  // ── Escape key: clear selection or search ────────────────────────────────────
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (selectedPlaylistIds.size > 0) {
+          setSelectedPlaylistIds(new Set());
+          lastSelectedPlaylistId.current = null;
+        } else if (selectedVideoIds.size > 0) {
+          setSelectedVideoIds(new Set());
+          lastSelectedId.current = null;
+        } else if (searchQuery) {
+          setSearchQuery("");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [selectedPlaylistIds.size, selectedVideoIds.size, searchQuery]);
 
  const {
  videos, playlists, filteredVideos, loading, loadingMore, loadMoreRef, loadData,
@@ -305,26 +332,108 @@ export default function ChannelPage() {
  }
  };
 
- const handlePurgeDuplicates = async () => {
- if (!selectedPlaylist || purgingDuplicates) return;
- setPurgingDuplicates(true);
- setSyncStatus("Scanning for duplicates...");
- try {
- const removed = await PurgePlaylistDuplicates(selectedPlaylist.id);
- if (removed === 0) {
- setSyncStatus("No duplicates found ✓");
- } else {
- setSyncStatus(`Removed ${removed} duplicate${removed !== 1 ? "s" : ""} ✓`);
- loadData(true);
- }
- setTimeout(() => setSyncStatus(""), 4000);
- } catch (e: any) {
- setSyncStatus("Failed to purge duplicates");
- setTimeout(() => setSyncStatus(""), 4000);
- } finally {
- setPurgingDuplicates(false);
- }
- };
+  const handlePurgeDuplicates = async () => {
+    if (!selectedPlaylist || purgingDuplicates) return;
+    setPurgingDuplicates(true);
+    setSyncStatus("Scanning for duplicates...");
+    try {
+      const removed = await PurgePlaylistDuplicates(selectedPlaylist.id);
+      if (removed === 0) {
+        setSyncStatus("No duplicates found ✓");
+      } else {
+        setSyncStatus(`Removed ${removed} duplicate${removed !== 1 ? "s" : ""} ✓`);
+        loadData(true);
+      }
+      setTimeout(() => setSyncStatus(""), 4000);
+    } catch (e: any) {
+      setSyncStatus("Failed to purge duplicates");
+      setTimeout(() => setSyncStatus(""), 4000);
+    } finally {
+      setPurgingDuplicates(false);
+    }
+  };
+
+  const handlePlaylistClick = (playlist: YTPlaylist, e: React.MouseEvent) => {
+    const visiblePlaylists = playlists.filter((p) => p.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = new Set(selectedPlaylistIds);
+      if (next.has(playlist.id)) next.delete(playlist.id);
+      else next.add(playlist.id);
+      setSelectedPlaylistIds(next);
+      lastSelectedPlaylistId.current = playlist.id;
+      return;
+    }
+
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const anchorId = lastSelectedPlaylistId.current || visiblePlaylists[0]?.id;
+      const currentIndex = visiblePlaylists.findIndex((p) => p.id === playlist.id);
+      const lastIndex = visiblePlaylists.findIndex((p) => p.id === anchorId);
+
+      if (currentIndex !== -1 && lastIndex !== -1) {
+        const start = Math.min(currentIndex, lastIndex);
+        const end = Math.max(currentIndex, lastIndex);
+        const next = new Set(selectedPlaylistIds);
+        for (let i = start; i <= end; i++) {
+          next.add(visiblePlaylists[i].id);
+        }
+        setSelectedPlaylistIds(next);
+      }
+      return;
+    }
+
+    // If already in multi-selection mode, normal click toggles selection
+    if (selectedPlaylistIds.size > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = new Set(selectedPlaylistIds);
+      if (next.has(playlist.id)) next.delete(playlist.id);
+      else next.add(playlist.id);
+      setSelectedPlaylistIds(next);
+      lastSelectedPlaylistId.current = playlist.id;
+      return;
+    }
+
+    // Normal click opens the playlist
+    lastSelectedPlaylistId.current = playlist.id;
+    setSelectedPlaylist(playlist);
+    setTimeout(() => loadData(true), 50);
+  };
+
+  const handlePlaylistSelectToggle = (playlist: YTPlaylist) => {
+    const next = new Set(selectedPlaylistIds);
+    if (next.has(playlist.id)) next.delete(playlist.id);
+    else next.add(playlist.id);
+    setSelectedPlaylistIds(next);
+    lastSelectedPlaylistId.current = playlist.id;
+  };
+
+  const handleUpdatePlaylistsVisibility = async (privacy: "public" | "unlisted" | "private") => {
+    if (selectedPlaylistIds.size === 0) return;
+    const targetIds = Array.from(selectedPlaylistIds);
+    setBulkUpdatingPlaylists(true);
+    const privacyLabel = privacy.charAt(0).toUpperCase() + privacy.slice(1);
+    setSyncStatus(`Updating ${targetIds.length} playlist${targetIds.length !== 1 ? "s" : ""} to ${privacyLabel}...`);
+
+    try {
+      await UpdatePlaylistsVisibility(targetIds, privacy);
+      setSyncStatus(`Updated ${targetIds.length} playlist${targetIds.length !== 1 ? "s" : ""} to ${privacyLabel} ✓`);
+      setSelectedPlaylistIds(new Set());
+      lastSelectedPlaylistId.current = null;
+      setTimeout(() => setSyncStatus(""), 4000);
+      loadData(true);
+    } catch (err: unknown) {
+      console.error("Failed to update playlist visibility:", err);
+      setSyncStatus("Failed to update visibility");
+      setTimeout(() => setSyncStatus(""), 4000);
+    } finally {
+      setBulkUpdatingPlaylists(false);
+    }
+  };
 
  const ytGroups = (activeTab === "videos" && !selectedPlaylist && (videoSort === "recent" || videoSort === "title_date"))
  ? groupByDayYT(filteredVideos, videoSort)
@@ -643,14 +752,23 @@ export default function ChannelPage() {
  ) : (
  <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
  {playlists.filter((p) => p.title.toLowerCase().includes(searchQuery.toLowerCase())).map((p) => (
- <PlaylistCard key={p.id} playlist={p} viewMode={viewMode} onClick={() => { setSelectedPlaylist(p); setTimeout(() => loadData(true), 50); }} onDeleted={() => loadData(true)} />
+ <PlaylistCard
+ key={p.id}
+ playlist={p}
+ viewMode={viewMode}
+ multiSelected={selectedPlaylistIds.has(p.id)}
+ onClick={(e) => handlePlaylistClick(p, e)}
+ onSelectToggle={() => handlePlaylistSelectToggle(p)}
+ onDeleted={() => loadData(true)}
+ />
  ))}
  </div>
  )}
  </div>
  )}
 
- {/* Bulk Action Bar */}
+ {/* Video Bulk Action Bar */}
+ {activeTab === "videos" && (
  <ChannelBulkActionBar 
  selectedCount={selectedVideoIds.size} 
  playlists={playlists} 
@@ -660,6 +778,20 @@ export default function ChannelPage() {
  }}
  onAddToPlaylist={handleAddToPlaylist}
  />
+ )}
+
+ {/* Playlist Bulk Action Bar */}
+ {activeTab === "playlists" && !selectedPlaylist && (
+ <PlaylistBulkActionBar
+ selectedCount={selectedPlaylistIds.size}
+ isUpdating={bulkUpdatingPlaylists}
+ onClearSelection={() => {
+ setSelectedPlaylistIds(new Set());
+ lastSelectedPlaylistId.current = null;
+ }}
+ onUpdateVisibility={handleUpdatePlaylistsVisibility}
+ />
+ )}
 
  {/* Duplicate Warning Dialog */}
  {duplicateWarning && (
