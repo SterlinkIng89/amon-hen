@@ -59,6 +59,7 @@ export interface YTPlaylist {
  videoCount: number;
  thumbnailUrl: string;
  publishedAt: string;
+ privacy?: string;
 }
 
 export interface VideoGroup {

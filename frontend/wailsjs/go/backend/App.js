@@ -62,6 +62,10 @@ export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function GetDB() {
+  return window['go']['backend']['App']['GetDB']();
+}
+
 export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
 }
@@ -88,6 +92,10 @@ export function GetSteamAppID(arg1) {
 
 export function GetSteamDeveloperStats(arg1) {
   return window['go']['backend']['App']['GetSteamDeveloperStats'](arg1);
+}
+
+export function GetSteamGameAchievementPct(arg1) {
+  return window['go']['backend']['App']['GetSteamGameAchievementPct'](arg1);
 }
 
 export function GetSteamGamesByDeveloper(arg1) {
@@ -156,6 +164,10 @@ export function GetYouTubeChannelInfo() {
 
 export function ImportYouTubeJSON() {
   return window['go']['backend']['App']['ImportYouTubeJSON']();
+}
+
+export function InitTestDB(arg1) {
+  return window['go']['backend']['App']['InitTestDB'](arg1);
 }
 
 export function IsSteamSyncing() {
@@ -282,14 +294,18 @@ export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
 }
 
+export function UpdatePlaylistVisibility(arg1, arg2) {
+  return window['go']['backend']['App']['UpdatePlaylistVisibility'](arg1, arg2);
+}
+
+export function UpdatePlaylistsVisibility(arg1, arg2) {
+  return window['go']['backend']['App']['UpdatePlaylistsVisibility'](arg1, arg2);
+}
+
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
 }
 
 export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['backend']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-}
-
-export function GetSteamGameAchievementPct(arg1) {
-  return window['go']['backend']['App']['GetSteamGameAchievementPct'](arg1);
 }

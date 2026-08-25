@@ -33,6 +33,7 @@ type YTPlaylist struct {
 	VideoCount   int64  `json:"videoCount"`
 	ThumbnailUrl string `json:"thumbnailUrl"`
 	PublishedAt  string `json:"publishedAt"`
+	Privacy      string `json:"privacy"`
 }
 
 // SyncChannelData downloads all videos and playlists from the channel and saves them to SQLite.
@@ -203,7 +204,7 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 
 	pageToken := ""
 	for {
-		call := svc.Playlists.List([]string{"snippet", "contentDetails"}).Mine(true).MaxResults(50)
+		call := svc.Playlists.List([]string{"snippet", "contentDetails", "status"}).Mine(true).MaxResults(50)
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -224,12 +225,18 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 				thumb = item.Snippet.Thumbnails.Medium.Url
 			}
 
-			tx.Exec(`INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
+			privacy := "public"
+			if item.Status != nil && item.Status.PrivacyStatus != "" {
+				privacy = item.Status.PrivacyStatus
+			}
+
+			tx.Exec(`INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at, privacy)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
-				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at`,
-				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime)
+				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at,
+				privacy=excluded.privacy`,
+				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime, privacy)
 
 			toSync = append(toSync, playlistEntry{
 				id:          item.Id,
@@ -767,7 +774,7 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 	}
 
 	rows, err := a.db.conn.Query(fmt.Sprintf(`
-		SELECT p.id, p.title, p.description, p.video_count, p.thumbnail_url, p.published_at
+		SELECT p.id, p.title, p.description, p.video_count, p.thumbnail_url, p.published_at, COALESCE(p.privacy, 'public')
 		FROM yt_playlists p
 		ORDER BY %s`, orderBy))
 	if err != nil {
@@ -778,7 +785,7 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 	var playlists []YTPlaylist
 	for rows.Next() {
 		var p YTPlaylist
-		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.VideoCount, &p.ThumbnailUrl, &p.PublishedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.VideoCount, &p.ThumbnailUrl, &p.PublishedAt, &p.Privacy); err != nil {
 			continue
 		}
 		playlists = append(playlists, p)
