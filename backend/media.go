@@ -36,7 +36,11 @@ func (a *App) initCache() {
 	fmt.Printf("Thumbnail worker limit: %d (of %d CPUs)\n", workers, runtime.NumCPU())
 }
 
-// cacheKey builds a unique filename from path + mod time
+// CacheKey builds a unique filename from path + mod time
+func CacheKey(path string, modTime time.Time) string {
+	return cacheKey(path, modTime)
+}
+
 func cacheKey(path string, modTime time.Time) string {
 	raw := fmt.Sprintf("%s|%d", path, modTime.UnixNano())
 	sum := md5.Sum([]byte(raw))

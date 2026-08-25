@@ -1,27 +1,21 @@
-package backend
+package backend_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"amon-hen/backend"
 )
 
-func setupTestApp(t *testing.T) (*App, string) {
+func setupTestApp(t *testing.T) (*backend.App, string) {
 	tempDir, err := os.MkdirTemp("", "amon-hen-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	app := &App{
-		cacheDir: tempDir,
-		thumbSem: make(chan struct{}, 2),
-	}
-
-	os.MkdirAll(filepath.Join(tempDir, "thumbs"), 0755)
-	os.MkdirAll(filepath.Join(tempDir, "previews"), 0755)
-	os.MkdirAll(filepath.Join(tempDir, "durations"), 0755)
-
+	app := backend.NewTestApp(tempDir)
 	return app, tempDir
 }
 
@@ -30,9 +24,9 @@ func TestCacheKey(t *testing.T) {
 	t1 := time.Unix(1000, 0)
 	t2 := time.Unix(2000, 0)
 
-	key1 := cacheKey(path, t1)
-	key1Repeat := cacheKey(path, t1)
-	key2 := cacheKey(path, t2)
+	key1 := backend.CacheKey(path, t1)
+	key1Repeat := backend.CacheKey(path, t1)
+	key2 := backend.CacheKey(path, t2)
 
 	if key1 != key1Repeat {
 		t.Errorf("Expected identical cache keys for same input, got %s and %s", key1, key1Repeat)
@@ -68,7 +62,7 @@ func TestGetThumbnail_CacheHit(t *testing.T) {
 		t.Fatalf("Failed to stat dummy video: %v", err)
 	}
 
-	key := cacheKey(videoPath, info.ModTime())
+	key := backend.CacheKey(videoPath, info.ModTime())
 	cachedThumbPath := filepath.Join(tempDir, "thumbs", key+".jpg")
 	if err := os.WriteFile(cachedThumbPath, []byte("fake thumbnail image"), 0644); err != nil {
 		t.Fatalf("Failed to create cached thumbnail: %v", err)
@@ -99,7 +93,7 @@ func TestGetVideoPreview_CacheHit(t *testing.T) {
 		t.Fatalf("Failed to stat dummy video: %v", err)
 	}
 
-	key := cacheKey(videoPath, info.ModTime())
+	key := backend.CacheKey(videoPath, info.ModTime())
 	cachedPreviewPath := filepath.Join(tempDir, "previews", key+".jpg")
 	if err := os.WriteFile(cachedPreviewPath, []byte("fake preview sheet"), 0644); err != nil {
 		t.Fatalf("Failed to create cached preview: %v", err)
@@ -130,7 +124,7 @@ func TestGetVideoDuration_CacheHit(t *testing.T) {
 		t.Fatalf("Failed to stat dummy video: %v", err)
 	}
 
-	key := cacheKey(videoPath, info.ModTime())
+	key := backend.CacheKey(videoPath, info.ModTime())
 	cachedDurationPath := filepath.Join(tempDir, "durations", key+".txt")
 	if err := os.WriteFile(cachedDurationPath, []byte("42.50\n"), 0644); err != nil {
 		t.Fatalf("Failed to create cached duration: %v", err)

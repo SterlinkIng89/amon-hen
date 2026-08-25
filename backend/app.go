@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -40,6 +41,19 @@ func NewApp() *App {
 		uploads: make(map[string]context.CancelFunc),
 	}
 	a.initCache()
+	return a
+}
+
+// NewTestApp creates an App configured for unit testing with a custom cache directory.
+func NewTestApp(cacheDir string) *App {
+	a := &App{
+		cacheDir: cacheDir,
+		thumbSem: make(chan struct{}, 2),
+		uploads:  make(map[string]context.CancelFunc),
+	}
+	_ = os.MkdirAll(filepath.Join(cacheDir, "thumbs"), 0755)
+	_ = os.MkdirAll(filepath.Join(cacheDir, "previews"), 0755)
+	_ = os.MkdirAll(filepath.Join(cacheDir, "durations"), 0755)
 	return a
 }
 
