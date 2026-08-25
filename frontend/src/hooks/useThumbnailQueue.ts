@@ -1,51 +1,83 @@
 /**
  * useThumbnailQueue
  *
- * A module-level async semaphore that limits the number of concurrent
- * thumbnail/preview/duration requests sent to the Go backend.
- *
- * Why: When a folder with many clips is opened, useInView fires for all
- * visible cards at once. Without throttling, N×3 backend calls hit ffmpeg
- * simultaneously and saturate the CPU. This queue caps it at CONCURRENCY
- * parallel requests regardless of how many cards become visible at once.
- *
- * The Go backend has its own semaphore too (runtime.NumCPU()/2), so this
- * is a secondary safety net that also improves perceived load order
- * (thumbnails appear top-to-bottom rather than all at once).
+ * Module-level async semaphore and in-memory cache for media assets
+ * (thumbnails, previews, durations).
  */
 
-const CONCURRENCY = 3;
+const thumbCache = new Map<string, string>();
+const durationCache = new Map<string, number>();
+const previewCache = new Map<string, string>();
 
-let active = 0;
-const queue: Array<() => void> = [];
-
-function release() {
- active--;
- if (queue.length > 0) {
- const next = queue.shift()!;
- active++;
- next();
- }
+export function getCachedThumb(path: string): string | undefined {
+  return thumbCache.get(path);
 }
 
-/**
- * Enqueue an async task so that at most CONCURRENCY tasks run at the same time.
- * Returns a Promise that resolves/rejects with the result of `fn`.
- */
-export function enqueueThumb<T>(fn: () => Promise<T>): Promise<T> {
- return new Promise<T>((resolve, reject) => {
- const run = () => {
- fn()
- .then(resolve)
- .catch(reject)
- .finally(release);
- };
-
- if (active < CONCURRENCY) {
- active++;
- run();
- } else {
- queue.push(run);
- }
- });
+export function setCachedThumb(path: string, url: string): void {
+  thumbCache.set(path, url);
 }
+
+export function clearCachedThumb(path: string): void {
+  thumbCache.delete(path);
+}
+
+export function getCachedDuration(path: string): number | undefined {
+  return durationCache.get(path);
+}
+
+export function setCachedDuration(path: string, duration: number): void {
+  durationCache.set(path, duration);
+}
+
+export function getCachedPreview(path: string): string | undefined {
+  return previewCache.get(path);
+}
+
+export function setCachedPreview(path: string, url: string): void {
+  previewCache.set(path, url);
+}
+
+export function clearCachedPreview(path: string): void {
+  previewCache.delete(path);
+}
+
+function createQueue(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  function release() {
+    active--;
+    if (queue.length > 0) {
+      const next = queue.shift()!;
+      active++;
+      next();
+    }
+  }
+
+  return function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => {
+        fn()
+          .then(resolve)
+          .catch(reject)
+          .finally(release);
+      };
+
+      if (active < concurrency) {
+        active++;
+        run();
+      } else {
+        queue.push(run);
+      }
+    });
+  };
+}
+
+// High concurrency for fast thumbnail queries (cache hits resolve instantly)
+export const enqueueThumb = createQueue(8);
+
+// Dedicated queue for duration probes
+export const enqueueDuration = createQueue(4);
+
+// Dedicated queue for preview sprite generation (heavy ffmpeg on hover)
+export const enqueuePreview = createQueue(2);

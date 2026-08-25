@@ -36,7 +36,11 @@ func (a *App) initCache() {
 	fmt.Printf("Thumbnail worker limit: %d (of %d CPUs)\n", workers, runtime.NumCPU())
 }
 
-// cacheKey builds a unique filename from path + mod time
+// CacheKey builds a unique filename from path + mod time
+func CacheKey(path string, modTime time.Time) string {
+	return cacheKey(path, modTime)
+}
+
 func cacheKey(path string, modTime time.Time) string {
 	raw := fmt.Sprintf("%s|%d", path, modTime.UnixNano())
 	sum := md5.Sum([]byte(raw))
@@ -52,6 +56,7 @@ func (a *App) GetCacheDir() string {
 // GetThumbnail returns a local cache URL for a video file thumbnail.
 // It respects the global thumbSem semaphore to cap concurrent ffmpeg processes.
 func (a *App) GetThumbnail(path string) (string, error) {
+	start := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
 		appLog("[Media] GetThumbnail failed (file not found): %s", path)
@@ -63,8 +68,11 @@ func (a *App) GetThumbnail(path string) (string, error) {
 
 	// Cache hit — no ffmpeg needed, skip semaphore.
 	if _, err := os.Stat(cachePath); err == nil {
+		appLog("[Media] GetThumbnail CACHE HIT for %s in %v", filepath.Base(path), time.Since(start))
 		return urlPath, nil
 	}
+
+	appLog("[Media] GetThumbnail CACHE MISS for %s (queued for generation)", filepath.Base(path))
 
 	// Acquire a worker slot before spawning ffmpeg.
 	a.thumbSem <- struct{}{}
@@ -89,6 +97,7 @@ func (a *App) GetThumbnail(path string) (string, error) {
 		appLog("[Media] GetThumbnail failed for %s: ffmpeg error: %v", filepath.Base(path), err)
 		return "", fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
+	appLog("[Media] GetThumbnail GENERATED for %s in %v", filepath.Base(path), time.Since(start))
 	return urlPath, nil
 }
 
@@ -115,6 +124,7 @@ func (a *App) RegenerateThumbnail(path string) (string, error) {
 // GetVideoPreview generates a 5x5 sprite sheet preview for a video file.
 // It respects the global thumbSem semaphore to cap concurrent ffmpeg processes.
 func (a *App) GetVideoPreview(path string) (string, error) {
+	start := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
 		appLog("[Media] GetVideoPreview failed (file not found): %s", path)
@@ -126,8 +136,11 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 
 	// Cache hit — no ffmpeg needed, skip semaphore.
 	if _, err := os.Stat(cachePath); err == nil {
+		appLog("[Media] GetVideoPreview CACHE HIT for %s in %v", filepath.Base(path), time.Since(start))
 		return urlPath, nil
 	}
+
+	appLog("[Media] GetVideoPreview CACHE MISS for %s (queued for generation)", filepath.Base(path))
 
 	// Acquire a worker slot before spawning ffmpeg.
 	a.thumbSem <- struct{}{}
@@ -151,12 +164,14 @@ func (a *App) GetVideoPreview(path string) (string, error) {
 		appLog("[Media] GetVideoPreview failed for %s: ffmpeg error: %v", filepath.Base(path), err)
 		return "", fmt.Errorf("failed to generate preview: %w", err)
 	}
+	appLog("[Media] GetVideoPreview GENERATED for %s in %v", filepath.Base(path), time.Since(start))
 	return urlPath, nil
 }
 
 // GetVideoDuration returns the duration of the video in seconds using ffprobe.
 // Results are cached to disk so repeated calls (e.g. after rescan) are free.
 func (a *App) GetVideoDuration(path string) (float64, error) {
+	start := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0, fmt.Errorf("file not found: %w", err)
@@ -167,9 +182,12 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	// Cache hit — skip ffprobe entirely.
 	if data, readErr := os.ReadFile(cachePath); readErr == nil {
 		if dur, parseErr := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); parseErr == nil {
+			appLog("[Media] GetVideoDuration CACHE HIT for %s in %v (%.2fs)", filepath.Base(path), time.Since(start), dur)
 			return dur, nil
 		}
 	}
+
+	appLog("[Media] GetVideoDuration CACHE MISS for %s (running ffprobe)", filepath.Base(path))
 
 	// Acquire a worker slot before spawning ffprobe.
 	a.thumbSem <- struct{}{}
@@ -195,5 +213,6 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	}
 	// Persist to disk for future calls.
 	_ = os.WriteFile(cachePath, []byte(durStr), 0644)
+	appLog("[Media] GetVideoDuration GENERATED for %s in %v (%.2fs)", filepath.Base(path), time.Since(start), duration)
 	return duration, nil
 }

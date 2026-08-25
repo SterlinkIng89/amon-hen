@@ -5,6 +5,7 @@ import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, G
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
+import { setCachedThumb, clearCachedPreview } from "../../hooks/useThumbnailQueue";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
@@ -471,7 +472,11 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  setRegenLoading(true);
  try {
  const fresh = await RegenerateThumbnail(video.path);
- if (fresh) setRegenThumb(fresh);
+ if (fresh) {
+ setCachedThumb(video.path, fresh);
+ clearCachedPreview(video.path);
+ setRegenThumb(fresh);
+ }
  } catch (e) {
  console.error("Failed to regenerate thumbnail", e);
  } finally {

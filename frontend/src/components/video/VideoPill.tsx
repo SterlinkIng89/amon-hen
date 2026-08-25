@@ -7,123 +7,150 @@ import {
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
-import { enqueueThumb } from "../../hooks/useThumbnailQueue";
 import {
- GetThumbnail,
- GetVideoPreview,
- GetVideoDuration,
+	enqueueThumb,
+	enqueueDuration,
+	enqueuePreview,
+	getCachedThumb,
+	setCachedThumb,
+	getCachedDuration,
+	setCachedDuration,
+	getCachedPreview,
+	setCachedPreview,
+} from "../../hooks/useThumbnailQueue";
+import {
+	GetThumbnail,
+	GetVideoPreview,
+	GetVideoDuration,
 } from "../../../wailsjs/go/backend/App";
 
 interface VideoPillProps {
- video: YTVideo | VideoFile;
- selected?: boolean;
- multiSelected?: boolean;
- onClick?: (e: React.MouseEvent) => void;
- onUpload?: () => void;
- onUpdate?: () => void;
- viewMode?: "grid" | "list";
- compact?: boolean;
- uploadProgress?: number; // 0-100 while uploading, undefined otherwise
- uploadSpeed?: number; // bytes per second while uploading
- readOnlyThumbnail?: boolean;
- gameProfiles?: Record<string, GameProfile>;
- onThumbLoaded?: (url: string) => void;
- onSelectToggle?: (e: React.MouseEvent) => void;
+	video: YTVideo | VideoFile;
+	selected?: boolean;
+	multiSelected?: boolean;
+	onClick?: (e: React.MouseEvent) => void;
+	onUpload?: () => void;
+	onUpdate?: () => void;
+	viewMode?: "grid" | "list";
+	compact?: boolean;
+	uploadProgress?: number; // 0-100 while uploading, undefined otherwise
+	uploadSpeed?: number; // bytes per second while uploading
+	readOnlyThumbnail?: boolean;
+	gameProfiles?: Record<string, GameProfile>;
+	onThumbLoaded?: (url: string) => void;
+	onSelectToggle?: (e: React.MouseEvent) => void;
 }
 
 export default function VideoPill({
- video,
- selected,
- multiSelected,
- onClick,
- onUpload,
- onUpdate,
- viewMode = "grid",
- compact = false,
- uploadProgress,
- uploadSpeed,
- readOnlyThumbnail = false,
- gameProfiles = {},
- onThumbLoaded,
- onSelectToggle,
+	video,
+	selected,
+	multiSelected,
+	onClick,
+	onUpload,
+	onUpdate,
+	viewMode = "grid",
+	compact = false,
+	uploadProgress,
+	uploadSpeed,
+	readOnlyThumbnail = false,
+	gameProfiles = {},
+	onThumbLoaded,
+	onSelectToggle,
 }: VideoPillProps) {
- const ref = useRef<HTMLDivElement>(null);
- const inView = useInView(ref);
+	const ref = useRef<HTMLDivElement>(null);
+	const inView = useInView(ref);
 
- // States for local files
- const [thumb, setThumb] = useState("");
- const [sprite, setSprite] = useState("");
- const [bgPos, setBgPos] = useState("0% 0%");
- const [hovered, setHovered] = useState(false);
- const [thumbLoaded, setThumbLoaded] = useState(false);
- const [imgLoaded, setImgLoaded] = useState(false);
- const [localDuration, setLocalDuration] = useState<number | null>(null);
+	// Helper: Is it a YouTube video or a Local file?
+	const isYT = "id" in video && !("path" in video);
+	const isLocal = "path" in video;
+	const localPath = isLocal ? (video as VideoFile).path : "";
 
- // Helper: Is it a YouTube video or a Local file?
- const isYT = "id" in video && !("path" in video);
- const isLocal = "path" in video;
+	// States for local files initialized immediately from memory cache if present
+	const [thumb, setThumb] = useState<string>(() => (isLocal ? getCachedThumb(localPath) || "" : ""));
+	const [sprite, setSprite] = useState<string>(() => (isLocal ? getCachedPreview(localPath) || "" : ""));
+	const [bgPos, setBgPos] = useState("0% 0%");
+	const [hovered, setHovered] = useState(false);
+	const [thumbLoaded, setThumbLoaded] = useState<boolean>(() => (isLocal ? !!getCachedThumb(localPath) : true));
+	const [imgLoaded, setImgLoaded] = useState<boolean>(() => (isLocal ? !!getCachedThumb(localPath) : false));
+	const [localDuration, setLocalDuration] = useState<number | null>(() =>
+		isLocal ? getCachedDuration(localPath) ?? null : null
+	);
 
- // Data normalization
- const activeProfile = isLocal ? gameProfiles[(video as VideoFile).game || ""] : undefined;
- const title = isYT
- ? video.title
- : (activeProfile?.type === "multiplayer")
- ? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime)
- : video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime);
- const subtitle = isLocal ? video.name : "";
- const thumbnail = isYT ? video.thumbnailUrl : thumb;
- const publishedAt = isYT
- ? new Date(video.publishedAt).toLocaleDateString()
- : "";
+	// Data normalization
+	const activeProfile = isLocal ? gameProfiles[(video as VideoFile).game || ""] : undefined;
+	const title = isYT
+		? video.title
+		: (activeProfile?.type === "multiplayer")
+		? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime)
+		: video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime);
+	const subtitle = isLocal ? video.name : "";
+	const thumbnail = isYT ? video.thumbnailUrl : thumb;
+	const publishedAt = isYT
+		? new Date(video.publishedAt).toLocaleDateString()
+		: "";
 
- // Duration normalization
- const parseYTDuration = (isoDuration: string) => {
- const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
- const matches = isoDuration.match(regex);
- if (!matches) return "0:00";
- const h = parseInt(matches[1] || "0");
- const m = parseInt(matches[2] || "0");
- const s = parseInt(matches[3] || "0");
- if (h > 0)
- return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
- return `${m}:${s.toString().padStart(2, "0")}`;
- };
+	// Duration normalization
+	const parseYTDuration = (isoDuration: string) => {
+		const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+		const matches = isoDuration.match(regex);
+		if (!matches) return "0:00";
+		const h = parseInt(matches[1] || "0");
+		const m = parseInt(matches[2] || "0");
+		const s = parseInt(matches[3] || "0");
+		if (h > 0)
+			return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+		return `${m}:${s.toString().padStart(2, "0")}`;
+	};
 
- const displayDuration = isYT
- ? parseYTDuration(video.duration)
- : localDuration !== null
- ? formatDuration(localDuration)
- : "";
+	const displayDuration = isYT
+		? parseYTDuration(video.duration)
+		: localDuration !== null
+		? formatDuration(localDuration)
+		: "";
 
- const formatNumber = (num: number) => {
- if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
- if (num >= 1000) return (num / 1000).toFixed(1) + "K";
- return num.toString();
- };
+	const formatNumber = (num: number) => {
+		if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+		if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+		return num.toString();
+	};
 
- useEffect(() => {
- if (isLocal && inView) {
- if (!thumbLoaded) {
- enqueueThumb(() => GetThumbnail(video.path)).then((d) => {
- if (d) {
- setThumb(d);
- if (onThumbLoaded) onThumbLoaded(d);
- }
- setThumbLoaded(true);
- });
- }
- if (!sprite) {
- enqueueThumb(() => GetVideoPreview(video.path)).then((d) => {
- if (d) setSprite(d);
- });
- }
- if (localDuration === null) {
- enqueueThumb(() => GetVideoDuration(video.path)).then((s) => {
- if (s > 0) setLocalDuration(s);
- });
- }
- }
- }, [inView, isLocal, (video as VideoFile).path, thumbLoaded, sprite, localDuration]);
+	// Primary thumbnail & duration loading when entering viewport
+	useEffect(() => {
+		if (isLocal && inView && localPath) {
+			if (!thumb && !thumbLoaded) {
+				enqueueThumb(() => GetThumbnail(localPath)).then((d) => {
+					if (d) {
+						setCachedThumb(localPath, d);
+						setThumb(d);
+						if (onThumbLoaded) onThumbLoaded(d);
+					}
+					setThumbLoaded(true);
+				}).catch(() => {
+					setThumbLoaded(true);
+				});
+			}
+			if (localDuration === null) {
+				enqueueDuration(() => GetVideoDuration(localPath)).then((s) => {
+					if (s > 0) {
+						setCachedDuration(localPath, s);
+						setLocalDuration(s);
+					}
+				}).catch(() => {});
+			}
+		}
+	}, [inView, isLocal, localPath, thumb, thumbLoaded, localDuration, onThumbLoaded]);
+
+	// Secondary preview sprite loading — ONLY triggered when user hovers over card
+	useEffect(() => {
+		if (isLocal && hovered && !sprite && localPath) {
+			enqueuePreview(() => GetVideoPreview(localPath)).then((d) => {
+				if (d) {
+					setCachedPreview(localPath, d);
+					setSprite(d);
+				}
+			}).catch(() => {});
+		}
+	}, [isLocal, hovered, sprite, localPath]);
 
  useEffect(() => {
  if (selected && ref.current && viewMode === "list") {
