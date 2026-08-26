@@ -203,4 +203,16 @@ describe("ChannelPage YouTube Sync State", () => {
       expect(lightSyncButton).not.toBeDisabled();
     });
   });
+  it("renders a responsive subheader without fixed height h-14", async () => {
+    const { container } = render(<ChannelPage />);
+    
+    // Wait for component to settle to avoid act() warnings
+    await screen.findByTitle("Light sync — fetch recent 20 videos");
+
+    const stickyHeader = container.querySelector(".sticky.top-0 > div");
+    expect(stickyHeader).toBeInTheDocument();
+    expect(stickyHeader).not.toHaveClass("h-14");
+    expect(stickyHeader).toHaveClass("min-h-14");
+    expect(stickyHeader).toHaveClass("py-2");
+  });
 });

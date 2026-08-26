@@ -446,7 +446,7 @@ export default function ChannelPage() {
  <div className="flex-1 flex flex-col overflow-hidden bg-base">
  {/* ── Sticky sub-header ─────────────────────────────────────────────────── */}
  <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
- <div className="flex items-center gap-3 px-5 h-14 shrink-0 flex-wrap">
+ <div className="flex items-center gap-3 px-5 min-h-14 py-2 shrink-0 flex-wrap">
 
  {/* Breadcrumb / title */}
  {selectedPlaylist ? (
