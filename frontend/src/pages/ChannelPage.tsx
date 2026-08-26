@@ -171,27 +171,27 @@ export default function ChannelPage() {
  return () => document.removeEventListener("mousedown", handler);
  }, []);
 
- const handleSyncLight = async () => {
- if (isSyncing) return;
- setShowSyncMenu(false); setIsSyncing(true);
- setSyncStatus("Quick sync — last 20 videos...");
- try { await SyncRecentVideos(20); } catch (e) {
- console.error("Light sync failed:", e);
- setSyncStatus("Sync failed");
- setTimeout(() => setSyncStatus(""), 3000);
- } finally { setIsSyncing(false); }
- };
+  const runSync = async (statusLabel: string, syncFn: () => Promise<unknown>, errorLabel: string) => {
+    if (isSyncing) return;
+    setShowSyncMenu(false);
+    setIsSyncing(true);
+    setSyncStatus(statusLabel);
+    try {
+      await syncFn();
+    } catch (e) {
+      console.error(errorLabel, e);
+      setSyncStatus("Sync failed");
+      setTimeout(() => setSyncStatus(""), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
- const handleSyncFull = async () => {
- if (isSyncing) return;
- setShowSyncMenu(false); setIsSyncing(true);
- setSyncStatus("Full sync — fetching entire channel...");
- try { await SyncChannelData(); } catch (e) {
- console.error("Full sync failed:", e);
- setSyncStatus("Sync failed");
- setTimeout(() => setSyncStatus(""), 3000);
- } finally { setIsSyncing(false); }
- };
+  const handleSyncLight = () =>
+    runSync("Quick sync — last 20 videos...", () => SyncRecentVideos(20), "Light sync failed:");
+
+  const handleSyncFull = () =>
+    runSync("Full sync — fetching entire channel...", () => SyncChannelData(), "Full sync failed:");
 
  // Scroll sidebar to selected video
  useEffect(() => {
