@@ -19,13 +19,6 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   UpdatePlaylistsVisibility: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock IntersectionObserver
-(globalThis as any).IntersectionObserver = class IntersectionObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-
 // Mock runtime events
 const eventListeners: Record<string, Function[]> = {};
 
