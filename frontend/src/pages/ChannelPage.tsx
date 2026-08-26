@@ -126,12 +126,14 @@ export default function ChannelPage() {
  setSyncStatus(`Syncing: ${data.stage} (${data.count}/${data.total})`);
  });
  const unsub2 = EventsOn("youtube:sync-done", () => {
+ setIsSyncing(false);
  setSyncStatus("Sync complete!");
  setTimeout(() => setSyncStatus(""), 3000);
  loadData(true);
  setAnalyticsRefreshKey((k) => k + 1);
  });
  const unsub3 = EventsOn("youtube:done", () => {
+ setIsSyncing(false);
  loadData(true);
  setAnalyticsRefreshKey((k) => k + 1);
  });
@@ -155,6 +157,7 @@ export default function ChannelPage() {
  await SyncChannelData();
  }
  } catch (e) { console.error("Auto-sync check failed:", e); }
+ finally { setIsSyncing(false); }
  };
  checkAndAutoSync();
  }, []);
@@ -174,9 +177,9 @@ export default function ChannelPage() {
  setSyncStatus("Quick sync — last 20 videos...");
  try { await SyncRecentVideos(20); } catch (e) {
  console.error("Light sync failed:", e);
- setIsSyncing(false); setSyncStatus("Sync failed");
+ setSyncStatus("Sync failed");
  setTimeout(() => setSyncStatus(""), 3000);
- }
+ } finally { setIsSyncing(false); }
  };
 
  const handleSyncFull = async () => {
@@ -185,9 +188,9 @@ export default function ChannelPage() {
  setSyncStatus("Full sync — fetching entire channel...");
  try { await SyncChannelData(); } catch (e) {
  console.error("Full sync failed:", e);
- setIsSyncing(false); setSyncStatus("Sync failed");
+ setSyncStatus("Sync failed");
  setTimeout(() => setSyncStatus(""), 3000);
- }
+ } finally { setIsSyncing(false); }
  };
 
  // Scroll sidebar to selected video
