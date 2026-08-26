@@ -176,6 +176,16 @@ export default function Dashboard() {
  }
  }, [videos]);
 
+  // ── Clear selection on view change away from library ────────────────────────
+  useEffect(() => {
+    if (view !== "grid" && view !== "player") {
+      if (selectedPaths.length > 0) {
+        setSelectedPaths([]);
+        setLastSelectedIdx(-1);
+      }
+    }
+  }, [view]);
+
  // ── Escape key: clear selection or search ────────────────────────────────────
  useEffect(() => {
  const handleEscape = (e: KeyboardEvent) => {
@@ -349,7 +359,7 @@ export default function Dashboard() {
  processQueue(queue);
  };
 
- const isSelecting = selectedPaths.length > (view === "player" ? 1 : 0);
+  const isSelecting = (view === "grid" || view === "player") && selectedPaths.length > (view === "player" ? 1 : 0);
 
  return (
  <div className="flex flex-col h-screen overflow-hidden">

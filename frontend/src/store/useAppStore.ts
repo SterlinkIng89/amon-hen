@@ -111,3 +111,6 @@ export function useAppStore() {
  setSelectedIndex: (selectedIndex: number) => setState({ selectedIndex }),
  };
 }
+
+useAppStore.getState = getSnapshot;
+useAppStore.setState = setState;
