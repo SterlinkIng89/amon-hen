@@ -58,7 +58,7 @@ export default function LibrarySubHeader({
  return (
  <div className="flex flex-col border-b border-border-subtle bg-surface/50 backdrop-blur-md sticky top-0 z-20 shrink-0">
  {/* Top Row: Filters & Sort */}
- <div className="flex items-center justify-between px-6 h-14 shrink-0">
+ <div className="flex items-center justify-between px-6 min-h-14 py-2 shrink-0 flex-wrap gap-2">
  <div className="flex items-center gap-4 flex-wrap">
 
  {/* Folders */}
