@@ -11,6 +11,46 @@ interface PlaylistCardProps {
   onDeleted?: () => void;
 }
 
+function getPrivacyBadge(rawPrivacy?: string) {
+  const privacy = (rawPrivacy || "public").toLowerCase();
+  switch (privacy) {
+    case "private":
+      return {
+        label: "Private",
+        className: "bg-amber-500/10 text-amber-400 border-amber-500/25",
+        icon: (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        ),
+      };
+    case "unlisted":
+      return {
+        label: "Unlisted",
+        className: "bg-sky-500/10 text-sky-400 border-sky-500/25",
+        icon: (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        ),
+      };
+    default:
+      return {
+        label: "Public",
+        className: "bg-green-500/10 text-green-400 border-green-500/25",
+        icon: (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+        ),
+      };
+  }
+}
+
 export default function PlaylistCard({
   playlist,
   viewMode = "grid",
@@ -54,47 +94,7 @@ export default function PlaylistCard({
     }
   };
 
-  const privacy = (playlist.privacy || "public").toLowerCase();
-  const getPrivacyBadge = () => {
-    switch (privacy) {
-      case "private":
-        return {
-          label: "Private",
-          className: "bg-amber-500/10 text-amber-400 border-amber-500/25",
-          icon: (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          ),
-        };
-      case "unlisted":
-        return {
-          label: "Unlisted",
-          className: "bg-sky-500/10 text-sky-400 border-sky-500/25",
-          icon: (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-          ),
-        };
-      default:
-        return {
-          label: "Public",
-          className: "bg-green-500/10 text-green-400 border-green-500/25",
-          icon: (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          ),
-        };
-    }
-  };
-
-  const badge = getPrivacyBadge();
+  const badge = getPrivacyBadge(playlist.privacy);
 
   // While the confirm modal is open, show a warning overlay instead of navigating
   if (confirmDelete) {
@@ -270,18 +270,26 @@ export default function PlaylistCard({
       <div
         className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3 pb-2.5 gap-2"}`}
       >
-        <h3
-          className={`font-semibold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
-          title={playlist.title}
-        >
-          {playlist.title}
-        </h3>
+        <div data-testid="playlist-card-header" className="flex flex-col gap-1.5 min-w-0">
+          <h3
+            className={`font-semibold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
+            title={playlist.title}
+          >
+            {playlist.title}
+          </h3>
 
-        <div className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto"}`}>
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}>
-            {badge.icon}
-            <span>{badge.label}</span>
-          </span>
+          <div className="flex items-center">
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}>
+              {badge.icon}
+              <span>{badge.label}</span>
+            </span>
+          </div>
+        </div>
+
+        <div
+          data-testid="playlist-card-footer"
+          className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto"}`}
+        >
           <span className="text-[10px] text-text-muted">
             {playlist.videoCount} {playlist.videoCount === 1 ? "video" : "videos"}
           </span>
