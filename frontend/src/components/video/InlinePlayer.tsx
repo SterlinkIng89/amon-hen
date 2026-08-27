@@ -9,6 +9,8 @@ import { setCachedThumb, clearCachedPreview } from "../../hooks/useThumbnailQueu
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
+import { useAppStore } from "../../store/useAppStore";
+import { PlaylistPrivacy } from "../../types";
 
 interface InlinePlayerProps {
  video: VideoFile;
@@ -162,9 +164,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  const [gameModeInput, setGameModeInput] = useState(video.gameMode || "");
  const [customVarsInput, setCustomVarsInput] = useState<Record<string, string>>(video.customVars || {});
  const [description, setDescription] = useState(video.description || "");
- const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
- (video.privacy as "public" | "unlisted" | "private") || "unlisted"
- );
+ const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
+    (video.privacy as PlaylistPrivacy) || useAppStore.getState().defaultPlaylistPrivacy
+  );
  const [playlistId, setPlaylistId] = useState(video.playlistId || "");
  const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
@@ -201,7 +203,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  setEventInput(video.event || "");
  setGameModeInput(video.gameMode || "");
  setDescription(video.description || "");
- setPrivacy((video.privacy as "public" | "unlisted" | "private") || "unlisted");
+ setPrivacy((video.privacy as PlaylistPrivacy) || useAppStore.getState().defaultPlaylistPrivacy);
  setPlaylistId(video.playlistId || "");
  setPlaylistSearch(video.playlistTitle || "");
  }, [video.path, video.youtubeTitle, video.game, video.description, video.privacy, video.playlistId, video.episode, video.event, video.gameMode, gameProfiles]);
@@ -228,6 +230,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  setIsCreatingPlaylistLoading(true);
  setPlaylistCreateError("");
  try {
+ useAppStore.setState({ defaultPlaylistPrivacy: privacy });
  const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", privacy);
  setNewPlaylistTitle("");
  setIsCreatingPlaylist(false);
@@ -802,7 +805,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  <label className="text-sm font-medium text-white/90">Privacy</label>
  <div className="flex gap-2">
  {(["public", "unlisted", "private"] as const).map(p => (
- <button key={p} className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+ <button key={p} className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => { setPrivacy(p); useAppStore.setState({ defaultPlaylistPrivacy: p }); }}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
  ))}
  </div>
  </div>
@@ -1052,7 +1055,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  <label className="text-sm font-medium text-white/90">Privacy</label>
  <div className="flex gap-2">
  {(["public", "unlisted", "private"] as const).map(p => (
- <button key={p} className={`px-6 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => setPrivacy(p)}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
+ <button key={p} className={`px-6 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`} onClick={() => { setPrivacy(p); useAppStore.setState({ defaultPlaylistPrivacy: p }); }}>{p.charAt(0).toUpperCase() + p.slice(1)}</button>
  ))}
  </div>
  </div>

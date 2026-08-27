@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import { generateYouTubeTitle } from "../../utils/videoUtils";
+import { useAppStore } from "../../store/useAppStore";
+import { PlaylistPrivacy } from "../../types";
 import { QueueItem } from "./UploadQueue";
 import {
  GetChannelPlaylists,
@@ -11,7 +13,7 @@ import {
 export interface UploadOptions {
  title: string;
  description: string;
- privacy: "public" | "unlisted" | "private";
+ privacy: PlaylistPrivacy;
  playlistId?: string;
 }
 
@@ -51,8 +53,8 @@ export default function UploadDialog({
  ),
  );
  const [description, setDescription] = useState(video.description || "");
- const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">(
- (video.privacy as "public" | "unlisted" | "private") || "unlisted",
+ const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
+ (video.privacy as PlaylistPrivacy) || useAppStore.getState().defaultPlaylistPrivacy,
  );
  const [playlistId, setPlaylistId] = useState(video.playlistId || "");
  const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
@@ -107,24 +109,25 @@ export default function UploadDialog({
  }
  }, [playlists, playlistId]);
 
- const handleCreatePlaylist = async () => {
- if (!newPlaylistTitle.trim()) return;
- setIsCreatingPlaylist(true);
- setPlaylistError("");
- try {
- const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", privacy);
- // Refresh from DB — the backend already persisted the playlist row
- await refreshPlaylists();
- setNewPlaylistTitle("");
- setIsCreating(false);
- setPlaylistId(id);
- setPlaylistSearch(newPlaylistTitle.trim());
- } catch (e: any) {
- setPlaylistError(e?.toString() ?? "Failed to get or create playlist");
- } finally {
- setIsCreatingPlaylist(false);
- }
- };
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistTitle.trim()) return;
+    setIsCreatingPlaylist(true);
+    setPlaylistError("");
+    try {
+      useAppStore.setState({ defaultPlaylistPrivacy: privacy });
+      const id = await GetOrCreatePlaylist(newPlaylistTitle.trim(), "", privacy);
+      // Refresh from DB — the backend already persisted the playlist row
+      await refreshPlaylists();
+      setNewPlaylistTitle("");
+      setIsCreating(false);
+      setPlaylistId(id);
+      setPlaylistSearch(newPlaylistTitle.trim());
+    } catch (e: any) {
+      setPlaylistError(e?.toString() ?? "Failed to get or create playlist");
+    } finally {
+      setIsCreatingPlaylist(false);
+    }
+  };
 
  const opts = (): UploadOptions => ({
  title,
@@ -366,7 +369,10 @@ export default function UploadDialog({
  <button
  key={p}
  className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 rounded-sm text-xs font-semibold cursor-pointer transition-colors ${privacy === p ? "bg-accent text-white border border-accent hover:bg-accent" : "bg-elevated border border-border-subtle text-text-secondary hover:bg-card hover:border-border-medium hover:text-text-primary"}`}
- onClick={() => setPrivacy(p)}
+ onClick={() => {
+ setPrivacy(p);
+ useAppStore.setState({ defaultPlaylistPrivacy: p });
+ }}
  >
  {p === "public" && (
  <svg

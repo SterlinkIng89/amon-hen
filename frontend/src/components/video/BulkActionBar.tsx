@@ -11,6 +11,7 @@ import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import { generateYouTubeTitle, extractCustomVars } from "../../utils/videoUtils";
+import { useAppStore } from "../../store/useAppStore";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 
@@ -184,7 +185,7 @@ export default function BulkActionBar({
  setCreatingNewLoading(true);
  try {
  // Use GetOrCreatePlaylist to avoid duplicate playlists with the same name
- const newId = await GetOrCreatePlaylist(title, "", "public");
+ const newId = await GetOrCreatePlaylist(title, "", useAppStore.getState().defaultPlaylistPrivacy);
  if (newId) {
  await handleSavePlaylist(newId, title);
  setNewPlaylistTitle("");
