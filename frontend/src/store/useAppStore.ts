@@ -4,20 +4,21 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode } from "../types";
+import { ViewMode, PlaylistPrivacy } from "../types";
 
 type SortMode = "date" | "name" | "size";
 
 interface AppState {
- queue: QueueItem[];
- queueRunning: boolean;
- queueAddedAt: number; // timestamp bump — changes every time an item is added
- queueDoneAt: number; // timestamp bump — changes every time an item finishes
- ytAuthed: boolean;
- view: ViewMode;
- sortMode: SortMode;
- filterUploaded: boolean;
- selectedIndex: number;
+  queue: QueueItem[];
+  queueRunning: boolean;
+  queueAddedAt: number; // timestamp bump — changes every time an item is added
+  queueDoneAt: number; // timestamp bump — changes every time an item finishes
+  ytAuthed: boolean;
+  view: ViewMode;
+  sortMode: SortMode;
+  filterUploaded: boolean;
+  selectedIndex: number;
+  defaultPlaylistPrivacy: PlaylistPrivacy;
 }
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -25,26 +26,27 @@ interface AppState {
 const PREFS_KEY = "amon-hen-prefs";
 
 function loadPersistedPrefs(): Partial<AppState> {
- try {
- const raw = localStorage.getItem(PREFS_KEY);
- return raw ? JSON.parse(raw) : {};
- } catch {
- return {};
- }
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 
 function savePersistedPrefs(state: AppState) {
- try {
- localStorage.setItem(
- PREFS_KEY,
- JSON.stringify({
- view: state.view,
- sortMode: state.sortMode,
- filterUploaded: state.filterUploaded,
- selectedIndex: state.selectedIndex,
- })
- );
- } catch {}
+  try {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        view: state.view,
+        sortMode: state.sortMode,
+        filterUploaded: state.filterUploaded,
+        selectedIndex: state.selectedIndex,
+        defaultPlaylistPrivacy: state.defaultPlaylistPrivacy,
+      })
+    );
+  } catch {}
 }
 
 // ─── Store implementation ─────────────────────────────────────────────────────
@@ -52,64 +54,67 @@ function savePersistedPrefs(state: AppState) {
 const saved = loadPersistedPrefs();
 
 let state: AppState = {
- queue: [],
- queueRunning: false,
- queueAddedAt: 0,
- queueDoneAt: 0,
- ytAuthed: false,
- view: (saved.view as ViewMode) ?? "grid",
- sortMode: (saved.sortMode as SortMode) ?? "date",
- filterUploaded: saved.filterUploaded ?? false,
- selectedIndex: saved.selectedIndex ?? -1,
+  queue: [],
+  queueRunning: false,
+  queueAddedAt: 0,
+  queueDoneAt: 0,
+  ytAuthed: false,
+  view: (saved.view as ViewMode) ?? "grid",
+  sortMode: (saved.sortMode as SortMode) ?? "date",
+  filterUploaded: saved.filterUploaded ?? false,
+  selectedIndex: saved.selectedIndex ?? -1,
+  defaultPlaylistPrivacy: (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "public",
 };
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
 function getSnapshot() {
- return state;
+  return state;
 }
 
 function setState(patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>)) {
- const incoming = typeof patch === "function" ? patch(state) : patch;
- state = { ...state, ...incoming };
- savePersistedPrefs(state);
- listeners.forEach((l) => l());
+  const incoming = typeof patch === "function" ? patch(state) : patch;
+  state = { ...state, ...incoming };
+  savePersistedPrefs(state);
+  listeners.forEach((l) => l());
 }
 
 function subscribe(listener: Listener) {
- listeners.add(listener);
- return () => listeners.delete(listener);
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 // ─── React hook ───────────────────────────────────────────────────────────────
 
 export function useAppStore() {
- const s = useSyncExternalStore(subscribe, getSnapshot);
+  const s = useSyncExternalStore(subscribe, getSnapshot);
 
- const setQueue = (queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[])) => {
- setState((prev) => ({
- queue:
- typeof queueOrUpdater === "function"
- ? queueOrUpdater(prev.queue)
- : queueOrUpdater,
- }));
- };
+  const setQueue = (queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[])) => {
+    setState((prev) => ({
+      queue:
+        typeof queueOrUpdater === "function"
+          ? queueOrUpdater(prev.queue)
+          : queueOrUpdater,
+    }));
+  };
 
- return {
- ...s,
- setQueue,
- addToQueue: (items: QueueItem[]) =>
- setState((prev) => ({ queue: [...prev.queue, ...items], queueAddedAt: Date.now() })),
- bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
- bumpQueueDone: () => setState({ queueDoneAt: Date.now() }),
- setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
- setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
- setView: (view: ViewMode) => setState({ view }),
- setSortMode: (sortMode: SortMode) => setState({ sortMode }),
- setFilterUploaded: (filterUploaded: boolean) => setState({ filterUploaded }),
- setSelectedIndex: (selectedIndex: number) => setState({ selectedIndex }),
- };
+  return {
+    ...s,
+    setQueue,
+    addToQueue: (items: QueueItem[]) =>
+      setState((prev) => ({ queue: [...prev.queue, ...items], queueAddedAt: Date.now() })),
+    bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
+    bumpQueueDone: () => setState({ queueDoneAt: Date.now() }),
+    setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
+    setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
+    setView: (view: ViewMode) => setState({ view }),
+    setSortMode: (sortMode: SortMode) => setState({ sortMode }),
+    setFilterUploaded: (filterUploaded: boolean) => setState({ filterUploaded }),
+    setSelectedIndex: (selectedIndex: number) => setState({ selectedIndex }),
+    setDefaultPlaylistPrivacy: (defaultPlaylistPrivacy: PlaylistPrivacy) =>
+      setState({ defaultPlaylistPrivacy }),
+  };
 }
 
 useAppStore.getState = getSnapshot;
