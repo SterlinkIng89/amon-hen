@@ -120,29 +120,42 @@ export default function ChannelPage() {
  excludeWords: filters.excludeWords,
  });
 
- // Sync events
- useEffect(() => {
- const unsub1 = EventsOn("youtube:sync-progress", (data: { count: number; total: number; stage: string }) => {
- setSyncStatus(`Syncing: ${data.stage} (${data.count}/${data.total})`);
- });
- const unsub2 = EventsOn("youtube:sync-done", () => {
- setIsSyncing(false);
- setSyncStatus("Sync complete!");
- setTimeout(() => setSyncStatus(""), 3000);
- loadData(true);
- setAnalyticsRefreshKey((k) => k + 1);
- });
- const unsub3 = EventsOn("youtube:done", () => {
- setIsSyncing(false);
- loadData(true);
- setAnalyticsRefreshKey((k) => k + 1);
- });
- return () => {
- unsub1();
- unsub2();
- unsub3();
- };
- }, [loadData]);
+  // Sync events
+  useEffect(() => {
+    const unsub1 = EventsOn("youtube:sync-progress", (data: string | { count?: number; total?: number; stage?: string; message?: string }) => {
+      setIsSyncing(true);
+      if (typeof data === "string") {
+        setSyncStatus(data);
+      } else if (data && typeof data === "object") {
+        if (data.stage && data.count !== undefined && data.total !== undefined) {
+          setSyncStatus(`Syncing: ${data.stage} (${data.count}/${data.total})`);
+        } else if (data.stage) {
+          setSyncStatus(data.stage);
+        } else if (data.message) {
+          setSyncStatus(data.message);
+        } else {
+          setSyncStatus("Syncing...");
+        }
+      }
+    });
+    const unsub2 = EventsOn("youtube:sync-done", () => {
+      setIsSyncing(false);
+      setSyncStatus("Sync complete!");
+      setTimeout(() => setSyncStatus(""), 3000);
+      loadData(true);
+      setAnalyticsRefreshKey((k) => k + 1);
+    });
+    const unsub3 = EventsOn("youtube:done", () => {
+      setIsSyncing(false);
+      loadData(true);
+      setAnalyticsRefreshKey((k) => k + 1);
+    });
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
+  }, [loadData]);
 
  // Auto-sync on first visit
  useEffect(() => {
