@@ -215,4 +215,44 @@ describe("ChannelPage YouTube Sync State", () => {
     expect(stickyHeader).toHaveClass("min-h-14");
     expect(stickyHeader).toHaveClass("py-2");
   });
+
+  it("displays string sync progress message without undefined when youtube:sync-progress fires with string", async () => {
+    render(<ChannelPage />);
+    await screen.findByTitle("Light sync — fetch recent 20 videos");
+
+    await act(async () => {
+      const callbacks = eventListeners["youtube:sync-progress"] || [];
+      callbacks.forEach(cb => cb("Syncing playlists..."));
+    });
+
+    expect(screen.getByText("Syncing playlists...")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
+
+  it("displays progress when youtube:sync-progress fires with count string", async () => {
+    render(<ChannelPage />);
+    await screen.findByTitle("Light sync — fetch recent 20 videos");
+
+    await act(async () => {
+      const callbacks = eventListeners["youtube:sync-progress"] || [];
+      callbacks.forEach(cb => cb("Syncing videos... (42)"));
+    });
+
+    expect(screen.getByText("Syncing videos... (42)")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
+
+  it("displays structured sync progress when youtube:sync-progress fires with an object", async () => {
+    render(<ChannelPage />);
+    await screen.findByTitle("Light sync — fetch recent 20 videos");
+
+    await act(async () => {
+      const callbacks = eventListeners["youtube:sync-progress"] || [];
+      callbacks.forEach(cb => cb({ stage: "playlists", count: 5, total: 10 }));
+    });
+
+    expect(screen.getByText("Syncing: playlists (5/10)")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
 });
+
