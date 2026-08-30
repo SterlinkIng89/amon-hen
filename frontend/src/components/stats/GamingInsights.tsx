@@ -6,16 +6,41 @@ interface HistoricalVideo {
  title: string;
  published: string;
  duration: string;
+ gameTag?: string;
 }
 
-function parseISODurationToHours(iso: string): number {
- if (!iso) return 0;
- const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
- if (!match) return 0;
+function parseDurationToHours(isoOrSecs: string): number {
+ if (!isoOrSecs) return 0;
+ const str = isoOrSecs.trim();
+ if (!str) return 0;
+
+ // 1. ISO 8601 (PT1H2M3S)
+ const match = str.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
+ if (match && (match[1] || match[2] || match[3])) {
  const h = parseInt(match[1] || "0", 10);
  const m = parseInt(match[2] || "0", 10);
  const s = parseInt(match[3] || "0", 10);
  return h + (m / 60) + (s / 3600);
+ }
+
+ // 2. Standard timestamp HH:MM:SS or MM:SS
+ if (str.includes(":")) {
+ const parts = str.split(":").map(p => parseFloat(p));
+ if (parts.length === 3 && parts.every(n => !isNaN(n))) {
+ return parts[0] + (parts[1] / 60) + (parts[2] / 3600);
+ }
+ if (parts.length === 2 && parts.every(n => !isNaN(n))) {
+ return (parts[0] / 60) + (parts[1] / 3600);
+ }
+ }
+
+ // 3. Raw seconds (e.g. "3600" or "1820.5")
+ const secs = parseFloat(str);
+ if (!isNaN(secs) && secs > 0) {
+ return secs / 3600;
+ }
+
+ return 0;
 }
 
 interface GamingInsightsProps {
@@ -77,15 +102,14 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
  let totalVideos = 0;
 
  videos.forEach(v => {
- if (!v.published || v.published.length < 10) return;
- 
  const titleDate = extractTitleDate(v.title);
- const pubDate = titleDate || v.published.substring(0, 10);
- 
+ const pubDate = titleDate || (v.published && v.published.length >= 10 ? v.published.substring(0, 10) : "");
+
+ if (!pubDate || pubDate.length < 10) return;
  if (!matchesDate(pubDate)) return;
  if (!notExcluded(v.title)) return;
 
- const hours = parseISODurationToHours(v.duration);
+ const hours = parseDurationToHours(v.duration);
  totalHours += hours;
  totalVideos++;
 

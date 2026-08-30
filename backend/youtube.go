@@ -701,15 +701,22 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	// (which match by title LIKE '<tag> - %') have a fallback via explicit columns too.
 	// This row may not exist yet if the sync hasn't run \u2014 insert or update.
 	if a.db != nil && gameTag != "" {
+		dur, _ := a.GetVideoDuration(path)
+		durStr := ""
+		if dur > 0 {
+			durStr = fmt.Sprintf("%.2f", dur)
+		}
 		a.db.mu.Lock()
 		a.db.conn.Exec(`
-			INSERT INTO yt_videos (id, title, game_tag, episode, local_file, synced_at)
-			VALUES (?, ?, ?, ?, ?, ?)
+			INSERT INTO yt_videos (id, title, game_tag, episode, local_file, duration, published_at, synced_at)
+			VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)
 			ON CONFLICT(id) DO UPDATE SET
 				game_tag = excluded.game_tag,
 				episode  = excluded.episode,
-				local_file = excluded.local_file`,
-			result.Id, title, gameTag, episode, path, time.Now().Unix(),
+				local_file = excluded.local_file,
+				duration = CASE WHEN yt_videos.duration IS NULL OR yt_videos.duration = '' THEN excluded.duration ELSE yt_videos.duration END,
+				published_at = CASE WHEN yt_videos.published_at IS NULL OR yt_videos.published_at = '' THEN excluded.published_at ELSE yt_videos.published_at END`,
+			result.Id, title, gameTag, episode, path, durStr, time.Now().Unix(),
 		)
 		a.db.mu.Unlock()
 	}

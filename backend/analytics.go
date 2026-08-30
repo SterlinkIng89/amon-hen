@@ -38,6 +38,7 @@ type HistoricalVideo struct {
 	Title     string `json:"title"`
 	Published string `json:"published"`
 	Duration  string `json:"duration"`
+	GameTag   string `json:"gameTag"`
 }
 
 // TopVideo represents a single entry in the top-viewed videos list.
@@ -152,17 +153,21 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 	}
 
 	// ── 6. Daily Trends (Upload vs Title Dates) & Historical ────────────────────────
-	rows, err := a.db.conn.Query(`SELECT title, substr(published_at, 1, 10), COALESCE(duration, '') FROM yt_videos`)
+	rows, err := a.db.conn.Query(`SELECT title, COALESCE(published_at, ''), COALESCE(duration, ''), COALESCE(game_tag, '') FROM yt_videos`)
 	if err == nil {
 		uploadCounts := make(map[string]int)
 		titleCounts := make(map[string]int)
 
 		for rows.Next() {
-			var title, pubDate, duration string
-			if err := rows.Scan(&title, &pubDate, &duration); err == nil {
+			var title, pubDate, duration, gameTag string
+			if err := rows.Scan(&title, &pubDate, &duration, &gameTag); err == nil {
 				// Upload Date count
 				if pubDate != "" {
-					uploadCounts[pubDate]++
+					uploadDate := pubDate
+					if len(uploadDate) >= 10 {
+						uploadDate = uploadDate[:10]
+					}
+					uploadCounts[uploadDate]++
 				}
 
 				// Title Date count — use shared robust parser
@@ -174,6 +179,7 @@ func (a *App) GetChannelAnalytics() (*ChannelAnalytics, error) {
 					Title:     title,
 					Published: pubDate,
 					Duration:  duration,
+					GameTag:   gameTag,
 				})
 			}
 		}
