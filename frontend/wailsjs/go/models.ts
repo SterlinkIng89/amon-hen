@@ -32,6 +32,7 @@ export namespace backend {
 	    title: string;
 	    published: string;
 	    duration: string;
+	    gameTag: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoricalVideo(source);
@@ -42,6 +43,7 @@ export namespace backend {
 	        this.title = source["title"];
 	        this.published = source["published"];
 	        this.duration = source["duration"];
+	        this.gameTag = source["gameTag"];
 	    }
 	}
 	export class DailyCount {
