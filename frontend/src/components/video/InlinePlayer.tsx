@@ -446,6 +446,12 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  }
  
  if (tagInput) addRecentTag(tagInput);
+ if (eventInput) addRecentValue("event", eventInput);
+ if (customVarsInput) {
+ Object.entries(customVarsInput).forEach(([k, v]) => {
+ if (v) addRecentValue(k, v);
+ });
+ }
 
  // Reload config just in case to sync tagPlaylists
  const cfg = await LoadConfig();
@@ -505,6 +511,12 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
 
  const handleUploadNow = async () => {
  if (tagInput) addRecentTag(tagInput);
+ if (eventInput) addRecentValue("event", eventInput);
+ if (customVarsInput) {
+ Object.entries(customVarsInput).forEach(([k, v]) => {
+ if (v) addRecentValue(k, v);
+ });
+ }
  setUploading(true);
  
  // Save metadata to local database first
@@ -532,6 +544,12 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
 
  const handleAddToQueue = async () => {
  if (tagInput) addRecentTag(tagInput);
+ if (eventInput) addRecentValue("event", eventInput);
+ if (customVarsInput) {
+ Object.entries(customVarsInput).forEach(([k, v]) => {
+ if (v) addRecentValue(k, v);
+ });
+ }
  
  // Save metadata to local database first
  await SaveVideoMetadata(video.path, tagInput, ytTitle, description, privacy, playlistId, episodeInput !== "" ? Number(episodeInput) : (video.episode || 0), eventInput, gameModeInput, customVarsInput).catch(console.error);
@@ -725,6 +743,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
  value={eventInput}
  onChange={handleEventChange}
+ onEnter={handleSaveInfo}
  placeholder="Highlight..."
  />
  </div>
@@ -764,6 +783,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
  value={customVarsInput[cv] || ""}
  onChange={val => handleCustomVarChange(cv, val)}
+ onEnter={handleSaveInfo}
  placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
  />
  </div>
@@ -975,6 +995,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
  value={eventInput}
  onChange={handleEventChange}
+ onEnter={handleSaveInfo}
  placeholder="Highlight..."
  />
  </div>
@@ -1014,6 +1035,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
  value={customVarsInput[cv] || ""}
  onChange={val => handleCustomVarChange(cv, val)}
+ onEnter={handleSaveInfo}
  placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
  />
  </div>

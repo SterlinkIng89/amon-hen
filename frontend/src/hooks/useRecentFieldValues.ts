@@ -49,9 +49,26 @@ export function useRecentFieldValues(maxItems = 10) {
  });
  }, [maxItems]);
 
+ const removeRecentValue = useCallback((fieldKey: string, valToRemove: string) => {
+ setRecentValues(prev => {
+ const current = prev[fieldKey] || [];
+ const updated = current.filter(t => t !== valToRemove);
+ const newCache = { ...prev, [fieldKey]: updated };
+
+ // Save to backend asynchronously
+ SaveRecentFieldValues(newCache).catch(e => {
+ console.error("Failed to remove recent field value from backend", e);
+ });
+
+ window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+
+ return newCache;
+ });
+ }, []);
+
  const getRecentValues = useCallback((fieldKey: string) => {
  return recentValues[fieldKey] || [];
  }, [recentValues]);
 
- return { getRecentValues, addRecentValue };
+ return { getRecentValues, addRecentValue, removeRecentValue };
 }
