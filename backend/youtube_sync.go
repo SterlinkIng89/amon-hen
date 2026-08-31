@@ -331,6 +331,11 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 }
 
 func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
+	type itemEntry struct {
+		videoID  string
+		position int64
+	}
+	var items []itemEntry
 	pageToken := ""
 	for {
 		call := svc.PlaylistItems.List([]string{"snippet", "contentDetails"}).PlaylistId(playlistID).MaxResults(50)
@@ -346,10 +351,10 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
 		}
 
 		for _, item := range resp.Items {
-			a.db.conn.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position)
-				VALUES (?, ?, ?)
-				ON CONFLICT(playlist_id, video_id) DO UPDATE SET position=excluded.position`,
-				playlistID, item.ContentDetails.VideoId, item.Snippet.Position)
+			items = append(items, itemEntry{
+				videoID:  item.ContentDetails.VideoId,
+				position: item.Snippet.Position,
+			})
 		}
 
 		if resp.NextPageToken == "" {
@@ -357,7 +362,33 @@ func (a *App) syncPlaylistItems(svc *youtube.Service, playlistID string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return nil
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	tx, err := a.db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ?", playlistID); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES (?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, it := range items {
+		if _, err := stmt.Exec(playlistID, it.videoID, it.position); err != nil {
+			appLog("[syncPlaylistItems] Error inserting item %s into playlist %s: %v", it.videoID, playlistID, err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 // syncVideos fetches all videos from the uploads playlist and upserts them into SQLite.

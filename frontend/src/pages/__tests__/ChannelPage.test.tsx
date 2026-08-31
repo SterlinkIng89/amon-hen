@@ -254,5 +254,50 @@ describe("ChannelPage YouTube Sync State", () => {
     expect(screen.getByText("Syncing: playlists (5/10)")).toBeInTheDocument();
     expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
   });
+
+  it("shows duplicate warning banner and badges on duplicate videos in playlist view", async () => {
+    const mockPlaylists = [
+      { id: "pl-1", title: "Boss Battles", description: "", videoCount: 3, thumbnailUrl: "", publishedAt: "", privacy: "public" },
+    ];
+    const mockPlaylistVideos = [
+      { id: "v1", title: "Boss 1", description: "", publishedAt: "2026-01-01T00:00:00Z", thumbnailUrl: "", viewCount: 10, likeCount: 1, duration: "PT1M", privacy: "public", localFile: "" },
+      { id: "v2", title: "Boss 2", description: "", publishedAt: "2026-01-02T00:00:00Z", thumbnailUrl: "", viewCount: 20, likeCount: 2, duration: "PT2M", privacy: "public", localFile: "" },
+      { id: "v1", title: "Boss 1", description: "", publishedAt: "2026-01-01T00:00:00Z", thumbnailUrl: "", viewCount: 10, likeCount: 1, duration: "PT1M", privacy: "public", localFile: "" },
+    ];
+
+    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(mockPlaylists as any);
+    vi.mocked(AppBackend.GetPlaylistVideos).mockResolvedValue(mockPlaylistVideos as any);
+
+    render(<ChannelPage />);
+
+    // Switch to playlists tab
+    const playlistsTab = await screen.findByRole("button", { name: "Playlists" });
+    fireEvent.click(playlistsTab);
+
+    // Open playlist
+    const playlistCard = await screen.findByText("Boss Battles");
+    fireEvent.click(playlistCard);
+
+    // Wait for playlist items to load
+    await waitFor(() => {
+      expect(screen.getByText("1 duplicate video detected")).toBeInTheDocument();
+    });
+
+    // Verify duplicate badge on cards
+    const duplicateBadges = screen.getAllByText("Duplicate (2x)");
+    expect(duplicateBadges.length).toBe(2);
+
+    // Verify purge duplicates button shows count badge
+    const purgeButton = screen.getByRole("button", { name: /Purge Duplicates \(1\)/i });
+    expect(purgeButton).toBeInTheDocument();
+
+    // Trigger purge
+    vi.mocked(AppBackend.PurgePlaylistDuplicates).mockResolvedValue(1);
+    fireEvent.click(purgeButton);
+
+    await waitFor(() => {
+      expect(AppBackend.PurgePlaylistDuplicates).toHaveBeenCalledWith("pl-1");
+    });
+  });
 });
 
