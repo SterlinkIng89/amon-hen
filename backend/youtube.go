@@ -737,8 +737,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 			a.db.mu.Lock()
 			a.db.conn.Exec(`
 				INSERT INTO yt_playlist_items (playlist_id, video_id, position)
-				VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM yt_playlist_items WHERE playlist_id=?))
-				ON CONFLICT(playlist_id, video_id) DO NOTHING`,
+				VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM yt_playlist_items WHERE playlist_id=?))`,
 				playlistID, result.Id, playlistID)
 			a.db.conn.Exec(
 				`UPDATE yt_playlists SET video_count = video_count + 1 WHERE id = ?`,

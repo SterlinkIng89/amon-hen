@@ -99,3 +99,54 @@ func TestUpdatePlaylistVisibility_ValidationAndAuthCheck(t *testing.T) {
 	}
 }
 
+func TestPlaylistItems_DuplicateVideoEntries(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "test.db")
+	err := app.InitTestDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to init test DB: %v", err)
+	}
+
+	db := app.GetDB()
+	// Insert test video and playlist
+	_, err = db.Exec(`
+		INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy)
+		VALUES 
+			('vid1', 'Video One', 'Description 1', '2026-01-01T00:00:00Z', 'https://example.com/1.jpg', 100, 10, 'PT5M', 'public'),
+			('vid2', 'Video Two', 'Description 2', '2026-01-02T00:00:00Z', 'https://example.com/2.jpg', 200, 20, 'PT10M', 'public');
+		INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at, privacy)
+		VALUES ('PL_DUP', 'Playlist with Duplicates', 'Desc', 3, 'https://example.com/p.jpg', '2026-01-01T00:00:00Z', 1000, 'public');
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert fixtures: %v", err)
+	}
+
+	// Insert duplicate video entries: vid1 at position 0, vid2 at position 1, vid1 at position 2
+	_, err = db.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position)
+		VALUES 
+			('PL_DUP', 'vid1', 0),
+			('PL_DUP', 'vid2', 1),
+			('PL_DUP', 'vid1', 2);
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert playlist items with duplicates: %v", err)
+	}
+
+	videos, err := app.GetPlaylistVideos("PL_DUP")
+	if err != nil {
+		t.Fatalf("GetPlaylistVideos returned error: %v", err)
+	}
+
+	if len(videos) != 3 {
+		t.Fatalf("Expected 3 playlist video entries (including duplicates), got %d", len(videos))
+	}
+
+	if videos[0].ID != "vid1" || videos[1].ID != "vid2" || videos[2].ID != "vid1" {
+		t.Errorf("Expected video order ['vid1', 'vid2', 'vid1'], got [%s, %s, %s]",
+			videos[0].ID, videos[1].ID, videos[2].ID)
+	}
+}
+

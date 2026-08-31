@@ -60,11 +60,13 @@ func (db *DB) migrate() error {
 			privacy TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS yt_playlist_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			playlist_id TEXT,
 			video_id TEXT,
-			position INTEGER,
-			PRIMARY KEY (playlist_id, video_id)
+			position INTEGER
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_yt_playlist_items_pl ON yt_playlist_items(playlist_id, position)`,
+		`CREATE INDEX IF NOT EXISTS idx_yt_playlist_items_vid ON yt_playlist_items(video_id)`,
 		`CREATE TABLE IF NOT EXISTS api_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			ts INTEGER NOT NULL,
@@ -116,6 +118,42 @@ func (db *DB) migrate() error {
 	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN privacy TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN game_tag TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN episode INTEGER")
+
+	// Migrate yt_playlist_items if legacy composite primary key exists
+	var isCompositePK bool
+	rows, pErr := db.conn.Query("PRAGMA table_info(yt_playlist_items)")
+	if pErr == nil {
+		var pkCount int
+		for rows.Next() {
+			var cid int
+			var name, ctype string
+			var notnull, pk int
+			var dfltValue sql.NullString
+			if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err == nil {
+				if pk > 0 && (name == "playlist_id" || name == "video_id") {
+					pkCount++
+				}
+			}
+		}
+		rows.Close()
+		if pkCount >= 2 {
+			isCompositePK = true
+		}
+	}
+	if isCompositePK {
+		db.conn.Exec(`
+			CREATE TABLE IF NOT EXISTS yt_playlist_items_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				playlist_id TEXT,
+				video_id TEXT,
+				position INTEGER
+			);
+			INSERT INTO yt_playlist_items_new (playlist_id, video_id, position)
+			SELECT playlist_id, video_id, position FROM yt_playlist_items;
+			DROP TABLE yt_playlist_items;
+			ALTER TABLE yt_playlist_items_new RENAME TO yt_playlist_items;
+		`)
+	}
 
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {

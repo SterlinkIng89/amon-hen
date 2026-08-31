@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
 import { SyncRecentVideos, SyncChannelData, GetSyncStatus, IsYouTubeAuthed, GetPlaylistVideos, AddVideoToPlaylist, PurgePlaylistDuplicates, UpdatePlaylistsVisibility } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
@@ -106,19 +106,39 @@ export default function ChannelPage() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPlaylistIds.size, selectedVideoIds.size, searchQuery]);
 
- const {
- videos, playlists, filteredVideos, loading, loadingMore, loadMoreRef, loadData,
- } = useChannelData({
- activeTab,
- videoSort,
- playlistSort,
- debouncedSearch,
- selectedPlaylist,
- dateFilter: analyticsDate,
- dateFrom: analyticsDate ? undefined : filters.dateFrom,
- dateTo: analyticsDate ? undefined : filters.dateTo,
- excludeWords: filters.excludeWords,
- });
+  const {
+    videos, playlists, playlistVideos, filteredVideos, loading, loadingMore, loadMoreRef, loadData,
+  } = useChannelData({
+    activeTab,
+    videoSort,
+    playlistSort,
+    debouncedSearch,
+    selectedPlaylist,
+    dateFilter: analyticsDate,
+    dateFrom: analyticsDate ? undefined : filters.dateFrom,
+    dateTo: analyticsDate ? undefined : filters.dateTo,
+    excludeWords: filters.excludeWords,
+  });
+
+  const playlistVideoCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!selectedPlaylist) return counts;
+    for (const v of playlistVideos) {
+      if (!v.id) continue;
+      counts.set(v.id, (counts.get(v.id) || 0) + 1);
+    }
+    return counts;
+  }, [selectedPlaylist, playlistVideos]);
+
+  const duplicateEntriesCount = useMemo(() => {
+    let excess = 0;
+    for (const count of playlistVideoCounts.values()) {
+      if (count > 1) {
+        excess += count - 1;
+      }
+    }
+    return excess;
+  }, [playlistVideoCounts]);
 
   // Sync events
   useEffect(() => {
@@ -472,6 +492,19 @@ export default function ChannelPage() {
  <span className="text-[9px] font-bold text-accent leading-none mb-0.5 group-hover:text-accent/80 transition-colors">Playlist</span>
  <h1 className="text-sm font-bold text-text-primary leading-none truncate max-w-[260px] group-hover:text-accent transition-colors">{selectedPlaylist.title}</h1>
  </div>
+
+ {/* Duplicate warning banner */}
+ {duplicateEntriesCount > 0 && (
+ <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold shrink-0">
+ <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
+ <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+ <line x1="12" y1="9" x2="12" y2="13" />
+ <line x1="12" y1="17" x2="12.01" y2="17" />
+ </svg>
+ <span>{duplicateEntriesCount} duplicate video{duplicateEntriesCount !== 1 ? "s" : ""} detected</span>
+ </div>
+ )}
+
  {/* Purge duplicates button */}
  <button
  onClick={handlePurgeDuplicates}
@@ -480,6 +513,8 @@ export default function ChannelPage() {
  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all active:scale-95 shrink-0 ${
  purgingDuplicates
  ? "bg-orange-500/10 border-orange-500/30 text-orange-400 cursor-wait"
+ : duplicateEntriesCount > 0
+ ? "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
  : "bg-elevated/50 border-border-subtle text-text-secondary hover:text-orange-400 hover:border-orange-500/40 hover:bg-orange-500/10"
  } disabled:opacity-60 disabled:active:scale-100`}
  >
@@ -495,7 +530,7 @@ export default function ChannelPage() {
  <line x1="10" y1="11" x2="10" y2="17" />
  <line x1="14" y1="11" x2="14" y2="17" />
  </svg>
- Purge Duplicates
+ Purge Duplicates {duplicateEntriesCount > 0 ? `(${duplicateEntriesCount})` : ""}
  </>
  )}
  </button>
@@ -692,9 +727,9 @@ export default function ChannelPage() {
  </div>
  ) : (
  <>
- {playerVideos.map((v) => (
- <div key={v.id} data-selected={selectedVideo?.id === v.id}>
- <VideoPill video={v} selected={selectedVideo?.id === v.id} onUpdate={() => loadData(true)} viewMode="list" compact={true} onClick={() => setSelectedVideo(v)} />
+ {playerVideos.map((v, idx) => (
+ <div key={`${v.id}-${idx}`} data-selected={selectedVideo?.id === v.id}>
+ <VideoPill video={v} selected={selectedVideo?.id === v.id} onUpdate={() => loadData(true)} viewMode="list" compact={true} onClick={() => setSelectedVideo(v)} duplicateCount={selectedPlaylist ? playlistVideoCounts.get(v.id) : undefined} />
  </div>
  ))}
  <div ref={loadMoreRef} className="h-8 flex items-center justify-center shrink-0">
@@ -722,7 +757,11 @@ export default function ChannelPage() {
  </div>
  ) : (
  <div className={viewMode === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4" : "flex flex-col gap-2"}>
- {filteredVideos.map((v) => (<div key={v.id} onClick={(e) => handleVideoClick(v, e)}><VideoPill video={v} multiSelected={selectedVideoIds.has(v.id)} onUpdate={() => loadData(true)} viewMode={viewMode} onSelectToggle={() => handleSelectToggle(v)} /></div>))}
+ {filteredVideos.map((v, idx) => (
+ <div key={`${v.id}-${idx}`} onClick={(e) => handleVideoClick(v, e)}>
+ <VideoPill video={v} multiSelected={selectedVideoIds.has(v.id)} onUpdate={() => loadData(true)} viewMode={viewMode} onSelectToggle={() => handleSelectToggle(v)} duplicateCount={playlistVideoCounts.get(v.id)} />
+ </div>
+ ))}
  </div>
  )
  ) : activeTab === "videos" ? (

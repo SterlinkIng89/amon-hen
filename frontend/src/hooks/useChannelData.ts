@@ -200,13 +200,14 @@ export function useChannelData({
  }
 
  return {
- videos,
- playlists,
- filteredVideos,
- loading,
- loadingMore,
- hasMore,
- loadMoreRef,
- loadData,
+  videos,
+  playlists,
+  playlistVideos,
+  filteredVideos,
+  loading,
+  loadingMore,
+  hasMore,
+  loadMoreRef,
+  loadData,
  };
 }
