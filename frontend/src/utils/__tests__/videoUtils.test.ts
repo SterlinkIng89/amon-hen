@@ -32,7 +32,7 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         undefined,
         undefined,
         undefined,
-        sampleVideo.modTime
+        sampleVideo.modTime,
       );
       expect(title).toBe("Overwatch 2 — 26/08/26");
     });
@@ -46,7 +46,7 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         undefined,
         undefined,
         undefined,
-        sampleVideo.modTime
+        sampleVideo.modTime,
       );
       expect(title).toBe("Overwatch 2 - Title - Mode - 26/08/26");
     });
@@ -60,7 +60,7 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "Grand Finals",
         "Competitive",
         undefined,
-        sampleVideo.modTime
+        sampleVideo.modTime,
       );
       expect(title).toBe("Overwatch 2 - Grand Finals - Competitive - 26/08/26");
     });
@@ -68,7 +68,8 @@ describe("videoUtils - Title generation & placeholder detection", () => {
     it("handles custom variables in titleTemplate", () => {
       const customProfile: GameProfile = {
         type: "multiplayer",
-        titleTemplate: "{game} | {event} | {gamemode} | {map} | {hero} | {date}",
+        titleTemplate:
+          "{game} | {event} | {gamemode} | {map} | {hero} | {date}",
       };
       const titleWithFallbacks = generateYouTubeTitle(
         sampleVideo.name,
@@ -78,9 +79,11 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "",
         "",
         {},
-        sampleVideo.modTime
+        sampleVideo.modTime,
       );
-      expect(titleWithFallbacks).toBe("Overwatch 2 | Title | Mode | Map | Hero | 26/08/26");
+      expect(titleWithFallbacks).toBe(
+        "Overwatch 2 | Title | Mode | Map | Hero | 26/08/26",
+      );
 
       const titleFilled = generateYouTubeTitle(
         sampleVideo.name,
@@ -90,9 +93,11 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "Clash",
         "Ranked",
         { map: "King's Row", hero: "Tracer" },
-        sampleVideo.modTime
+        sampleVideo.modTime,
       );
-      expect(titleFilled).toBe("Overwatch 2 | Clash | Ranked | King's Row | Tracer | 26/08/26");
+      expect(titleFilled).toBe(
+        "Overwatch 2 | Clash | Ranked | King's Row | Tracer | 26/08/26",
+      );
     });
   });
 
@@ -149,7 +154,9 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       };
 
       const result = getVideoTitleSegments(video, multiplayerProfile);
-      expect(result.fullTitle).toBe("Overwatch 2 - Scrimmage - Mode - 26/08/26");
+      expect(result.fullTitle).toBe(
+        "Overwatch 2 - Scrimmage - Mode - 26/08/26",
+      );
       expect(result.hasPlaceholders).toBe(true);
 
       expect(result.segments).toEqual([
@@ -171,7 +178,9 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       };
 
       const result = getVideoTitleSegments(video, multiplayerProfile);
-      expect(result.fullTitle).toBe("Overwatch 2 - Championship - Payload - 26/08/26");
+      expect(result.fullTitle).toBe(
+        "Overwatch 2 - Championship - Payload - 26/08/26",
+      );
       expect(result.hasPlaceholders).toBe(false);
 
       expect(result.segments).toEqual([
@@ -198,7 +207,9 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       };
 
       const result = getVideoTitleSegments(video, customProfile);
-      expect(result.fullTitle).toBe("Overwatch 2 | Tournament | Map | 26/08/26");
+      expect(result.fullTitle).toBe(
+        "Overwatch 2 | Tournament | Map | 26/08/26",
+      );
       expect(result.hasPlaceholders).toBe(true);
 
       expect(result.segments).toEqual([
@@ -236,7 +247,10 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         episode: 3,
       };
 
-      const result = getVideoTitleSegments(video, { type: "singleplayer", titleTemplate: "" });
+      const result = getVideoTitleSegments(video, {
+        type: "singleplayer",
+        titleTemplate: "",
+      });
       expect(result.fullTitle).toBe("Overwatch 2 — 26/08/26 — 3");
       expect(result.hasPlaceholders).toBe(false);
       expect(result.segments).toEqual([
@@ -253,7 +267,11 @@ describe("videoUtils - Title generation & placeholder detection", () => {
     });
 
     it("returns false when multiplayer profile has all variables filled", () => {
-      const video: VideoFile = { ...sampleVideo, event: "Match", gameMode: "Competitive" };
+      const video: VideoFile = {
+        ...sampleVideo,
+        event: "Match",
+        gameMode: "Competitive",
+      };
       expect(hasUnfilledPlaceholders(video, multiplayerProfile)).toBe(false);
     });
 

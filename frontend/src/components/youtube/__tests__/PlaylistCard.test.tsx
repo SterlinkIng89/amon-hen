@@ -90,7 +90,7 @@ describe("PlaylistCard", () => {
         playlist={mockPlaylist}
         onClick={onClick}
         onSelectToggle={onSelectToggle}
-      />
+      />,
     );
 
     // Card click
@@ -98,7 +98,9 @@ describe("PlaylistCard", () => {
     expect(onClick).toHaveBeenCalled();
 
     // Select toggle
-    const checkbox = container.querySelector(".select-none > div:first-child > div:first-child");
+    const checkbox = container.querySelector(
+      ".select-none > div:first-child > div:first-child",
+    );
     if (checkbox) {
       fireEvent.click(checkbox);
       expect(onSelectToggle).toHaveBeenCalled();
@@ -145,7 +147,9 @@ describe("PlaylistCard", () => {
       duplicateCount: 3,
     };
 
-    render(<PlaylistCard playlist={playlistWithMultipleDups} viewMode="list" />);
+    render(
+      <PlaylistCard playlist={playlistWithMultipleDups} viewMode="list" />,
+    );
 
     const badge = screen.getByTestId("duplicate-badge");
     expect(badge).toBeInTheDocument();
@@ -156,7 +160,9 @@ describe("PlaylistCard", () => {
   });
 
   it("does not render duplicate badge when duplicateCount is 0 or undefined", () => {
-    const { rerender } = render(<PlaylistCard playlist={mockPlaylist} viewMode="grid" />);
+    const { rerender } = render(
+      <PlaylistCard playlist={mockPlaylist} viewMode="grid" />,
+    );
     expect(screen.queryByTestId("duplicate-badge")).not.toBeInTheDocument();
 
     const playlistZeroDups: YTPlaylist = {
@@ -167,4 +173,3 @@ describe("PlaylistCard", () => {
     expect(screen.queryByTestId("duplicate-badge")).not.toBeInTheDocument();
   });
 });
-
