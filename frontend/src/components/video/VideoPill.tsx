@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { YTVideo, VideoFile, GameProfile } from "../../types";
 import {
- formatSize,
- formatDuration,
- generateYouTubeTitle,
+  formatSize,
+  formatDuration,
+  generateYouTubeTitle,
+  getVideoTitleSegments,
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
@@ -81,11 +82,7 @@ export default function VideoPill({
 
 	// Data normalization
 	const activeProfile = isLocal ? gameProfiles[(video as VideoFile).game || ""] : undefined;
-	const title = isYT
-		? video.title
-		: (activeProfile?.type === "multiplayer")
-		? generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime)
-		: video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, activeProfile, video.event, video.gameMode, (video as VideoFile).customVars, (video as VideoFile).modTime);
+	const { fullTitle: title, segments: titleSegments } = getVideoTitleSegments(video, activeProfile);
 	const subtitle = isLocal ? video.name : "";
 	const thumbnail = isYT ? video.thumbnailUrl : thumb;
 	const publishedAt = isYT
@@ -326,17 +323,35 @@ export default function VideoPill({
  className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px]"}`}
  title={title}
  >
- {/* Colorize game-name prefix with its deterministic per-tag color */}
- {isLocal && (video as VideoFile).game && (video as VideoFile).game!.length > 0 && title.startsWith((video as VideoFile).game!) ? (
- <>
- <span style={{ color: getTagColor((video as VideoFile).game!) }} className="font-bold ">
- {(video as VideoFile).game}
- </span>
- <span className="opacity-90">{title.slice((video as VideoFile).game!.length)}</span>
- </>
- ) : (
- title
- )}
+ 					{titleSegments.map((segment, idx) => {
+						if (segment.isGameTag) {
+							return (
+								<span
+									key={idx}
+									style={{ color: getTagColor(segment.text) }}
+									className="font-bold"
+								>
+									{segment.text}
+								</span>
+							);
+						}
+						if (segment.isPlaceholder) {
+							return (
+								<span
+									key={idx}
+									className="text-amber-400 font-semibold bg-amber-400/10 px-1 py-0.5 rounded border border-dashed border-amber-400/30 text-[11px] inline-block my-[-2px]"
+									title={`Unfilled variable: ${segment.varName || segment.text}`}
+								>
+									{segment.text}
+								</span>
+							);
+						}
+						return (
+							<span key={idx} className="opacity-90">
+								{segment.text}
+							</span>
+						);
+					})}
  </h3>
  {isList && publishedAt && (
  <span className="text-[10px] text-text-muted font-medium mt-0.5">
