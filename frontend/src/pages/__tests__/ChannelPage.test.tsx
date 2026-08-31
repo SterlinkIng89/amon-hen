@@ -89,8 +89,9 @@ describe("ChannelPage YouTube Sync State", () => {
     const fullSyncButton = await screen.findByText("Full Sync");
     fireEvent.click(fullSyncButton);
 
-    const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
-    expect(lightSyncButton).toBeDisabled();
+    const syncButton = screen.getByTitle("Full sync in progress...");
+    expect(syncButton).toBeDisabled();
+    expect(syncButton).toHaveTextContent("Full");
 
     // Resolve the sync operation
     await act(async () => {
@@ -98,9 +99,79 @@ describe("ChannelPage YouTube Sync State", () => {
       await syncPromise;
     });
 
-    // Button should be enabled again
+    // Button should be enabled again and reset to Light
     await waitFor(() => {
-      expect(lightSyncButton).not.toBeDisabled();
+      const idleButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      expect(idleButton).not.toBeDisabled();
+      expect(idleButton).toHaveTextContent("Light");
+    });
+  });
+
+  it("updates button label to 'Full' and tooltip to 'Full sync in progress...' when Full Sync is running", async () => {
+    let resolveSync: () => void = () => {};
+    const syncPromise = new Promise<void>((res) => {
+      resolveSync = res;
+    });
+    vi.mocked(AppBackend.SyncChannelData).mockReturnValue(syncPromise as any);
+
+    render(<ChannelPage />);
+
+    // Initially idle
+    const idleButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    expect(idleButton).toHaveTextContent("Light");
+
+    // Open dropdown and click Full Sync
+    const moreOptionsButton = screen.getByTitle("More sync options");
+    fireEvent.click(moreOptionsButton);
+
+    const fullSyncOption = await screen.findByText("Full Sync");
+    fireEvent.click(fullSyncOption);
+
+    // Should dynamically show "Full" and "Full sync in progress..."
+    const syncingButton = screen.getByTitle("Full sync in progress...");
+    expect(syncingButton).toBeDisabled();
+    expect(syncingButton).toHaveTextContent("Full");
+
+    // Complete sync
+    await act(async () => {
+      resolveSync();
+      await syncPromise;
+    });
+
+    await waitFor(() => {
+      const completedButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      expect(completedButton).toHaveTextContent("Light");
+      expect(completedButton).not.toBeDisabled();
+    });
+  });
+
+  it("updates tooltip to 'Light sync in progress...' while maintaining 'Light' label when Light Sync is running", async () => {
+    let resolveSync: () => void = () => {};
+    const syncPromise = new Promise<void>((res) => {
+      resolveSync = res;
+    });
+    vi.mocked(AppBackend.SyncRecentVideos).mockReturnValue(syncPromise as any);
+
+    render(<ChannelPage />);
+
+    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    expect(lightSyncButton).toHaveTextContent("Light");
+
+    fireEvent.click(lightSyncButton);
+
+    const syncingButton = screen.getByTitle("Light sync in progress...");
+    expect(syncingButton).toBeDisabled();
+    expect(syncingButton).toHaveTextContent("Light");
+
+    await act(async () => {
+      resolveSync();
+      await syncPromise;
+    });
+
+    await waitFor(() => {
+      const completedButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      expect(completedButton).toHaveTextContent("Light");
+      expect(completedButton).not.toBeDisabled();
     });
   });
 
@@ -172,9 +243,10 @@ describe("ChannelPage YouTube Sync State", () => {
     const fullSyncButton = await screen.findByText("Full Sync");
     fireEvent.click(fullSyncButton);
 
-    const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
     await waitFor(() => {
+      const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
       expect(lightSyncButton).not.toBeDisabled();
+      expect(lightSyncButton).toHaveTextContent("Light");
     });
   });
 
@@ -188,10 +260,9 @@ describe("ChannelPage YouTube Sync State", () => {
 
     render(<ChannelPage />);
 
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
-
-    // During auto-sync, button should be disabled
-    expect(lightSyncButton).toBeDisabled();
+    const fullSyncButton = await screen.findByTitle("Full sync in progress...");
+    expect(fullSyncButton).toBeDisabled();
+    expect(fullSyncButton).toHaveTextContent("Full");
 
     // Finish auto-sync
     await act(async () => {
@@ -200,7 +271,9 @@ describe("ChannelPage YouTube Sync State", () => {
     });
 
     await waitFor(() => {
+      const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
       expect(lightSyncButton).not.toBeDisabled();
+      expect(lightSyncButton).toHaveTextContent("Light");
     });
   });
   it("renders a responsive subheader without fixed height h-14", async () => {

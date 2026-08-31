@@ -39,6 +39,7 @@ export default function ChannelPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [autoplay, setAutoplay] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [activeSyncType, setActiveSyncType] = useState<"light" | "full" | null>(null);
   const [syncStatus, setSyncStatus] = useState("");
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -160,6 +161,7 @@ export default function ChannelPage() {
     });
     const unsub2 = EventsOn("youtube:sync-done", () => {
       setIsSyncing(false);
+      setActiveSyncType(null);
       setSyncStatus("Sync complete!");
       setTimeout(() => setSyncStatus(""), 3000);
       loadData(true);
@@ -167,6 +169,7 @@ export default function ChannelPage() {
     });
     const unsub3 = EventsOn("youtube:done", () => {
       setIsSyncing(false);
+      setActiveSyncType(null);
       loadData(true);
       setAnalyticsRefreshKey((k) => k + 1);
     });
@@ -177,37 +180,42 @@ export default function ChannelPage() {
     };
   }, [loadData]);
 
- // Auto-sync on first visit
- useEffect(() => {
- const checkAndAutoSync = async () => {
- try {
- const authed = await IsYouTubeAuthed();
- if (!authed) return;
- const status: any = await GetSyncStatus();
- if ((status?.count ?? 0) === 0) {
- setIsSyncing(true);
- setSyncStatus("First sync — fetching all channel data...");
- await SyncChannelData();
- }
- } catch (e) { console.error("Auto-sync check failed:", e); }
- finally { setIsSyncing(false); }
- };
- checkAndAutoSync();
- }, []);
+  // Auto-sync on first visit
+  useEffect(() => {
+    const checkAndAutoSync = async () => {
+      try {
+        const authed = await IsYouTubeAuthed();
+        if (!authed) return;
+        const status: any = await GetSyncStatus();
+        if ((status?.count ?? 0) === 0) {
+          setIsSyncing(true);
+          setActiveSyncType("full");
+          setSyncStatus("First sync — fetching all channel data...");
+          await SyncChannelData();
+        }
+      } catch (e) { console.error("Auto-sync check failed:", e); }
+      finally {
+        setIsSyncing(false);
+        setActiveSyncType(null);
+      }
+    };
+    checkAndAutoSync();
+  }, []);
 
- // Close sync dropdown on outside click
- useEffect(() => {
- const handler = (e: MouseEvent) => {
- if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) setShowSyncMenu(false);
- };
- document.addEventListener("mousedown", handler);
- return () => document.removeEventListener("mousedown", handler);
- }, []);
+  // Close sync dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) setShowSyncMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-  const runSync = async (statusLabel: string, syncFn: () => Promise<unknown>, errorLabel: string) => {
+  const runSync = async (type: "light" | "full", statusLabel: string, syncFn: () => Promise<unknown>, errorLabel: string) => {
     if (isSyncing) return;
     setShowSyncMenu(false);
     setIsSyncing(true);
+    setActiveSyncType(type);
     setSyncStatus(statusLabel);
     try {
       await syncFn();
@@ -217,14 +225,15 @@ export default function ChannelPage() {
       setTimeout(() => setSyncStatus(""), 3000);
     } finally {
       setIsSyncing(false);
+      setActiveSyncType(null);
     }
   };
 
   const handleSyncLight = () =>
-    runSync("Quick sync — last 20 videos...", () => SyncRecentVideos(20), "Light sync failed:");
+    runSync("light", "Quick sync — last 20 videos...", () => SyncRecentVideos(20), "Light sync failed:");
 
   const handleSyncFull = () =>
-    runSync("Full sync — fetching entire channel...", () => SyncChannelData(), "Full sync failed:");
+    runSync("full", "Full sync — fetching entire channel...", () => SyncChannelData(), "Full sync failed:");
 
  // Scroll sidebar to selected video
  useEffect(() => {
@@ -648,13 +657,24 @@ export default function ChannelPage() {
  <span className={`text-[10px] font-bold ${isSyncing ? "text-accent animate-pulse" : "text-green-500"} max-w-[140px] truncate`}>{syncStatus}</span>
  )}
  <div ref={syncMenuRef} className="relative flex items-center">
- <button onClick={handleSyncLight} disabled={loading || isSyncing}
- className={`flex items-center gap-1 pl-2 pr-1.5 py-1.5 rounded-l-lg border-y border-l transition-all group active:scale-95 ${isSyncing ? "bg-accent/10 border-accent/30 text-accent" : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"} disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`}
- title="Light sync — fetch recent 20 videos">
- <svg className={`${isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
- <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
- </svg>
- <span className="text-[10px] font-bold">Light</span>
+ <button
+   onClick={handleSyncLight}
+   disabled={loading || isSyncing}
+   className={`flex items-center gap-1 pl-2 pr-1.5 py-1.5 rounded-l-lg border-y border-l transition-all group active:scale-95 ${isSyncing ? "bg-accent/10 border-accent/30 text-accent" : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"} disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`}
+   title={
+     isSyncing
+       ? activeSyncType === "full"
+         ? "Full sync in progress..."
+         : "Light sync in progress..."
+       : "Light sync — fetch recent 20 videos"
+   }
+ >
+   <svg className={`${isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+     <path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+   </svg>
+   <span className="text-[10px] font-bold">
+     {isSyncing && activeSyncType === "full" ? "Full" : "Light"}
+   </span>
  </button>
  <button onClick={() => setShowSyncMenu((v) => !v)} disabled={loading || isSyncing}
  className={`flex items-center justify-center px-1 py-1.5 rounded-r-lg border transition-all ${isSyncing ? "bg-accent/10 border-accent/30 text-accent" : "bg-elevated/50 text-text-secondary hover:text-text-primary hover:bg-elevated border-border-subtle"} disabled:opacity-50 disabled:cursor-not-allowed`}
