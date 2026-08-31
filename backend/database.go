@@ -47,6 +47,11 @@ func (db *DB) migrate() error {
 			duration TEXT,
 			privacy TEXT,
 			local_file TEXT,
+			game_tag TEXT,
+			episode INTEGER,
+			monetization_status TEXT DEFAULT 'monetized',
+			rejection_reason TEXT DEFAULT '',
+			status_issues TEXT DEFAULT '',
 			synced_at INTEGER
 		)`,
 		`CREATE TABLE IF NOT EXISTS yt_playlists (
@@ -113,11 +118,20 @@ func (db *DB) migrate() error {
 		)`,
 	}
 	
+	for _, q := range queries {
+		if _, err := db.conn.Exec(q); err != nil {
+			return fmt.Errorf("migration failed on query: %w", err)
+		}
+	}
+
 	// Migración manual para añadir columnas si no existen (ignorar error si ya existen)
 	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN published_at TEXT")
 	db.conn.Exec("ALTER TABLE yt_playlists ADD COLUMN privacy TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN game_tag TEXT")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN episode INTEGER")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN monetization_status TEXT DEFAULT 'monetized'")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN rejection_reason TEXT DEFAULT ''")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN status_issues TEXT DEFAULT ''")
 
 	// Migrate yt_playlist_items if legacy composite primary key exists
 	var isCompositePK bool

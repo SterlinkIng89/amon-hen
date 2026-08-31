@@ -13,17 +13,73 @@ import (
 )
 
 type YTVideo struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	PublishedAt   string `json:"publishedAt"`
-	ThumbnailUrl  string `json:"thumbnailUrl"`
-	ViewCount     uint64 `json:"viewCount"`
-	LikeCount     uint64 `json:"likeCount"`
-	Duration      string `json:"duration"`
-	Privacy       string `json:"privacy"`
-	LocalFile     string `json:"localFile,omitempty"`
-	PlaylistTitle string `json:"playlistTitle,omitempty"`
+	ID                 string   `json:"id"`
+	Title              string   `json:"title"`
+	Description        string   `json:"description"`
+	PublishedAt        string   `json:"publishedAt"`
+	ThumbnailUrl       string   `json:"thumbnailUrl"`
+	ViewCount          uint64   `json:"viewCount"`
+	LikeCount          uint64   `json:"likeCount"`
+	Duration           string   `json:"duration"`
+	Privacy            string   `json:"privacy"`
+	LocalFile          string   `json:"localFile,omitempty"`
+	PlaylistTitle      string   `json:"playlistTitle,omitempty"`
+	Episode            *int     `json:"episode,omitempty"`
+	MonetizationStatus string   `json:"monetizationStatus,omitempty"`
+	RejectionReason    string   `json:"rejectionReason,omitempty"`
+	StatusIssues       []string `json:"statusIssues,omitempty"`
+}
+
+// ComputeVideoStatus determines monetization status and any specific issues
+func ComputeVideoStatus(uploadStatus, rejectionReason, ytRating string, regionBlocked []string) (string, []string) {
+	issues := make([]string, 0)
+
+	normUpload := strings.ToLower(strings.TrimSpace(uploadStatus))
+	normRejection := strings.ToLower(strings.TrimSpace(rejectionReason))
+	normRating := strings.TrimSpace(ytRating)
+
+	if normUpload == "rejected" {
+		issues = append(issues, "rejected")
+	} else if normUpload == "failed" {
+		issues = append(issues, "failed")
+	}
+
+	if normRejection != "" {
+		issues = append(issues, normRejection)
+	}
+
+	if normRating == "ytAgeRestricted" {
+		issues = append(issues, "age_restricted")
+	}
+
+	if len(regionBlocked) > 0 {
+		issues = append(issues, "region_restricted")
+	}
+
+	if normUpload == "rejected" || normUpload == "failed" || normRejection != "" {
+		return "demonetized", issues
+	}
+
+	if normRating == "ytAgeRestricted" || len(regionBlocked) > 0 {
+		return "limited", issues
+	}
+
+	return "monetized", issues
+}
+
+func parseStatusIssues(issuesStr string) []string {
+	if strings.TrimSpace(issuesStr) == "" {
+		return []string{}
+	}
+	parts := strings.Split(issuesStr, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
 }
 
 type YTPlaylist struct {
@@ -440,14 +496,34 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 					}
 				}
 
-				tx.Exec(`INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, synced_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ytRating := ""
+				if vid.ContentDetails != nil && vid.ContentDetails.ContentRating != nil {
+					ytRating = vid.ContentDetails.ContentRating.YtRating
+				}
+				var regionBlocked []string
+				if vid.ContentDetails != nil && vid.ContentDetails.RegionRestriction != nil {
+					regionBlocked = vid.ContentDetails.RegionRestriction.Blocked
+				}
+				uploadStatus := ""
+				rejectionReason := ""
+				if vid.Status != nil {
+					uploadStatus = vid.Status.UploadStatus
+					rejectionReason = vid.Status.RejectionReason
+				}
+				monetizationStatus, issues := ComputeVideoStatus(uploadStatus, rejectionReason, ytRating, regionBlocked)
+				issuesStr := strings.Join(issues, ",")
+
+				tx.Exec(`INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, monetization_status, rejection_reason, status_issues, synced_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					ON CONFLICT(id) DO UPDATE SET
 					title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 					thumbnail_url=excluded.thumbnail_url, view_count=excluded.view_count, like_count=excluded.like_count,
-					duration=excluded.duration, privacy=excluded.privacy, synced_at=excluded.synced_at`,
+					duration=excluded.duration, privacy=excluded.privacy,
+					monetization_status=excluded.monetization_status, rejection_reason=excluded.rejection_reason, status_issues=excluded.status_issues,
+					synced_at=excluded.synced_at`,
 					vid.Id, vid.Snippet.Title, vid.Snippet.Description, vid.Snippet.PublishedAt, thumb,
-					vid.Statistics.ViewCount, vid.Statistics.LikeCount, vid.ContentDetails.Duration, vid.Status.PrivacyStatus, syncTime)
+					vid.Statistics.ViewCount, vid.Statistics.LikeCount, vid.ContentDetails.Duration, vid.Status.PrivacyStatus,
+					monetizationStatus, rejectionReason, issuesStr, syncTime)
 			}
 			tx.Commit()
 			a.db.mu.Unlock()
@@ -557,14 +633,35 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 					thumb = vid.Snippet.Thumbnails.Default.Url
 				}
 			}
-			tx.Exec(`INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, synced_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+			ytRating := ""
+			if vid.ContentDetails != nil && vid.ContentDetails.ContentRating != nil {
+				ytRating = vid.ContentDetails.ContentRating.YtRating
+			}
+			var regionBlocked []string
+			if vid.ContentDetails != nil && vid.ContentDetails.RegionRestriction != nil {
+				regionBlocked = vid.ContentDetails.RegionRestriction.Blocked
+			}
+			uploadStatus := ""
+			rejectionReason := ""
+			if vid.Status != nil {
+				uploadStatus = vid.Status.UploadStatus
+				rejectionReason = vid.Status.RejectionReason
+			}
+			monetizationStatus, issues := ComputeVideoStatus(uploadStatus, rejectionReason, ytRating, regionBlocked)
+			issuesStr := strings.Join(issues, ",")
+
+			tx.Exec(`INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, monetization_status, rejection_reason, status_issues, synced_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 				thumbnail_url=excluded.thumbnail_url, view_count=excluded.view_count, like_count=excluded.like_count,
-				duration=excluded.duration, privacy=excluded.privacy, synced_at=excluded.synced_at`,
+				duration=excluded.duration, privacy=excluded.privacy,
+				monetization_status=excluded.monetization_status, rejection_reason=excluded.rejection_reason, status_issues=excluded.status_issues,
+				synced_at=excluded.synced_at`,
 				vid.Id, vid.Snippet.Title, vid.Snippet.Description, vid.Snippet.PublishedAt, thumb,
-				vid.Statistics.ViewCount, vid.Statistics.LikeCount, vid.ContentDetails.Duration, vid.Status.PrivacyStatus, syncTime)
+				vid.Statistics.ViewCount, vid.Statistics.LikeCount, vid.ContentDetails.Duration, vid.Status.PrivacyStatus,
+				monetizationStatus, rejectionReason, issuesStr, syncTime)
 		}
 		tx.Commit()
 		a.db.mu.Unlock()
@@ -629,7 +726,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 	if sortBy == "title_date" || hasDateFilter {
 		query := fmt.Sprintf(`
 			SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
-			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
+			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
+			       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
 			FROM yt_videos v
 			WHERE %s`, where)
 
@@ -644,7 +742,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			var v YTVideo
 			var localFile sql.NullString
 			var playlistTitle sql.NullString
-			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle); err != nil {
+			var issuesStr string
+			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr); err != nil {
 				continue
 			}
 			if localFile.Valid {
@@ -653,6 +752,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			if playlistTitle.Valid {
 				v.PlaylistTitle = playlistTitle.String
 			}
+			v.StatusIssues = parseStatusIssues(issuesStr)
 
 			if hasDateFilter {
 				uploadDate := ""
@@ -737,7 +837,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 
 	query := fmt.Sprintf(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
-		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title
+		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
 		FROM yt_videos v
 		WHERE %s
 		ORDER BY %s
@@ -756,7 +857,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		var v YTVideo
 		var localFile sql.NullString
 		var playlistTitle sql.NullString
-		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle); err != nil {
+		var issuesStr string
+		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr); err != nil {
 			fmt.Println("Error scanning video row:", err)
 			continue
 		}
@@ -766,6 +868,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		if playlistTitle.Valid {
 			v.PlaylistTitle = playlistTitle.String
 		}
+		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}
 
@@ -831,7 +934,8 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), 
-		       COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file
+		       COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
 		FROM yt_videos v
 		JOIN yt_playlist_items pi ON v.id = pi.video_id
 		WHERE pi.playlist_id = ?
@@ -845,17 +949,33 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 	for rows.Next() {
 		var v YTVideo
 		var localFile sql.NullString
+		var issuesStr string
 		err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl,
-			&v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile)
+			&v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile,
+			&v.MonetizationStatus, &v.RejectionReason, &issuesStr)
 		if err != nil {
 			continue
 		}
 		if localFile.Valid {
 			v.LocalFile = localFile.String
 		}
+		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}
 	return videos, nil
+}
+
+// UpdateVideoMonetizationStatus manually updates the monetization and issue status for a video
+func (a *App) UpdateVideoMonetizationStatus(videoID, status, rejectionReason string, issues []string) error {
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	issuesStr := strings.Join(issues, ",")
+	_, err := a.db.conn.Exec(`
+		UPDATE yt_videos 
+		SET monetization_status = ?, rejection_reason = ?, status_issues = ?
+		WHERE id = ?`, status, rejectionReason, issuesStr, videoID)
+	return err
 }
 
 // LinkLocalToYouTube links a local file to a YouTube ID in both SQLite and config
