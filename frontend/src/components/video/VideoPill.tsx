@@ -319,11 +319,11 @@ export default function VideoPill({
  className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3 pb-2.5 gap-1.5"}`}
  >
  <div className="flex flex-col gap-0.5">
- <h3
- className={`font-semibold text-text-primary line-clamp-2 leading-tight break-words ${isList ? "text-xs" : "text-[13px]"}`}
- title={title}
- >
- 					{titleSegments.map((segment, idx) => {
+ 				<h3
+					className={`font-semibold text-text-primary line-clamp-2 leading-snug break-words ${isList ? "text-xs" : "text-[13px]"}`}
+					title={title}
+				>
+					{titleSegments.map((segment, idx) => {
 						if (segment.isGameTag) {
 							return (
 								<span
@@ -339,7 +339,7 @@ export default function VideoPill({
 							return (
 								<span
 									key={idx}
-									className="text-amber-400 font-semibold bg-amber-400/10 px-1 py-0.5 rounded border border-dashed border-amber-400/30 text-[11px] inline-block my-[-2px]"
+									className="text-amber-400 font-semibold bg-amber-500/15 px-1 py-0.5 rounded-sm text-[11px]"
 									title={`Unfilled variable: ${segment.varName || segment.text}`}
 								>
 									{segment.text}
@@ -352,17 +352,17 @@ export default function VideoPill({
 							</span>
 						);
 					})}
- </h3>
- {isList && publishedAt && (
- <span className="text-[10px] text-text-muted font-medium mt-0.5">
- {publishedAt}
- </span>
- )}
- </div>
+				</h3>
+				{isList && publishedAt && (
+					<span className="text-[10px] text-text-muted font-medium mt-0.5">
+						{publishedAt}
+					</span>
+				)}
+			</div>
 
- <div
- className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto pt-1"}`}
- >
+			<div
+				className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto pt-2"}`}
+			>
  <div className="flex items-center gap-3">
  {isYT ? (
  <span className="flex items-center gap-1.5 text-text-muted font-medium truncate">
