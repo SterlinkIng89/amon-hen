@@ -23,6 +23,7 @@ import {
 	GetVideoPreview,
 	GetVideoDuration,
 } from "../../../wailsjs/go/backend/App";
+import VideoStatusBadge from "../youtube/VideoStatusBadge";
 
 interface VideoPillProps {
 	video: YTVideo | VideoFile;
@@ -349,9 +350,17 @@ export default function VideoPill({
  >
  <div className="flex items-center gap-3">
  {isYT ? (
- <span className="text-text-muted font-medium truncate">
- {formatNumber(video.viewCount)} views • {formatNumber(video.likeCount)} likes
- {publishedAt && ` • ${publishedAt}`}
+ <span className="flex items-center gap-1.5 text-text-muted font-medium truncate">
+   <VideoStatusBadge
+     monetizationStatus={(video as YTVideo).monetizationStatus}
+     rejectionReason={(video as YTVideo).rejectionReason}
+     statusIssues={(video as YTVideo).statusIssues}
+     compact={isList && compact}
+   />
+   <span>
+     {formatNumber(video.viewCount)} views • {formatNumber(video.likeCount)} likes
+     {publishedAt && ` • ${publishedAt}`}
+   </span>
  </span>
  ) : (
  <span className="flex items-center gap-1.5">

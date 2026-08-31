@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -48,3 +48,29 @@ describe("VideoPill Duplicate Indicator", () => {
     expect(screen.queryByText(/Duplicate/i)).not.toBeInTheDocument();
   });
 });
+
+describe("VideoPill Monetization and Status Indicator", () => {
+  it("does not render status indicator for healthy monetized YT video with no issues", () => {
+    const monetizedVid: YTVideo = {
+      ...mockVideo,
+      monetizationStatus: "monetized",
+    };
+    render(<VideoPill video={monetizedVid} viewMode="grid" />);
+    expect(screen.queryByTestId("video-status-badge")).not.toBeInTheDocument();
+  });
+
+  it("renders demonetized / issue indicator when video has copyright issues", () => {
+    const copyrightVid: YTVideo = {
+      ...mockVideo,
+      monetizationStatus: "demonetized",
+      rejectionReason: "copyright",
+      statusIssues: ["rejected", "copyright"],
+    };
+    render(<VideoPill video={copyrightVid} viewMode="list" />);
+    const badge = screen.getByTestId("video-status-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute("title", "Demonetized • Copyright claim");
+    expect(badge.className).toContain("text-rose-500");
+  });
+});
+

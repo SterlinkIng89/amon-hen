@@ -38,18 +38,21 @@ export interface Config {
 }
 
 export interface YTVideo {
- id: string;
- title: string;
- description: string;
- publishedAt: string;
- thumbnailUrl: string;
- viewCount: number;
- likeCount: number;
- duration: string;
- privacy: string;
- localFile?: string;
- playlistTitle?: string;
- episode?: number;
+  id: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  thumbnailUrl: string;
+  viewCount: number;
+  likeCount: number;
+  duration: string;
+  privacy: string;
+  localFile?: string;
+  playlistTitle?: string;
+  episode?: number;
+  monetizationStatus?: "monetized" | "limited" | "demonetized" | "unknown" | string;
+  rejectionReason?: string;
+  statusIssues?: string[];
 }
 
 export interface YTPlaylist {
