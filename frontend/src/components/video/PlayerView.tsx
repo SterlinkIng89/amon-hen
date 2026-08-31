@@ -62,7 +62,7 @@ export default function PlayerView({
  <VideoPill
  key={video.path}
  video={video}
- selected={idx === selectedIndex && selectedPaths.length === 0}
+ selected={Boolean(selectedVideo && video.path === selectedVideo.path && selectedPaths.length === 0)}
  multiSelected={selectedPaths.includes(video.path)}
  viewMode="list"
  compact={true}
@@ -82,16 +82,16 @@ export default function PlayerView({
  const handlePrev = () => {
  if (currentFilteredIdx > 0) {
  const prevVideo = sortedVideos[currentFilteredIdx - 1];
- const sortedIdx = sortedVideos.findIndex(v => v.path === prevVideo.path);
- onGoTo(sortedIdx);
+ const sortedIdx = allVideos.findIndex(v => v.path === prevVideo.path);
+ if (sortedIdx !== -1) onGoTo(sortedIdx);
  }
  };
 
  const handleNext = () => {
  if (currentFilteredIdx >= 0 && currentFilteredIdx < sortedVideos.length - 1) {
  const nextVideo = sortedVideos[currentFilteredIdx + 1];
- const sortedIdx = sortedVideos.findIndex(v => v.path === nextVideo.path);
- onGoTo(sortedIdx);
+ const sortedIdx = allVideos.findIndex(v => v.path === nextVideo.path);
+ if (sortedIdx !== -1) onGoTo(sortedIdx);
  }
  };
 
