@@ -425,6 +425,7 @@ export namespace backend {
 	    thumbnailUrl: string;
 	    publishedAt: string;
 	    privacy: string;
+	    duplicateCount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new YTPlaylist(source);
@@ -439,6 +440,7 @@ export namespace backend {
 	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.publishedAt = source["publishedAt"];
 	        this.privacy = source["privacy"];
+	        this.duplicateCount = source["duplicateCount"];
 	    }
 	}
 	export class YTVideo {

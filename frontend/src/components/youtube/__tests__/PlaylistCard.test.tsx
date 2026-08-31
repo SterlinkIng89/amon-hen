@@ -122,4 +122,49 @@ describe("PlaylistCard", () => {
       expect(onDeleted).toHaveBeenCalled();
     });
   });
+
+  it("renders duplicate warning badge when duplicateCount > 0 in grid view", () => {
+    const playlistWithDups: YTPlaylist = {
+      ...mockPlaylist,
+      duplicateCount: 1,
+    };
+
+    render(<PlaylistCard playlist={playlistWithDups} viewMode="grid" />);
+
+    const badge = screen.getByTestId("duplicate-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("1 duplicate");
+
+    const header = screen.getByTestId("playlist-card-header");
+    expect(header).toContainElement(badge);
+  });
+
+  it("renders duplicate warning badge with correct pluralization in list view", () => {
+    const playlistWithMultipleDups: YTPlaylist = {
+      ...mockPlaylist,
+      duplicateCount: 3,
+    };
+
+    render(<PlaylistCard playlist={playlistWithMultipleDups} viewMode="list" />);
+
+    const badge = screen.getByTestId("duplicate-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("3 duplicates");
+
+    const header = screen.getByTestId("playlist-card-header");
+    expect(header).toContainElement(badge);
+  });
+
+  it("does not render duplicate badge when duplicateCount is 0 or undefined", () => {
+    const { rerender } = render(<PlaylistCard playlist={mockPlaylist} viewMode="grid" />);
+    expect(screen.queryByTestId("duplicate-badge")).not.toBeInTheDocument();
+
+    const playlistZeroDups: YTPlaylist = {
+      ...mockPlaylist,
+      duplicateCount: 0,
+    };
+    rerender(<PlaylistCard playlist={playlistZeroDups} viewMode="grid" />);
+    expect(screen.queryByTestId("duplicate-badge")).not.toBeInTheDocument();
+  });
 });
+

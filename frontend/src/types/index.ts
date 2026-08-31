@@ -63,6 +63,7 @@ export interface YTPlaylist {
  thumbnailUrl: string;
  publishedAt: string;
  privacy?: string;
+ duplicateCount?: number;
 }
 
 export interface VideoGroup {

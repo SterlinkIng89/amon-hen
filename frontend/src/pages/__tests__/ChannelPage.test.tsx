@@ -299,5 +299,30 @@ describe("ChannelPage YouTube Sync State", () => {
       expect(AppBackend.PurgePlaylistDuplicates).toHaveBeenCalledWith("pl-1");
     });
   });
+
+  it("shows duplicate badge on playlist cards in playlist grid overview when duplicateCount > 0", async () => {
+    const mockPlaylists = [
+      { id: "pl-1", title: "Boss Battles", description: "", videoCount: 5, thumbnailUrl: "", publishedAt: "", privacy: "public", duplicateCount: 2 },
+      { id: "pl-2", title: "Clean List", description: "", videoCount: 3, thumbnailUrl: "", publishedAt: "", privacy: "public", duplicateCount: 0 },
+    ];
+
+    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(mockPlaylists as any);
+
+    render(<ChannelPage />);
+
+    // Switch to playlists tab
+    const playlistsTab = await screen.findByRole("button", { name: "Playlists" });
+    fireEvent.click(playlistsTab);
+
+    // Wait for playlists to render
+    await screen.findByText("Boss Battles");
+    await screen.findByText("Clean List");
+
+    // Check duplicate badge is rendered for pl-1
+    const dupBadge = screen.getByTestId("duplicate-badge");
+    expect(dupBadge).toBeInTheDocument();
+    expect(dupBadge).toHaveTextContent("2 duplicates");
+  });
 });
+
 
