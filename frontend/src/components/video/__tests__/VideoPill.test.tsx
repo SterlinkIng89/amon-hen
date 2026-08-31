@@ -74,3 +74,91 @@ describe("VideoPill Monetization and Status Indicator", () => {
   });
 });
 
+describe("VideoPill Title Placeholder Highlighting", () => {
+  const localVideo = {
+    name: "2026-08-26 14-30-00.mp4",
+    path: "/videos/2026-08-26 14-30-00.mp4",
+    size: 104857600,
+    modTime: 1787754600000,
+    folder: "/videos",
+    game: "Overwatch 2",
+  };
+
+  const gameProfiles = {
+    "Overwatch 2": {
+      type: "multiplayer",
+      titleTemplate: "{game} - {event} - {gamemode} - {date}",
+      modes: ["Quick Play", "Competitive"],
+    },
+  };
+
+  it("highlights unfilled 'Title' and 'Mode' placeholders with amber badge style", () => {
+    const unfilledVideo = {
+      ...localVideo,
+      event: "",
+      gameMode: "",
+    };
+
+    render(
+      <VideoPill
+        video={unfilledVideo}
+        gameProfiles={gameProfiles}
+        viewMode="grid"
+      />
+    );
+
+    const titlePlaceholder = screen.getByText("Title");
+    const modePlaceholder = screen.getByText("Mode");
+
+    expect(titlePlaceholder).toBeInTheDocument();
+    expect(titlePlaceholder.className).toContain("text-amber-400");
+    expect(modePlaceholder).toBeInTheDocument();
+    expect(modePlaceholder.className).toContain("text-amber-400");
+  });
+
+  it("highlights only unfilled placeholders when some fields are filled", () => {
+    const partiallyFilledVideo = {
+      ...localVideo,
+      event: "Grand Finals",
+      gameMode: "",
+    };
+
+    render(
+      <VideoPill
+        video={partiallyFilledVideo}
+        gameProfiles={gameProfiles}
+        viewMode="list"
+      />
+    );
+
+    const eventText = screen.getByText("Grand Finals");
+    const modePlaceholder = screen.getByText("Mode");
+
+    expect(eventText).toBeInTheDocument();
+    expect(eventText.className).not.toContain("text-amber-400");
+    expect(modePlaceholder).toBeInTheDocument();
+    expect(modePlaceholder.className).toContain("text-amber-400");
+  });
+
+  it("does not highlight when all variables are filled", () => {
+    const filledVideo = {
+      ...localVideo,
+      event: "Grand Finals",
+      gameMode: "Competitive",
+    };
+
+    render(
+      <VideoPill
+        video={filledVideo}
+        gameProfiles={gameProfiles}
+        viewMode="grid"
+      />
+    );
+
+    expect(screen.getByText("Grand Finals")).toBeInTheDocument();
+    expect(screen.getByText("Competitive")).toBeInTheDocument();
+    expect(screen.queryByText("Title")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mode")).not.toBeInTheDocument();
+  });
+});
+

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { VideoFile, YTPlaylist, GameProfile } from "../../types";
-import { generateYouTubeTitle } from "../../utils/videoUtils";
+import { generateYouTubeTitle, hasUnfilledPlaceholders } from "../../utils/videoUtils";
 import { useAppStore } from "../../store/useAppStore";
 import { PlaylistPrivacy } from "../../types";
 import { QueueItem } from "./UploadQueue";
@@ -186,6 +186,16 @@ export default function UploadDialog({
  <span className="text-[10px] text-text-muted mt-0.5">
  Pattern: <em>Game - YYYY MM DD - Ep#</em>
  </span>
+ {hasUnfilledPlaceholders(video, video.game ? profiles[video.game] : undefined) && (
+   <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-1">
+     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
+       <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+       <line x1="12" y1="9" x2="12" y2="13" />
+       <line x1="12" y1="17" x2="12.01" y2="17" />
+     </svg>
+     <span>This title contains unfilled placeholder variables from its game profile.</span>
+   </div>
+ )}
  </div>
 
  <div className="flex flex-col gap-1.5 relative">
