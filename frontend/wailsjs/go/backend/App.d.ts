@@ -53,6 +53,8 @@ export function GetSteamDeveloperStats(arg1:string):Promise<Array<backend.SteamD
 
 export function GetSteamGameAchievementPct(arg1:string):Promise<number>;
 
+export function GetSteamGameAssets(arg1:string):Promise<backend.SteamGameAssets>;
+
 export function GetSteamGamesByDeveloper(arg1:string):Promise<Array<backend.SteamGameItem>>;
 
 export function GetSteamGamesByPublisher(arg1:string):Promise<Array<backend.SteamGameItem>>;

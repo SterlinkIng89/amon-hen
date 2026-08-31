@@ -297,6 +297,24 @@ export namespace backend {
 	        this.gamesCount = source["gamesCount"];
 	    }
 	}
+	export class SteamGameAssets {
+	    heroUrl: string;
+	    posterUrl: string;
+	    headerUrl: string;
+	    logoUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamGameAssets(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.heroUrl = source["heroUrl"];
+	        this.posterUrl = source["posterUrl"];
+	        this.headerUrl = source["headerUrl"];
+	        this.logoUrl = source["logoUrl"];
+	    }
+	}
 	export class SteamGameItem {
 	    appid: number;
 	    name: string;

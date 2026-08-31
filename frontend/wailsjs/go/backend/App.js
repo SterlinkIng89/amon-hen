@@ -98,6 +98,10 @@ export function GetSteamGameAchievementPct(arg1) {
   return window['go']['backend']['App']['GetSteamGameAchievementPct'](arg1);
 }
 
+export function GetSteamGameAssets(arg1) {
+  return window['go']['backend']['App']['GetSteamGameAssets'](arg1);
+}
+
 export function GetSteamGamesByDeveloper(arg1) {
   return window['go']['backend']['App']['GetSteamGamesByDeveloper'](arg1);
 }
