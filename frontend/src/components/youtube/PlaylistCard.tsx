@@ -278,11 +278,25 @@ export default function PlaylistCard({
             {playlist.title}
           </h3>
 
-          <div className="flex items-center">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}>
               {badge.icon}
               <span>{badge.label}</span>
             </span>
+
+            {playlist.duplicateCount !== undefined && playlist.duplicateCount > 0 && (
+              <span
+                data-testid="duplicate-badge"
+                title={`${playlist.duplicateCount} duplicate video${playlist.duplicateCount !== 1 ? "s" : ""} detected in playlist`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>{playlist.duplicateCount} duplicate{playlist.duplicateCount !== 1 ? "s" : ""}</span>
+              </span>
+            )}
           </div>
         </div>
 

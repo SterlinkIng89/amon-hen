@@ -83,13 +83,14 @@ func parseStatusIssues(issuesStr string) []string {
 }
 
 type YTPlaylist struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	VideoCount   int64  `json:"videoCount"`
-	ThumbnailUrl string `json:"thumbnailUrl"`
-	PublishedAt  string `json:"publishedAt"`
-	Privacy      string `json:"privacy"`
+	ID             string `json:"id"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	VideoCount     int64  `json:"videoCount"`
+	ThumbnailUrl   string `json:"thumbnailUrl"`
+	PublishedAt    string `json:"publishedAt"`
+	Privacy        string `json:"privacy"`
+	DuplicateCount int64  `json:"duplicateCount"`
 }
 
 // SyncChannelData downloads all videos and playlists from the channel and saves them to SQLite.
@@ -908,7 +909,19 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 	}
 
 	rows, err := a.db.conn.Query(fmt.Sprintf(`
-		SELECT p.id, p.title, p.description, p.video_count, p.thumbnail_url, p.published_at, COALESCE(p.privacy, 'public')
+		SELECT 
+			p.id, 
+			p.title, 
+			p.description, 
+			p.video_count, 
+			p.thumbnail_url, 
+			p.published_at, 
+			COALESCE(p.privacy, 'public'),
+			COALESCE((
+				SELECT COUNT(*) - COUNT(DISTINCT pi.video_id)
+				FROM yt_playlist_items pi
+				WHERE pi.playlist_id = p.id
+			), 0) AS duplicate_count
 		FROM yt_playlists p
 		ORDER BY %s`, orderBy))
 	if err != nil {
@@ -919,7 +932,7 @@ func (a *App) GetChannelPlaylists(sortBy string) ([]YTPlaylist, error) {
 	var playlists []YTPlaylist
 	for rows.Next() {
 		var p YTPlaylist
-		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.VideoCount, &p.ThumbnailUrl, &p.PublishedAt, &p.Privacy); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.VideoCount, &p.ThumbnailUrl, &p.PublishedAt, &p.Privacy, &p.DuplicateCount); err != nil {
 			continue
 		}
 		playlists = append(playlists, p)
