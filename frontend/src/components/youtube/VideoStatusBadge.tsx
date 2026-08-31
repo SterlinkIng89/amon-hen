@@ -1,7 +1,8 @@
 ﻿import React from "react";
 
 interface VideoStatusBadgeProps {
-  monetizationStatus?: "monetized" | "limited" | "demonetized" | "unknown" | string;
+  monetizationStatus?:
+    "monetized" | "limited" | "demonetized" | "unknown" | string;
   rejectionReason?: string;
   statusIssues?: string[];
   compact?: boolean;
@@ -27,7 +28,9 @@ export default function VideoStatusBadge({
 }: VideoStatusBadgeProps) {
   let issuesList = [
     ...(rejectionReason ? [rejectionReason] : []),
-    ...(statusIssues || []).filter((i) => i.toLowerCase() !== rejectionReason.toLowerCase()),
+    ...(statusIssues || []).filter(
+      (i) => i.toLowerCase() !== rejectionReason.toLowerCase(),
+    ),
   ];
 
   if (rejectionReason && issuesList.includes("rejected")) {
@@ -62,7 +65,9 @@ export default function VideoStatusBadge({
   ) {
     colorClass = "text-amber-400 bg-amber-400/10 border-amber-400/30";
     iconType = "yellow";
-    title = detailedIssues ? `Limited monetization • ${detailedIssues}` : "Limited monetization";
+    title = detailedIssues
+      ? `Limited monetization • ${detailedIssues}`
+      : "Limited monetization";
   } else {
     return null;
   }

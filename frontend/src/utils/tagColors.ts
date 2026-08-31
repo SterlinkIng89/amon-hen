@@ -10,30 +10,30 @@
  */
 
 function djb2(str: string): number {
- let hash = 5381;
- for (let i = 0; i < str.length; i++) {
- // <<5 + hash is equivalent to hash * 33
- hash = (((hash << 5) + hash) ^ str.charCodeAt(i)) >>> 0;
- }
- return hash;
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    // <<5 + hash is equivalent to hash * 33
+    hash = (((hash << 5) + hash) ^ str.charCodeAt(i)) >>> 0;
+  }
+  return hash;
 }
 
 export function getTagColor(tag: string): string {
- if (!tag || tag.trim().length === 0) return "";
+  if (!tag || tag.trim().length === 0) return "";
 
- const hash = djb2(tag.toLowerCase().trim());
+  const hash = djb2(tag.toLowerCase().trim());
 
- // Map to full hue wheel
- let hue = hash % 360;
+  // Map to full hue wheel
+  let hue = hash % 360;
 
- // Rotate hues in the accent-orange zone (15–45°) to avoid confusion
- if (hue >= 15 && hue <= 45) {
- hue = (hue + 120) % 360;
- }
+  // Rotate hues in the accent-orange zone (15–45°) to avoid confusion
+  if (hue >= 15 && hue <= 45) {
+    hue = (hue + 120) % 360;
+  }
 
- // Derive saturation and lightness within readable bands using hash bits
- const saturation = 55 + ((hash >> 4) % 18); // 55–72 %
- const lightness = 62 + ((hash >> 8) % 9); // 62–70 %
+  // Derive saturation and lightness within readable bands using hash bits
+  const saturation = 55 + ((hash >> 4) % 18); // 55–72 %
+  const lightness = 62 + ((hash >> 8) % 9); // 62–70 %
 
- return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }

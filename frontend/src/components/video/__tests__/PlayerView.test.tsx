@@ -46,19 +46,62 @@ vi.mock("../InlinePlayer", () => ({
   }) => (
     <div data-testid="inline-player">
       <span data-testid="playing-video">{video.name}</span>
-      {onPrev && <button data-testid="btn-prev" onClick={onPrev}>Prev</button>}
-      {onNext && <button data-testid="btn-next" onClick={onNext}>Next</button>}
+      {onPrev && (
+        <button data-testid="btn-prev" onClick={onPrev}>
+          Prev
+        </button>
+      )}
+      {onNext && (
+        <button data-testid="btn-next" onClick={onNext}>
+          Next
+        </button>
+      )}
     </div>
   ),
 }));
 
 describe("PlayerView Component", () => {
   const allVideos: VideoFile[] = [
-    { path: "/videos/global_0.mp4", name: "global_0.mp4", size: 100, modTime: 1000, folder: "/global", game: "" },
-    { path: "/videos/outplayed_1.mp4", name: "outplayed_1.mp4", size: 200, modTime: 2000, folder: "/outplayed", game: "League of Legends" },
-    { path: "/videos/global_2.mp4", name: "global_2.mp4", size: 300, modTime: 3000, folder: "/global", game: "" },
-    { path: "/videos/outplayed_3.mp4", name: "outplayed_3.mp4", size: 400, modTime: 4000, folder: "/outplayed", game: "League of Legends" },
-    { path: "/videos/outplayed_4.mp4", name: "outplayed_4.mp4", size: 500, modTime: 5000, folder: "/outplayed", game: "League of Legends" },
+    {
+      path: "/videos/global_0.mp4",
+      name: "global_0.mp4",
+      size: 100,
+      modTime: 1000,
+      folder: "/global",
+      game: "",
+    },
+    {
+      path: "/videos/outplayed_1.mp4",
+      name: "outplayed_1.mp4",
+      size: 200,
+      modTime: 2000,
+      folder: "/outplayed",
+      game: "League of Legends",
+    },
+    {
+      path: "/videos/global_2.mp4",
+      name: "global_2.mp4",
+      size: 300,
+      modTime: 3000,
+      folder: "/global",
+      game: "",
+    },
+    {
+      path: "/videos/outplayed_3.mp4",
+      name: "outplayed_3.mp4",
+      size: 400,
+      modTime: 4000,
+      folder: "/outplayed",
+      game: "League of Legends",
+    },
+    {
+      path: "/videos/outplayed_4.mp4",
+      name: "outplayed_4.mp4",
+      size: 500,
+      modTime: 5000,
+      folder: "/outplayed",
+      game: "League of Legends",
+    },
   ];
 
   // Filtered list (e.g. folder "/outplayed")
@@ -110,7 +153,7 @@ describe("PlayerView Component", () => {
         {...defaultProps}
         selectedVideo={allVideos[0]} // global_0.mp4 (not in filteredVideos)
         selectedIndex={0} // matches index 0 in filteredVideos if checked by index!
-      />
+      />,
     );
 
     const pill1 = screen.getByTestId("video-pill-outplayed_1.mp4");
@@ -127,7 +170,7 @@ describe("PlayerView Component", () => {
       <PlayerView
         {...defaultProps}
         selectedPaths={["/videos/outplayed_1.mp4", "/videos/outplayed_4.mp4"]}
-      />
+      />,
     );
 
     const pill3 = screen.getByTestId("video-pill-outplayed_3.mp4");
@@ -141,7 +184,7 @@ describe("PlayerView Component", () => {
         {...defaultProps}
         selectedVideo={filteredVideos[1]} // outplayed_3.mp4 (allVideos index 3)
         onGoTo={onGoTo}
-      />
+      />,
     );
 
     // Prev should go to filteredVideos[0] which is outplayed_1.mp4 (allVideos index 1)
@@ -157,12 +200,7 @@ describe("PlayerView Component", () => {
 
   it("calls onVideoClick with the sidebar index when a video pill is clicked", () => {
     const onVideoClick = vi.fn();
-    render(
-      <PlayerView
-        {...defaultProps}
-        onVideoClick={onVideoClick}
-      />
-    );
+    render(<PlayerView {...defaultProps} onVideoClick={onVideoClick} />);
 
     const pill4 = screen.getByTestId("video-pill-outplayed_4.mp4");
     fireEvent.click(pill4);

@@ -22,7 +22,9 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />,
+    );
 
     // Check that privacy option Public is selected by default
     const publicBtn = screen.getByRole("button", { name: /public/i });
@@ -32,8 +34,15 @@ describe("TagPlaylistModal", () => {
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Valorant", "", "public");
-      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Valorant", "pl-123");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "",
+        "public",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-123",
+      );
       expect(onSaved).toHaveBeenCalled();
     });
   });
@@ -42,7 +51,9 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Overwatch" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Overwatch" onClose={onClose} onSaved={onSaved} />,
+    );
 
     const unlistedBtn = screen.getByRole("button", { name: /unlisted/i });
     fireEvent.click(unlistedBtn);
@@ -53,8 +64,15 @@ describe("TagPlaylistModal", () => {
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Overwatch", "", "unlisted");
-      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Overwatch", "pl-123");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Overwatch",
+        "",
+        "unlisted",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Overwatch",
+        "pl-123",
+      );
       expect(onSaved).toHaveBeenCalled();
     });
   });
@@ -64,13 +82,19 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />,
+    );
 
     const createBtn = screen.getByRole("button", { name: /create & link/i });
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Minecraft", "", "private");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Minecraft",
+        "",
+        "private",
+      );
     });
   });
 });

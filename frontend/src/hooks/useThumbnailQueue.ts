@@ -57,10 +57,7 @@ function createQueue(concurrency: number) {
   return function enqueue<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const run = () => {
-        fn()
-          .then(resolve)
-          .catch(reject)
-          .finally(release);
+        fn().then(resolve).catch(reject).finally(release);
       };
 
       if (active < concurrency) {

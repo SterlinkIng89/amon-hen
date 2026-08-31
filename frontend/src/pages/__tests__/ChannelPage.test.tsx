@@ -1,6 +1,11 @@
-import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ChannelPage from "../ChannelPage";
 import * as AppBackend from "../../../wailsjs/go/backend/App";
@@ -12,7 +17,9 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   GetSyncStatus: vi.fn().mockResolvedValue({ count: 10, total: 10 }),
   IsYouTubeAuthed: vi.fn().mockResolvedValue(true),
   GetPlaylistVideos: vi.fn().mockResolvedValue([]),
-  GetChannelVideosPaginated: vi.fn().mockResolvedValue({ videos: [], total: 0 }),
+  GetChannelVideosPaginated: vi
+    .fn()
+    .mockResolvedValue({ videos: [], total: 0 }),
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
   AddVideoToPlaylist: vi.fn().mockResolvedValue(undefined),
   PurgePlaylistDuplicates: vi.fn().mockResolvedValue(0),
@@ -29,7 +36,9 @@ vi.mock("../../../wailsjs/runtime/runtime", () => ({
     }
     eventListeners[event].push(callback);
     return () => {
-      eventListeners[event] = eventListeners[event].filter(cb => cb !== callback);
+      eventListeners[event] = eventListeners[event].filter(
+        (cb) => cb !== callback,
+      );
     };
   }),
   EventsOff: vi.fn(),
@@ -53,7 +62,9 @@ describe("ChannelPage YouTube Sync State", () => {
     render(<ChannelPage />);
 
     // Wait for initial load
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const lightSyncButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     expect(lightSyncButton).not.toBeDisabled();
 
     // Click Light sync
@@ -101,7 +112,9 @@ describe("ChannelPage YouTube Sync State", () => {
 
     // Button should be enabled again and reset to Light
     await waitFor(() => {
-      const idleButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      const idleButton = screen.getByTitle(
+        "Light sync — fetch recent 20 videos",
+      );
       expect(idleButton).not.toBeDisabled();
       expect(idleButton).toHaveTextContent("Light");
     });
@@ -117,7 +130,9 @@ describe("ChannelPage YouTube Sync State", () => {
     render(<ChannelPage />);
 
     // Initially idle
-    const idleButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const idleButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     expect(idleButton).toHaveTextContent("Light");
 
     // Open dropdown and click Full Sync
@@ -139,7 +154,9 @@ describe("ChannelPage YouTube Sync State", () => {
     });
 
     await waitFor(() => {
-      const completedButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      const completedButton = screen.getByTitle(
+        "Light sync — fetch recent 20 videos",
+      );
       expect(completedButton).toHaveTextContent("Light");
       expect(completedButton).not.toBeDisabled();
     });
@@ -154,7 +171,9 @@ describe("ChannelPage YouTube Sync State", () => {
 
     render(<ChannelPage />);
 
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const lightSyncButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     expect(lightSyncButton).toHaveTextContent("Light");
 
     fireEvent.click(lightSyncButton);
@@ -169,7 +188,9 @@ describe("ChannelPage YouTube Sync State", () => {
     });
 
     await waitFor(() => {
-      const completedButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      const completedButton = screen.getByTitle(
+        "Light sync — fetch recent 20 videos",
+      );
       expect(completedButton).toHaveTextContent("Light");
       expect(completedButton).not.toBeDisabled();
     });
@@ -177,11 +198,15 @@ describe("ChannelPage YouTube Sync State", () => {
 
   it("resets isSyncing to false when youtube:sync-done event fires", async () => {
     // Keep sync running initially
-    vi.mocked(AppBackend.SyncRecentVideos).mockReturnValue(new Promise(() => {}) as any);
+    vi.mocked(AppBackend.SyncRecentVideos).mockReturnValue(
+      new Promise(() => {}) as any,
+    );
 
     render(<ChannelPage />);
 
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const lightSyncButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     fireEvent.click(lightSyncButton);
 
     expect(lightSyncButton).toBeDisabled();
@@ -189,7 +214,7 @@ describe("ChannelPage YouTube Sync State", () => {
     // Trigger the backend youtube:sync-done event
     await act(async () => {
       const callbacks = eventListeners["youtube:sync-done"] || [];
-      callbacks.forEach(cb => cb());
+      callbacks.forEach((cb) => cb());
     });
 
     // Should become enabled when sync-done fires
@@ -199,11 +224,15 @@ describe("ChannelPage YouTube Sync State", () => {
   });
 
   it("resets isSyncing to false when youtube:done event fires", async () => {
-    vi.mocked(AppBackend.SyncRecentVideos).mockReturnValue(new Promise(() => {}) as any);
+    vi.mocked(AppBackend.SyncRecentVideos).mockReturnValue(
+      new Promise(() => {}) as any,
+    );
 
     render(<ChannelPage />);
 
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const lightSyncButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     fireEvent.click(lightSyncButton);
 
     expect(lightSyncButton).toBeDisabled();
@@ -211,7 +240,7 @@ describe("ChannelPage YouTube Sync State", () => {
     // Trigger youtube:done event
     await act(async () => {
       const callbacks = eventListeners["youtube:done"] || [];
-      callbacks.forEach(cb => cb());
+      callbacks.forEach((cb) => cb());
     });
 
     await waitFor(() => {
@@ -220,11 +249,15 @@ describe("ChannelPage YouTube Sync State", () => {
   });
 
   it("resets isSyncing when light sync fails", async () => {
-    vi.mocked(AppBackend.SyncRecentVideos).mockRejectedValue(new Error("Network failure"));
+    vi.mocked(AppBackend.SyncRecentVideos).mockRejectedValue(
+      new Error("Network failure"),
+    );
 
     render(<ChannelPage />);
 
-    const lightSyncButton = await screen.findByTitle("Light sync — fetch recent 20 videos");
+    const lightSyncButton = await screen.findByTitle(
+      "Light sync — fetch recent 20 videos",
+    );
     fireEvent.click(lightSyncButton);
 
     await waitFor(() => {
@@ -233,7 +266,9 @@ describe("ChannelPage YouTube Sync State", () => {
   });
 
   it("resets isSyncing when full sync fails", async () => {
-    vi.mocked(AppBackend.SyncChannelData).mockRejectedValue(new Error("Network failure"));
+    vi.mocked(AppBackend.SyncChannelData).mockRejectedValue(
+      new Error("Network failure"),
+    );
 
     render(<ChannelPage />);
 
@@ -244,19 +279,26 @@ describe("ChannelPage YouTube Sync State", () => {
     fireEvent.click(fullSyncButton);
 
     await waitFor(() => {
-      const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      const lightSyncButton = screen.getByTitle(
+        "Light sync — fetch recent 20 videos",
+      );
       expect(lightSyncButton).not.toBeDisabled();
       expect(lightSyncButton).toHaveTextContent("Light");
     });
   });
 
   it("resets isSyncing after auto-sync on first visit completes", async () => {
-    vi.mocked(AppBackend.GetSyncStatus).mockResolvedValue({ count: 0, total: 0 } as any);
+    vi.mocked(AppBackend.GetSyncStatus).mockResolvedValue({
+      count: 0,
+      total: 0,
+    } as any);
     let resolveAutoSync: () => void = () => {};
     const autoSyncPromise = new Promise<void>((res) => {
       resolveAutoSync = res;
     });
-    vi.mocked(AppBackend.SyncChannelData).mockReturnValue(autoSyncPromise as any);
+    vi.mocked(AppBackend.SyncChannelData).mockReturnValue(
+      autoSyncPromise as any,
+    );
 
     render(<ChannelPage />);
 
@@ -271,14 +313,16 @@ describe("ChannelPage YouTube Sync State", () => {
     });
 
     await waitFor(() => {
-      const lightSyncButton = screen.getByTitle("Light sync — fetch recent 20 videos");
+      const lightSyncButton = screen.getByTitle(
+        "Light sync — fetch recent 20 videos",
+      );
       expect(lightSyncButton).not.toBeDisabled();
       expect(lightSyncButton).toHaveTextContent("Light");
     });
   });
   it("renders a responsive subheader without fixed height h-14", async () => {
     const { container } = render(<ChannelPage />);
-    
+
     // Wait for component to settle to avoid act() warnings
     await screen.findByTitle("Light sync — fetch recent 20 videos");
 
@@ -295,7 +339,7 @@ describe("ChannelPage YouTube Sync State", () => {
 
     await act(async () => {
       const callbacks = eventListeners["youtube:sync-progress"] || [];
-      callbacks.forEach(cb => cb("Syncing playlists..."));
+      callbacks.forEach((cb) => cb("Syncing playlists..."));
     });
 
     expect(screen.getByText("Syncing playlists...")).toBeInTheDocument();
@@ -308,7 +352,7 @@ describe("ChannelPage YouTube Sync State", () => {
 
     await act(async () => {
       const callbacks = eventListeners["youtube:sync-progress"] || [];
-      callbacks.forEach(cb => cb("Syncing videos... (42)"));
+      callbacks.forEach((cb) => cb("Syncing videos... (42)"));
     });
 
     expect(screen.getByText("Syncing videos... (42)")).toBeInTheDocument();
@@ -321,7 +365,9 @@ describe("ChannelPage YouTube Sync State", () => {
 
     await act(async () => {
       const callbacks = eventListeners["youtube:sync-progress"] || [];
-      callbacks.forEach(cb => cb({ stage: "playlists", count: 5, total: 10 }));
+      callbacks.forEach((cb) =>
+        cb({ stage: "playlists", count: 5, total: 10 }),
+      );
     });
 
     expect(screen.getByText("Syncing: playlists (5/10)")).toBeInTheDocument();
@@ -330,21 +376,68 @@ describe("ChannelPage YouTube Sync State", () => {
 
   it("shows duplicate warning banner and badges on duplicate videos in playlist view", async () => {
     const mockPlaylists = [
-      { id: "pl-1", title: "Boss Battles", description: "", videoCount: 3, thumbnailUrl: "", publishedAt: "", privacy: "public" },
+      {
+        id: "pl-1",
+        title: "Boss Battles",
+        description: "",
+        videoCount: 3,
+        thumbnailUrl: "",
+        publishedAt: "",
+        privacy: "public",
+      },
     ];
     const mockPlaylistVideos = [
-      { id: "v1", title: "Boss 1", description: "", publishedAt: "2026-01-01T00:00:00Z", thumbnailUrl: "", viewCount: 10, likeCount: 1, duration: "PT1M", privacy: "public", localFile: "" },
-      { id: "v2", title: "Boss 2", description: "", publishedAt: "2026-01-02T00:00:00Z", thumbnailUrl: "", viewCount: 20, likeCount: 2, duration: "PT2M", privacy: "public", localFile: "" },
-      { id: "v1", title: "Boss 1", description: "", publishedAt: "2026-01-01T00:00:00Z", thumbnailUrl: "", viewCount: 10, likeCount: 1, duration: "PT1M", privacy: "public", localFile: "" },
+      {
+        id: "v1",
+        title: "Boss 1",
+        description: "",
+        publishedAt: "2026-01-01T00:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 1,
+        duration: "PT1M",
+        privacy: "public",
+        localFile: "",
+      },
+      {
+        id: "v2",
+        title: "Boss 2",
+        description: "",
+        publishedAt: "2026-01-02T00:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 20,
+        likeCount: 2,
+        duration: "PT2M",
+        privacy: "public",
+        localFile: "",
+      },
+      {
+        id: "v1",
+        title: "Boss 1",
+        description: "",
+        publishedAt: "2026-01-01T00:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 1,
+        duration: "PT1M",
+        privacy: "public",
+        localFile: "",
+      },
     ];
 
-    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(mockPlaylists as any);
-    vi.mocked(AppBackend.GetPlaylistVideos).mockResolvedValue(mockPlaylistVideos as any);
+    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(
+      mockPlaylists as any,
+    );
+    vi.mocked(AppBackend.GetPlaylistVideos).mockResolvedValue(
+      mockPlaylistVideos as any,
+    );
 
     render(<ChannelPage />);
 
     // Switch to playlists tab
-    const playlistsTab = await screen.findByRole("button", { name: "Playlists" });
+    const playlistsTab = await screen.findByRole("button", {
+      name: "Playlists",
+    });
     fireEvent.click(playlistsTab);
 
     // Open playlist
@@ -353,7 +446,9 @@ describe("ChannelPage YouTube Sync State", () => {
 
     // Wait for playlist items to load
     await waitFor(() => {
-      expect(screen.getByText("1 duplicate video detected")).toBeInTheDocument();
+      expect(
+        screen.getByText("1 duplicate video detected"),
+      ).toBeInTheDocument();
     });
 
     // Verify duplicate badge on cards
@@ -361,7 +456,9 @@ describe("ChannelPage YouTube Sync State", () => {
     expect(duplicateBadges.length).toBe(2);
 
     // Verify purge duplicates button shows count badge
-    const purgeButton = screen.getByRole("button", { name: /Purge Duplicates \(1\)/i });
+    const purgeButton = screen.getByRole("button", {
+      name: /Purge Duplicates \(1\)/i,
+    });
     expect(purgeButton).toBeInTheDocument();
 
     // Trigger purge
@@ -375,16 +472,38 @@ describe("ChannelPage YouTube Sync State", () => {
 
   it("shows duplicate badge on playlist cards in playlist grid overview when duplicateCount > 0", async () => {
     const mockPlaylists = [
-      { id: "pl-1", title: "Boss Battles", description: "", videoCount: 5, thumbnailUrl: "", publishedAt: "", privacy: "public", duplicateCount: 2 },
-      { id: "pl-2", title: "Clean List", description: "", videoCount: 3, thumbnailUrl: "", publishedAt: "", privacy: "public", duplicateCount: 0 },
+      {
+        id: "pl-1",
+        title: "Boss Battles",
+        description: "",
+        videoCount: 5,
+        thumbnailUrl: "",
+        publishedAt: "",
+        privacy: "public",
+        duplicateCount: 2,
+      },
+      {
+        id: "pl-2",
+        title: "Clean List",
+        description: "",
+        videoCount: 3,
+        thumbnailUrl: "",
+        publishedAt: "",
+        privacy: "public",
+        duplicateCount: 0,
+      },
     ];
 
-    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(mockPlaylists as any);
+    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(
+      mockPlaylists as any,
+    );
 
     render(<ChannelPage />);
 
     // Switch to playlists tab
-    const playlistsTab = await screen.findByRole("button", { name: "Playlists" });
+    const playlistsTab = await screen.findByRole("button", {
+      name: "Playlists",
+    });
     fireEvent.click(playlistsTab);
 
     // Wait for playlists to render
@@ -397,5 +516,3 @@ describe("ChannelPage YouTube Sync State", () => {
     expect(dupBadge).toHaveTextContent("2 duplicates");
   });
 });
-
-

@@ -1,40 +1,40 @@
 export interface VideoFile {
- name: string;
- path: string;
- size: number;
- modTime: number;
- folder: string;
- game: string;
- youtubeTitle?: string;
- description?: string;
- privacy?: string;
- youtubeId?: string;
- playlistId?: string;
- playlistTitle?: string;
-	episode?: number;
-	event?: string;
-	gameMode?: string;
-	customVars?: Record<string, string>;
+  name: string;
+  path: string;
+  size: number;
+  modTime: number;
+  folder: string;
+  game: string;
+  youtubeTitle?: string;
+  description?: string;
+  privacy?: string;
+  youtubeId?: string;
+  playlistId?: string;
+  playlistTitle?: string;
+  episode?: number;
+  event?: string;
+  gameMode?: string;
+  customVars?: Record<string, string>;
 }
 
 export interface GameProfile {
-	type: string; // "singleplayer" | "multiplayer"
-	titleTemplate: string;
-	modes?: string[]; // list of available game modes
+  type: string; // "singleplayer" | "multiplayer"
+  titleTemplate: string;
+  modes?: string[]; // list of available game modes
 }
 
 export interface Config {
-	folders: string[];
-	youtube_client_id: string;
-	youtube_client_secret: string;
-	youtube_token_json?: string;
-	video_games: Record<string, string>;
-	video_metadata: Record<string, any>;
-	folder_settings: Record<string, FolderConfig>;
-	game_profiles: Record<string, GameProfile>;
-	tag_playlists: Record<string, string>;
-	watch_folder_enabled: boolean;
-	title_separator?: string;
+  folders: string[];
+  youtube_client_id: string;
+  youtube_client_secret: string;
+  youtube_token_json?: string;
+  video_games: Record<string, string>;
+  video_metadata: Record<string, any>;
+  folder_settings: Record<string, FolderConfig>;
+  game_profiles: Record<string, GameProfile>;
+  tag_playlists: Record<string, string>;
+  watch_folder_enabled: boolean;
+  title_separator?: string;
 }
 
 export interface YTVideo {
@@ -50,38 +50,40 @@ export interface YTVideo {
   localFile?: string;
   playlistTitle?: string;
   episode?: number;
-  monetizationStatus?: "monetized" | "limited" | "demonetized" | "unknown" | string;
+  monetizationStatus?:
+    "monetized" | "limited" | "demonetized" | "unknown" | string;
   rejectionReason?: string;
   statusIssues?: string[];
 }
 
 export interface YTPlaylist {
- id: string;
- title: string;
- description: string;
- videoCount: number;
- thumbnailUrl: string;
- publishedAt: string;
- privacy?: string;
- duplicateCount?: number;
+  id: string;
+  title: string;
+  description: string;
+  videoCount: number;
+  thumbnailUrl: string;
+  publishedAt: string;
+  privacy?: string;
+  duplicateCount?: number;
 }
 
 export interface VideoGroup {
- label: string;
- dateKey: string;
- videos: VideoFile[];
+  label: string;
+  dateKey: string;
+  videos: VideoFile[];
 }
 
 export interface VideoGroupYT {
- label: string;
- dateKey: string;
- videos: YTVideo[];
+  label: string;
+  dateKey: string;
+  videos: YTVideo[];
 }
 
 export interface FolderConfig {
- recursive: boolean;
- max_duration_secs: number;
+  recursive: boolean;
+  max_duration_secs: number;
 }
 
-export type ViewMode = "grid" | "player" | "channel" | "queue" | "stats" | "steam";
+export type ViewMode =
+  "grid" | "player" | "channel" | "queue" | "stats" | "steam";
 export type PlaylistPrivacy = "public" | "unlisted" | "private";
