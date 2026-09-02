@@ -42,6 +42,10 @@ export function GetAPILogs(arg1) {
   return window['go']['backend']['App']['GetAPILogs'](arg1);
 }
 
+export function GetAllGameTags() {
+  return window['go']['backend']['App']['GetAllGameTags']();
+}
+
 export function GetAutoLaunch() {
   return window['go']['backend']['App']['GetAutoLaunch']();
 }
@@ -304,6 +308,10 @@ export function UpdatePlaylistVisibility(arg1, arg2) {
 
 export function UpdatePlaylistsVisibility(arg1, arg2) {
   return window['go']['backend']['App']['UpdatePlaylistsVisibility'](arg1, arg2);
+}
+
+export function UpdateVideoMonetizationStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpdateVideoMonetizationStatus'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
