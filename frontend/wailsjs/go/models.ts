@@ -455,6 +455,10 @@ export namespace backend {
 	    privacy: string;
 	    localFile?: string;
 	    playlistTitle?: string;
+	    episode?: number;
+	    monetizationStatus?: string;
+	    rejectionReason?: string;
+	    statusIssues?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new YTVideo(source);
@@ -473,6 +477,10 @@ export namespace backend {
 	        this.privacy = source["privacy"];
 	        this.localFile = source["localFile"];
 	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.monetizationStatus = source["monetizationStatus"];
+	        this.rejectionReason = source["rejectionReason"];
+	        this.statusIssues = source["statusIssues"];
 	    }
 	}
 	export class YouTubeChannel {

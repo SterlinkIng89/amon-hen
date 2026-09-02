@@ -287,7 +287,7 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 	return a.saveConfig()
 }
 
-// SetTagPlaylist links a game tag to a YouTube playlist ID
+// SetTagPlaylist links a game tag to a YouTube playlist ID and retroactively updates existing videos.
 func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
@@ -298,7 +298,86 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 	}
 	a.config.TagPlaylists[tag] = playlistID
 	a.configMu.Unlock()
-	return a.saveConfig()
+	
+	err := a.saveConfig()
+	if err != nil {
+		return err
+	}
+
+	// Retroactively update existing videos
+	// Run in goroutine to not block UI
+	go func() {
+		// Find all videos with this tag
+		a.db.mu.Lock()
+		rows, dbErr := a.db.conn.Query("SELECT id FROM yt_videos WHERE game_tag = ?", tag)
+		if dbErr != nil {
+			a.db.mu.Unlock()
+			appLog("[SetTagPlaylist] DB error finding videos: %v", dbErr)
+			return
+		}
+		
+		var videoIDs []string
+		for rows.Next() {
+			var vid string
+			if err := rows.Scan(&vid); err == nil {
+				videoIDs = append(videoIDs, vid)
+			}
+		}
+		rows.Close()
+		a.db.mu.Unlock()
+
+		if len(videoIDs) > 0 {
+			appLog("[SetTagPlaylist] Retroactively adding %d videos to playlist %s", len(videoIDs), playlistID)
+			for _, vid := range videoIDs {
+				var exists int
+				a.db.mu.Lock()
+				a.db.conn.QueryRow("SELECT 1 FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid).Scan(&exists)
+				a.db.mu.Unlock()
+				
+				if exists == 0 {
+					_ = a.AddVideoToPlaylist(playlistID, vid)
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// GetAllGameTags returns a list of unique game tags from both configuration and database.
+func (a *App) GetAllGameTags() ([]string, error) {
+	tagSet := make(map[string]bool)
+
+	// From Config
+	a.configMu.Lock()
+	for tag := range a.config.TagPlaylists {
+		if tag != "" {
+			tagSet[tag] = true
+		}
+	}
+	a.configMu.Unlock()
+
+	// From DB
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+	rows, err := a.db.conn.Query("SELECT DISTINCT game_tag FROM yt_videos WHERE game_tag IS NOT NULL AND game_tag != ''")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err == nil && t != "" {
+			tagSet[t] = true
+		}
+	}
+
+	var result []string
+	for t := range tagSet {
+		result = append(result, t)
+	}
+	return result, nil
 }
 
 // SaveVideoMetadata updates all metadata for a specific video and saves the config

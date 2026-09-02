@@ -25,6 +25,8 @@ export function DisconnectSteam():Promise<void>;
 
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
 
+export function GetAllGameTags():Promise<Array<string>>;
+
 export function GetAutoLaunch():Promise<boolean>;
 
 export function GetCacheDir():Promise<string>;
@@ -156,6 +158,8 @@ export function UnlinkLocalVideo(arg1:string):Promise<void>;
 export function UpdatePlaylistVisibility(arg1:string,arg2:string):Promise<void>;
 
 export function UpdatePlaylistsVisibility(arg1:Array<string>,arg2:string):Promise<number>;
+
+export function UpdateVideoMonetizationStatus(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
