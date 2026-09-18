@@ -4,6 +4,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import TagPlaylistModal from "../TagPlaylistModal";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
 import { useAppStore } from "../../../store/useAppStore";
+import { backend } from "../../../../wailsjs/go/models";
+
+const mockPlaylist = (id: string, title: string): backend.YTPlaylist => ({
+  id,
+  title,
+  description: "",
+  videoCount: 0,
+  thumbnailUrl: "",
+  publishedAt: "2026-01-01",
+  privacy: "public",
+  duplicateCount: 0,
+});
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
@@ -95,6 +107,113 @@ describe("TagPlaylistModal", () => {
         "",
         "private",
       );
+    });
+  });
+
+  it("should sort playlists alphabetically A-Z in existing playlist select", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-z", "Zelda Highlights"),
+      mockPlaylist("pl-a", "Apex Legends"),
+      mockPlaylist("pl-m", "Mario Kart"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Gaming" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      const options = screen.getAllByRole("option");
+      const optionTexts = options.map((opt) => opt.textContent);
+      expect(optionTexts).toEqual([
+        "Select a playlist...",
+        "Apex Legends",
+        "Mario Kart",
+        "Zelda Highlights",
+      ]);
+    });
+  });
+
+  it("should filter playlists in real-time as user types in the search input", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-1", "Apex Legends"),
+      mockPlaylist("pl-2", "Mario Kart"),
+      mockPlaylist("pl-3", "Mario Party"),
+      mockPlaylist("pl-4", "Zelda Highlights"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Mario" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText("Search playlists");
+    fireEvent.change(searchInput, { target: { value: "mario" } });
+
+    const options = screen.getAllByRole("option").map((opt) => opt.textContent);
+    expect(options).toEqual([
+      "Select a playlist...",
+      "Mario Kart",
+      "Mario Party",
+    ]);
+    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zelda Highlights")).not.toBeInTheDocument();
+  });
+
+  it("should show empty state when search query matches no playlists and clear restores list", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-1", "Apex Legends"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Test" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText("Search playlists");
+    fireEvent.change(searchInput, { target: { value: "Unknown Game" } });
+
+    expect(screen.getByText("No playlists found...")).toBeInTheDocument();
+    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
+
+    const clearBtn = screen.getByLabelText("Clear playlist search");
+    fireEvent.click(clearBtn);
+
+    expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+  });
+
+  it("should link selected existing playlist when user selects one and clicks link", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-100", "Valorant Ranked"),
+    ]);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Valorant Ranked")).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText("Select playlist");
+    fireEvent.change(select, { target: { value: "pl-100" } });
+
+    const linkBtn = screen.getByRole("button", { name: /link selected/i });
+    expect(linkBtn).not.toBeDisabled();
+    fireEvent.click(linkBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-100",
+      );
+      expect(onSaved).toHaveBeenCalled();
     });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   GetChannelPlaylists,
   GetOrCreatePlaylist,
@@ -15,6 +15,7 @@ interface Props {
 
 export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState(tag); // default to tag name
@@ -40,6 +41,27 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
         setIsLoading(false);
       });
   }, []);
+
+  const sortedPlaylists = useMemo(() => {
+    return [...playlists].sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { numeric: true }),
+    );
+  }, [playlists]);
+
+  const filteredPlaylists = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sortedPlaylists;
+    return sortedPlaylists.filter((p) => p.title.toLowerCase().includes(query));
+  }, [sortedPlaylists, searchQuery]);
+
+  useEffect(() => {
+    if (
+      selectedPlaylistId &&
+      !filteredPlaylists.some((p) => p.id === selectedPlaylistId)
+    ) {
+      setSelectedPlaylistId("");
+    }
+  }, [filteredPlaylists, selectedPlaylistId]);
 
   const handleCreateAndLink = async () => {
     if (!newPlaylistTitle.trim()) return;
@@ -67,8 +89,8 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
     try {
       await SetTagPlaylist(tag, selectedPlaylistId);
       onSaved();
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
       setIsCreating(false);
     }
   };
@@ -181,19 +203,79 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 p-3 border border-border-subtle rounded bg-elevated">
-            <label className="text-xs font-bold text-text-secondary">
+          <div className="flex flex-col gap-2 p-3 border border-border-subtle rounded bg-elevated">
+            <label
+              htmlFor="playlist-search-input"
+              className="text-xs font-bold text-text-secondary"
+            >
               Link Existing Playlist
             </label>
+            <div className="relative flex items-center">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="absolute left-2.5 text-text-muted pointer-events-none"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                id="playlist-search-input"
+                className="w-full h-[34px] bg-surface border border-border-subtle rounded-sm pl-8 pr-7 text-xs text-text-primary outline-none focus:border-accent placeholder:text-text-muted"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search playlists..."
+                disabled={isLoading || isCreating}
+                aria-label="Search playlists"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 text-xs text-text-muted hover:text-text-primary p-0.5"
+                  aria-label="Clear playlist search"
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
             <div className="flex gap-2 items-center">
               <select
                 className="flex-1 min-w-0 h-[38px] bg-surface border border-border-subtle rounded-sm px-2 text-sm text-text-primary outline-none focus:border-accent"
                 value={selectedPlaylistId}
                 onChange={(e) => setSelectedPlaylistId(e.target.value)}
-                disabled={isLoading || isCreating}
+                disabled={
+                  isLoading || isCreating || filteredPlaylists.length === 0
+                }
+                aria-label="Select playlist"
               >
-                <option value="">Select a playlist...</option>
-                {playlists.map((p) => (
+                <option value="">
+                  {isLoading
+                    ? "Loading playlists..."
+                    : filteredPlaylists.length === 0
+                      ? "No playlists found..."
+                      : "Select a playlist..."}
+                </option>
+                {filteredPlaylists.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}
                   </option>
