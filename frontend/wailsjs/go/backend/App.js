@@ -22,6 +22,10 @@ export function CreatePlaylist(arg1, arg2, arg3) {
   return window['go']['backend']['App']['CreatePlaylist'](arg1, arg2, arg3);
 }
 
+export function CreateVideoClip(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['CreateVideoClip'](arg1, arg2, arg3, arg4);
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }
@@ -304,6 +308,10 @@ export function UpdatePlaylistVisibility(arg1, arg2) {
 
 export function UpdatePlaylistsVisibility(arg1, arg2) {
   return window['go']['backend']['App']['UpdatePlaylistsVisibility'](arg1, arg2);
+}
+
+export function UpdateVideoMonetizationStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpdateVideoMonetizationStatus'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {

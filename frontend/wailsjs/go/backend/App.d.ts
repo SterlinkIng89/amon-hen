@@ -15,6 +15,8 @@ export function CancelUpload(arg1:string):Promise<void>;
 
 export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function CreateVideoClip(arg1:string,arg2:number,arg3:number,arg4:string):Promise<string>;
+
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function DeleteGameProfile(arg1:string):Promise<void>;
@@ -156,6 +158,8 @@ export function UnlinkLocalVideo(arg1:string):Promise<void>;
 export function UpdatePlaylistVisibility(arg1:string,arg2:string):Promise<void>;
 
 export function UpdatePlaylistsVisibility(arg1:Array<string>,arg2:string):Promise<number>;
+
+export function UpdateVideoMonetizationStatus(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

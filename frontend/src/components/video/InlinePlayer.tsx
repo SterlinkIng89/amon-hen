@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist } from "../../types";
 import { formatSize, formatDuration, generateYouTubeTitle, extractCustomVars, extractOrderedInputVars } from "../../utils/videoUtils";
-import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig, LogFrontendEvent } from "../../../wailsjs/go/backend/App";
+import { UploadToYouTube, SaveVideoMetadata, DeleteFiles, GetChannelPlaylists, GetOrCreatePlaylist, RegenerateThumbnail, UpdateYouTubeVideoMetadata, LoadConfig, LogFrontendEvent, CreateVideoClip } from "../../../wailsjs/go/backend/App";
+import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
@@ -42,6 +43,39 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  useEffect(() => {
  localStorage.setItem(STORAGE_AUTOREPEAT_KEY, String(autoRepeatEnabled));
  }, [autoRepeatEnabled]);
+
+ const [clipMode, setClipMode] = useState(false);
+ const [clipSaving, setClipSaving] = useState(false);
+ const [clipSaveError, setClipSaveError] = useState<string | null>(null);
+ const [clipSaveSuccess, setClipSaveSuccess] = useState<string | null>(null);
+ const [videoDuration, setVideoDuration] = useState(0);
+ const [prevInfoExpanded, setPrevInfoExpanded] = useState<boolean | null>(null);
+
+ const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
+ return localStorage.getItem("player_info_expanded") !== "false";
+ });
+
+ const enterClipMode = () => {
+ if (videoRef.current && videoRef.current.duration) {
+ setVideoDuration(videoRef.current.duration);
+ }
+ setPrevInfoExpanded(isInfoExpanded);
+ setIsInfoExpanded(false);
+ setClipMode(true);
+ setClipSaveError(null);
+ };
+
+ const exitClipMode = () => {
+ setClipMode(false);
+ if (prevInfoExpanded !== null) {
+ setIsInfoExpanded(prevInfoExpanded);
+ setPrevInfoExpanded(null);
+ }
+ };
+
+ useEffect(() => {
+ localStorage.setItem("player_info_expanded", String(isInfoExpanded));
+ }, [isInfoExpanded]);
 
  // Restore saved volume + mute when loading a new video
  useEffect(() => {
@@ -129,6 +163,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") {
  return;
  }
+ if (clipMode) {
+ return; // When in clipMode, ClipTimelineSelector handles its own keyboard shortcuts
+ }
  const el = videoRef.current;
  if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
  if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
@@ -146,7 +183,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  };
  document.addEventListener("keydown", onKey);
  return () => document.removeEventListener("keydown", onKey);
- }, [onPrev, onNext]);
+ }, [onPrev, onNext, clipMode]);
 
  const handleVideoEnded = () => {
  // If auto-repeat is enabled, the `loop` attribute handles looping.
@@ -252,14 +289,6 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  const [regenThumb, setRegenThumb] = useState<string | null>(null);
  const [regenLoading, setRegenLoading] = useState(false);
 
- const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
- return localStorage.getItem("player_info_expanded") !== "false";
- });
-
- useEffect(() => {
- localStorage.setItem("player_info_expanded", String(isInfoExpanded));
- }, [isInfoExpanded]);
-
  const [aspectRatio, setAspectRatio] = useState(window.innerWidth / window.innerHeight);
 
  useEffect(() => {
@@ -319,6 +348,9 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  setInfoSaved(false);
  setConfirmDelete(false);
  setDeleting(false);
+ setClipMode(false);
+ setClipSaveError(null);
+ setClipSaveSuccess(null);
  }, [video.path, video.game, video.name, video.youtubeTitle, video.description, video.privacy, video.playlistId, video.episode, video.event, video.gameMode, gameProfiles]);
 
  // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
@@ -572,6 +604,27 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  onAddToQueue(item);
  };
 
+ const handleClipSave = async (startSec: number, endSec: number, clipTitle: string) => {
+ setClipSaving(true);
+ setClipSaveError(null);
+ setClipSaveSuccess(null);
+ try {
+ const createdPath = await CreateVideoClip(video.path, startSec, endSec, clipTitle);
+ const fileName = createdPath.split(/[\\/]/).pop() || "Clip";
+ setClipSaveSuccess(`Created: ${fileName}`);
+ exitClipMode();
+ if (onTagSaved) {
+ onTagSaved();
+ }
+ setTimeout(() => setClipSaveSuccess(null), 5000);
+ } catch (err: unknown) {
+ const msg = err instanceof Error ? err.message : String(err);
+ setClipSaveError(msg || "Failed to create clip");
+ } finally {
+ setClipSaving(false);
+ }
+ };
+
  const isDirty = 
  tagInput !== (video.game || "") ||
  ytTitle !== (video.youtubeTitle || generateYouTubeTitle(video.name, video.game, video.episode, gameProfiles[video.game || ""], video.event, video.gameMode, video.customVars, video.modTime)) ||
@@ -585,7 +638,35 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  {/* Video */}
  <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-[200px]">
  {!deleting ? (
- <video ref={videoRef} key={video.path} src={src} controls className={`w-full h-full object-contain outline-none ${isWide ? "max-h-full" : "max-h-[75vh]"}`} autoPlay loop={autoRepeatEnabled} onEnded={handleVideoEnded} />
+          <video 
+            ref={videoRef} 
+            key={video.path} 
+            src={src} 
+            controls={!clipMode} 
+            className={`w-full h-full object-contain outline-none ${clipMode ? "cursor-pointer" : ""} ${isWide ? "max-h-full" : clipMode ? "max-h-full" : "max-h-[75vh]"}`} 
+            autoPlay 
+            loop={autoRepeatEnabled && !clipMode} 
+            onEnded={handleVideoEnded}
+            onClick={() => {
+              if (clipMode && videoRef.current) {
+                if (videoRef.current.paused) {
+                  videoRef.current.play().catch(() => {});
+                } else {
+                  videoRef.current.pause();
+                }
+              }
+            }}
+            onLoadedMetadata={() => {
+              if (videoRef.current) {
+                setVideoDuration(videoRef.current.duration);
+              }
+            }}
+            onDurationChange={() => {
+              if (videoRef.current) {
+                setVideoDuration(videoRef.current.duration);
+              }
+            }}
+          />
  ) : (
  <div className="text-white/60">Deleting...</div>
  )}
@@ -605,86 +686,139 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  )}
  </div>
 
- {/* Nav */}
- <div className={`flex items-center px-6 py-3 bg-[#0f0f0f] shrink-0 z-10 relative ${isWide ? "justify-center" : "justify-between"}`}>
- {/* Left: File Info (Only for standard mode) */}
- {!isWide && (
- <div className="flex-1 flex items-center gap-2 overflow-hidden mr-4">
- <span className="font-medium text-sm text-white/90 truncate" title={video.path}>{video.name}</span>
- <span className="text-white/40 shrink-0 text-sm">•</span>
- <span className="text-white/60 text-sm shrink-0">{formatSize(video.size)}</span>
- </div>
+ {/* Clip notification / error banners */}
+ {clipSaveSuccess && (
+   <div className="bg-[#2ba640]/20 border-b border-[#2ba640]/40 px-6 py-2 text-xs text-[#2ba640] flex items-center justify-between animate-fadeIn shrink-0">
+     <div className="flex items-center gap-2">
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+         <polyline points="20 6 9 17 4 12"></polyline>
+       </svg>
+       <span>Clip created successfully! ({clipSaveSuccess})</span>
+     </div>
+     <button onClick={() => setClipSaveSuccess(null)} className="text-[#2ba640]/70 hover:text-[#2ba640]">✕</button>
+   </div>
+ )}
+ {clipSaveError && (
+   <div className="bg-red-500/20 border-b border-red-500/40 px-6 py-2 text-xs text-red-400 flex items-center justify-between animate-fadeIn shrink-0">
+     <div className="flex items-center gap-2">
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+         <circle cx="12" cy="12" r="10"></circle>
+         <line x1="12" y1="8" x2="12" y2="12"></line>
+         <line x1="12" y1="16" x2="12.01" y2="16"></line>
+       </svg>
+       <span>{clipSaveError}</span>
+     </div>
+     <button onClick={() => setClipSaveError(null)} className="text-red-400/70 hover:text-red-400">✕</button>
+   </div>
  )}
 
- {/* Center: Controls */}
- <div className="flex items-center gap-2">
- <button 
- className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${autoRepeatEnabled ? "bg-[#3ea6ff]/20 text-[#3ea6ff]" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
- onClick={() => {
- setAutoRepeatEnabled(!autoRepeatEnabled);
- if (!autoRepeatEnabled) setAutoPlayEnabled(false); // mutually exclusive
- }}
- title={autoRepeatEnabled ? "Auto-repeat is ON" : "Turn on Auto-repeat"}
- >
- <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
- </button>
- <button 
- className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
- onClick={onPrev ?? undefined} 
- disabled={!onPrev} 
- title="Previous (←)"
- >
- <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
- Previous
- </button>
- <button 
- className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
- onClick={onNext ?? undefined} 
- disabled={!onNext} 
- title="Next (→)"
- >
- Next
- <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
- </button>
- <button 
- className={`relative flex items-center h-[26px] w-[46px] rounded-full transition-colors ml-2 ${autoPlayEnabled ? "bg-white" : "bg-white/20 hover:bg-white/30"}`}
- onClick={() => {
- setAutoPlayEnabled(!autoPlayEnabled);
- if (!autoPlayEnabled) setAutoRepeatEnabled(false);
- }}
- title={autoPlayEnabled ? "Autoplay is on" : "Autoplay is off"}
- >
- <div
- className={`absolute w-[20px] h-[20px] rounded-full flex items-center justify-center transition-transform ${autoPlayEnabled ? "translate-x-[22px] bg-black text-white" : "translate-x-[3px] bg-black text-white/70"}`}
- >
- <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="ml-[1.5px]">
- <path d="M8 5v14l11-7z" />
- </svg>
- </div>
- </button>
- </div>
+  {/* Clip Timeline Selector (Outplayed mode) or Nav Bar */}
+  {clipMode ? (
+    <ClipTimelineSelector
+      videoRef={videoRef}
+      videoName={video.name}
+      duration={videoDuration}
+      defaultTitle={`${video.name.replace(/\.[^/.]+$/, "")} - Clip`}
+      isSaving={clipSaving}
+      onClipSave={handleClipSave}
+      onCancel={exitClipMode}
+    />
+  ) : (
+    /* Nav */
+    <div className={`flex items-center px-6 py-3 bg-[#0f0f0f] shrink-0 z-10 relative ${isWide ? "justify-center" : "justify-between"}`}>
+      {/* Left: File Info (Only for standard mode) */}
+      {!isWide && (
+        <div className="flex-1 flex items-center gap-2 overflow-hidden mr-4">
+          <span className="font-medium text-sm text-white/90 truncate" title={video.path}>{video.name}</span>
+          <span className="text-white/40 shrink-0 text-sm">•</span>
+          <span className="text-white/60 text-sm shrink-0">{formatSize(video.size)}</span>
+        </div>
+      )}
 
- {/* Right: Toggle (Only for standard mode) */}
- {!isWide && (
- <div className="flex-1 flex justify-end ml-4">
- <button 
- className="flex items-center gap-2 text-sm font-medium text-white/90 hover:bg-white/10 transition-all px-4 py-2 rounded-full"
- onClick={() => setIsInfoExpanded(!isInfoExpanded)}
- >
- {isInfoExpanded ? "Hide Details" : "Show Details"}
- <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isInfoExpanded ? "rotate-180" : ""}`}>
- <polyline points="6 9 12 15 18 9"></polyline>
- </svg>
- </button>
- </div>
- )}
- </div>
- </div>
+      {/* Center: Controls */}
+      <div className="flex items-center gap-2">
+        <button 
+          className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${autoRepeatEnabled ? "bg-[#3ea6ff]/20 text-[#3ea6ff]" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
+          onClick={() => {
+            setAutoRepeatEnabled(!autoRepeatEnabled);
+            if (!autoRepeatEnabled) setAutoPlayEnabled(false); // mutually exclusive
+          }}
+          title={autoRepeatEnabled ? "Auto-repeat is on" : "Turn on auto-repeat"}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+        </button>
+        <button 
+          className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
+          onClick={onPrev ?? undefined} 
+          disabled={!onPrev} 
+          title="Previous (←)"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
+          Previous
+        </button>
+        <button 
+          className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent" 
+          onClick={onNext ?? undefined} 
+          disabled={!onNext} 
+          title="Next (→)"
+        >
+          Next
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18 14.5 12 6 6v12zm10-12v12h2V6h-2z" /></svg>
+        </button>
+        <button 
+          className={`relative flex items-center h-[26px] w-[46px] rounded-full transition-colors ml-2 ${autoPlayEnabled ? "bg-white" : "bg-white/20 hover:bg-white/30"}`}
+          onClick={() => {
+            setAutoPlayEnabled(!autoPlayEnabled);
+            if (!autoPlayEnabled) setAutoRepeatEnabled(false);
+          }}
+          title={autoPlayEnabled ? "Autoplay is on" : "Autoplay is off"}
+        >
+          <div
+            className={`absolute w-[20px] h-[20px] rounded-full flex items-center justify-center transition-transform ${autoPlayEnabled ? "translate-x-[22px] bg-black text-white" : "translate-x-[3px] bg-black text-white/70"}`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="ml-[1.5px]">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </button>
+        <button 
+          className="px-4 py-2 rounded-full transition-colors flex items-center gap-1.5 text-sm font-medium ml-1 text-white/80 hover:bg-white/10 hover:text-white"
+          onClick={enterClipMode}
+          title="Create a Clip (Scissors)"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="6" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+            <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+            <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+          </svg>
+          Clip
+        </button>
+      </div>
 
- {/* Info & Edit panel */}
- {isWide ? (
- <div className={`bg-[#0f0f0f] border-l border-white/10 shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded ? "w-[420px] 2xl:w-[480px]" : "w-14 items-center py-4"}`}>
- {isInfoExpanded ? (
+      {/* Right: Toggle (Only for standard mode) */}
+      {!isWide && (
+        <div className="flex-1 flex justify-end ml-4">
+          <button 
+            className="flex items-center gap-2 text-sm font-medium text-white/90 hover:bg-white/10 transition-all px-4 py-2 rounded-full"
+            onClick={() => setIsInfoExpanded(!isInfoExpanded)}
+          >
+            {isInfoExpanded ? "Hide Details" : "Show Details"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isInfoExpanded ? "rotate-180" : ""}`}>
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
+  )}
+  </div>
+
+  {/* Info & Edit panel */}
+  {isWide ? (
+  <div className={`bg-[#0f0f0f] border-l border-white/10 shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded && !clipMode ? "w-[420px] 2xl:w-[480px]" : "w-14 items-center py-4"}`}>
+  {isInfoExpanded && !clipMode ? (
  <div className="flex flex-col h-full w-full p-6 gap-6 animate-in fade-in duration-300 text-white">
  {/* Panel Header (Sidebar mode) */}
  <div className="flex items-center gap-4 pb-4 border-b border-white/10 shrink-0">
@@ -955,7 +1089,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  </div>
  ) : (
  // Standard View Bottom Panel
- isInfoExpanded && (
+ isInfoExpanded && !clipMode && (
  <div className="bg-[#0f0f0f] border-t border-white/10 p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300 text-white">
  <div className="flex flex-col gap-5">
  <div className="flex flex-wrap gap-3">
