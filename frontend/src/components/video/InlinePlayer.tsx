@@ -49,6 +49,7 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  const [clipSaveError, setClipSaveError] = useState<string | null>(null);
  const [clipSaveSuccess, setClipSaveSuccess] = useState<string | null>(null);
  const [videoDuration, setVideoDuration] = useState(0);
+ const [clipAnchorTime, setClipAnchorTime] = useState(0);
  const [prevInfoExpanded, setPrevInfoExpanded] = useState<boolean | null>(null);
 
  const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
@@ -56,6 +57,8 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
  });
 
  const enterClipMode = () => {
+ const current = videoRef.current?.currentTime ?? 0;
+ setClipAnchorTime(current);
  if (videoRef.current && videoRef.current.duration) {
  setVideoDuration(videoRef.current.duration);
  }
@@ -712,12 +715,13 @@ export default function InlinePlayer({ video, streamPort, selectedPaths = [], on
    </div>
  )}
 
-  {/* Clip Timeline Selector (Outplayed mode) or Nav Bar */}
+  {/* Clip Timeline Selector or Navigation Bar */}
   {clipMode ? (
     <ClipTimelineSelector
       videoRef={videoRef}
       videoName={video.name}
       duration={videoDuration}
+      anchorTime={clipAnchorTime}
       defaultTitle={`${video.name.replace(/\.[^/.]+$/, "")} - Clip`}
       isSaving={clipSaving}
       onClipSave={handleClipSave}

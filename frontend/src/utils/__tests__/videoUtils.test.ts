@@ -3,6 +3,8 @@ import {
   generateYouTubeTitle,
   getVideoTitleSegments,
   hasUnfilledPlaceholders,
+  formatTimeWithSubseconds,
+  computeInitialClipRange,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -259,6 +261,44 @@ describe("videoUtils - Title generation & placeholder detection", () => {
 
     it("returns false for standard singleplayer video", () => {
       expect(hasUnfilledPlaceholders(sampleVideo)).toBe(false);
+    });
+  });
+
+  describe("formatTimeWithSubseconds", () => {
+    it("formats minutes and seconds under an hour with subseconds", () => {
+      expect(formatTimeWithSubseconds(0)).toBe("00:00.0");
+      expect(formatTimeWithSubseconds(14.5)).toBe("00:14.5");
+      expect(formatTimeWithSubseconds(75.3)).toBe("01:15.3");
+      expect(formatTimeWithSubseconds(3599.9)).toBe("59:59.9");
+    });
+
+    it("formats hours, minutes, and seconds when exceeding 1 hour", () => {
+      expect(formatTimeWithSubseconds(3600)).toBe("1:00:00.0");
+      expect(formatTimeWithSubseconds(3665.4)).toBe("1:01:05.4");
+      expect(formatTimeWithSubseconds(10800.8)).toBe("3:00:00.8");
+    });
+
+    it("handles negative values cleanly by clamping to zero", () => {
+      expect(formatTimeWithSubseconds(-5)).toBe("00:00.0");
+    });
+  });
+
+  describe("computeInitialClipRange", () => {
+    it("returns full range when total duration is 30s or less", () => {
+      expect(computeInitialClipRange(10, 20)).toEqual({ inPoint: 0, outPoint: 20 });
+      expect(computeInitialClipRange(0, 30)).toEqual({ inPoint: 0, outPoint: 30 });
+    });
+
+    it("centers on anchor when within middle of video", () => {
+      expect(computeInitialClipRange(3600, 7200)).toEqual({ inPoint: 3585, outPoint: 3615 });
+    });
+
+    it("clamps to start if anchor is near beginning", () => {
+      expect(computeInitialClipRange(5, 600)).toEqual({ inPoint: 0, outPoint: 30 });
+    });
+
+    it("clamps to end if anchor is near video finish", () => {
+      expect(computeInitialClipRange(595, 600)).toEqual({ inPoint: 570, outPoint: 600 });
     });
   });
 });
