@@ -104,7 +104,7 @@ func (a *App) GetQuotaUsedToday() (int, error) {
 
 	var total int
 	err := a.db.conn.QueryRow(
-		`SELECT COALESCE(SUM(quota_cost), 0) FROM api_logs WHERE ts >= ?`, startOfDay,
+		`SELECT COALESCE(SUM(quota_cost), 0) FROM api_logs WHERE ts >= ? AND success = 1`, startOfDay,
 	).Scan(&total)
 	return total, err
 }

@@ -204,7 +204,9 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 		return nil, err
 	}
 	cfg := a.oauthConfig()
-	tokenSource := cfg.TokenSource(ctx, &token)
+	// Always use context.Background() for TokenSource and NewService so the cached client's
+	// token refresher is never bound to a transient, cancellable request context.
+	tokenSource := cfg.TokenSource(context.Background(), &token)
 
 	// Refresh the token once and persist if it changed
 	newToken, err := tokenSource.Token()
@@ -217,12 +219,19 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 		a.saveConfig()
 	}
 
-	svc, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
+	svc, err := youtube.NewService(context.Background(), option.WithTokenSource(tokenSource))
 	if err != nil {
 		return nil, err
 	}
 	a.ytSvc = svc
 	return svc, nil
+}
+
+// InvalidateYouTubeClient clears the cached YouTube service instance.
+func (a *App) InvalidateYouTubeClient() {
+	a.ytSvcMu.Lock()
+	a.ytSvc = nil
+	a.ytSvcMu.Unlock()
 }
 
 // progressReader wraps an io.Reader and emits upload progress events
@@ -621,7 +630,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 		cancel()
 	}()
 
-	svc, err := a.youtubeClient(ctx)
+	svc, err := a.youtubeClient(context.Background())
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
 		return err
@@ -680,6 +689,9 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 		}
 		
 		errMsg := err.Error()
+		if strings.Contains(errMsg, "token") || (strings.Contains(errMsg, "context canceled") && ctx.Err() == nil) {
+			a.InvalidateYouTubeClient()
+		}
 		if strings.Contains(errMsg, "quotaExceeded") || strings.Contains(errMsg, "RATE_LIMIT_EXCEEDED") {
 			appLog("[Queue] FATAL: YouTube Quota Exceeded while uploading '%s'. Wait 24h.", title)
 			errMsg = "Daily YouTube upload limit reached (~6 videos/day). Please wait 24h or request a quota increase in Google Cloud Console."
