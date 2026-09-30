@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { VideoFile, YTPlaylist } from "../../types";
+import { VideoFile, YTPlaylist, TagPlaylistConfig } from "../../types";
 import {
   formatSize,
   formatDuration,
   generateYouTubeTitle,
   extractCustomVars,
   extractOrderedInputVars,
+  resolveVideoContentType,
 } from "../../utils/videoUtils";
 import {
   UploadToYouTube,
@@ -17,6 +18,7 @@ import {
   UpdateYouTubeVideoMetadata,
   LoadConfig,
   LogFrontendEvent,
+  SetVideoContentType,
 } from "../../../wailsjs/go/backend/App";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useRecentTags } from "../../hooks/useRecentTags";
@@ -28,6 +30,7 @@ import {
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
+import { ContentTypeToggle } from "./ContentTypeToggle";
 import { useAppStore } from "../../store/useAppStore";
 import { PlaylistPrivacy } from "../../types";
 
@@ -243,26 +246,81 @@ export default function InlinePlayer({
   const [playlistCreateError, setPlaylistCreateError] = useState("");
   const [gameProfiles, setGameProfiles] = useState<Record<string, any>>({});
   const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
+  const [tagPlaylistConfigs, setTagPlaylistConfigs] = useState<
+    Record<string, TagPlaylistConfig>
+  >({});
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
     null,
   );
+
+  const effectiveDuration = video.durationSecs || 0;
+  const autoResolvedType: "vod" | "clip" =
+    resolveVideoContentType(effectiveDuration) || "vod";
+
+  const [selectedContentType, setSelectedContentType] = useState<
+    "" | "vod" | "clip"
+  >((video.contentType as "" | "vod" | "clip") || "");
+  const effectiveContentType: "vod" | "clip" =
+    selectedContentType || autoResolvedType;
 
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
         setGameProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
+        setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
       })
       .catch(() => {});
   }, []);
 
   const activeProfile = gameProfiles[tagInput];
 
+  const handleContentTypeToggle = (newType: "" | "vod" | "clip") => {
+    setSelectedContentType(newType);
+    const resolved = newType || autoResolvedType;
+    setYtTitle(
+      generateYouTubeTitle(
+        video.name,
+        tagInput,
+        episodeInput !== "" ? Number(episodeInput) : video.episode,
+        activeProfile,
+        eventInput,
+        gameModeInput,
+        customVarsInput,
+        video.modTime,
+        undefined,
+        resolved,
+      ),
+    );
+
+    if (tagInput) {
+      const tagCfg = tagPlaylistConfigs[tagInput];
+      if (
+        resolved === "clip" &&
+        tagCfg?.clip_playlist_id &&
+        tagCfg.clip_playlist_id !== "none"
+      ) {
+        setPlaylistId(tagCfg.clip_playlist_id);
+        const match = playlists.find((p) => p.id === tagCfg.clip_playlist_id);
+        if (match) setPlaylistSearch(match.title);
+      } else if (resolved === "vod") {
+        const vodId = tagCfg?.vod_playlist_id || tagPlaylists[tagInput];
+        if (vodId && vodId !== "none") {
+          setPlaylistId(vodId);
+          const match = playlists.find((p) => p.id === vodId);
+          if (match) setPlaylistSearch(match.title);
+        }
+      }
+    }
+  };
+
   // Sync form state whenever the video prop itself changes (e.g. after a rescan or
   // when the user navigates to a different video with arrow keys).
   // Without this, ytTitle/tagInput etc. would stay stale from the previous mount.
   useEffect(() => {
     const profile = gameProfiles[video.game || ""];
+    const resolvedType =
+      resolveVideoContentType(video.durationSecs, video.contentType) || "vod";
     if (profile?.type === "multiplayer") {
       setYtTitle(
         generateYouTubeTitle(
@@ -274,6 +332,8 @@ export default function InlinePlayer({
           video.gameMode,
           video.customVars,
           video.modTime,
+          undefined,
+          resolvedType,
         ),
       );
     } else {
@@ -288,13 +348,19 @@ export default function InlinePlayer({
             video.gameMode,
             video.customVars,
             video.modTime,
+            undefined,
+            resolvedType,
           ),
       );
     }
+    setSelectedContentType(
+      (video.contentType as "" | "vod" | "clip") || "",
+    );
     setTagInput(video.game || "");
     setEpisodeInput(video.episode || "");
     setEventInput(video.event || "");
     setGameModeInput(video.gameMode || "");
+    setCustomVarsInput(video.customVars || {});
     setDescription(video.description || "");
     setPrivacy(
       (video.privacy as PlaylistPrivacy) ||
@@ -302,16 +368,22 @@ export default function InlinePlayer({
     );
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
+    setInfoSaved(false);
+    setConfirmDelete(false);
+    setDeleting(false);
   }, [
     video.path,
     video.youtubeTitle,
     video.game,
+    video.name,
     video.description,
     video.privacy,
     video.playlistId,
     video.episode,
     video.event,
     video.gameMode,
+    video.contentType,
+    video.durationSecs,
     gameProfiles,
   ]);
 
@@ -403,6 +475,7 @@ export default function InlinePlayer({
     description,
     privacy,
     playlistId,
+    selectedContentType,
   });
   formSnapshotRef.current = {
     tagInput,
@@ -414,6 +487,7 @@ export default function InlinePlayer({
     description,
     privacy,
     playlistId,
+    selectedContentType,
   };
 
   // Tracks the path this snapshot belongs to. Effect body runs AFTER cleanup,
@@ -441,69 +515,11 @@ export default function InlinePlayer({
         s.gameModeInput,
         s.customVarsInput,
       )
+        .then(() => SetVideoContentType(path, s.selectedContentType))
         .then(() => onTagSaved?.())
         .catch(console.error);
     };
   }, [video.path]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Reset form when video changes
-  useEffect(() => {
-    const profile = gameProfiles[video.game || ""];
-    if (profile?.type === "multiplayer") {
-      setYtTitle(
-        generateYouTubeTitle(
-          video.name,
-          video.game,
-          video.episode,
-          profile,
-          video.event,
-          video.gameMode,
-          video.customVars,
-          video.modTime,
-        ),
-      );
-    } else {
-      setYtTitle(
-        video.youtubeTitle ||
-          generateYouTubeTitle(
-            video.name,
-            video.game,
-            video.episode,
-            profile,
-            video.event,
-            video.gameMode,
-            video.customVars,
-            video.modTime,
-          ),
-      );
-    }
-    setTagInput(video.game || "");
-    setEpisodeInput(video.episode || "");
-    setEventInput(video.event || "");
-    setGameModeInput(video.gameMode || "");
-    setCustomVarsInput(video.customVars || {});
-    setDescription(video.description || "");
-    setPrivacy(
-      (video.privacy as "public" | "unlisted" | "private") || "unlisted",
-    );
-    setPlaylistId(video.playlistId || "");
-    setPlaylistSearch(video.playlistTitle || "");
-    setInfoSaved(false);
-    setConfirmDelete(false);
-    setDeleting(false);
-  }, [
-    video.path,
-    video.game,
-    video.name,
-    video.youtubeTitle,
-    video.description,
-    video.privacy,
-    video.playlistId,
-    video.episode,
-    video.event,
-    video.gameMode,
-    gameProfiles,
-  ]);
 
   // Auto-update YT title when tag changes (if they haven't manually saved a different title yet)
   const handleTagChange = (val: string) => {
@@ -767,6 +783,7 @@ export default function InlinePlayer({
           gameModeInput,
           customVarsInput,
         );
+        await SetVideoContentType(p, selectedContentType);
       }
 
       if (tagInput) addRecentTag(tagInput);
@@ -861,6 +878,7 @@ export default function InlinePlayer({
       gameModeInput,
       customVarsInput,
     ).catch(console.error);
+    await SetVideoContentType(video.path, selectedContentType).catch(console.error);
     onTagSaved?.();
 
     const item: QueueItem = {
@@ -912,6 +930,7 @@ export default function InlinePlayer({
       gameModeInput,
       customVarsInput,
     ).catch(console.error);
+    await SetVideoContentType(video.path, selectedContentType).catch(console.error);
     onTagSaved?.(); // Refresh UI in dashboard
 
     const item: QueueItem = {
@@ -932,6 +951,7 @@ export default function InlinePlayer({
   };
 
   const isDirty =
+    selectedContentType !== (video.contentType || "") ||
     tagInput !== (video.game || "") ||
     ytTitle !==
       (video.youtubeTitle ||
@@ -944,6 +964,8 @@ export default function InlinePlayer({
           video.gameMode,
           video.customVars,
           video.modTime,
+          undefined,
+          effectiveContentType,
         )) ||
     description !== (video.description || "") ||
     privacy !== (video.privacy || "unlisted") ||
@@ -1298,20 +1320,42 @@ export default function InlinePlayer({
                       )}
                     </>
                   ) : (
-                    <div className="flex flex-col gap-2 w-24 shrink-0">
-                      <label className="text-sm font-medium text-white/90">
-                        Episode #
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
-                        value={episodeInput}
-                        onChange={(e) => handleEpisodeChange(e.target.value)}
-                        placeholder="—"
-                      />
-                    </div>
+                    effectiveContentType === "clip" ? (
+                      <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                        <label className="text-sm font-medium text-white/90">
+                          Clip Title
+                        </label>
+                        <FieldInput
+                          fieldKey="event"
+                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                          value={eventInput}
+                          onChange={handleEventChange}
+                          onEnter={handleSaveInfo}
+                          placeholder="Clip name..."
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 w-24 shrink-0">
+                        <label className="text-sm font-medium text-white/90">
+                          Episode #
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
+                          value={episodeInput}
+                          onChange={(e) => handleEpisodeChange(e.target.value)}
+                          placeholder="—"
+                        />
+                      </div>
+                    )
                   )}
+
+                  <ContentTypeToggle
+                    selectedContentType={selectedContentType}
+                    autoResolvedType={autoResolvedType}
+                    onChange={handleContentTypeToggle}
+                  />
                 </div>
                 <div className="flex gap-3">
                   <div className="flex flex-col gap-2 flex-1">
@@ -1792,20 +1836,42 @@ export default function InlinePlayer({
                     )}
                   </>
                 ) : (
-                  <div className="flex flex-col gap-2 w-24 shrink-0">
-                    <label className="text-sm font-medium text-white/90">
-                      Episode #
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
-                      value={episodeInput}
-                      onChange={(e) => handleEpisodeChange(e.target.value)}
-                      placeholder="—"
-                    />
-                  </div>
+                  effectiveContentType === "clip" ? (
+                    <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                      <label className="text-sm font-medium text-white/90">
+                        Clip Title
+                      </label>
+                      <FieldInput
+                        fieldKey="event"
+                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                        value={eventInput}
+                        onChange={handleEventChange}
+                        onEnter={handleSaveInfo}
+                        placeholder="Clip name..."
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 w-24 shrink-0">
+                      <label className="text-sm font-medium text-white/90">
+                        Episode #
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
+                        value={episodeInput}
+                        onChange={(e) => handleEpisodeChange(e.target.value)}
+                        placeholder="—"
+                      />
+                    </div>
+                  )
                 )}
+
+                <ContentTypeToggle
+                  selectedContentType={selectedContentType}
+                  autoResolvedType={autoResolvedType}
+                  onChange={handleContentTypeToggle}
+                />
               </div>
               <div className="flex gap-3">
                 <div className="flex flex-col gap-2 flex-1">

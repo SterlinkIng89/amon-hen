@@ -58,6 +58,19 @@ export function extractDatePart(filename: string, modTime?: number): string {
   }
 }
 
+export function resolveVideoContentType(
+  durationSecs?: number | null,
+  explicitType?: string,
+): "vod" | "clip" | undefined {
+  if (explicitType === "clip" || explicitType === "vod") {
+    return explicitType;
+  }
+  if (durationSecs !== undefined && durationSecs !== null && durationSecs > 0) {
+    return durationSecs < 120 ? "clip" : "vod";
+  }
+  return undefined;
+}
+
 export function generateYouTubeTitle(
   filename: string,
   game?: string,
@@ -67,10 +80,25 @@ export function generateYouTubeTitle(
   gameMode?: string,
   customVars?: Record<string, string>,
   modTime?: number,
+  titleSeparator?: string,
+  contentType?: "vod" | "clip",
 ): string {
   const datePart = extractDatePart(filename, modTime);
+  const sep = titleSeparator || " — ";
 
   if (!game) return datePart;
+
+  if (contentType === "clip") {
+    let clipTitle = event?.trim() || "";
+    if (!clipTitle) {
+      const stem = filename.replace(/\.[^/.]+$/, "");
+      const cleanStem = stem
+        .replace(/(?:^|_|-|\s)\d{4}-\d{2}-\d{2}(?:_|-|\s|$)/, "")
+        .replace(/^[_\-\s]+|[_\-\s]+$/g, "");
+      clipTitle = cleanStem || "Clip";
+    }
+    return `${game}${sep}${datePart}${sep}${clipTitle}`;
+  }
 
   if (profile && profile.type === "multiplayer") {
     let template = profile.titleTemplate || "{event} - {gamemode} - {date}";
@@ -95,9 +123,9 @@ export function generateYouTubeTitle(
     return res;
   }
 
-  const epSuffix = episode && episode > 0 ? ` — ${episode}` : "";
+  const epSuffix = episode && episode > 0 ? `${sep}${episode}` : "";
 
-  return `${game} — ${datePart}${epSuffix}`;
+  return `${game}${sep}${datePart}${epSuffix}`;
 }
 
 export function toLocalDateKey(ms: number) {
