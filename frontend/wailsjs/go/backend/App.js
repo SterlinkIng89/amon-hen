@@ -46,6 +46,10 @@ export function GetAPILogs(arg1) {
   return window['go']['backend']['App']['GetAPILogs'](arg1);
 }
 
+export function GetAllGameTags() {
+  return window['go']['backend']['App']['GetAllGameTags']();
+}
+
 export function GetAutoLaunch() {
   return window['go']['backend']['App']['GetAutoLaunch']();
 }
@@ -142,6 +146,10 @@ export function GetSyncStatus() {
   return window['go']['backend']['App']['GetSyncStatus']();
 }
 
+export function GetTagPlaylistConfig(arg1) {
+  return window['go']['backend']['App']['GetTagPlaylistConfig'](arg1);
+}
+
 export function GetThumbnail(arg1) {
   return window['go']['backend']['App']['GetThumbnail'](arg1);
 }
@@ -176,6 +184,10 @@ export function ImportYouTubeJSON() {
 
 export function InitTestDB(arg1) {
   return window['go']['backend']['App']['InitTestDB'](arg1);
+}
+
+export function InvalidateYouTubeClient() {
+  return window['go']['backend']['App']['InvalidateYouTubeClient']();
 }
 
 export function IsSteamSyncing() {
@@ -254,6 +266,10 @@ export function SetTagPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['SetTagPlaylist'](arg1, arg2);
 }
 
+export function SetTagPlaylistConfig(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['SetTagPlaylistConfig'](arg1, arg2, arg3);
+}
+
 export function SetTitleSeparator(arg1) {
   return window['go']['backend']['App']['SetTitleSeparator'](arg1);
 }
@@ -262,8 +278,16 @@ export function SetTrayUploadProgress(arg1) {
   return window['go']['backend']['App']['SetTrayUploadProgress'](arg1);
 }
 
+export function SetVideoContentType(arg1, arg2) {
+  return window['go']['backend']['App']['SetVideoContentType'](arg1, arg2);
+}
+
 export function SetVideoGames(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['backend']['App']['SetVideoGames'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function SetVideosContentType(arg1, arg2) {
+  return window['go']['backend']['App']['SetVideosContentType'](arg1, arg2);
 }
 
 export function SetVideosPlaylist(arg1, arg2, arg3) {

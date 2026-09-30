@@ -44,7 +44,7 @@ function savePersistedPrefs(state: AppState) {
         filterUploaded: state.filterUploaded,
         selectedIndex: state.selectedIndex,
         defaultPlaylistPrivacy: state.defaultPlaylistPrivacy,
-      })
+      }),
     );
   } catch {}
 }
@@ -63,7 +63,8 @@ let state: AppState = {
   sortMode: (saved.sortMode as SortMode) ?? "date",
   filterUploaded: saved.filterUploaded ?? false,
   selectedIndex: saved.selectedIndex ?? -1,
-  defaultPlaylistPrivacy: (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "public",
+  defaultPlaylistPrivacy:
+    (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "public",
 };
 
 type Listener = () => void;
@@ -73,7 +74,9 @@ function getSnapshot() {
   return state;
 }
 
-function setState(patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>)) {
+function setState(
+  patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>),
+) {
   const incoming = typeof patch === "function" ? patch(state) : patch;
   state = { ...state, ...incoming };
   savePersistedPrefs(state);
@@ -90,7 +93,9 @@ function subscribe(listener: Listener) {
 export function useAppStore() {
   const s = useSyncExternalStore(subscribe, getSnapshot);
 
-  const setQueue = (queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[])) => {
+  const setQueue = (
+    queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[]),
+  ) => {
     setState((prev) => ({
       queue:
         typeof queueOrUpdater === "function"
@@ -103,14 +108,18 @@ export function useAppStore() {
     ...s,
     setQueue,
     addToQueue: (items: QueueItem[]) =>
-      setState((prev) => ({ queue: [...prev.queue, ...items], queueAddedAt: Date.now() })),
+      setState((prev) => ({
+        queue: [...prev.queue, ...items],
+        queueAddedAt: Date.now(),
+      })),
     bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
     bumpQueueDone: () => setState({ queueDoneAt: Date.now() }),
     setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
     setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
     setView: (view: ViewMode) => setState({ view }),
     setSortMode: (sortMode: SortMode) => setState({ sortMode }),
-    setFilterUploaded: (filterUploaded: boolean) => setState({ filterUploaded }),
+    setFilterUploaded: (filterUploaded: boolean) =>
+      setState({ filterUploaded }),
     setSelectedIndex: (selectedIndex: number) => setState({ selectedIndex }),
     setDefaultPlaylistPrivacy: (defaultPlaylistPrivacy: PlaylistPrivacy) =>
       setState({ defaultPlaylistPrivacy }),

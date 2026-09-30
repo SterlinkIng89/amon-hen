@@ -48,9 +48,10 @@ func NewApp() *App {
 // NewTestApp creates an App configured for unit testing with a custom cache directory.
 func NewTestApp(cacheDir string) *App {
 	a := &App{
-		cacheDir: cacheDir,
-		thumbSem: make(chan struct{}, 2),
-		uploads:  make(map[string]context.CancelFunc),
+		cacheDir:   cacheDir,
+		configPath: filepath.Join(cacheDir, "config.json"),
+		thumbSem:   make(chan struct{}, 2),
+		uploads:    make(map[string]context.CancelFunc),
 	}
 	_ = os.MkdirAll(filepath.Join(cacheDir, "thumbs"), 0755)
 	_ = os.MkdirAll(filepath.Join(cacheDir, "previews"), 0755)

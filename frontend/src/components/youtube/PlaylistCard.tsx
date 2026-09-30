@@ -19,7 +19,16 @@ function getPrivacyBadge(rawPrivacy?: string) {
         label: "Private",
         className: "bg-amber-500/10 text-amber-400 border-amber-500/25",
         icon: (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
@@ -30,7 +39,16 @@ function getPrivacyBadge(rawPrivacy?: string) {
         label: "Unlisted",
         className: "bg-sky-500/10 text-sky-400 border-sky-500/25",
         icon: (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
@@ -41,7 +59,16 @@ function getPrivacyBadge(rawPrivacy?: string) {
         label: "Public",
         className: "bg-green-500/10 text-green-400 border-green-500/25",
         icon: (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -119,25 +146,41 @@ export default function PlaylistCard({
         </div>
 
         {/* Warning panel */}
-        <div className={`flex flex-col flex-1 justify-center min-w-0 ${isList ? "px-4 py-3" : "p-4"} gap-3`}>
+        <div
+          className={`flex flex-col flex-1 justify-center min-w-0 ${isList ? "px-4 py-3" : "p-4"} gap-3`}
+        >
           {/* Warning header */}
           <div className="flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-red-400 shrink-0">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="text-red-400 shrink-0"
+            >
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
             </svg>
-            <span className="text-xs font-bold text-red-400">Delete from YouTube?</span>
+            <span className="text-xs font-bold text-red-400">
+              Delete from YouTube?
+            </span>
           </div>
 
           {/* Warning body */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-text-primary leading-snug line-clamp-2">{playlist.title}</span>
+            <span className="text-[11px] font-bold text-text-primary leading-snug line-clamp-2">
+              {playlist.title}
+            </span>
             <span className="text-[10px] text-text-muted leading-relaxed">
-              This will <span className="text-red-400 font-bold">permanently delete</span> the playlist
-              and its {playlist.videoCount} video link{playlist.videoCount !== 1 ? "s" : ""} from YouTube.
-              Videos themselves are not deleted.
+              This will{" "}
+              <span className="text-red-400 font-bold">permanently delete</span>{" "}
+              the playlist and its {playlist.videoCount} video link
+              {playlist.videoCount !== 1 ? "s" : ""} from YouTube. Videos
+              themselves are not deleted.
             </span>
             {error && (
-              <span className="text-[10px] text-red-400 font-medium mt-0.5">{error}</span>
+              <span className="text-[10px] text-red-400 font-medium mt-0.5">
+                {error}
+              </span>
             )}
           </div>
 
@@ -153,7 +196,9 @@ export default function PlaylistCard({
                   <div className="w-2.5 h-2.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                   Deleting...
                 </span>
-              ) : "Delete"}
+              ) : (
+                "Delete"
+              )}
             </button>
             <button
               className="flex-1 py-1.5 rounded-md text-[11px] font-bold bg-elevated border border-border-subtle text-text-secondary hover:text-text-primary transition-colors"
@@ -193,10 +238,23 @@ export default function PlaylistCard({
             }
           }}
         >
-          <div className={`w-5 h-5 rounded border shadow-sm flex items-center justify-center transition-colors ${
-            multiSelected ? "bg-accent border-accent text-white" : "bg-black/40 border-white/40 text-transparent hover:border-white/80 backdrop-blur-sm"
-          }`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+          <div
+            className={`w-5 h-5 rounded border shadow-sm flex items-center justify-center transition-colors ${
+              multiSelected
+                ? "bg-accent border-accent text-white"
+                : "bg-black/40 border-white/40 text-transparent hover:border-white/80 backdrop-blur-sm"
+            }`}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </div>
@@ -270,7 +328,10 @@ export default function PlaylistCard({
       <div
         className={`flex flex-col flex-1 min-w-0 ${isList ? "px-3 py-2 justify-between" : "p-3 pb-2.5 gap-2"}`}
       >
-        <div data-testid="playlist-card-header" className="flex flex-col gap-1.5 min-w-0">
+        <div
+          data-testid="playlist-card-header"
+          className="flex flex-col gap-1.5 min-w-0"
+        >
           <h3
             className={`font-semibold text-text-primary line-clamp-2 leading-tight ${isList ? "text-xs" : "text-[13px] min-h-[32px]"}`}
             title={playlist.title}
@@ -279,24 +340,39 @@ export default function PlaylistCard({
           </h3>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}>
+            <span
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${badge.className}`}
+            >
               {badge.icon}
               <span>{badge.label}</span>
             </span>
 
-            {playlist.duplicateCount !== undefined && playlist.duplicateCount > 0 && (
-              <span
-                data-testid="duplicate-badge"
-                title={`${playlist.duplicateCount} duplicate video${playlist.duplicateCount !== 1 ? "s" : ""} detected in playlist`}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25"
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                <span>{playlist.duplicateCount} duplicate{playlist.duplicateCount !== 1 ? "s" : ""}</span>
-              </span>
-            )}
+            {playlist.duplicateCount !== undefined &&
+              playlist.duplicateCount > 0 && (
+                <span
+                  data-testid="duplicate-badge"
+                  title={`${playlist.duplicateCount} duplicate video${playlist.duplicateCount !== 1 ? "s" : ""} detected in playlist`}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <span>
+                    {playlist.duplicateCount} duplicate
+                    {playlist.duplicateCount !== 1 ? "s" : ""}
+                  </span>
+                </span>
+              )}
           </div>
         </div>
 
@@ -305,11 +381,11 @@ export default function PlaylistCard({
           className={`flex items-center justify-between text-text-secondary ${isList ? "text-[10px]" : "text-[11px] mt-auto"}`}
         >
           <span className="text-[10px] text-text-muted">
-            {playlist.videoCount} {playlist.videoCount === 1 ? "video" : "videos"}
+            {playlist.videoCount}{" "}
+            {playlist.videoCount === 1 ? "video" : "videos"}
           </span>
         </div>
       </div>
     </div>
   );
 }
-

@@ -11,7 +11,9 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   SaveVideoMetadata: vi.fn().mockResolvedValue(undefined),
   SyncRecentVideos: vi.fn().mockResolvedValue(undefined),
   UploadToYouTube: vi.fn().mockResolvedValue(undefined),
-  LoadConfig: vi.fn().mockResolvedValue({ folders: ["/test"], game_profiles: {} }),
+  LoadConfig: vi
+    .fn()
+    .mockResolvedValue({ folders: ["/test"], game_profiles: {} }),
   GetVideosFromFolders: vi.fn().mockResolvedValue([]),
   AddFolder: vi.fn().mockResolvedValue(""),
   RemoveFolder: vi.fn().mockResolvedValue(undefined),
@@ -28,8 +30,20 @@ vi.mock("../../../wailsjs/runtime/runtime", () => ({
 vi.mock("../../hooks/useVideoLibrary", () => ({
   useVideoLibrary: () => ({
     videos: [
-      { path: "/test/v1.mp4", name: "v1.mp4", size: 1024, modTime: 1000, folder: "/test" },
-      { path: "/test/v2.mp4", name: "v2.mp4", size: 2048, modTime: 2000, folder: "/test" },
+      {
+        path: "/test/v1.mp4",
+        name: "v1.mp4",
+        size: 1024,
+        modTime: 1000,
+        folder: "/test",
+      },
+      {
+        path: "/test/v2.mp4",
+        name: "v2.mp4",
+        size: 2048,
+        modTime: 2000,
+        folder: "/test",
+      },
     ],
     folders: ["/test"],
     activeFolders: [],
@@ -56,12 +70,13 @@ vi.mock("../../components/layout/AppHeader", () => ({
 }));
 
 vi.mock("../../components/video/VideoGrid", () => ({
-  default: ({ onOpenVideo }: { onOpenVideo: (idx: number, e: React.MouseEvent) => void }) => (
+  default: ({
+    onOpenVideo,
+  }: {
+    onOpenVideo: (idx: number, e: React.MouseEvent) => void;
+  }) => (
     <div data-testid="video-grid">
-      <button
-        data-testid="select-video-0"
-        onClick={(e) => onOpenVideo(0, e)}
-      >
+      <button data-testid="select-video-0" onClick={(e) => onOpenVideo(0, e)}>
         Select Video 0
       </button>
     </div>
@@ -150,4 +165,3 @@ describe("Dashboard Bulk Selection Navigation", () => {
     expect(screen.queryByTestId("bulk-action-bar")).not.toBeInTheDocument();
   });
 });
-

@@ -24,10 +24,12 @@ type VideoFile struct {
 	YouTubeID     string `json:"youtubeId,omitempty"`
 	PlaylistID    string `json:"playlistId,omitempty"`
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
-	Episode       int    `json:"episode"`
+	Episode       int               `json:"episode"`
+	DurationSecs  int               `json:"durationSecs,omitempty"`
 	Event         string            `json:"event,omitempty"`
 	GameMode      string            `json:"gameMode,omitempty"`
 	CustomVars    map[string]string `json:"customVars,omitempty"`
+	ContentType   string            `json:"contentType,omitempty"`
 }
 
 // generateYouTubeTitle builds the suggested upload title from video metadata and game profiles.
@@ -56,6 +58,22 @@ func (a *App) generateYouTubeTitle(video VideoFile) string {
 
 	if game == "" {
 		return dateStr
+	}
+
+	sep := a.titleSep()
+
+	if video.ContentType == "clip" {
+		clipTitle := video.Event
+		if clipTitle == "" {
+			cleanStem := strings.TrimSpace(re.ReplaceAllString(stem, ""))
+			cleanStem = strings.Trim(cleanStem, "_- ")
+			if cleanStem != "" {
+				clipTitle = cleanStem
+			} else {
+				clipTitle = "Clip"
+			}
+		}
+		return fmt.Sprintf("%s%s%s%s%s", game, sep, dateStr, sep, clipTitle)
 	}
 
 	if hasProfile && profile.Type == "multiplayer" {
@@ -87,7 +105,6 @@ func (a *App) generateYouTubeTitle(video VideoFile) string {
 		return res
 	}
 
-	sep := a.titleSep()
 	epSuffix := ""
 	if episode > 0 {
 		epSuffix = fmt.Sprintf("%s%d", sep, episode)
@@ -194,15 +211,10 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			meta := a.config.VideoMetadata[path]
 			a.configMu.RUnlock()
 
-			if fSettings.MaxDurationSecs > 0 {
-				if meta.DurationSecs == 0 {
-					dur, err := a.GetVideoDuration(path)
-					if err == nil && dur > 0 {
-						meta.DurationSecs = int(dur)
-					} else {
-						meta.DurationSecs = 999999
-					}
-					
+			if meta.DurationSecs == 0 {
+				dur, err := a.GetVideoDuration(path)
+				if err == nil && dur > 0 {
+					meta.DurationSecs = int(dur)
 					a.configMu.Lock()
 					if a.config.VideoMetadata == nil {
 						a.config.VideoMetadata = make(map[string]VideoMeta)
@@ -211,8 +223,19 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 					configChanged = true
 					a.configMu.Unlock()
 				}
-				if meta.DurationSecs > fSettings.MaxDurationSecs {
-					return nil
+			}
+
+			if fSettings.MaxDurationSecs > 0 && meta.DurationSecs > fSettings.MaxDurationSecs {
+				return nil
+			}
+
+			cType := a.resolveContentType(meta, path)
+
+			resolvedPlId := meta.PlaylistID
+			if meta.Game != "" && resolvedPlId == "" {
+				tagPl := a.resolveTagPlaylist(meta.Game, cType)
+				if tagPl != "" && tagPl != "none" {
+					resolvedPlId = tagPl
 				}
 			}
 
@@ -227,17 +250,19 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				Description:  meta.Description,
 				Privacy:      meta.Privacy,
 				YouTubeID:    meta.YouTubeID,
-				PlaylistID:   meta.PlaylistID,
+				PlaylistID:   resolvedPlId,
 				PlaylistTitle: func() string {
 					if t := pTitleMap[meta.YouTubeID]; t != "" {
 						return t
 					}
 					return meta.PlaylistTitle
 				}(),
-				Episode:    meta.Episode,
-				Event:      meta.Event,
-				GameMode:   meta.GameMode,
-				CustomVars: meta.CustomVars,
+				Episode:      meta.Episode,
+				DurationSecs: meta.DurationSecs,
+				Event:        meta.Event,
+				GameMode:     meta.GameMode,
+				CustomVars:   meta.CustomVars,
+				ContentType:  cType,
 			})
 
 			vIdx := len(videos) - 1
@@ -283,7 +308,7 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 	//                    This preserves the original behavior for series in progress.
 	hasLocalAnchor := make(map[string]bool)
 	for i := range videos {
-		if videos[i].Game != "" && videos[i].Episode > 0 {
+		if videos[i].Game != "" && videos[i].Episode > 0 && videos[i].ContentType != "clip" {
 			hasLocalAnchor[videos[i].Game] = true
 		}
 	}
@@ -312,7 +337,10 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 
 		profile, hasProfile := a.config.GameProfiles[game]
-		if hasProfile && profile.Type == "multiplayer" {
+		if videos[i].ContentType == "clip" {
+			// Clips never use sequential episode numbers.
+			videos[i].Episode = 0
+		} else if hasProfile && profile.Type == "multiplayer" {
 			// Multiplayer series never use sequential episode numbers.
 			videos[i].Episode = 0
 		} else if videos[i].Episode > 0 {

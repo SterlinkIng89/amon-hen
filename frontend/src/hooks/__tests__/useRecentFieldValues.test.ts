@@ -34,7 +34,10 @@ describe("useRecentFieldValues", () => {
       await Promise.resolve();
     });
 
-    expect(result.current.getRecentValues("event")).toEqual(["Quadra Kill", "Ace"]);
+    expect(result.current.getRecentValues("event")).toEqual([
+      "Quadra Kill",
+      "Ace",
+    ]);
     expect(result.current.getRecentValues("nonexistent")).toEqual([]);
   });
 
@@ -50,11 +53,15 @@ describe("useRecentFieldValues", () => {
       await Promise.resolve();
     });
 
-    expect(result.current.getRecentValues("event")).toEqual(["Pentakill", "Quadra Kill", "Ace"]);
+    expect(result.current.getRecentValues("event")).toEqual([
+      "Pentakill",
+      "Quadra Kill",
+      "Ace",
+    ]);
     expect(appBackend.SaveRecentFieldValues).toHaveBeenCalledWith(
       expect.objectContaining({
         event: ["Pentakill", "Quadra Kill", "Ace"],
-      })
+      }),
     );
 
     // Adding existing item reorders it to front
@@ -63,7 +70,11 @@ describe("useRecentFieldValues", () => {
       await Promise.resolve();
     });
 
-    expect(result.current.getRecentValues("event")).toEqual(["Ace", "Pentakill", "Quadra Kill"]);
+    expect(result.current.getRecentValues("event")).toEqual([
+      "Ace",
+      "Pentakill",
+      "Quadra Kill",
+    ]);
   });
 
   it("removes a recent value from the specified fieldKey", async () => {
@@ -82,7 +93,7 @@ describe("useRecentFieldValues", () => {
     expect(appBackend.SaveRecentFieldValues).toHaveBeenCalledWith(
       expect.objectContaining({
         event: ["Ace"],
-      })
+      }),
     );
   });
 });

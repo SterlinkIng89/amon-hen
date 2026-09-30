@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { GetChannelAnalytics, GetSteamAppID } from "../../../wailsjs/go/backend/App";
+import {
+  GetChannelAnalytics,
+  GetSteamAppID,
+} from "../../../wailsjs/go/backend/App";
 import { extractTitleDate } from "../../utils/videoUtils";
 
 interface HistoricalVideo {
@@ -20,17 +23,17 @@ function parseDurationToHours(isoOrSecs: string): number {
     const h = parseInt(match[1] || "0", 10);
     const m = parseInt(match[2] || "0", 10);
     const s = parseInt(match[3] || "0", 10);
-    return h + (m / 60) + (s / 3600);
+    return h + m / 60 + s / 3600;
   }
 
   // 2. Standard timestamp HH:MM:SS or MM:SS
   if (str.includes(":")) {
-    const parts = str.split(":").map(p => parseFloat(p));
-    if (parts.length === 3 && parts.every(n => !isNaN(n))) {
-      return parts[0] + (parts[1] / 60) + (parts[2] / 3600);
+    const parts = str.split(":").map((p) => parseFloat(p));
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      return parts[0] + parts[1] / 60 + parts[2] / 3600;
     }
-    if (parts.length === 2 && parts.every(n => !isNaN(n))) {
-      return (parts[0] / 60) + (parts[1] / 3600);
+    if (parts.length === 2 && parts.every((n) => !isNaN(n))) {
+      return parts[0] / 60 + parts[1] / 3600;
     }
   }
 
@@ -67,7 +70,10 @@ interface MostPlayedGamesProps {
   globalYear?: string;
 }
 
-export default function MostPlayedGames({ filters, globalYear }: MostPlayedGamesProps) {
+export default function MostPlayedGames({
+  filters,
+  globalYear,
+}: MostPlayedGamesProps) {
   const [videos, setVideos] = useState<HistoricalVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -120,9 +126,13 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
       return !excludeWords.some((w: string) => lower.includes(w.toLowerCase()));
     };
 
-    videos.forEach(v => {
+    videos.forEach((v) => {
       const titleDate = extractTitleDate(v.title);
-      const pubDate = titleDate || (v.published && v.published.length >= 10 ? v.published.substring(0, 10) : "");
+      const pubDate =
+        titleDate ||
+        (v.published && v.published.length >= 10
+          ? v.published.substring(0, 10)
+          : "");
 
       if (!pubDate || pubDate.length < 10) return;
       if (!matchesDate(pubDate)) return;
@@ -131,7 +141,7 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
       const g = extractGameName(v.title, v.gameTag);
       if (!g) return;
 
-      const norm = g.toLowerCase().replace(/[\s\-_]+/g, '');
+      const norm = g.toLowerCase().replace(/[\s\-_]+/g, "");
       if (!norm) return;
 
       if (!displayNames[norm]) displayNames[norm] = g;
@@ -145,7 +155,8 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
       yearlyStats[year][norm] = (yearlyStats[year][norm] || 0) + hours;
 
       if (!monthlyStats[monthKey]) monthlyStats[monthKey] = {};
-      monthlyStats[monthKey][norm] = (monthlyStats[monthKey][norm] || 0) + hours;
+      monthlyStats[monthKey][norm] =
+        (monthlyStats[monthKey][norm] || 0) + hours;
     });
 
     const sortGames = (map: Record<string, number>): GameStat[] => {
@@ -158,17 +169,20 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
     const yearlyTotals: Record<string, number> = {};
     const yearlyGames: Record<string, GameStat[]> = {};
 
-    years.forEach(y => {
+    years.forEach((y) => {
       const games = sortGames(yearlyStats[y]);
       yearlyGames[y] = games;
       yearlyTotals[y] = games.reduce((acc, curr) => acc + curr.hours, 0);
     });
 
     // Generate all 12 months for a year so chart looks consistent
-    const monthlyDataByYear: Record<string, { label: string; key: string; total: number }[]> = {};
+    const monthlyDataByYear: Record<
+      string,
+      { label: string; key: string; total: number }[]
+    > = {};
     const monthlyGames: Record<string, GameStat[]> = {};
 
-    years.forEach(y => {
+    years.forEach((y) => {
       monthlyDataByYear[y] = [];
       for (let i = 1; i <= 12; i++) {
         const mStr = i.toString().padStart(2, "0");
@@ -176,10 +190,10 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
         const games = monthlyStats[mKey] ? sortGames(monthlyStats[mKey]) : [];
         monthlyGames[mKey] = games;
         const total = games.reduce((acc, curr) => acc + curr.hours, 0);
-        
+
         const date = new Date(parseInt(y), i - 1, 1);
         const label = date.toLocaleString("en-US", { month: "short" });
-        
+
         monthlyDataByYear[y].push({ label, key: mKey, total });
       }
     });
@@ -189,7 +203,7 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
       yearlyTotals,
       yearlyGames,
       monthlyDataByYear,
-      monthlyGames
+      monthlyGames,
     };
   }, [videos, filters?.value]);
 
@@ -198,26 +212,36 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
     if (stats && stats.years.length > 0 && !selectedYear) {
       const latestYear = stats.years[0];
       setSelectedYear(latestYear);
-      
+
       // Find the most recent active month for that year
       if (!selectedMonthKey) {
         const activeMonths = [...stats.monthlyDataByYear[latestYear]].reverse();
-        const latestActiveMonth = activeMonths.find(m => m.total > 0);
-        setSelectedMonthKey(latestActiveMonth ? latestActiveMonth.key : `${latestYear}-01`);
+        const latestActiveMonth = activeMonths.find((m) => m.total > 0);
+        setSelectedMonthKey(
+          latestActiveMonth ? latestActiveMonth.key : `${latestYear}-01`,
+        );
       }
     }
   }, [stats, selectedYear, selectedMonthKey]);
 
   // Sync with global year from Recording Activity
   useEffect(() => {
-    if (globalYear && globalYear !== "All" && stats?.years.includes(globalYear)) {
+    if (
+      globalYear &&
+      globalYear !== "All" &&
+      stats?.years.includes(globalYear)
+    ) {
       setSelectedYear(globalYear);
       // Auto switch to month view to show details for this year
       setViewMode("month");
       // Pick the latest active month for the newly synced year
-      const activeMonths = [...(stats.monthlyDataByYear[globalYear] || [])].reverse();
-      const latestActiveMonth = activeMonths.find(m => m.total > 0);
-      setSelectedMonthKey(latestActiveMonth ? latestActiveMonth.key : `${globalYear}-01`);
+      const activeMonths = [
+        ...(stats.monthlyDataByYear[globalYear] || []),
+      ].reverse();
+      const latestActiveMonth = activeMonths.find((m) => m.total > 0);
+      setSelectedMonthKey(
+        latestActiveMonth ? latestActiveMonth.key : `${globalYear}-01`,
+      );
     }
   }, [globalYear, stats]);
 
@@ -236,12 +260,19 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
   let maxChartValue = 0;
 
   if (viewMode === "year") {
-    chartData = stats.years.slice().reverse().map(y => ({ label: y, key: y, value: stats.yearlyTotals[y] }));
+    chartData = stats.years
+      .slice()
+      .reverse()
+      .map((y) => ({ label: y, key: y, value: stats.yearlyTotals[y] }));
   } else {
-    chartData = (stats.monthlyDataByYear[selectedYear] || []).map(m => ({ label: m.label, key: m.key, value: m.total }));
+    chartData = (stats.monthlyDataByYear[selectedYear] || []).map((m) => ({
+      label: m.label,
+      key: m.key,
+      value: m.total,
+    }));
   }
-  
-  maxChartValue = Math.max(...chartData.map(d => d.value), 1);
+
+  maxChartValue = Math.max(...chartData.map((d) => d.value), 1);
 
   // List Data preparation
   let listTitle = "";
@@ -262,12 +293,15 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
   return (
     <div className="px-5 pb-5 flex flex-col gap-4 animate-fadeIn">
       <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-xl">
-        
         {/* Header & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <h2 className="text-base font-bold text-text-primary tracking-tight">Playtime by Game</h2>
-            <span className="text-xs text-text-muted">Total hours based on video duration</span>
+            <h2 className="text-base font-bold text-text-primary tracking-tight">
+              Playtime by Game
+            </h2>
+            <span className="text-xs text-text-muted">
+              Total hours based on video duration
+            </span>
           </div>
 
           <div className="flex items-center gap-2 bg-surface/50 p-1 rounded-lg border border-border-subtle">
@@ -289,7 +323,7 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
         {/* Year Selector (Only visible in Month view) */}
         {viewMode === "month" && (
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {stats.years.map(y => (
+            {stats.years.map((y) => (
               <button
                 key={y}
                 onClick={() => {
@@ -307,12 +341,16 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
         {/* Interactive Bar Chart */}
         <div className="h-32 flex items-end gap-1 sm:gap-2 mt-2">
           {chartData.map((d) => {
-            const isSelected = viewMode === "year" ? d.key === selectedYear : d.key === selectedMonthKey;
-            const heightPercent = d.value > 0 ? Math.max((d.value / maxChartValue) * 100, 4) : 0;
-            
+            const isSelected =
+              viewMode === "year"
+                ? d.key === selectedYear
+                : d.key === selectedMonthKey;
+            const heightPercent =
+              d.value > 0 ? Math.max((d.value / maxChartValue) * 100, 4) : 0;
+
             return (
-              <div 
-                key={d.key} 
+              <div
+                key={d.key}
                 className="flex-1 flex flex-col justify-end items-center gap-2 group cursor-pointer h-full"
                 onClick={() => {
                   if (viewMode === "year") setSelectedYear(d.key);
@@ -325,12 +363,14 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
                     {d.value.toFixed(1)} hrs
                   </div>
                   {/* Bar */}
-                  <div 
+                  <div
                     className={`w-full max-w-[40px] rounded-t-sm transition-all duration-500 ease-out ${isSelected ? "bg-accent " : "bg-border-subtle group-hover:bg-text-muted"}`}
                     style={{ height: `${heightPercent}%` }}
                   />
                 </div>
-                <span className={`text-[10px] font-bold tracking-wider ${isSelected ? "text-text-primary" : "text-text-muted group-hover:text-text-secondary"}`}>
+                <span
+                  className={`text-[10px] font-bold tracking-wider ${isSelected ? "text-text-primary" : "text-text-muted group-hover:text-text-secondary"}`}
+                >
                   {d.label}
                 </span>
               </div>
@@ -342,7 +382,6 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
 
         {/* Leaderboard & Highlight 2-Column Container */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-start">
-          
           {/* Left Column: Top Game Highlight (fixed compact card) */}
           <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-3">
             <h3 className="text-xs font-bold text-text-secondary">
@@ -359,8 +398,10 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
 
           {/* Right Column: Leaderboard List (constrained width to prevent excessive stretching) */}
           <div className="flex-1 w-full max-w-3xl flex flex-col gap-3">
-            <h3 className="text-xs font-bold text-text-secondary">{listTitle}</h3>
-            
+            <h3 className="text-xs font-bold text-text-secondary">
+              {listTitle}
+            </h3>
+
             <div className="flex flex-col gap-2.5">
               {gamesToDisplay.length === 0 ? (
                 <div className="py-8 flex flex-col items-center justify-center gap-2 text-text-muted">
@@ -368,14 +409,18 @@ export default function MostPlayedGames({ filters, globalYear }: MostPlayedGames
                 </div>
               ) : (
                 gamesToDisplay.map((g, idx) => (
-                  <GameRow key={g.game} game={g.game} hours={g.hours} index={idx} maxGameHours={maxGameHours} />
+                  <GameRow
+                    key={g.game}
+                    game={g.game}
+                    hours={g.hours}
+                    index={idx}
+                    maxGameHours={maxGameHours}
+                  />
                 ))
               )}
             </div>
           </div>
-
         </div>
-
       </div>
     </div>
   );
@@ -390,50 +435,70 @@ function useSteamGameData(gameName: string) {
 
   useEffect(() => {
     let mounted = true;
-    GetSteamAppID(gameName).then(async (id: any) => {
-      if (!mounted || !id || id === "NOT_FOUND") return;
-      setAppId(id);
+    GetSteamAppID(gameName)
+      .then(async (id: any) => {
+        if (!mounted || !id || id === "NOT_FOUND") return;
+        setAppId(id);
 
-      // @ts-ignore
-      const goApp = window.go?.backend?.App;
-      if (goApp?.GetSteamGameAssets) {
-        const assets = await goApp.GetSteamGameAssets(id);
-        if (mounted) {
-          if (assets?.heroUrl) setHeroUrl(assets.heroUrl);
-          if (assets?.posterUrl) setPosterUrl(assets.posterUrl);
+        // @ts-ignore
+        const goApp = window.go?.backend?.App;
+        if (goApp?.GetSteamGameAssets) {
+          const assets = await goApp.GetSteamGameAssets(id);
+          if (mounted) {
+            if (assets?.heroUrl) setHeroUrl(assets.heroUrl);
+            if (assets?.posterUrl) setPosterUrl(assets.posterUrl);
+          }
+        } else if (mounted) {
+          setHeroUrl(
+            `https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_hero.jpg`,
+          );
+          setPosterUrl(
+            `https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_600x900_2x.jpg`,
+          );
         }
-      } else if (mounted) {
-        setHeroUrl(`https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_hero.jpg`);
-        setPosterUrl(`https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_600x900_2x.jpg`);
-      }
 
-      if (goApp?.GetSteamGameAchievementPct) {
-        const pct = await goApp.GetSteamGameAchievementPct(id);
-        if (mounted && pct > 0) setAchievementsPct(pct);
-      }
-    }).catch(console.error);
+        if (goApp?.GetSteamGameAchievementPct) {
+          const pct = await goApp.GetSteamGameAchievementPct(id);
+          if (mounted && pct > 0) setAchievementsPct(pct);
+        }
+      })
+      .catch(console.error);
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [gameName]);
 
   return { appId, heroUrl, posterUrl, achievementsPct };
 }
 
-function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: number, index: number, maxGameHours: number }) {
+function GameRow({
+  game,
+  hours,
+  index,
+  maxGameHours,
+}: {
+  game: string;
+  hours: number;
+  index: number;
+  maxGameHours: number;
+}) {
   const { appId, heroUrl } = useSteamGameData(game);
 
   const progressWidth = `${(hours / maxGameHours) * 100}%`;
   const isTop = index === 0;
 
-  const bgImage = heroUrl ? `url('${heroUrl}')` : (appId ? `url('https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg')` : 'none');
+  const bgImage = heroUrl
+    ? `url('${heroUrl}')`
+    : appId
+      ? `url('https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg')`
+      : "none";
 
   return (
-    <div 
-      className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all hover:scale-[1.01] border border-border-subtle hover:border-border-medium z-0 h-[64px] shadow-sm"
-    >
+    <div className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all hover:scale-[1.01] border border-border-subtle hover:border-border-medium z-0 h-[64px] shadow-sm">
       {/* Layer 1: Blurred Color Bleed (Dominant color effect) */}
-      {(heroUrl || appId) ? (
-        <div 
+      {heroUrl || appId ? (
+        <div
           className="absolute inset-0 -z-30 bg-cover bg-center opacity-40 group-hover:opacity-60 blur-xl transition-opacity duration-500 scale-110"
           style={{ backgroundImage: bgImage }}
         />
@@ -446,42 +511,51 @@ function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: nu
 
       {/* Layer 3: Sharp Image on the right half */}
       {(heroUrl || appId) && (
-        <div 
+        <div
           className="absolute inset-y-0 right-0 w-1/2 max-w-[450px] -z-10 bg-cover bg-left opacity-80 group-hover:opacity-100 transition-opacity duration-500"
-          style={{ 
+          style={{
             backgroundImage: bgImage,
-            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 25%)",
-            maskImage: "linear-gradient(to right, transparent 0%, black 25%)"
+            WebkitMaskImage:
+              "linear-gradient(to right, transparent 0%, black 25%)",
+            maskImage: "linear-gradient(to right, transparent 0%, black 25%)",
           }}
         />
       )}
 
       {/* Progress Background Fill */}
-      <div 
+      <div
         className={`absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent/15" : "bg-accent/5 opacity-50 group-hover:opacity-100"}`}
         style={{ width: progressWidth }}
       />
-      
+
       {/* Thicker Progress Bar at the bottom */}
-      <div 
+      <div
         className={`absolute bottom-0 left-0 h-[4px] -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent " : "bg-accent/60 group-hover:bg-accent "}`}
         style={{ width: progressWidth }}
       />
-      
+
       <div className="flex items-center gap-3 z-10 w-2/3">
-        <span className={`w-5 shrink-0 text-center text-base font-black ${isTop ? "text-accent " : "text-text-muted group-hover:text-text-primary transition-colors"}`}>
+        <span
+          className={`w-5 shrink-0 text-center text-base font-black ${isTop ? "text-accent " : "text-text-muted group-hover:text-text-primary transition-colors"}`}
+        >
           {index + 1}
         </span>
-        <span className={`text-sm font-bold ${isTop ? "text-white" : "text-text-primary"} transition-colors truncate `}>
+        <span
+          className={`text-sm font-bold ${isTop ? "text-white" : "text-text-primary"} transition-colors truncate `}
+        >
           {game}
         </span>
       </div>
-      
+
       <div className="flex items-center gap-1 shrink-0 z-10 bg-surface/80 backdrop-blur-md px-2 py-1 rounded-md border border-border-subtle shadow-sm group-hover:border-border-medium transition-colors">
-        <span className={`text-xs font-black tabular-nums ${isTop ? "text-accent " : "text-text-primary"}`}>
+        <span
+          className={`text-xs font-black tabular-nums ${isTop ? "text-accent " : "text-text-primary"}`}
+        >
           {hours < 0.1 ? "<0.1" : hours.toFixed(1)}
         </span>
-        <span className="text-[9px] text-text-muted font-bold tracking-wider">hrs</span>
+        <span className="text-[9px] text-text-muted font-bold tracking-wider">
+          hrs
+        </span>
       </div>
     </div>
   );
@@ -490,20 +564,28 @@ function GameRow({ game, hours, index, maxGameHours }: { game: string, hours: nu
 function TopGameHighlight({ game }: { game: GameStat }) {
   const { appId, posterUrl, achievementsPct } = useSteamGameData(game.game);
 
-  const activePoster = posterUrl || (appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg` : "");
+  const activePoster =
+    posterUrl ||
+    (appId
+      ? `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`
+      : "");
 
   return (
     <div className="relative w-full max-w-[280px] aspect-[2/3] rounded-xl overflow-hidden border border-border-subtle shadow-lg group bg-surface">
       {/* Background Poster */}
-      {(activePoster || appId) ? (
-        <div 
+      {activePoster || appId ? (
+        <div
           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-[1.03]"
           style={{ backgroundImage: `url('${activePoster}')` }}
         />
       ) : (
         <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center p-4 text-center opacity-50">
-          <span className="text-3xl font-black text-text-muted/30 mb-2">#1</span>
-          <span className="text-sm font-bold text-text-primary">{game.game}</span>
+          <span className="text-3xl font-black text-text-muted/30 mb-2">
+            #1
+          </span>
+          <span className="text-sm font-bold text-text-primary">
+            {game.game}
+          </span>
         </div>
       )}
 
@@ -514,24 +596,30 @@ function TopGameHighlight({ game }: { game: GameStat }) {
       <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-1.5 z-10">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1 shadow-md">
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse " />
-          <span className="text-[9px] font-black tracking-wider text-accent ">Top Played</span>
+          <span className="text-[9px] font-black tracking-wider text-accent ">
+            Top Played
+          </span>
         </span>
-        <h4 className="text-lg font-black text-white leading-snug line-clamp-2">{game.game}</h4>
-        
+        <h4 className="text-lg font-black text-white leading-snug line-clamp-2">
+          {game.game}
+        </h4>
+
         <div className="flex items-end gap-1 mt-1">
           <span className="text-2xl sm:text-3xl font-black text-accent tabular-nums">
             {game.hours < 0.1 ? "<0.1" : game.hours.toFixed(1)}
           </span>
-          <span className="text-[10px] font-bold text-text-muted tracking-widest mb-1">hrs</span>
+          <span className="text-[10px] font-bold text-text-muted tracking-widest mb-1">
+            hrs
+          </span>
         </div>
 
         {/* Achievements */}
         {achievementsPct > 0 && (
           <div className="flex items-center gap-2 mt-2">
             <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden shadow-inner">
-              <div 
-                className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
-                style={{ width: `${achievementsPct}%` }} 
+              <div
+                className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
+                style={{ width: `${achievementsPct}%` }}
               />
             </div>
             <span className="text-[10px] font-black text-emerald-400 tabular-nums">

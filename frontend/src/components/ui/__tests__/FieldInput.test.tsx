@@ -28,7 +28,7 @@ describe("FieldInput", () => {
         value="Highlight 1"
         onChange={vi.fn()}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
@@ -43,7 +43,7 @@ describe("FieldInput", () => {
         value="Cuad"
         onChange={vi.fn()}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
@@ -61,7 +61,7 @@ describe("FieldInput", () => {
         value="Cuad"
         onChange={onChange}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
@@ -87,7 +87,7 @@ describe("FieldInput", () => {
         onChange={vi.fn()}
         onBlur={onBlur}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
@@ -107,7 +107,7 @@ describe("FieldInput", () => {
         onChange={vi.fn()}
         onEnter={onEnter}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
@@ -126,13 +126,15 @@ describe("FieldInput", () => {
         value=""
         onChange={onChange}
         placeholder="Enter event..."
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText("Enter event...");
     fireEvent.focus(input);
 
-    const removeBtns = screen.getAllByRole("button", { name: /remove suggestion/i });
+    const removeBtns = screen.getAllByRole("button", {
+      name: /remove suggestion/i,
+    });
     expect(removeBtns.length).toBe(2);
 
     fireEvent.mouseDown(removeBtns[0]);

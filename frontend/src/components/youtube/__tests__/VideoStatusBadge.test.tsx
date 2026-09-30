@@ -11,10 +11,18 @@ describe("VideoStatusBadge", () => {
   });
 
   it("renders limited monetization badge (yellow) when limited or age restricted", () => {
-    render(<VideoStatusBadge monetizationStatus="limited" statusIssues={["age_restricted"]} />);
+    render(
+      <VideoStatusBadge
+        monetizationStatus="limited"
+        statusIssues={["age_restricted"]}
+      />,
+    );
     const badge = screen.getByTestId("video-status-badge");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveAttribute("title", "Limited monetization • Age restricted");
+    expect(badge).toHaveAttribute(
+      "title",
+      "Limited monetization • Age restricted",
+    );
     expect(badge.className).toContain("text-amber-400");
   });
 
@@ -24,7 +32,7 @@ describe("VideoStatusBadge", () => {
         monetizationStatus="demonetized"
         rejectionReason="copyright"
         statusIssues={["rejected", "copyright"]}
-      />
+      />,
     );
     const badge = screen.getByTestId("video-status-badge");
     expect(badge).toBeInTheDocument();
@@ -38,11 +46,14 @@ describe("VideoStatusBadge", () => {
         monetizationStatus="demonetized"
         rejectionReason="termsOfUse"
         statusIssues={["termsOfUse"]}
-      />
+      />,
     );
     const badge = screen.getByTestId("video-status-badge");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveAttribute("title", "Demonetized • Terms of use violation");
+    expect(badge).toHaveAttribute(
+      "title",
+      "Demonetized • Terms of use violation",
+    );
     expect(badge.className).toContain("text-rose-500");
   });
 });

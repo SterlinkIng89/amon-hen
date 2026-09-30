@@ -41,10 +41,14 @@ describe("VideoPill Duplicate Indicator", () => {
   });
 
   it("does not render duplicate badge when duplicateCount is undefined or <= 1", () => {
-    const { rerender } = render(<VideoPill video={mockVideo} viewMode="grid" />);
+    const { rerender } = render(
+      <VideoPill video={mockVideo} viewMode="grid" />,
+    );
     expect(screen.queryByText(/Duplicate/i)).not.toBeInTheDocument();
 
-    rerender(<VideoPill video={mockVideo} duplicateCount={1} viewMode="grid" />);
+    rerender(
+      <VideoPill video={mockVideo} duplicateCount={1} viewMode="grid" />,
+    );
     expect(screen.queryByText(/Duplicate/i)).not.toBeInTheDocument();
   });
 });
@@ -104,7 +108,7 @@ describe("VideoPill Title Placeholder Highlighting", () => {
         video={unfilledVideo}
         gameProfiles={gameProfiles}
         viewMode="grid"
-      />
+      />,
     );
 
     const titlePlaceholder = screen.getByText("Title");
@@ -128,7 +132,7 @@ describe("VideoPill Title Placeholder Highlighting", () => {
         video={partiallyFilledVideo}
         gameProfiles={gameProfiles}
         viewMode="list"
-      />
+      />,
     );
 
     const eventText = screen.getByText("Grand Finals");
@@ -152,7 +156,7 @@ describe("VideoPill Title Placeholder Highlighting", () => {
         video={filledVideo}
         gameProfiles={gameProfiles}
         viewMode="grid"
-      />
+      />,
     );
 
     expect(screen.getByText("Grand Finals")).toBeInTheDocument();
@@ -161,4 +165,3 @@ describe("VideoPill Title Placeholder Highlighting", () => {
     expect(screen.queryByText("Mode")).not.toBeInTheDocument();
   });
 });
-

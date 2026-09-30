@@ -4,11 +4,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import TagPlaylistModal from "../TagPlaylistModal";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
 import { useAppStore } from "../../../store/useAppStore";
+import { backend } from "../../../../wailsjs/go/models";
+
+const mockPlaylist = (id: string, title: string): backend.YTPlaylist => ({
+  id,
+  title,
+  description: "",
+  videoCount: 0,
+  thumbnailUrl: "",
+  publishedAt: "2026-01-01",
+  privacy: "public",
+  duplicateCount: 0,
+});
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
   GetOrCreatePlaylist: vi.fn().mockResolvedValue("pl-123"),
   SetTagPlaylist: vi.fn().mockResolvedValue(undefined),
+  SetTagPlaylistConfig: vi.fn().mockResolvedValue(undefined),
+  LoadConfig: vi.fn().mockResolvedValue({
+    tag_playlists: {},
+    tag_playlist_configs: {},
+  }),
 }));
 
 describe("TagPlaylistModal", () => {
@@ -22,7 +39,9 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />,
+    );
 
     // Check that privacy option Public is selected by default
     const publicBtn = screen.getByRole("button", { name: /public/i });
@@ -32,8 +51,15 @@ describe("TagPlaylistModal", () => {
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Valorant", "", "public");
-      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Valorant", "pl-123");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "",
+        "public",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-123",
+      );
       expect(onSaved).toHaveBeenCalled();
     });
   });
@@ -42,7 +68,9 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Overwatch" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Overwatch" onClose={onClose} onSaved={onSaved} />,
+    );
 
     const unlistedBtn = screen.getByRole("button", { name: /unlisted/i });
     fireEvent.click(unlistedBtn);
@@ -53,8 +81,15 @@ describe("TagPlaylistModal", () => {
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Overwatch", "", "unlisted");
-      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Overwatch", "pl-123");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Overwatch",
+        "",
+        "unlisted",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Overwatch",
+        "pl-123",
+      );
       expect(onSaved).toHaveBeenCalled();
     });
   });
@@ -64,13 +99,188 @@ describe("TagPlaylistModal", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(<TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />);
+    render(
+      <TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />,
+    );
 
     const createBtn = screen.getByRole("button", { name: /create & link/i });
     fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith("Minecraft", "", "private");
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Minecraft",
+        "",
+        "private",
+      );
+    });
+  });
+
+  it("should sort playlists alphabetically A-Z in existing playlist select", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-z", "Zelda Highlights"),
+      mockPlaylist("pl-a", "Apex Legends"),
+      mockPlaylist("pl-m", "Mario Kart"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Gaming" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      const options = screen.getAllByRole("option");
+      const optionTexts = options.map((opt) => opt.textContent);
+      expect(optionTexts).toEqual([
+        "Select a playlist...",
+        "Apex Legends",
+        "Mario Kart",
+        "Zelda Highlights",
+      ]);
+    });
+  });
+
+  it("should filter playlists in real-time as user types in the search input", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-1", "Apex Legends"),
+      mockPlaylist("pl-2", "Mario Kart"),
+      mockPlaylist("pl-3", "Mario Party"),
+      mockPlaylist("pl-4", "Zelda Highlights"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Mario" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText("Search playlists");
+    fireEvent.change(searchInput, { target: { value: "mario" } });
+
+    const options = screen.getAllByRole("option").map((opt) => opt.textContent);
+    expect(options).toEqual([
+      "Select a playlist...",
+      "Mario Kart",
+      "Mario Party",
+    ]);
+    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zelda Highlights")).not.toBeInTheDocument();
+  });
+
+  it("should show empty state when search query matches no playlists and clear restores list", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-1", "Apex Legends"),
+    ]);
+
+    render(
+      <TagPlaylistModal tag="Test" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText("Search playlists");
+    fireEvent.change(searchInput, { target: { value: "Unknown Game" } });
+
+    expect(screen.getByText("No playlists found...")).toBeInTheDocument();
+    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
+
+    const clearBtn = screen.getByLabelText("Clear playlist search");
+    fireEvent.click(clearBtn);
+
+    expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+  });
+
+  it("should link selected existing playlist when user selects one and clicks link", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-100", "Valorant Ranked"),
+    ]);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Valorant Ranked")).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText("Select playlist");
+    fireEvent.change(select, { target: { value: "pl-100" } });
+
+    const linkBtn = screen.getByRole("button", { name: /link selected/i });
+    expect(linkBtn).not.toBeDisabled();
+    fireEvent.click(linkBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-100",
+      );
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-100",
+        "",
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should link selected existing playlist to clip playlist when clip tab is active", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-clip-1", "Valorant Clips"),
+    ]);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    // Switch to Clip Playlist tab
+    const clipTab = screen.getByRole("button", { name: /clip playlist/i });
+    fireEvent.click(clipTab);
+
+    await waitFor(() => {
+      expect(screen.getByText("Valorant Clips")).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText("Select playlist");
+    fireEvent.change(select, { target: { value: "pl-clip-1" } });
+
+    const linkBtn = screen.getByRole("button", { name: /link selected/i });
+    fireEvent.click(linkBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "",
+        "pl-clip-1",
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should handle skip by saving 'none' for both vod and clip playlist configs", async () => {
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    const skipBtn = screen.getByRole("button", {
+      name: /no playlist for "valorant" — don't ask again/i,
+    });
+    fireEvent.click(skipBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "none",
+        "none",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Valorant", "none");
+      expect(onSaved).toHaveBeenCalled();
     });
   });
 });
+

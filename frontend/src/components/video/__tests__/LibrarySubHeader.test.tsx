@@ -23,8 +23,10 @@ describe("LibrarySubHeader", () => {
     };
 
     const { container } = render(<LibrarySubHeader {...dummyProps} />);
-    const stickyHeaderInner = container.querySelector(".sticky.top-0 > div:first-child");
-    
+    const stickyHeaderInner = container.querySelector(
+      ".sticky.top-0 > div:first-child",
+    );
+
     expect(stickyHeaderInner).toBeInTheDocument();
     expect(stickyHeaderInner).not.toHaveClass("h-14");
     expect(stickyHeaderInner).toHaveClass("min-h-14");

@@ -10,19 +10,25 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type TagPlaylistConfig struct {
+	VodPlaylistID  string `json:"vod_playlist_id"`
+	ClipPlaylistID string `json:"clip_playlist_id"`
+}
+
 type VideoMeta struct {
-	Game          string `json:"game"`
-	YouTubeTitle  string `json:"youtubeTitle"`
-	Description   string `json:"description"`
-	Privacy       string `json:"privacy"`
-	YouTubeID     string `json:"youtubeId,omitempty"`
-	PlaylistID    string `json:"playlistId,omitempty"`
-	PlaylistTitle string `json:"playlistTitle,omitempty"`
-	Episode       int    `json:"episode"`
-	DurationSecs  int    `json:"durationSecs,omitempty"`
+	Game          string            `json:"game"`
+	YouTubeTitle  string            `json:"youtubeTitle"`
+	Description   string            `json:"description"`
+	Privacy       string            `json:"privacy"`
+	YouTubeID     string            `json:"youtubeId,omitempty"`
+	PlaylistID    string            `json:"playlistId,omitempty"`
+	PlaylistTitle string            `json:"playlistTitle,omitempty"`
+	Episode       int               `json:"episode"`
+	DurationSecs  int               `json:"durationSecs,omitempty"`
 	Event         string            `json:"event,omitempty"`
 	GameMode      string            `json:"gameMode,omitempty"`
 	CustomVars    map[string]string `json:"customVars,omitempty"`
+	ContentType   string            `json:"contentType,omitempty"` // "vod" | "clip" | "" (auto)
 }
 
 type FolderConfig struct {
@@ -38,17 +44,18 @@ type GameProfile struct {
 
 // Config holds persistent application settings
 type Config struct {
-	Folders             []string                `json:"folders"`
-	YouTubeClientID     string                  `json:"youtube_client_id"`
-	YouTubeClientSecret string                  `json:"youtube_client_secret"`
-	YouTubeTokenJSON    string                  `json:"youtube_token_json,omitempty"`
-	VideoGames          map[string]string       `json:"video_games"`    // Maps path to game tag
-	VideoMetadata       map[string]VideoMeta    `json:"video_metadata"` // Maps path to metadata
-	FolderSettings      map[string]FolderConfig `json:"folder_settings"`
-	GameProfiles        map[string]GameProfile  `json:"game_profiles"`
-	TagPlaylists        map[string]string       `json:"tag_playlists"` // Maps tag to YouTube playlist ID
-	WatchFolderEnabled  bool                    `json:"watch_folder_enabled"`
-	RecentFieldValues   map[string][]string     `json:"recent_field_values,omitempty"`
+	Folders             []string                     `json:"folders"`
+	YouTubeClientID     string                       `json:"youtube_client_id"`
+	YouTubeClientSecret string                       `json:"youtube_client_secret"`
+	YouTubeTokenJSON    string                       `json:"youtube_token_json,omitempty"`
+	VideoGames          map[string]string            `json:"video_games"`    // Maps path to game tag
+	VideoMetadata       map[string]VideoMeta         `json:"video_metadata"` // Maps path to metadata
+	FolderSettings      map[string]FolderConfig      `json:"folder_settings"`
+	GameProfiles        map[string]GameProfile       `json:"game_profiles"`
+	TagPlaylists        map[string]string            `json:"tag_playlists"` // Maps tag to YouTube playlist ID (legacy fallback)
+	TagPlaylistConfigs  map[string]TagPlaylistConfig `json:"tag_playlist_configs,omitempty"` // Maps tag to VOD and Clip playlist IDs
+	WatchFolderEnabled  bool                         `json:"watch_folder_enabled"`
+	RecentFieldValues   map[string][]string          `json:"recent_field_values,omitempty"`
 	// TitleSeparator is the separator used between segments in auto-generated
 	// YouTube titles (e.g. "Game — 1/08/26" vs "Game - 1/08/26").
 	// Defaults to " - " when empty.
@@ -86,6 +93,19 @@ func (a *App) initConfig() {
 	}
 	if a.config.GameProfiles == nil {
 		a.config.GameProfiles = make(map[string]GameProfile)
+	}
+	if a.config.TagPlaylists == nil {
+		a.config.TagPlaylists = make(map[string]string)
+	}
+	if a.config.TagPlaylistConfigs == nil {
+		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	for tag, plId := range a.config.TagPlaylists {
+		if _, exists := a.config.TagPlaylistConfigs[tag]; !exists {
+			a.config.TagPlaylistConfigs[tag] = TagPlaylistConfig{
+				VodPlaylistID: plId,
+			}
+		}
 	}
 
 	// Hardcode default profile and modes for League of Legends
@@ -125,6 +145,9 @@ func (a *App) initConfig() {
 
 // saveConfig persists the current config to disk
 func (a *App) saveConfig() error {
+	if a.configPath == "" {
+		return nil
+	}
 	a.configMu.RLock()
 	data, err := json.MarshalIndent(a.config, "", "  ")
 	a.configMu.RUnlock()
@@ -254,7 +277,8 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 			if tagChanged {
 				meta.Episode = 0
 				// Auto-assign playlist if linked
-				if plId, ok := a.config.TagPlaylists[game]; ok && plId != "none" {
+				cType := a.resolveContentType(meta, p)
+				if plId := a.resolveTagPlaylist(game, cType); plId != "" && plId != "none" {
 					meta.PlaylistID = plId
 				}
 			}
@@ -287,7 +311,7 @@ func (a *App) SetVideoGames(paths []string, game string, event string, gameMode 
 	return a.saveConfig()
 }
 
-// SetTagPlaylist links a game tag to a YouTube playlist ID
+// SetTagPlaylist links a game tag to a YouTube playlist ID and retroactively updates existing videos.
 func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
@@ -297,8 +321,224 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 		a.config.TagPlaylists = make(map[string]string)
 	}
 	a.config.TagPlaylists[tag] = playlistID
+	if a.config.TagPlaylistConfigs == nil {
+		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	cfg := a.config.TagPlaylistConfigs[tag]
+	cfg.VodPlaylistID = playlistID
+	a.config.TagPlaylistConfigs[tag] = cfg
+	a.configMu.Unlock()
+	
+	err := a.saveConfig()
+	if err != nil {
+		return err
+	}
+
+	// Retroactively update existing videos
+	// Run in goroutine to not block UI
+	go func() {
+		// Find all videos with this tag
+		a.db.mu.Lock()
+		rows, dbErr := a.db.conn.Query("SELECT id FROM yt_videos WHERE game_tag = ?", tag)
+		if dbErr != nil {
+			a.db.mu.Unlock()
+			appLog("[SetTagPlaylist] DB error finding videos: %v", dbErr)
+			return
+		}
+		
+		var videoIDs []string
+		for rows.Next() {
+			var vid string
+			if err := rows.Scan(&vid); err == nil {
+				videoIDs = append(videoIDs, vid)
+			}
+		}
+		rows.Close()
+		a.db.mu.Unlock()
+
+		if len(videoIDs) > 0 {
+			appLog("[SetTagPlaylist] Retroactively adding %d videos to playlist %s", len(videoIDs), playlistID)
+			for _, vid := range videoIDs {
+				var exists int
+				a.db.mu.Lock()
+				a.db.conn.QueryRow("SELECT 1 FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid).Scan(&exists)
+				a.db.mu.Unlock()
+				
+				if exists == 0 {
+					_ = a.AddVideoToPlaylist(playlistID, vid)
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// SetTagPlaylistConfig updates both VOD and Clip playlist IDs for a given tag.
+func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylistID string) error {
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	a.configMu.Lock()
+	if a.config.TagPlaylistConfigs == nil {
+		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	if a.config.TagPlaylists == nil {
+		a.config.TagPlaylists = make(map[string]string)
+	}
+	a.config.TagPlaylistConfigs[tag] = TagPlaylistConfig{
+		VodPlaylistID:  vodPlaylistID,
+		ClipPlaylistID: clipPlaylistID,
+	}
+	// Keep TagPlaylists backward compatible with VOD playlist
+	a.config.TagPlaylists[tag] = vodPlaylistID
+	a.configMu.Unlock()
+
+	return a.saveConfig()
+}
+
+// GetTagPlaylistConfig returns the TagPlaylistConfig for a tag.
+func (a *App) GetTagPlaylistConfig(tag string) TagPlaylistConfig {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	if a.config.TagPlaylistConfigs != nil {
+		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+			return cfg
+		}
+	}
+	if a.config.TagPlaylists != nil {
+		if plId, ok := a.config.TagPlaylists[tag]; ok {
+			return TagPlaylistConfig{VodPlaylistID: plId}
+		}
+	}
+	return TagPlaylistConfig{}
+}
+
+// resolveContentType determines whether a video is a "clip" or "vod".
+// Explicit manual override wins. Otherwise auto-detects: duration < 120s => "clip", else "vod".
+func (a *App) resolveContentType(meta VideoMeta, path string) string {
+	if meta.ContentType == "clip" || meta.ContentType == "vod" {
+		return meta.ContentType
+	}
+	dur := meta.DurationSecs
+	if dur <= 0 && path != "" {
+		if d, err := a.GetVideoDuration(path); err == nil && d > 0 {
+			dur = int(d)
+		}
+	}
+	if dur > 0 && dur < 120 {
+		return "clip"
+	}
+	return "vod"
+}
+
+// resolveTagPlaylist returns the playlist ID mapped to the given game tag and content type ("vod" or "clip").
+func (a *App) resolveTagPlaylist(tag string, contentType string) string {
+	if tag == "" {
+		return ""
+	}
+	if a.config.TagPlaylistConfigs != nil {
+		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+			if contentType == "clip" {
+				return cfg.ClipPlaylistID
+			}
+			if cfg.VodPlaylistID != "" {
+				return cfg.VodPlaylistID
+			}
+		}
+	}
+	if contentType != "clip" && a.config.TagPlaylists != nil {
+		return a.config.TagPlaylists[tag]
+	}
+	return ""
+}
+
+// SetVideoContentType sets the manual override for content type ("vod", "clip", or "" for auto).
+func (a *App) SetVideoContentType(path string, contentType string) error {
+	a.configMu.Lock()
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+	meta := a.config.VideoMetadata[path]
+	meta.ContentType = contentType
+
+	resolved := a.resolveContentType(meta, path)
+	if meta.Game != "" {
+		plId := a.resolveTagPlaylist(meta.Game, resolved)
+		if plId != "" && plId != "none" {
+			meta.PlaylistID = plId
+		}
+		if resolved == "clip" {
+			meta.Episode = 0
+		}
+		meta.YouTubeTitle = "" // force re-generation
+	}
+	a.config.VideoMetadata[path] = meta
 	a.configMu.Unlock()
 	return a.saveConfig()
+}
+
+// SetVideosContentType sets the manual override for multiple videos.
+func (a *App) SetVideosContentType(paths []string, contentType string) error {
+	a.configMu.Lock()
+	if a.config.VideoMetadata == nil {
+		a.config.VideoMetadata = make(map[string]VideoMeta)
+	}
+	for _, p := range paths {
+		meta := a.config.VideoMetadata[p]
+		meta.ContentType = contentType
+
+		resolved := a.resolveContentType(meta, p)
+		if meta.Game != "" {
+			plId := a.resolveTagPlaylist(meta.Game, resolved)
+			if plId != "" && plId != "none" {
+				meta.PlaylistID = plId
+			}
+			if resolved == "clip" {
+				meta.Episode = 0
+			}
+			meta.YouTubeTitle = "" // force re-generation
+		}
+		a.config.VideoMetadata[p] = meta
+	}
+	a.configMu.Unlock()
+	return a.saveConfig()
+}
+
+// GetAllGameTags returns a list of unique game tags from both configuration and database.
+func (a *App) GetAllGameTags() ([]string, error) {
+	tagSet := make(map[string]bool)
+
+	// From Config
+	a.configMu.Lock()
+	for tag := range a.config.TagPlaylists {
+		if tag != "" {
+			tagSet[tag] = true
+		}
+	}
+	a.configMu.Unlock()
+
+	// From DB
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+	rows, err := a.db.conn.Query("SELECT DISTINCT game_tag FROM yt_videos WHERE game_tag IS NOT NULL AND game_tag != ''")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err == nil && t != "" {
+			tagSet[t] = true
+		}
+	}
+
+	var result []string
+	for t := range tagSet {
+		result = append(result, t)
+	}
+	return result, nil
 }
 
 // SaveVideoMetadata updates all metadata for a specific video and saves the config
@@ -320,7 +560,8 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		a.config.VideoGames[path] = game
 		// Auto-assign playlist if tag changed and we have a linked playlist (and user didn't explicitly override it with another playlist right now)
 		if tagChanged && playlistId == prevMeta.PlaylistID {
-			if plId, ok := a.config.TagPlaylists[game]; ok && plId != "none" {
+			cType := a.resolveContentType(prevMeta, path)
+			if plId := a.resolveTagPlaylist(game, cType); plId != "" && plId != "none" {
 				playlistId = plId
 			}
 		}
@@ -333,9 +574,11 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		Privacy:      privacy,
 		PlaylistID:   playlistId,
 		Episode:      episode,
+		DurationSecs: prevMeta.DurationSecs,
 		Event:        event,
 		GameMode:     gameMode,
 		CustomVars:   customVars,
+		ContentType:  prevMeta.ContentType,
 	}
 	// Copy YouTubeID from prevMeta so we don't lose it
 	meta := a.config.VideoMetadata[path]
