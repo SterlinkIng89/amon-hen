@@ -29,6 +29,41 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+export function formatTimeWithSubseconds(sec: number): string {
+  const clamped = Math.max(0, sec);
+  const totalTenths = Math.round(clamped * 10);
+  const ms = totalTenths % 10;
+  const totalSeconds = Math.floor(totalTenths / 10);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${ms}`;
+  }
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${ms}`;
+}
+
+export function computeInitialClipRange(
+  anchorTime: number,
+  totalDuration: number,
+): { inPoint: number; outPoint: number } {
+  const safeDuration = Math.max(totalDuration, 0.1);
+  if (safeDuration <= 30) {
+    return { inPoint: 0, outPoint: safeDuration };
+  }
+
+  let inP = Math.max(0, anchorTime - 15);
+  let outP = Math.min(safeDuration, anchorTime + 15);
+
+  if (inP === 0) {
+    outP = Math.min(safeDuration, 30);
+  } else if (outP === safeDuration) {
+    inP = Math.max(0, safeDuration - 30);
+  }
+
+  return { inPoint: inP, outPoint: outP };
+}
+
 export function extractDatePart(filename: string, modTime?: number): string {
   const stem = filename.replace(/\.[^/.]+$/, "");
 

@@ -22,6 +22,10 @@ export function CreatePlaylist(arg1, arg2, arg3) {
   return window['go']['backend']['App']['CreatePlaylist'](arg1, arg2, arg3);
 }
 
+export function CreateVideoClip(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['CreateVideoClip'](arg1, arg2, arg3, arg4);
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }

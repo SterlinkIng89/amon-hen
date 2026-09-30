@@ -15,6 +15,8 @@ export function CancelUpload(arg1:string):Promise<void>;
 
 export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function CreateVideoClip(arg1:string,arg2:number,arg3:number,arg4:string):Promise<string>;
+
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function DeleteGameProfile(arg1:string):Promise<void>;
