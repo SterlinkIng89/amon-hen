@@ -3,6 +3,8 @@ import {
   GetChannelPlaylists,
   GetOrCreatePlaylist,
   SetTagPlaylist,
+  SetTagPlaylistConfig,
+  LoadConfig,
 } from "../../../wailsjs/go/backend/App";
 import { YTPlaylist, PlaylistPrivacy } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
@@ -14,6 +16,9 @@ interface Props {
 }
 
 export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
+  const [activeTab, setActiveTab] = useState<"vod" | "clip">("vod");
+  const [vodPlaylistId, setVodPlaylistId] = useState("");
+  const [clipPlaylistId, setClipPlaylistId] = useState("");
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +36,26 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
   };
 
   useEffect(() => {
+    LoadConfig()
+      .then((cfg) => {
+        const tagCfg = cfg.tag_playlist_configs?.[tag];
+        const legacyVod = cfg.tag_playlists?.[tag];
+        let initialVod = "";
+        let initialClip = "";
+        if (tagCfg?.vod_playlist_id && tagCfg.vod_playlist_id !== "none") {
+          initialVod = tagCfg.vod_playlist_id;
+        } else if (legacyVod && legacyVod !== "none") {
+          initialVod = legacyVod;
+        }
+        if (tagCfg?.clip_playlist_id && tagCfg.clip_playlist_id !== "none") {
+          initialClip = tagCfg.clip_playlist_id;
+        }
+        setVodPlaylistId(initialVod);
+        setClipPlaylistId(initialClip);
+        setSelectedPlaylistId(initialVod);
+      })
+      .catch(console.error);
+
     GetChannelPlaylists("recent")
       .then((res) => {
         setPlaylists(res || []);
@@ -40,7 +65,24 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
         console.error(err);
         setIsLoading(false);
       });
-  }, []);
+  }, [tag]);
+
+  const handleTabChange = (tab: "vod" | "clip") => {
+    setActiveTab(tab);
+    setSearchQuery("");
+    setError("");
+    if (tab === "vod") {
+      setNewPlaylistTitle(tag);
+      setSelectedPlaylistId(
+        vodPlaylistId && vodPlaylistId !== "none" ? vodPlaylistId : "",
+      );
+    } else {
+      setNewPlaylistTitle(`${tag} Clips`);
+      setSelectedPlaylistId(
+        clipPlaylistId && clipPlaylistId !== "none" ? clipPlaylistId : "",
+      );
+    }
+  };
 
   const sortedPlaylists = useMemo(() => {
     return [...playlists].sort((a, b) =>
@@ -63,6 +105,9 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
     }
   }, [filteredPlaylists, selectedPlaylistId]);
 
+  const currentLinkedId = activeTab === "vod" ? vodPlaylistId : clipPlaylistId;
+  const currentLinkedPlaylist = playlists.find((p) => p.id === currentLinkedId);
+
   const handleCreateAndLink = async () => {
     if (!newPlaylistTitle.trim()) return;
     setIsCreating(true);
@@ -74,7 +119,14 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
         "",
         privacy,
       );
-      await SetTagPlaylist(tag, id);
+      if (activeTab === "vod") {
+        setVodPlaylistId(id);
+        await SetTagPlaylistConfig(tag, id, clipPlaylistId);
+        await SetTagPlaylist(tag, id);
+      } else {
+        setClipPlaylistId(id);
+        await SetTagPlaylistConfig(tag, vodPlaylistId, id);
+      }
       onSaved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -87,7 +139,14 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
     setIsCreating(true);
     setError("");
     try {
-      await SetTagPlaylist(tag, selectedPlaylistId);
+      if (activeTab === "vod") {
+        setVodPlaylistId(selectedPlaylistId);
+        await SetTagPlaylistConfig(tag, selectedPlaylistId, clipPlaylistId);
+        await SetTagPlaylist(tag, selectedPlaylistId);
+      } else {
+        setClipPlaylistId(selectedPlaylistId);
+        await SetTagPlaylistConfig(tag, vodPlaylistId, selectedPlaylistId);
+      }
       onSaved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -95,9 +154,31 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
     }
   };
 
-  const handleSkip = async () => {
-    // Set to "none" so it doesn't prompt again
+  const handleUnlinkCurrent = async () => {
+    setIsCreating(true);
+    setError("");
     try {
+      if (activeTab === "vod") {
+        setVodPlaylistId("");
+        setSelectedPlaylistId("");
+        await SetTagPlaylistConfig(tag, "", clipPlaylistId);
+        await SetTagPlaylist(tag, "");
+      } else {
+        setClipPlaylistId("");
+        setSelectedPlaylistId("");
+        await SetTagPlaylistConfig(tag, vodPlaylistId, "");
+      }
+      onSaved();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      await SetTagPlaylistConfig(tag, "none", "none");
       await SetTagPlaylist(tag, "none");
     } catch (e) {
       console.error(e);
@@ -113,11 +194,58 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
             Link Playlist to Tag
           </h2>
           <p className="text-sm text-text-secondary mt-1">
-            You added a new tag <strong>"{tag}"</strong>. Link a YouTube
-            playlist so future videos are auto-added to it — or skip if you
-            don't want auto-linking for this tag.
+            Configure YouTube playlist destinations for tag <strong>"{tag}"</strong> for both full VODs and short clips.
           </p>
         </div>
+
+        {/* Tab Selector */}
+        <div className="flex border-b border-border-subtle gap-2">
+          <button
+            type="button"
+            className={`flex-1 pb-2 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === "vod"
+                ? "border-accent text-accent"
+                : "border-transparent text-text-muted hover:text-text-primary"
+            }`}
+            onClick={() => handleTabChange("vod")}
+          >
+            <span>VOD Playlist</span>
+            {vodPlaylistId && vodPlaylistId !== "none" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={`flex-1 pb-2 text-xs font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === "clip"
+                ? "border-accent text-accent"
+                : "border-transparent text-text-muted hover:text-text-primary"
+            }`}
+            onClick={() => handleTabChange("clip")}
+          >
+            <span>Clip Playlist</span>
+            {clipPlaylistId && clipPlaylistId !== "none" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+            )}
+          </button>
+        </div>
+
+        {currentLinkedPlaylist && (
+          <div className="flex items-center justify-between px-3 py-2 rounded bg-card border border-border-subtle text-xs">
+            <span className="text-text-secondary truncate">
+              Linked {activeTab === "vod" ? "VOD" : "Clip"}:{" "}
+              <strong className="text-text-primary">{currentLinkedPlaylist.title}</strong>
+            </span>
+            <button
+              type="button"
+              className="text-[11px] text-red-400 hover:text-red-300 ml-2 underline cursor-pointer"
+              onClick={handleUnlinkCurrent}
+              disabled={isCreating}
+            >
+              Unlink
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded p-2 text-xs text-red-400">
@@ -125,9 +253,9 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
           </div>
         )}
 
-        {/* Skip option — prominently placed */}
+        {/* Skip option */}
         <button
-          className="flex items-center gap-2 w-full px-4 py-2.5 rounded-md border border-border-subtle bg-elevated hover:bg-card hover:border-border-medium transition-colors text-sm font-medium text-text-secondary hover:text-text-primary text-left"
+          className="flex items-center gap-2 w-full px-4 py-2 rounded-md border border-border-subtle bg-elevated hover:bg-card hover:border-border-medium transition-colors text-xs font-medium text-text-secondary hover:text-text-primary text-left"
           onClick={handleSkip}
           disabled={isCreating}
         >
@@ -153,7 +281,7 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
         <div className="flex items-center gap-4">
           <div className="h-px bg-border-subtle flex-1" />
           <span className="text-xs text-text-muted font-bold tracking-wider">
-            or link one
+            or configure {activeTab === "vod" ? "VOD" : "clip"} playlist
           </span>
           <div className="h-px bg-border-subtle flex-1" />
         </div>
@@ -161,7 +289,7 @@ export default function TagPlaylistModal({ tag, onClose, onSaved }: Props) {
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 p-3 border border-border-subtle rounded bg-elevated">
             <label className="text-xs font-bold text-text-secondary">
-              Create New Playlist
+              Create New {activeTab === "vod" ? "VOD" : "Clip"} Playlist
             </label>
             <div className="flex gap-2 items-center">
               <input

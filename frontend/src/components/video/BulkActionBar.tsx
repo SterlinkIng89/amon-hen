@@ -6,6 +6,7 @@ import {
   SetVideosPlaylist,
   GetOrCreatePlaylist,
   LoadConfig,
+  SetVideosContentType,
 } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
@@ -75,6 +76,36 @@ export default function BulkActionBar({
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
     null,
   );
+  const [contentTypeOverride, setContentTypeOverride] = useState("auto");
+  const [savingContentType, setSavingContentType] = useState(false);
+
+  useEffect(() => {
+    if (selectedVideos.length > 0) {
+      const firstType = selectedVideos[0]?.contentType || "";
+      const allSame = selectedVideos.every(
+        (v) => (v.contentType || "") === firstType,
+      );
+      if (allSame && (firstType === "vod" || firstType === "clip")) {
+        setContentTypeOverride(firstType);
+      } else {
+        setContentTypeOverride("auto");
+      }
+    }
+  }, [selectedVideos]);
+
+  const handleContentTypeChange = async (val: string) => {
+    setContentTypeOverride(val);
+    setSavingContentType(true);
+    try {
+      const ct = val === "auto" ? "" : val;
+      await SetVideosContentType(selectedPaths, ct);
+      onRescanOnly();
+    } catch (e) {
+      console.error("Failed to update content type", e);
+    } finally {
+      setSavingContentType(false);
+    }
+  };
 
   useEffect(() => {
     LoadConfig()
@@ -535,6 +566,24 @@ export default function BulkActionBar({
               )}
             </div>
           )}
+        </div>
+
+        <div className="w-px h-5 bg-white/10" />
+
+        {/* Content Type override */}
+        <div className="flex items-center gap-1.5">
+          <label className="text-[11px] text-text-muted font-medium">Type:</label>
+          <select
+            className="bg-elevated border border-border-subtle rounded-sm px-2 py-1 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card cursor-pointer"
+            value={contentTypeOverride}
+            onChange={(e) => handleContentTypeChange(e.target.value)}
+            disabled={savingContentType}
+            aria-label="Content type override"
+          >
+            <option value="auto">Auto</option>
+            <option value="vod">Force VOD</option>
+            <option value="clip">Force Clip</option>
+          </select>
         </div>
 
         <div className="w-px h-5 bg-white/10" />

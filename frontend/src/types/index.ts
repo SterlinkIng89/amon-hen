@@ -12,9 +12,16 @@ export interface VideoFile {
   playlistId?: string;
   playlistTitle?: string;
   episode?: number;
+  durationSecs?: number;
   event?: string;
   gameMode?: string;
   customVars?: Record<string, string>;
+  contentType?: string;
+}
+
+export interface TagPlaylistConfig {
+  vod_playlist_id: string;
+  clip_playlist_id: string;
 }
 
 export interface GameProfile {
@@ -33,8 +40,12 @@ export interface Config {
   folder_settings: Record<string, FolderConfig>;
   game_profiles: Record<string, GameProfile>;
   tag_playlists: Record<string, string>;
+  tag_playlist_configs?: Record<string, TagPlaylistConfig>;
   watch_folder_enabled: boolean;
   title_separator?: string;
+  recent_field_values?: Record<string, string[]>;
+  steam_api_key?: string;
+  steam_id?: string;
 }
 
 export interface YTVideo {

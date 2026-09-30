@@ -21,6 +21,11 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
   GetOrCreatePlaylist: vi.fn().mockResolvedValue("pl-123"),
   SetTagPlaylist: vi.fn().mockResolvedValue(undefined),
+  SetTagPlaylistConfig: vi.fn().mockResolvedValue(undefined),
+  LoadConfig: vi.fn().mockResolvedValue({
+    tag_playlists: {},
+    tag_playlist_configs: {},
+  }),
 }));
 
 describe("TagPlaylistModal", () => {
@@ -213,7 +218,69 @@ describe("TagPlaylistModal", () => {
         "Valorant",
         "pl-100",
       );
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "pl-100",
+        "",
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should link selected existing playlist to clip playlist when clip tab is active", async () => {
+    vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
+      mockPlaylist("pl-clip-1", "Valorant Clips"),
+    ]);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    // Switch to Clip Playlist tab
+    const clipTab = screen.getByRole("button", { name: /clip playlist/i });
+    fireEvent.click(clipTab);
+
+    await waitFor(() => {
+      expect(screen.getByText("Valorant Clips")).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText("Select playlist");
+    fireEvent.change(select, { target: { value: "pl-clip-1" } });
+
+    const linkBtn = screen.getByRole("button", { name: /link selected/i });
+    fireEvent.click(linkBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "",
+        "pl-clip-1",
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should handle skip by saving 'none' for both vod and clip playlist configs", async () => {
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
+    );
+
+    const skipBtn = screen.getByRole("button", {
+      name: /no playlist for "valorant" — don't ask again/i,
+    });
+    fireEvent.click(skipBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "none",
+        "none",
+      );
+      expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Valorant", "none");
       expect(onSaved).toHaveBeenCalled();
     });
   });
 });
+

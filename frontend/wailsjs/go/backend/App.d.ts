@@ -75,6 +75,8 @@ export function GetStreamPort():Promise<number>;
 
 export function GetSyncStatus():Promise<Record<string, any>>;
 
+export function GetTagPlaylistConfig(arg1:string):Promise<backend.TagPlaylistConfig>;
+
 export function GetThumbnail(arg1:string):Promise<string>;
 
 export function GetVideoDuration(arg1:string):Promise<number>;
@@ -92,6 +94,8 @@ export function GetYouTubeChannelInfo():Promise<backend.YouTubeChannel>;
 export function ImportYouTubeJSON():Promise<void>;
 
 export function InitTestDB(arg1:string):Promise<void>;
+
+export function InvalidateYouTubeClient():Promise<void>;
 
 export function IsSteamSyncing():Promise<boolean>;
 
@@ -131,11 +135,17 @@ export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
 
+export function SetTagPlaylistConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SetTitleSeparator(arg1:string):Promise<void>;
 
 export function SetTrayUploadProgress(arg1:number):Promise<void>;
 
+export function SetVideoContentType(arg1:string,arg2:string):Promise<void>;
+
 export function SetVideoGames(arg1:Array<string>,arg2:string,arg3:string,arg4:string,arg5:Record<string, string>):Promise<void>;
+
+export function SetVideosContentType(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function SetVideosPlaylist(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 

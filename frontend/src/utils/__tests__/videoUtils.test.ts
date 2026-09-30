@@ -99,6 +99,38 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "Overwatch 2 | Clash | Ranked | King's Row | Tracer | 26/08/26",
       );
     });
+
+    it("generates clip title with event title without episode number", () => {
+      const title = generateYouTubeTitle(
+        "2026-08-26_clip.mp4",
+        "Overwatch 2",
+        5, // even if episode is passed, clip shouldn't use it
+        undefined,
+        "Sick 5k",
+        undefined,
+        undefined,
+        sampleVideo.modTime,
+        " - ",
+        "clip",
+      );
+      expect(title).toBe("Overwatch 2 - 26/08/26 - Sick 5k");
+    });
+
+    it("generates clip title with filename fallback when event is empty", () => {
+      const title = generateYouTubeTitle(
+        "2026-08-26_Insane_Flick.mp4",
+        "Valorant",
+        0,
+        undefined,
+        "",
+        undefined,
+        undefined,
+        sampleVideo.modTime,
+        " - ",
+        "clip",
+      );
+      expect(title).toBe("Valorant - 26/08/26 - Insane_Flick");
+    });
   });
 
   describe("getVideoTitleSegments", () => {
