@@ -38,20 +38,24 @@ export function DeletePlaylist(arg1) {
   return window['go']['backend']['App']['DeletePlaylist'](arg1);
 }
 
-export function DisconnectSteam() {
-  return window['go']['backend']['App']['DisconnectSteam']();
+export function DeleteYouTubeVideo(arg1, arg2) {
+  return window['go']['backend']['App']['DeleteYouTubeVideo'](arg1, arg2);
+}
+
+export function DeleteYouTubeVideos(arg1, arg2) {
+  return window['go']['backend']['App']['DeleteYouTubeVideos'](arg1, arg2);
 }
 
 export function DiscardUploadSession(arg1) {
   return window['go']['backend']['App']['DiscardUploadSession'](arg1);
 }
 
-export function GetAPILogs(arg1) {
-  return window['go']['backend']['App']['GetAPILogs'](arg1);
+export function DisconnectSteam() {
+  return window['go']['backend']['App']['DisconnectSteam']();
 }
 
-export function GetUploadSessions() {
-  return window['go']['backend']['App']['GetUploadSessions']();
+export function GetAPILogs(arg1) {
+  return window['go']['backend']['App']['GetAPILogs'](arg1);
 }
 
 export function GetAllGameTags() {
@@ -160,6 +164,10 @@ export function GetTagPlaylistConfig(arg1) {
 
 export function GetThumbnail(arg1) {
   return window['go']['backend']['App']['GetThumbnail'](arg1);
+}
+
+export function GetUploadSessions() {
+  return window['go']['backend']['App']['GetUploadSessions']();
 }
 
 export function GetVideoDuration(arg1) {

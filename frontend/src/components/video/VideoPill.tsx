@@ -43,6 +43,7 @@ interface VideoPillProps {
   onThumbLoaded?: (url: string) => void;
   onSelectToggle?: (e: React.MouseEvent) => void;
   duplicateCount?: number;
+  onDelete?: () => void;
 }
 
 export default function VideoPill({
@@ -61,6 +62,7 @@ export default function VideoPill({
   onThumbLoaded,
   onSelectToggle,
   duplicateCount,
+  onDelete,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -279,6 +281,26 @@ export default function VideoPill({
             </svg>
           </div>
         </div>
+
+        {/* Delete button — hover absolute */}
+        {onDelete && (
+          <button
+            type="button"
+            className={`absolute top-2 left-9 p-1.5 rounded-full bg-black/50 border border-white/20 backdrop-blur-md text-white/80 hover:text-red-400 hover:bg-black/80 hover:border-red-500/50 transition-all shadow-sm z-30 ${
+              hovered ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
+            title="Delete video from YouTube"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+            </svg>
+          </button>
+        )}
 
         {isLocal && !thumbLoaded && (
           <div className="absolute inset-0 bg-elevated bg-[length:200%_100%] animate-shimmer bg-gradient-to-r from-elevated via-card to-elevated" />

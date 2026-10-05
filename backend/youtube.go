@@ -518,6 +518,80 @@ func (a *App) DeletePlaylist(playlistID string) error {
 	return nil
 }
 
+// removeYouTubeVideoLocal cleans up a video from the local DB and optionally deletes the local recording file.
+func (a *App) removeYouTubeVideoLocal(videoID string, deleteLocalFile bool) error {
+	var localFile string
+	if a.db != nil {
+		a.db.mu.Lock()
+		_ = a.db.conn.QueryRow("SELECT COALESCE(local_file, '') FROM yt_videos WHERE id = ?", videoID).Scan(&localFile)
+
+		tx, txErr := a.db.conn.Begin()
+		if txErr == nil {
+			tx.Exec("DELETE FROM yt_playlist_items WHERE video_id = ?", videoID)
+			tx.Exec("DELETE FROM yt_videos WHERE id = ?", videoID)
+			tx.Commit()
+		}
+		a.db.mu.Unlock()
+	}
+
+	if deleteLocalFile && localFile != "" {
+		if err := a.DeleteFiles([]string{localFile}); err != nil {
+			appLog("[DeleteYouTubeVideo] Failed to delete local file %s: %v", localFile, err)
+		}
+	}
+
+	return nil
+}
+
+// DeleteYouTubeVideo deletes a video from YouTube and cleans up local references.
+func (a *App) DeleteYouTubeVideo(videoID string, deleteLocalFile bool) error {
+	if strings.TrimSpace(videoID) == "" {
+		return fmt.Errorf("video ID cannot be empty")
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	err = svc.Videos.Delete(videoID).Do()
+	a.logAPICall("videos.delete", videoID, videoID, 50, start, err)
+	if err != nil {
+		return fmt.Errorf("failed to delete video on YouTube: %w", err)
+	}
+
+	return a.removeYouTubeVideoLocal(videoID, deleteLocalFile)
+}
+
+// DeleteYouTubeVideos deletes multiple videos from YouTube in batch.
+func (a *App) DeleteYouTubeVideos(videoIDs []string, deleteLocalFiles bool) (deleted []string, errors []string) {
+	for i, id := range videoIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		err := a.DeleteYouTubeVideo(id, deleteLocalFiles)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", id, err))
+			// If quota exceeded, stop attempting further deletions to preserve remaining quota
+			if strings.Contains(err.Error(), "quotaExceeded") {
+				for _, remID := range videoIDs[i+1:] {
+					remID = strings.TrimSpace(remID)
+					if remID != "" {
+						errors = append(errors, fmt.Sprintf("%s: skipped due to quota exhaustion", remID))
+					}
+				}
+				break
+			}
+		} else {
+			deleted = append(deleted, id)
+		}
+	}
+	return deleted, errors
+}
+
 // ValidatePrivacyStatus checks and normalizes the privacy status string.
 func ValidatePrivacyStatus(privacy string) (string, error) {
 	norm := strings.ToLower(strings.TrimSpace(privacy))

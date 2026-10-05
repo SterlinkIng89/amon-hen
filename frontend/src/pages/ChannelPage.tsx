@@ -26,6 +26,7 @@ import AdvancedFilters, {
 import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
 import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
+import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 
 export default function ChannelPage() {
   const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
@@ -53,6 +54,7 @@ export default function ChannelPage() {
     duplicates: string[];
     targetVideoIds: string[];
   } | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<YTVideo[] | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
   const [purgingDuplicates, setPurgingDuplicates] = useState(false);
@@ -423,6 +425,44 @@ export default function ChannelPage() {
       console.error("Error checking playlist:", e);
       setBulkAdding(false);
     }
+  };
+
+  const handleTriggerBulkDelete = () => {
+    if (selectedVideoIds.size === 0) return;
+    const targets = (selectedPlaylist ? playlistVideos : videos).filter((v) =>
+      selectedVideoIds.has(v.id),
+    );
+    if (targets.length > 0) {
+      setDeleteTargets(targets);
+    }
+  };
+
+  const handleDeletedVideos = (deletedIds: string[]) => {
+    const deletedSet = new Set(deletedIds);
+    // Clear deleted items from selection
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev);
+      deletedIds.forEach((id) => next.delete(id));
+      return next;
+    });
+
+    // If currently viewing a deleted video in player, advance or close
+    if (selectedVideo && deletedSet.has(selectedVideo.id)) {
+      const remaining = playerVideos.filter((v) => !deletedSet.has(v.id));
+      if (remaining.length > 0) {
+        const currentIndex = playerVideos.findIndex(
+          (v) => v.id === selectedVideo.id,
+        );
+        const nextVideo =
+          remaining[Math.min(currentIndex, remaining.length - 1)];
+        setSelectedVideo(nextVideo);
+      } else {
+        setSelectedVideo(null);
+        setViewType("grid");
+      }
+    }
+
+    loadData(true);
   };
 
   const processAddVideos = async (
@@ -1191,6 +1231,7 @@ export default function ChannelPage() {
                 onUpdate={() => loadData(true)}
                 onNext={handleNext}
                 onPrev={handlePrev}
+                onRequestDelete={(v) => setDeleteTargets([v])}
                 onEnded={() => {
                   if (autoplay) handleNext();
                 }}
@@ -1245,6 +1286,7 @@ export default function ChannelPage() {
                       viewMode={viewMode}
                       onSelectToggle={() => handleSelectToggle(v)}
                       duplicateCount={playlistVideoCounts.get(v.id)}
+                      onDelete={() => setDeleteTargets([v])}
                     />
                   </div>
                 ))}
@@ -1339,6 +1381,7 @@ export default function ChannelPage() {
                               onUpdate={() => loadData(true)}
                               viewMode={viewMode}
                               onSelectToggle={(e) => handleSelectToggle(v)}
+                              onDelete={() => setDeleteTargets([v])}
                             />
                           </div>
                         ))}
@@ -1361,6 +1404,7 @@ export default function ChannelPage() {
                           onUpdate={() => loadData(true)}
                           viewMode={viewMode}
                           onSelectToggle={(e) => handleSelectToggle(v)}
+                          onDelete={() => setDeleteTargets([v])}
                         />
                       </div>
                     ))}
@@ -1424,7 +1468,7 @@ export default function ChannelPage() {
       )}
 
       {/* Video Bulk Action Bar */}
-      {activeTab === "videos" && (
+      {(activeTab === "videos" || selectedPlaylist) && (
         <ChannelBulkActionBar
           selectedCount={selectedVideoIds.size}
           playlists={playlists}
@@ -1433,6 +1477,7 @@ export default function ChannelPage() {
             lastSelectedId.current = null;
           }}
           onAddToPlaylist={handleAddToPlaylist}
+          onDeleteFromYouTube={handleTriggerBulkDelete}
         />
       )}
 
@@ -1474,6 +1519,15 @@ export default function ChannelPage() {
             setDuplicateWarning(null);
             setBulkAdding(false);
           }}
+        />
+      )}
+
+      {/* Delete Video Modal */}
+      {deleteTargets && deleteTargets.length > 0 && (
+        <DeleteVideoModal
+          videos={deleteTargets}
+          onClose={() => setDeleteTargets(null)}
+          onDeleted={handleDeletedVideos}
         />
       )}
     </div>

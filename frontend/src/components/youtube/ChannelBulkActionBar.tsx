@@ -6,6 +6,7 @@ interface Props {
   playlists: YTPlaylist[];
   onClearSelection: () => void;
   onAddToPlaylist: (playlistId: string) => void;
+  onDeleteFromYouTube?: () => void;
 }
 
 export default function ChannelBulkActionBar({
@@ -13,6 +14,7 @@ export default function ChannelBulkActionBar({
   playlists,
   onClearSelection,
   onAddToPlaylist,
+  onDeleteFromYouTube,
 }: Props) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [playlistSearch, setPlaylistSearch] = useState("");
@@ -117,6 +119,30 @@ export default function ChannelBulkActionBar({
             </div>
           )}
         </div>
+
+        {/* Action: Delete from YouTube */}
+        {onDeleteFromYouTube && (
+          <button
+            className="btn btn-danger btn-sm flex items-center gap-1.5"
+            onClick={onDeleteFromYouTube}
+            title="Delete selected videos from YouTube"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            Delete from YouTube
+          </button>
+        )}
 
         {/* Clear Selection */}
         <button
