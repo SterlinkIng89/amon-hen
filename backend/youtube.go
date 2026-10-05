@@ -17,7 +17,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	youtube "google.golang.org/api/youtube/v3"
 )
@@ -224,6 +223,7 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 		return nil, err
 	}
 	a.ytSvc = svc
+	a.ytTokenSource = tokenSource
 	return svc, nil
 }
 
@@ -231,8 +231,24 @@ func (a *App) youtubeClient(ctx context.Context) (*youtube.Service, error) {
 func (a *App) InvalidateYouTubeClient() {
 	a.ytSvcMu.Lock()
 	a.ytSvc = nil
+	a.ytTokenSource = nil
 	a.ytSvcMu.Unlock()
 }
+
+// authedHTTPClient returns an http.Client authenticated via OAuth2 that refreshes tokens automatically.
+func (a *App) authedHTTPClient(ctx context.Context) (*http.Client, error) {
+	if _, err := a.youtubeClient(ctx); err != nil {
+		return nil, err
+	}
+	a.ytSvcMu.Lock()
+	ts := a.ytTokenSource
+	a.ytSvcMu.Unlock()
+	if ts == nil {
+		return nil, fmt.Errorf("no oauth2 token source available")
+	}
+	return oauth2.NewClient(ctx, ts), nil
+}
+
 
 // progressReader wraps an io.Reader and emits upload progress events
 type progressReader struct {
@@ -502,6 +518,80 @@ func (a *App) DeletePlaylist(playlistID string) error {
 	return nil
 }
 
+// removeYouTubeVideoLocal cleans up a video from the local DB and optionally deletes the local recording file.
+func (a *App) removeYouTubeVideoLocal(videoID string, deleteLocalFile bool) error {
+	var localFile string
+	if a.db != nil {
+		a.db.mu.Lock()
+		_ = a.db.conn.QueryRow("SELECT COALESCE(local_file, '') FROM yt_videos WHERE id = ?", videoID).Scan(&localFile)
+
+		tx, txErr := a.db.conn.Begin()
+		if txErr == nil {
+			tx.Exec("DELETE FROM yt_playlist_items WHERE video_id = ?", videoID)
+			tx.Exec("DELETE FROM yt_videos WHERE id = ?", videoID)
+			tx.Commit()
+		}
+		a.db.mu.Unlock()
+	}
+
+	if deleteLocalFile && localFile != "" {
+		if err := a.DeleteFiles([]string{localFile}); err != nil {
+			appLog("[DeleteYouTubeVideo] Failed to delete local file %s: %v", localFile, err)
+		}
+	}
+
+	return nil
+}
+
+// DeleteYouTubeVideo deletes a video from YouTube and cleans up local references.
+func (a *App) DeleteYouTubeVideo(videoID string, deleteLocalFile bool) error {
+	if strings.TrimSpace(videoID) == "" {
+		return fmt.Errorf("video ID cannot be empty")
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	err = svc.Videos.Delete(videoID).Do()
+	a.logAPICall("videos.delete", videoID, videoID, 50, start, err)
+	if err != nil {
+		return fmt.Errorf("failed to delete video on YouTube: %w", err)
+	}
+
+	return a.removeYouTubeVideoLocal(videoID, deleteLocalFile)
+}
+
+// DeleteYouTubeVideos deletes multiple videos from YouTube in batch.
+func (a *App) DeleteYouTubeVideos(videoIDs []string, deleteLocalFiles bool) (deleted []string, errors []string) {
+	for i, id := range videoIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		err := a.DeleteYouTubeVideo(id, deleteLocalFiles)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", id, err))
+			// If quota exceeded, stop attempting further deletions to preserve remaining quota
+			if strings.Contains(err.Error(), "quotaExceeded") {
+				for _, remID := range videoIDs[i+1:] {
+					remID = strings.TrimSpace(remID)
+					if remID != "" {
+						errors = append(errors, fmt.Sprintf("%s: skipped due to quota exhaustion", remID))
+					}
+				}
+				break
+			}
+		} else {
+			deleted = append(deleted, id)
+		}
+	}
+	return deleted, errors
+}
+
 // ValidatePrivacyStatus checks and normalizes the privacy status string.
 func ValidatePrivacyStatus(privacy string) (string, error) {
 	norm := strings.ToLower(strings.TrimSpace(privacy))
@@ -614,155 +704,6 @@ func (a *App) CancelUpload(path string) error {
 		return nil
 	}
 	return fmt.Errorf("no active upload found for path: %s", path)
-}
-
-// UploadToYouTube uploads a single video to YouTube and emits progress events
-func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	a.uploadsMu.Lock()
-	a.uploads[path] = cancel
-	a.uploadsMu.Unlock()
-
-	defer func() {
-		a.uploadsMu.Lock()
-		delete(a.uploads, path)
-		a.uploadsMu.Unlock()
-		cancel()
-	}()
-
-	svc, err := a.youtubeClient(context.Background())
-	if err != nil {
-		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
-		return err
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		appLog("[Queue] Failed to open local file %s: %v", filepath.Base(path), err)
-		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": err.Error()})
-		return err
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		appLog("[Queue] Failed to stat local file %s: %v", filepath.Base(path), err)
-		return err
-	}
-
-	appLog("[Queue] Started uploading '%s' (Size: %d bytes)", title, info.Size())
-
-	pr := &progressReader{
-		r:          f,
-		total:      info.Size(),
-		lastUpdate: time.Now(),
-		onProg: func(pct int, speed float64) {
-			runtime.EventsEmit(a.ctx, "youtube:progress", map[string]interface{}{
-				"path":    path,
-				"percent": pct,
-				"speed":   speed,
-			})
-		},
-	}
-
-	video := &youtube.Video{
-		Snippet: &youtube.VideoSnippet{
-			Title:       title,
-			Description: description,
-		},
-		Status: &youtube.VideoStatus{
-			PrivacyStatus: privacy,
-		},
-	}
-
-	call := svc.Videos.Insert([]string{"snippet", "status"}, video).Context(ctx)
-	call.Media(pr, googleapi.ContentType("video/*"))
-
-	start := time.Now()
-	result, err := call.Do()
-	a.logAPICall("videos.insert", "", title, QuotaVideosInsert, start, err)
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			appLog("[Queue] Upload cancelled by user: '%s'", title)
-			runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": "Upload cancelled"})
-			return fmt.Errorf("upload cancelled")
-		}
-		
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "token") || (strings.Contains(errMsg, "context canceled") && ctx.Err() == nil) {
-			a.InvalidateYouTubeClient()
-		}
-		if strings.Contains(errMsg, "quotaExceeded") || strings.Contains(errMsg, "RATE_LIMIT_EXCEEDED") {
-			appLog("[Queue] FATAL: YouTube Quota Exceeded while uploading '%s'. Wait 24h.", title)
-			errMsg = "Daily YouTube upload limit reached (~6 videos/day). Please wait 24h or request a quota increase in Google Cloud Console."
-		} else {
-			appLog("[Queue] Upload failed for '%s': %v", title, err)
-		}
-		
-		runtime.EventsEmit(a.ctx, "youtube:error", map[string]string{"path": path, "message": errMsg})
-		return err
-	}
-
-	elapsed := time.Since(start)
-	appLog("[Queue] Successfully uploaded '%s' (ID: %s, Time taken: %s)", title, result.Id, elapsed.Round(time.Second).String())
-
-	// Save YouTube ID locally
-	a.LinkLocalToYouTube(path, result.Id, gameTag, episode)
-
-	// Persist game_tag + episode into yt_videos so future episode-count queries
-	// (which match by title LIKE '<tag> - %') have a fallback via explicit columns too.
-	// This row may not exist yet if the sync hasn't run \u2014 insert or update.
-	if a.db != nil && gameTag != "" {
-		dur, _ := a.GetVideoDuration(path)
-		durStr := ""
-		if dur > 0 {
-			durStr = fmt.Sprintf("%.2f", dur)
-		}
-		a.db.mu.Lock()
-		a.db.conn.Exec(`
-			INSERT INTO yt_videos (id, title, game_tag, episode, local_file, duration, published_at, synced_at)
-			VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)
-			ON CONFLICT(id) DO UPDATE SET
-				game_tag = excluded.game_tag,
-				episode  = excluded.episode,
-				local_file = excluded.local_file,
-				duration = CASE WHEN yt_videos.duration IS NULL OR yt_videos.duration = '' THEN excluded.duration ELSE yt_videos.duration END,
-				published_at = CASE WHEN yt_videos.published_at IS NULL OR yt_videos.published_at = '' THEN excluded.published_at ELSE yt_videos.published_at END`,
-			result.Id, title, gameTag, episode, path, durStr, time.Now().Unix(),
-		)
-		a.db.mu.Unlock()
-	}
-
-	// Add to playlist if specified
-	if playlistID != "" {
-		if plErr := a.AddVideoToPlaylist(playlistID, result.Id); plErr != nil {
-			appLog("[Queue] Warning: Failed to add video '%s' to playlist %s: %v", result.Id, playlistID, plErr)
-			// Emit a warning but do not fail the whole upload
-			runtime.EventsEmit(a.ctx, "youtube:playlist-error", map[string]string{
-				"videoId":    result.Id,
-				"playlistId": playlistID,
-				"message":    plErr.Error(),
-			})
-		} else if a.db != nil {
-			// Persist the membership immediately so the Channel view is correct
-			// without needing a full sync
-			a.db.mu.Lock()
-			a.db.conn.Exec(`
-				INSERT INTO yt_playlist_items (playlist_id, video_id, position)
-				VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM yt_playlist_items WHERE playlist_id=?))`,
-				playlistID, result.Id, playlistID)
-			a.db.conn.Exec(
-				`UPDATE yt_playlists SET video_count = video_count + 1 WHERE id = ?`,
-				playlistID)
-			a.db.mu.Unlock()
-		}
-	}
-
-	runtime.EventsEmit(a.ctx, "youtube:done", map[string]string{
-		"path": path,
-		"url":  "https://youtu.be/" + result.Id,
-	})
-	return nil
 }
 
 // PurgePlaylistDuplicates fetches every playlistItem from YouTube for the given

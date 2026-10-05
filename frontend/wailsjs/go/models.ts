@@ -393,6 +393,42 @@ export namespace backend {
 	}
 	
 	
+	export class UploadSession {
+	    videoPath: string;
+	    uploadUrl: string;
+	    totalBytes: number;
+	    bytesUploaded: number;
+	    fileMtime: number;
+	    title: string;
+	    description: string;
+	    privacy: string;
+	    playlistId: string;
+	    gameTag: string;
+	    episode: number;
+	    status: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UploadSession(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoPath = source["videoPath"];
+	        this.uploadUrl = source["uploadUrl"];
+	        this.totalBytes = source["totalBytes"];
+	        this.bytesUploaded = source["bytesUploaded"];
+	        this.fileMtime = source["fileMtime"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.playlistId = source["playlistId"];
+	        this.gameTag = source["gameTag"];
+	        this.episode = source["episode"];
+	        this.status = source["status"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class VideoFile {
 	    name: string;
 	    path: string;

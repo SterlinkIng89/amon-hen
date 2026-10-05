@@ -23,6 +23,12 @@ export function DeleteGameProfile(arg1:string):Promise<void>;
 
 export function DeletePlaylist(arg1:string):Promise<void>;
 
+export function DeleteYouTubeVideo(arg1:string,arg2:boolean):Promise<void>;
+
+export function DeleteYouTubeVideos(arg1:Array<string>,arg2:boolean):Promise<Array<string>|Array<string>>;
+
+export function DiscardUploadSession(arg1:string):Promise<void>;
+
 export function DisconnectSteam():Promise<void>;
 
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
@@ -81,6 +87,8 @@ export function GetTagPlaylistConfig(arg1:string):Promise<backend.TagPlaylistCon
 
 export function GetThumbnail(arg1:string):Promise<string>;
 
+export function GetUploadSessions():Promise<Array<backend.UploadSession>>;
+
 export function GetVideoDuration(arg1:string):Promise<number>;
 
 export function GetVideoPreview(arg1:string):Promise<string>;
@@ -118,6 +126,8 @@ export function PurgePlaylistDuplicates(arg1:string):Promise<number>;
 export function RegenerateThumbnail(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
+
+export function ResumeUpload(arg1:string):Promise<void>;
 
 export function SaveFolderSettings(arg1:string,arg2:backend.FolderConfig):Promise<void>;
 

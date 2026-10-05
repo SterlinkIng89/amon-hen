@@ -6,6 +6,7 @@ import {
   SyncRecentVideos,
   UploadToYouTube,
   LoadConfig,
+  GetUploadSessions,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
@@ -114,6 +115,45 @@ export default function Dashboard() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    GetUploadSessions()
+      .then((sessions) => {
+        if (!sessions || sessions.length === 0) return;
+        setQueue((currQueue) => {
+          const newItems: QueueItem[] = [];
+          sessions.forEach((s) => {
+            if (currQueue.some((q) => q.videoPath === s.videoPath)) return;
+            const pct =
+              s.totalBytes > 0
+                ? Math.round((s.bytesUploaded / s.totalBytes) * 100)
+                : 0;
+            const fileName = s.videoPath.split(/[/\\]/).pop() || "Video";
+            newItems.push({
+              id: `session-${s.videoPath}`,
+              videoPath: s.videoPath,
+              videoName: fileName,
+              size: s.totalBytes,
+              title: s.title || fileName,
+              description: s.description || "",
+              privacy:
+                s.privacy === "public" || s.privacy === "private"
+                  ? s.privacy
+                  : "unlisted",
+              status: "interrupted",
+              progress: pct,
+              playlistId: s.playlistId,
+              gameTag: s.gameTag,
+              episode: s.episode,
+              resumable: true,
+              resumedFrom: s.bytesUploaded,
+            });
+          });
+          return newItems.length > 0 ? [...currQueue, ...newItems] : currQueue;
+        });
+      })
+      .catch(() => {});
+  }, [setQueue]);
 
   // ── Advanced library filters ─────────────────────────────────────────────────
   const libFilters = useAdvancedFilters();

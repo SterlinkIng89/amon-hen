@@ -13,6 +13,7 @@ interface YouTubeInlinePlayerProps {
   onNext: (() => void) | null;
   onUpdate?: () => void;
   onEnded?: () => void;
+  onRequestDelete?: (video: YTVideo) => void;
 }
 
 export default function YouTubeInlinePlayer({
@@ -21,6 +22,7 @@ export default function YouTubeInlinePlayer({
   onNext,
   onUpdate,
   onEnded,
+  onRequestDelete,
 }: YouTubeInlinePlayerProps) {
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
@@ -366,6 +368,29 @@ export default function YouTubeInlinePlayer({
                   {video.playlistTitle}
                 </span>
               </div>
+            )}
+
+            {onRequestDelete && (
+              <button
+                onClick={() => onRequestDelete(video)}
+                className="px-3 py-1.5 rounded-full bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5"
+                title="Delete video from YouTube"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span className="text-xs font-bold">Delete</span>
+              </button>
             )}
 
             <div className="relative">

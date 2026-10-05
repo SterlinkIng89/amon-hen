@@ -116,6 +116,21 @@ func (db *DB) migrate() error {
 			publisher TEXT,
 			PRIMARY KEY (appid, publisher)
 		)`,
+		`CREATE TABLE IF NOT EXISTS upload_sessions (
+			video_path TEXT PRIMARY KEY,
+			upload_url TEXT NOT NULL,
+			total_bytes INTEGER NOT NULL,
+			bytes_uploaded INTEGER DEFAULT 0,
+			file_mtime INTEGER DEFAULT 0,
+			title TEXT,
+			description TEXT,
+			privacy TEXT,
+			playlist_id TEXT,
+			game_tag TEXT,
+			episode INTEGER DEFAULT 0,
+			status TEXT DEFAULT 'uploading',
+			updated_at INTEGER
+		)`,
 	}
 	
 	for _, q := range queries {
