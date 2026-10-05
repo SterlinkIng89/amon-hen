@@ -542,3 +542,16 @@ export function hasUnfilledPlaceholders(
 ): boolean {
   return getVideoTitleSegments(video, profile).hasPlaceholders;
 }
+
+export function formatPlaytimeHoursMinutes(decimalHours: number): string {
+  if (!decimalHours || isNaN(decimalHours) || decimalHours <= 0) {
+    return "0m";
+  }
+  const totalMinutes = Math.round(decimalHours * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0 && minutes === 0) return "<1m";
+  if (hours === 0) return `${minutes}m`;
+  return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+}
+

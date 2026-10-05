@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { GetChannelAnalytics } from "../../../wailsjs/go/backend/App";
-import { extractTitleDate } from "../../utils/videoUtils";
+import {
+  extractTitleDate,
+  formatPlaytimeHoursMinutes,
+} from "../../utils/videoUtils";
 
 interface HistoricalVideo {
   title: string;
@@ -274,12 +277,12 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             title="Total Time"
-            value={`${Math.round(insights.totalHours)}h`}
+            value={formatPlaytimeHoursMinutes(insights.totalHours)}
             subtitle={`${insights.totalVideos} videos`}
           />
           <StatCard
             title="Avg Hours / Day"
-            value={`${insights.avgHoursPerDay.toFixed(1)}h`}
+            value={formatPlaytimeHoursMinutes(insights.avgHoursPerDay)}
             subtitle="per day played"
           />
           <StatCard
@@ -317,7 +320,7 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
                     <div className="w-full flex justify-center h-full items-end relative">
                       <div className="absolute -top-8 bg-surface border border-border-subtle text-text-primary text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
                         {count} days ·{" "}
-                        {insights.dayOfWeekAvgHours[idx].toFixed(1)}h avg
+                        {formatPlaytimeHoursMinutes(insights.dayOfWeekAvgHours[idx])} avg
                       </div>
                       <div
                         className="w-full max-w-[24px] rounded-t-sm transition-all duration-500 ease-out bg-border-subtle group-hover:bg-accent"
@@ -345,13 +348,13 @@ export default function GamingInsights({ filters }: GamingInsightsProps) {
                 date={insights.peakDayVideos.date}
               />
               <RecordRow
-                label="Marathon Day (Hours)"
-                value={`${insights.marathonDay.hours.toFixed(1)}h`}
+                label="Marathon Day"
+                value={formatPlaytimeHoursMinutes(insights.marathonDay.hours)}
                 date={insights.marathonDay.date}
               />
               <RecordRow
-                label="Best Month (Hours)"
-                value={`${insights.bestMonth.hours.toFixed(1)}h`}
+                label="Best Month"
+                value={formatPlaytimeHoursMinutes(insights.bestMonth.hours)}
                 date={insights.bestMonth.month}
               />
               <RecordRow

@@ -3,7 +3,10 @@ import {
   GetChannelAnalytics,
   GetSteamAppID,
 } from "../../../wailsjs/go/backend/App";
-import { extractTitleDate } from "../../utils/videoUtils";
+import {
+  extractTitleDate,
+  formatPlaytimeHoursMinutes,
+} from "../../utils/videoUtils";
 
 interface HistoricalVideo {
   title: string;
@@ -366,7 +369,7 @@ export default function MostPlayedGames({
                 <div className="w-full flex justify-center h-full items-end relative">
                   {/* Tooltip */}
                   <div className="absolute -top-8 bg-surface border border-border-subtle text-text-primary text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
-                    {d.value.toFixed(1)} hrs
+                    {formatPlaytimeHoursMinutes(d.value)}
                   </div>
                   {/* Bar */}
                   <div
@@ -596,16 +599,13 @@ function GameRow({
         </span>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 z-10 bg-surface/80 backdrop-blur-md px-2 py-1 rounded-md border border-border-subtle shadow-sm group-hover:border-border-medium transition-colors">
+      <div className="flex items-center shrink-0 z-10 bg-surface/80 backdrop-blur-md px-2 py-1 rounded-md border border-border-subtle shadow-sm group-hover:border-border-medium transition-colors">
         <span
           className={`text-xs font-black tabular-nums ${
             isSelected ? "text-accent" : "text-text-primary"
           }`}
         >
-          {hours < 0.1 ? "<0.1" : hours.toFixed(1)}
-        </span>
-        <span className="text-[9px] text-text-muted font-bold tracking-wider">
-          hrs
+          {formatPlaytimeHoursMinutes(hours)}
         </span>
       </div>
     </div>
@@ -660,12 +660,9 @@ function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
           {game.game}
         </h4>
 
-        <div className="flex items-end gap-1 mt-1">
+        <div className="flex items-end mt-1">
           <span className="text-2xl sm:text-3xl font-black text-accent tabular-nums">
-            {game.hours < 0.1 ? "<0.1" : game.hours.toFixed(1)}
-          </span>
-          <span className="text-[10px] font-bold text-text-muted tracking-widest mb-1">
-            hrs
+            {formatPlaytimeHoursMinutes(game.hours)}
           </span>
         </div>
 

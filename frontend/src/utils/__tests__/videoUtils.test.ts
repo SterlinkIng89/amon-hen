@@ -5,6 +5,7 @@ import {
   hasUnfilledPlaceholders,
   formatTimeWithSubseconds,
   computeInitialClipRange,
+  formatPlaytimeHoursMinutes,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -351,4 +352,38 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(computeInitialClipRange(595, 600)).toEqual({ inPoint: 570, outPoint: 600 });
     });
   });
+
+  describe("formatPlaytimeHoursMinutes", () => {
+    it("handles 0, negative, and NaN cleanly", () => {
+      expect(formatPlaytimeHoursMinutes(0)).toBe("0m");
+      expect(formatPlaytimeHoursMinutes(-2)).toBe("0m");
+      expect(formatPlaytimeHoursMinutes(NaN)).toBe("0m");
+    });
+
+    it("handles values under 1 minute", () => {
+      expect(formatPlaytimeHoursMinutes(0.005)).toBe("<1m");
+    });
+
+    it("formats minutes without hour prefix when under 1 hour", () => {
+      expect(formatPlaytimeHoursMinutes(0.5)).toBe("30m");
+      expect(formatPlaytimeHoursMinutes(0.75)).toBe("45m");
+      expect(formatPlaytimeHoursMinutes(1 / 60)).toBe("1m");
+    });
+
+    it("formats hours and zero-padded minutes", () => {
+      expect(formatPlaytimeHoursMinutes(1)).toBe("1h 00m");
+      expect(formatPlaytimeHoursMinutes(1.05)).toBe("1h 03m");
+      expect(formatPlaytimeHoursMinutes(12.5)).toBe("12h 30m");
+    });
+
+    it("formats large multi-day playtime totals", () => {
+      expect(formatPlaytimeHoursMinutes(50.25)).toBe("50h 15m");
+      expect(formatPlaytimeHoursMinutes(120.75)).toBe("120h 45m");
+    });
+
+    it("handles rounding near boundaries", () => {
+      expect(formatPlaytimeHoursMinutes(1.999)).toBe("2h 00m");
+    });
+  });
 });
+
