@@ -18,6 +18,7 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   AddFolder: vi.fn().mockResolvedValue(""),
   RemoveFolder: vi.fn().mockResolvedValue(undefined),
   SaveFolders: vi.fn().mockResolvedValue(undefined),
+  GetUploadSessions: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock runtime

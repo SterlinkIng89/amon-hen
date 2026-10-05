@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/oauth2"
 	youtube "google.golang.org/api/youtube/v3"
 )
 
@@ -24,8 +25,9 @@ type App struct {
 	configMu   sync.RWMutex
 	db         *DB
 	// Cached YouTube service — reused across API calls to avoid redundant token refreshes
-	ytSvc   *youtube.Service
-	ytSvcMu sync.Mutex
+	ytSvc         *youtube.Service
+	ytTokenSource oauth2.TokenSource
+	ytSvcMu       sync.Mutex
 	// Folder watcher — watches configured folders for new video files
 	watcher *FolderWatcher
 	// Active uploads tracking
@@ -66,6 +68,10 @@ func (a *App) Startup(ctx context.Context) {
 	a.initConfig()
 	if err := a.initDB(); err != nil {
 		fmt.Println("Failed to init database:", err)
+	} else if a.db != nil {
+		if err := a.db.MarkStaleUploadsInterrupted(); err != nil {
+			appLog("[App] Failed to mark stale uploads interrupted: %v", err)
+		}
 	}
 	a.initCache()
 	a.startStreamServer()

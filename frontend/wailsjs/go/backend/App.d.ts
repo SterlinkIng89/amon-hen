@@ -25,7 +25,11 @@ export function DeletePlaylist(arg1:string):Promise<void>;
 
 export function DisconnectSteam():Promise<void>;
 
+export function DiscardUploadSession(arg1:string):Promise<void>;
+
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
+
+export function GetUploadSessions():Promise<Array<backend.UploadSession>>;
 
 export function GetAllGameTags():Promise<Array<string>>;
 
@@ -118,6 +122,8 @@ export function PurgePlaylistDuplicates(arg1:string):Promise<number>;
 export function RegenerateThumbnail(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
+
+export function ResumeUpload(arg1:string):Promise<void>;
 
 export function SaveFolderSettings(arg1:string,arg2:backend.FolderConfig):Promise<void>;
 

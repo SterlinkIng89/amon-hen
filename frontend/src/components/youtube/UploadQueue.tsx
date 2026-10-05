@@ -22,7 +22,7 @@ export interface QueueItem {
   title: string;
   description: string;
   privacy: "public" | "unlisted" | "private";
-  status: "pending" | "uploading" | "processing" | "done" | "error";
+  status: "pending" | "uploading" | "processing" | "done" | "error" | "interrupted";
   progress: number;
   playlistId?: string;
   gameTag?: string;
@@ -32,6 +32,8 @@ export interface QueueItem {
   uploadSpeed?: number;
   startedAt?: number; // ms timestamp when upload began
   completedAt?: number; // ms timestamp when upload finished
+  resumable?: boolean;
+  resumedFrom?: number;
 }
 
 interface Props {
@@ -178,7 +180,11 @@ export default function UploadQueue({
       (data: { path: string; message: string }) => {
         const updated = queueRef.current.map((item) =>
           item.videoPath === data.path
-            ? { ...item, status: "error" as const, error: data.message }
+            ? {
+                ...item,
+                status: item.status === "interrupted" ? ("interrupted" as const) : ("error" as const),
+                error: data.message,
+              }
             : item,
         );
         onUpdateQueue(updated);
@@ -200,10 +206,74 @@ export default function UploadQueue({
       },
     );
 
+    const unsub4 = EventsOn(
+      "youtube:interrupted",
+      (data: { path: string; bytesUploaded: number; totalBytes: number }) => {
+        const pct =
+          data.totalBytes > 0
+            ? Math.round((data.bytesUploaded / data.totalBytes) * 100)
+            : 0;
+        const updated = queueRef.current.map((item) =>
+          item.videoPath === data.path
+            ? {
+                ...item,
+                status: "interrupted" as const,
+                progress: pct,
+                resumable: true,
+                resumedFrom: data.bytesUploaded,
+                uploadSpeed: undefined,
+              }
+            : item,
+        );
+        onUpdateQueue(updated);
+        SetTrayUploadProgress(-1).catch(() => {});
+
+        const stillActive = updated.filter(
+          (i) => i.status === "uploading" || i.status === "pending",
+        ).length;
+        if (stillActive === 0) {
+          LogFrontendEvent("[Queue] Active uploads interrupted or paused.");
+          onSetRunning(false);
+        } else {
+          processQueue(updated);
+        }
+      },
+    );
+
+    const unsub5 = EventsOn(
+      "youtube:session-expired",
+      (data: { path: string; message: string }) => {
+        const updated = queueRef.current.map((item) =>
+          item.videoPath === data.path
+            ? {
+                ...item,
+                status: "error" as const,
+                error: data.message || "Upload session expired",
+                resumable: false,
+                uploadSpeed: undefined,
+              }
+            : item,
+        );
+        onUpdateQueue(updated);
+        SetTrayUploadProgress(-1).catch(() => {});
+
+        const stillActive = updated.filter(
+          (i) => i.status === "uploading" || i.status === "pending",
+        ).length;
+        if (stillActive === 0) {
+          onSetRunning(false);
+        } else {
+          processQueue(updated);
+        }
+      },
+    );
+
     return () => {
       unsub1();
       unsub2();
       unsub3();
+      unsub4();
+      unsub5();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

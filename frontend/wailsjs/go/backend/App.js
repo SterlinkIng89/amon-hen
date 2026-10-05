@@ -42,8 +42,16 @@ export function DisconnectSteam() {
   return window['go']['backend']['App']['DisconnectSteam']();
 }
 
+export function DiscardUploadSession(arg1) {
+  return window['go']['backend']['App']['DiscardUploadSession'](arg1);
+}
+
 export function GetAPILogs(arg1) {
   return window['go']['backend']['App']['GetAPILogs'](arg1);
+}
+
+export function GetUploadSessions() {
+  return window['go']['backend']['App']['GetUploadSessions']();
 }
 
 export function GetAllGameTags() {
@@ -228,6 +236,10 @@ export function RegenerateThumbnail(arg1) {
 
 export function RemoveFolder(arg1) {
   return window['go']['backend']['App']['RemoveFolder'](arg1);
+}
+
+export function ResumeUpload(arg1) {
+  return window['go']['backend']['App']['ResumeUpload'](arg1);
 }
 
 export function SaveFolderSettings(arg1, arg2) {
