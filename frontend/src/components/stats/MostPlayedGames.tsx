@@ -81,6 +81,7 @@ export default function MostPlayedGames({
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
+  const [selectedGameName, setSelectedGameName] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -289,6 +290,11 @@ export default function MostPlayedGames({
   }
 
   const maxGameHours = gamesToDisplay.length > 0 ? gamesToDisplay[0].hours : 1;
+  const selectedIndex = gamesToDisplay.findIndex(
+    (g) => g.game === selectedGameName,
+  );
+  const activeIndex = selectedIndex >= 0 ? selectedIndex : 0;
+  const activeGame = gamesToDisplay[activeIndex];
 
   return (
     <div className="px-5 pb-5 flex flex-col gap-4 animate-fadeIn">
@@ -385,10 +391,16 @@ export default function MostPlayedGames({
           {/* Left Column: Top Game Highlight (fixed compact card) */}
           <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-3">
             <h3 className="text-xs font-bold text-text-secondary">
-              #1 Game of the {viewMode === "year" ? "Year" : "Month"}
+              {activeIndex === 0
+                ? `#1 Game of the ${viewMode === "year" ? "Year" : "Month"}`
+                : `Selected Game (#${activeIndex + 1})`}
             </h3>
-            {gamesToDisplay.length > 0 ? (
-              <TopGameHighlight game={gamesToDisplay[0]} />
+            {gamesToDisplay.length > 0 && activeGame ? (
+              <TopGameHighlight
+                key={activeGame.game}
+                game={activeGame}
+                rank={activeIndex + 1}
+              />
             ) : (
               <div className="bg-surface/30 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
                 No game to highlight
@@ -415,6 +427,8 @@ export default function MostPlayedGames({
                     hours={g.hours}
                     index={idx}
                     maxGameHours={maxGameHours}
+                    isSelected={idx === activeIndex}
+                    onSelect={setSelectedGameName}
                   />
                 ))
               )}
@@ -472,21 +486,26 @@ function useSteamGameData(gameName: string) {
   return { appId, heroUrl, posterUrl, achievementsPct };
 }
 
+interface GameRowProps {
+  game: string;
+  hours: number;
+  index: number;
+  maxGameHours: number;
+  isSelected: boolean;
+  onSelect: (game: string) => void;
+}
+
 function GameRow({
   game,
   hours,
   index,
   maxGameHours,
-}: {
-  game: string;
-  hours: number;
-  index: number;
-  maxGameHours: number;
-}) {
+  isSelected,
+  onSelect,
+}: GameRowProps) {
   const { appId, heroUrl } = useSteamGameData(game);
 
   const progressWidth = `${(hours / maxGameHours) * 100}%`;
-  const isTop = index === 0;
 
   const bgImage = heroUrl
     ? `url('${heroUrl}')`
@@ -495,7 +514,23 @@ function GameRow({
       : "none";
 
   return (
-    <div className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all hover:scale-[1.01] border border-border-subtle hover:border-border-medium z-0 h-[64px] shadow-sm">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onClick={() => onSelect(game)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(game);
+        }
+      }}
+      className={`group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all cursor-pointer hover:scale-[1.01] border z-0 h-[64px] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+        isSelected
+          ? "border-accent bg-surface/60"
+          : "border-border-subtle hover:border-border-medium"
+      }`}
+    >
       {/* Layer 1: Blurred Color Bleed (Dominant color effect) */}
       {heroUrl || appId ? (
         <div
@@ -524,24 +559,38 @@ function GameRow({
 
       {/* Progress Background Fill */}
       <div
-        className={`absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent/15" : "bg-accent/5 opacity-50 group-hover:opacity-100"}`}
+        className={`absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700 ease-out ${
+          isSelected
+            ? "bg-accent/15"
+            : "bg-accent/5 opacity-50 group-hover:opacity-100"
+        }`}
         style={{ width: progressWidth }}
       />
 
       {/* Thicker Progress Bar at the bottom */}
       <div
-        className={`absolute bottom-0 left-0 h-[4px] -z-10 transition-all duration-700 ease-out ${isTop ? "bg-accent " : "bg-accent/60 group-hover:bg-accent "}`}
+        className={`absolute bottom-0 left-0 h-[4px] -z-10 transition-all duration-700 ease-out ${
+          isSelected
+            ? "bg-accent"
+            : "bg-accent/60 group-hover:bg-accent"
+        }`}
         style={{ width: progressWidth }}
       />
 
       <div className="flex items-center gap-3 z-10 w-2/3">
         <span
-          className={`w-5 shrink-0 text-center text-base font-black ${isTop ? "text-accent " : "text-text-muted group-hover:text-text-primary transition-colors"}`}
+          className={`w-5 shrink-0 text-center text-base font-black ${
+            isSelected
+              ? "text-accent"
+              : "text-text-muted group-hover:text-text-primary transition-colors"
+          }`}
         >
           {index + 1}
         </span>
         <span
-          className={`text-sm font-bold ${isTop ? "text-white" : "text-text-primary"} transition-colors truncate `}
+          className={`text-sm font-bold ${
+            isSelected ? "text-white" : "text-text-primary"
+          } transition-colors truncate`}
         >
           {game}
         </span>
@@ -549,7 +598,9 @@ function GameRow({
 
       <div className="flex items-center gap-1 shrink-0 z-10 bg-surface/80 backdrop-blur-md px-2 py-1 rounded-md border border-border-subtle shadow-sm group-hover:border-border-medium transition-colors">
         <span
-          className={`text-xs font-black tabular-nums ${isTop ? "text-accent " : "text-text-primary"}`}
+          className={`text-xs font-black tabular-nums ${
+            isSelected ? "text-accent" : "text-text-primary"
+          }`}
         >
           {hours < 0.1 ? "<0.1" : hours.toFixed(1)}
         </span>
@@ -561,7 +612,12 @@ function GameRow({
   );
 }
 
-function TopGameHighlight({ game }: { game: GameStat }) {
+interface TopGameHighlightProps {
+  game: GameStat;
+  rank: number;
+}
+
+function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
   const { appId, posterUrl, achievementsPct } = useSteamGameData(game.game);
 
   const activePoster =
@@ -581,7 +637,7 @@ function TopGameHighlight({ game }: { game: GameStat }) {
       ) : (
         <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center p-4 text-center opacity-50">
           <span className="text-3xl font-black text-text-muted/30 mb-2">
-            #1
+            #{rank}
           </span>
           <span className="text-sm font-bold text-text-primary">
             {game.game}
@@ -597,7 +653,7 @@ function TopGameHighlight({ game }: { game: GameStat }) {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1 shadow-md">
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse " />
           <span className="text-[9px] font-black tracking-wider text-accent ">
-            Top Played
+            {rank === 1 ? "Top Played" : `#${rank} Selected`}
           </span>
         </span>
         <h4 className="text-lg font-black text-white leading-snug line-clamp-2">
