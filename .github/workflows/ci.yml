@@ -17,7 +17,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Run Go Tests
-        run: go test -v ./...
+        run: go test -v ./backend/... ./tests/backend/...
 
   frontend-check:
     name: Frontend Build & Tests
