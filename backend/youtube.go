@@ -342,7 +342,7 @@ func (a *App) GetYouTubeChannelInfo() (*YouTubeChannel, error) {
 func (a *App) CreatePlaylist(title, description, privacy string) (string, error) {
 	normPrivacy, err := ValidatePrivacyStatus(privacy)
 	if err != nil {
-		normPrivacy = "public"
+		normPrivacy = "unlisted"
 	}
 
 	ctx := context.Background()
@@ -434,7 +434,7 @@ func (a *App) GetOrCreatePlaylist(title, description, privacy string) (string, e
 					if item.Snippet.Thumbnails != nil && item.Snippet.Thumbnails.Medium != nil {
 						thumb = item.Snippet.Thumbnails.Medium.Url
 					}
-					itemPrivacy := "public"
+					itemPrivacy := "unlisted"
 					if item.Status != nil && item.Status.PrivacyStatus != "" {
 						itemPrivacy = item.Status.PrivacyStatus
 					}
