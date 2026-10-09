@@ -271,27 +271,23 @@ export default function MostPlayedGames({
   return (
     <div className="px-5 pb-5 flex flex-col gap-4">
       <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-xl">
-        {/* Header & Subtitle */}
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-bold text-text-primary tracking-tight">
+        {/* Header & Playtime Toolbar */}
+        <div className="flex flex-wrap items-center gap-4">
+          <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
             Playtime by game
           </h2>
-          <span className="text-xs text-text-muted">
-            Total hours based on video duration
-          </span>
-        </div>
 
-        {/* Unified One-Line Toolbar */}
-        <PlaytimeToolbar
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          years={stats.years}
-          selectedYear={selectedYear}
-          onYearSelect={handleYearChange}
-          selectedMonthKey={selectedMonthKey}
-          onMonthSelect={setSelectedMonthKey}
-          monthsWithData={stats.monthsWithDataSet}
-        />
+          <PlaytimeToolbar
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            years={stats.years}
+            selectedYear={selectedYear}
+            onYearSelect={handleYearChange}
+            selectedMonthKey={selectedMonthKey}
+            onMonthSelect={setSelectedMonthKey}
+            monthsWithData={stats.monthsWithDataSet}
+          />
+        </div>
 
         {/* Stacked Chart (Daily in month view, Monthly in year view) */}
         <PlaytimeStackedChart

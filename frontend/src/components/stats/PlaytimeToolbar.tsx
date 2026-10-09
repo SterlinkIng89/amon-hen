@@ -7,6 +7,7 @@ export interface PlaytimeToolbarProps {
   readonly selectedMonthKey: string; // "YYYY-MM"
   readonly onMonthSelect: (monthKey: string) => void;
   readonly monthsWithData: ReadonlySet<string>; // set of "YYYY-MM"
+  readonly className?: string;
 }
 
 const MONTH_NAMES = [
@@ -33,11 +34,12 @@ export function PlaytimeToolbar({
   selectedMonthKey,
   onMonthSelect,
   monthsWithData,
+  className = "",
 }: PlaytimeToolbarProps) {
   const currentMonthNum = parseInt(selectedMonthKey.split("-")[1] || "1", 10);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 w-full py-1">
+    <div className={`flex flex-wrap items-center gap-3 ${className}`.trim()}>
       {/* 1. Mode Switcher (By month / By year) */}
       <div className="flex items-center bg-surface/60 p-0.5 rounded-lg border border-border-subtle shrink-0">
         <button
