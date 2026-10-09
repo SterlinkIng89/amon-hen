@@ -1209,6 +1209,7 @@ export default function ChannelPage() {
                             ? playlistVideoCounts.get(v.id)
                             : undefined
                         }
+                        onDelete={() => setDeleteTargets([v])}
                       />
                     </div>
                   ))}

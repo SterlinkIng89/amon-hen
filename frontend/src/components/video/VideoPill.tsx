@@ -243,63 +243,64 @@ export default function VideoPill({
         style={{ width: isList ? thumbWidth : "100%" }}
         onMouseMove={handleMouseMove}
       >
-        {/* Selection Checkbox */}
-        <div
-          className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${
-            multiSelected
-              ? "opacity-100"
-              : hovered
-                ? "opacity-100"
-                : "opacity-0"
-          }`}
-          onClick={(e) => {
-            if (onSelectToggle) {
-              e.preventDefault();
-              e.stopPropagation();
-              onSelectToggle(e);
-            }
-          }}
-        >
-          <div
-            className={`w-5 h-5 rounded border shadow-sm flex items-center justify-center transition-colors ${
-              multiSelected
-                ? "bg-accent border-accent text-white"
-                : "bg-black/40 border-white/40 text-transparent hover:border-white/80 backdrop-blur-sm"
-            }`}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-        </div>
+        {/* Top-left Actions Overlay */}
+        {(onSelectToggle || onDelete) && (
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 pointer-events-none">
+            {/* Selection Checkbox */}
+            {onSelectToggle && (
+              <button
+                type="button"
+                className={`w-5 h-5 rounded border shadow-xs flex items-center justify-center transition-all pointer-events-auto cursor-pointer ${
+                  multiSelected
+                    ? "bg-accent border-accent text-white opacity-100"
+                    : `bg-black/40 border-white/40 text-transparent hover:border-white/80 backdrop-blur-xs ${
+                        hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      }`
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelectToggle(e);
+                }}
+                title={multiSelected ? "Deselect video" : "Select video"}
+                aria-label={multiSelected ? "Deselect video" : "Select video"}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+            )}
 
-        {/* Delete button — hover absolute */}
-        {onDelete && (
-          <button
-            type="button"
-            className={`absolute top-2 left-9 p-1.5 rounded-full bg-black/50 border border-white/20 backdrop-blur-md text-white/80 hover:text-red-400 hover:bg-black/80 hover:border-red-500/50 transition-all shadow-sm z-30 ${
-              hovered ? "opacity-100" : "opacity-0"
-            }`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDelete();
-            }}
-            title="Delete video from YouTube"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-            </svg>
-          </button>
+            {/* Delete button */}
+            {onDelete && (
+              <button
+                type="button"
+                className={`w-5 h-5 rounded border border-white/20 bg-black/50 backdrop-blur-xs text-white/80 hover:text-red-400 hover:bg-black/80 hover:border-red-500/50 flex items-center justify-center transition-all shadow-xs pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title="Delete video from YouTube"
+                aria-label="Delete video from YouTube"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
 
         {isLocal && !thumbLoaded && (
