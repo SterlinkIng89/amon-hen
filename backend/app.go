@@ -32,6 +32,7 @@ type App struct {
 	watcher *FolderWatcher
 	// Active uploads tracking
 	uploadsMu sync.Mutex
+	playlistOpMu sync.Mutex
 	uploads   map[string]context.CancelFunc
 	// thumbSem limits concurrent ffmpeg/ffprobe processes for thumbnail generation.
 	// Prevents CPU saturation when many clips are loaded at once.

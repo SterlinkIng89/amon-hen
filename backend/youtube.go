@@ -461,6 +461,20 @@ func (a *App) GetOrCreatePlaylist(title, description, privacy string) (string, e
 
 // AddVideoToPlaylist adds an existing video to a YouTube playlist
 func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
+	a.playlistOpMu.Lock()
+	defer a.playlistOpMu.Unlock()
+
+	if a.db != nil {
+		var exists int
+		a.db.mu.Lock()
+		err := a.db.conn.QueryRow("SELECT 1 FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, videoID).Scan(&exists)
+		a.db.mu.Unlock()
+		if err == nil && exists == 1 {
+			appLog("[AddVideoToPlaylist] Video %s already exists in playlist %s locally, skipping insert.", videoID, playlistID)
+			return nil
+		}
+	}
+
 	ctx := context.Background()
 	svc, err := a.youtubeClient(ctx)
 	if err != nil {
@@ -484,6 +498,13 @@ func (a *App) AddVideoToPlaylist(playlistID, videoID string) error {
 		fmt.Printf("Error adding video %s to playlist %s: %v\n", videoID, playlistID, err)
 		return err
 	}
+
+	if a.db != nil {
+		a.db.mu.Lock()
+		a.db.conn.Exec("INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES (?, ?, 0)", playlistID, videoID)
+		a.db.mu.Unlock()
+	}
+
 	return nil
 }
 

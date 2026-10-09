@@ -359,14 +359,7 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 		if len(videoIDs) > 0 {
 			appLog("[SetTagPlaylist] Retroactively adding %d videos to playlist %s", len(videoIDs), playlistID)
 			for _, vid := range videoIDs {
-				var exists int
-				a.db.mu.Lock()
-				a.db.conn.QueryRow("SELECT 1 FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid).Scan(&exists)
-				a.db.mu.Unlock()
-				
-				if exists == 0 {
-					_ = a.AddVideoToPlaylist(playlistID, vid)
-				}
+				_ = a.AddVideoToPlaylist(playlistID, vid)
 			}
 		}
 	}()
