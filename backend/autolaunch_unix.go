@@ -11,3 +11,5 @@ func (a *App) GetAutoLaunch() bool { return false }
 func (a *App) SetAutoLaunch(_ bool) error {
 	return errors.New("auto-launch is only supported on Windows")
 }
+
+func (a *App) syncAutoLaunchPath() {}

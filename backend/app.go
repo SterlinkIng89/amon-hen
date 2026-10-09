@@ -76,6 +76,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.initCache()
 	a.startStreamServer()
 	a.startWatcher()
+	a.syncAutoLaunchPath()
 
 	appLog("[App] Startup complete")
 

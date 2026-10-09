@@ -87,11 +87,23 @@ This starts both the Go backend and a Vite dev server with hot-reload. You can a
 
 ### 4. Build a production binary
 
+Using Wails CLI directly:
+
 ```bash
 wails build
 ```
 
-The output executable is placed in `build/bin/`.
+Or using the Windows PowerShell helper script (automatically closes any running instances to release file locks before compiling):
+
+```powershell
+# Build only
+.\build.ps1
+
+# Build and immediately restart the updated application
+.\build.ps1 -Restart
+```
+
+The output executable is placed in `build/bin/Amon Hen.exe`.
 
 ---
 
