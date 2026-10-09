@@ -37,3 +37,10 @@ export function getTagColor(tag: string): string {
 
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
+
+export const DEFAULT_GAME_COLOR = "#64748b"; // Slate-500 fallback
+
+export function getGameColor(game: string): string {
+  if (!game || game.trim().length === 0) return DEFAULT_GAME_COLOR;
+  return getTagColor(game) || DEFAULT_GAME_COLOR;
+}

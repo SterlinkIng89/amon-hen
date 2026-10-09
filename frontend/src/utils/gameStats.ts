@@ -1,4 +1,5 @@
 import { extractTitleDate } from "./videoUtils";
+import { getGameColor, DEFAULT_GAME_COLOR } from "./tagColors";
 
 export interface HistoricalVideo {
   title: string;
@@ -72,26 +73,16 @@ export interface MonthGameBreakdown {
   byGame: Record<string, number>; // gameDisplayName -> hours
 }
 
-export const GAME_PALETTE_COLORS: readonly string[] = [
-  "#3b82f6", // Blue
-  "#ef4444", // Red
-  "#14b8a6", // Teal
-  "#f97316", // Orange
-  "#22c55e", // Green
-  "#a855f7", // Purple
-  "#eab308", // Yellow
-  "#ec4899", // Pink
-];
+export const OTHER_GAME_COLOR = DEFAULT_GAME_COLOR;
 
-export const OTHER_GAME_COLOR = "#64748b"; // Slate-500
+export { getGameColor };
 
 export function assignGameColors(
   topGameNames: string[],
 ): Record<string, string> {
   const mapping: Record<string, string> = {};
-  topGameNames.forEach((name, idx) => {
-    mapping[name] =
-      GAME_PALETTE_COLORS[idx % GAME_PALETTE_COLORS.length] || OTHER_GAME_COLOR;
+  topGameNames.forEach((name) => {
+    mapping[name] = getGameColor(name);
   });
   return mapping;
 }

@@ -2,9 +2,8 @@ import { useMemo, useState } from "react";
 import {
   DayGameBreakdown,
   MonthGameBreakdown,
-  assignGameColors,
-  OTHER_GAME_COLOR,
 } from "../../utils/gameStats";
+import { getGameColor } from "../../utils/tagColors";
 
 export interface PlaytimeStackedChartProps {
   readonly viewMode: "month" | "year";
@@ -71,7 +70,6 @@ interface StackedBarColumnProps {
   readonly hasAnyHovered: boolean;
   readonly tooltipSide: "left" | "right";
   readonly barMaxWidthClass: string;
-  readonly colorMap: Readonly<Record<string, string>>;
   readonly labelNode: React.ReactNode;
   readonly onSelect?: (key: string) => void;
   readonly onHover: () => void;
@@ -90,7 +88,6 @@ function StackedBarColumn({
   hasAnyHovered,
   tooltipSide,
   barMaxWidthClass,
-  colorMap,
   labelNode,
   onSelect,
   onHover,
@@ -138,7 +135,7 @@ function StackedBarColumn({
           {entries.length > 0 ? (
             <div className="flex flex-col gap-1.5">
               {entries.slice(0, 4).map(([game, h]) => {
-                const color = colorMap[game] || OTHER_GAME_COLOR;
+                const color = getGameColor(game);
                 const pct =
                   totalHours > 0 ? Math.round((h / totalHours) * 100) : 0;
                 return (
@@ -196,7 +193,7 @@ function StackedBarColumn({
       >
         {entries.map(([game, h]) => {
           const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
-          const color = colorMap[game] || OTHER_GAME_COLOR;
+          const color = getGameColor(game);
           return (
             <div
               key={game}
@@ -225,10 +222,6 @@ export function PlaytimeStackedChart({
 }: PlaytimeStackedChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const colorMap = useMemo(() => {
-    return assignGameColors([...topGames]);
-  }, [topGames]);
-
   const chartMax = useMemo(() => {
     const raw =
       viewMode === "month"
@@ -247,9 +240,9 @@ export function PlaytimeStackedChart({
   const legendItems = useMemo(() => {
     return topGames.slice(0, 5).map((game) => ({
       name: game,
-      color: colorMap[game] || OTHER_GAME_COLOR,
+      color: getGameColor(game),
     }));
-  }, [topGames, colorMap]);
+  }, [topGames]);
 
   const hasAnyHovered = hoveredIndex !== null;
 
@@ -283,7 +276,6 @@ export function PlaytimeStackedChart({
                   hasAnyHovered={hasAnyHovered}
                   tooltipSide={idx < 18 ? "right" : "left"}
                   barMaxWidthClass="max-w-[28px]"
-                  colorMap={colorMap}
                   onSelect={onSelectKey}
                   onHover={() => setHoveredIndex(idx)}
                   onLeave={() => setHoveredIndex(null)}
@@ -316,7 +308,6 @@ export function PlaytimeStackedChart({
                   hasAnyHovered={hasAnyHovered}
                   tooltipSide={idx < 6 ? "right" : "left"}
                   barMaxWidthClass="max-w-[36px]"
-                  colorMap={colorMap}
                   onSelect={onSelectKey}
                   onHover={() => setHoveredIndex(idx)}
                   onLeave={() => setHoveredIndex(null)}
@@ -347,13 +338,11 @@ export function PlaytimeStackedChart({
               <span className="truncate max-w-[130px]">{item.name}</span>
             </div>
           ))}
-          <div className="flex items-center gap-1.5">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: OTHER_GAME_COLOR }}
-            />
-            <span>Other</span>
-          </div>
+          {topGames.length > 5 && (
+            <span className="text-[10px] text-text-muted">
+              +{topGames.length - 5} more
+            </span>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,6 @@
-import { useMemo } from "react";
 import { useSteamGameData } from "../../hooks/useSteamGameData";
 import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
-import { assignGameColors } from "../../utils/gameStats";
+import { getGameColor } from "../../utils/tagColors";
 
 export interface GameListItem {
   readonly game: string;
@@ -68,7 +67,10 @@ function GameRowItem({
               loading="lazy"
             />
           ) : (
-            <span className="text-[10px] font-bold text-text-muted">
+            <span
+              className="text-[10px] font-bold"
+              style={{ color }}
+            >
               {game.slice(0, 2).toUpperCase()}
             </span>
           )}
@@ -76,14 +78,20 @@ function GameRowItem({
 
         {/* Name and Progress bar */}
         <div className="flex flex-col gap-1 min-w-0 flex-1">
-          <span
-            className={`text-xs font-semibold truncate ${
-              isSelected ? "text-text-primary" : "text-text-secondary group-hover:text-text-primary"
-            }`}
-            title={game}
-          >
-            {game}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: color }}
+            />
+            <span
+              className={`text-xs font-semibold truncate ${
+                isSelected ? "text-text-primary" : "text-text-secondary group-hover:text-text-primary"
+              }`}
+              title={game}
+            >
+              {game}
+            </span>
+          </div>
 
           {/* Thin progress bar colored matching game chart color */}
           <div className="h-1 w-full max-w-[160px] bg-border-subtle rounded-full overflow-hidden">
@@ -118,9 +126,6 @@ export function TopGamesList({
   maxHours,
   listTitle,
 }: TopGamesListProps) {
-  const topNames = useMemo(() => games.map((g) => g.game), [games]);
-  const colorMap = useMemo(() => assignGameColors(topNames), [topNames]);
-
   return (
     <div className="flex flex-col gap-2.5 w-full">
       <h3 className="text-xs font-bold text-text-secondary">{listTitle}</h3>
@@ -139,7 +144,7 @@ export function TopGamesList({
               rank={idx + 1}
               isSelected={g.game === selectedGameName}
               maxHours={maxHours}
-              color={colorMap[g.game] || "#64748b"}
+              color={getGameColor(g.game)}
               onSelect={onSelectGame}
             />
           ))}
