@@ -57,7 +57,6 @@ describe("MostPlayedGames Monthly Layout", () => {
     expect(screen.getByText("#1 Game of the month")).toBeDefined();
     expect(screen.getByText(/Top games in October 2026/i)).toBeDefined();
     expect(screen.getByText("Monthly timeline")).toBeDefined();
-    expect(screen.getByText("Chronological gaming stints")).toBeDefined();
   });
 
   it("updates the highlight card when selecting a game from the list", async () => {

@@ -6,17 +6,16 @@ import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
 export interface GamingTimelineStripProps {
   readonly stints: readonly GameStint[];
   readonly selectedStintId?: string | null;
-  readonly onSelectStint?: (stint: GameStint) => void;
+  readonly onSelectStint?: (stint: GameStint, activeGameName?: string) => void;
 }
 
 interface StintCardProps {
   readonly stint: GameStint;
   readonly isSelected: boolean;
-  readonly onSelect: (stint: GameStint) => void;
+  readonly onSelect: (stint: GameStint, activeGameName?: string) => void;
 }
 
 function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
-  // If multiple games, maintain active index that can be swapped by clicking the back card
   const [activeGameIndex, setActiveGameIndex] = useState(0);
 
   const activeGame: StintGame =
@@ -32,38 +31,47 @@ function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
   const handleSwap = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (stint.games.length > 1) {
-      setActiveGameIndex((prev) => (prev + 1) % stint.games.length);
+      const nextIndex = (activeGameIndex + 1) % stint.games.length;
+      setActiveGameIndex(nextIndex);
+      const nextGame = stint.games[nextIndex];
+      if (nextGame) {
+        onSelect(stint, nextGame.game);
+      }
     }
   };
 
   const dateLabel = formatDateLabel(stint.startDate, stint.endDate);
   const isSingleDay = stint.startDate === stint.endDate;
+  const hasMultipleGames = stint.games.length > 1;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(stint)}
+      onClick={() => onSelect(stint, activeGame.game)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onSelect(stint);
+          onSelect(stint, activeGame.game);
         }
       }}
-      className={`group relative flex flex-col items-center shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-xl p-2 transition-all ${
-        isSelected ? "bg-surface/80 ring-1 ring-accent" : "hover:bg-surface/40"
-      }`}
+      className="group relative flex flex-col items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-lg p-1 transition-all"
     >
-      {/* Covers container sitting on top of the timeline track */}
-      <div className="relative w-20 h-28 sm:w-24 sm:h-34 mb-2 flex items-center justify-center">
-        {/* Back card (if stacked games exist) */}
+      {/* Horizontal connector line at date pill level */}
+      <div
+        aria-hidden="true"
+        className="absolute top-[182px] sm:top-[238px] inset-x-0 h-0.5 bg-border-subtle/40 -z-0 pointer-events-none"
+      />
+
+      <div className="relative w-34 h-44 sm:w-42 sm:h-56 mb-2.5 flex items-center justify-center">
         {backGame && (
           <div
             role="button"
             tabIndex={0}
             onClick={handleSwap}
-            title={`Click to swap to ${backGame.game}`}
-            className="absolute top-2 left-3 w-18 h-26 sm:w-22 sm:h-32 rounded-lg border border-accent/60 overflow-hidden shadow-xs cursor-pointer z-0 opacity-70 group-hover:opacity-90 group-hover:translate-x-1 group-hover:translate-y-1 transition-all bg-surface"
+            title={`Switch to ${backGame.game}`}
+            aria-label={`Switch to ${backGame.game}`}
+            className="absolute top-0 right-0 w-28 h-40 sm:w-36 sm:h-52 rounded-xl border border-accent/50 overflow-hidden shadow-xs cursor-pointer z-0 opacity-90 group-hover:opacity-100 group-hover:translate-x-2 group-hover:-translate-y-1 transition-all bg-surface hover:border-accent"
           >
             {backPoster ? (
               <img
@@ -73,8 +81,8 @@ function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
                 loading="lazy"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-surface/80 p-1 text-center">
-                <span className="text-[9px] font-bold text-text-muted">
+              <div className="w-full h-full flex items-center justify-center bg-surface/80 p-2 text-center">
+                <span className="text-xs font-bold text-text-muted">
                   {backGame.game}
                 </span>
               </div>
@@ -84,7 +92,7 @@ function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
 
         {/* Front card */}
         <div
-          className={`relative w-18 h-26 sm:w-22 sm:h-32 rounded-lg border overflow-hidden shadow-xs z-10 transition-transform bg-surface ${
+          className={`relative w-28 h-40 sm:w-36 sm:h-52 rounded-xl border overflow-hidden shadow-xs z-10 transition-transform bg-surface ${
             isSelected
               ? "border-accent ring-2 ring-accent/40"
               : "border-border-subtle group-hover:border-border-medium group-hover:scale-102"
@@ -105,17 +113,37 @@ function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
             </div>
           )}
 
-          {/* Stint game title overlay badge on hover / focus */}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-[10px] font-bold text-white line-clamp-1">
-              {activeGame.game}
-            </span>
-          </div>
+          {/* Quick Swap button icon in bottom right */}
+          {hasMultipleGames && (
+            <button
+              type="button"
+              onClick={handleSwap}
+              title={`Switch to ${backGame?.game || "next game"}`}
+              aria-label="Switch to next game"
+              className="absolute bottom-1 right-1 p-1 rounded-md bg-surface/95 hover:bg-accent hover:text-black text-text-secondary border border-border-subtle hover:border-accent shadow-xs z-20 transition-all cursor-pointer opacity-90 group-hover:opacity-100"
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 21h5v-5" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Date Pill */}
-      <div className="px-2.5 py-0.5 rounded-full bg-surface/70 border border-border-subtle text-[10px] font-bold text-text-secondary whitespace-nowrap mb-1">
+      {/* Date Pill with timeline node styling */}
+      <div className="relative z-10 px-2.5 py-0.5 rounded-full bg-surface border border-border-subtle text-[10px] font-bold text-text-secondary whitespace-nowrap mb-1 shadow-xs">
         {dateLabel}
       </div>
 
@@ -147,37 +175,20 @@ export function GamingTimelineStrip({
   }
 
   return (
-    <div className="flex flex-col gap-2 w-full">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-text-secondary">
-          Monthly timeline
-        </h3>
-        <span className="text-[10px] text-text-muted">
-          Chronological gaming stints
-        </span>
-      </div>
+    <div className="flex flex-col gap-2.5 w-full">
+      <h3 className="text-xs font-bold text-text-secondary">
+        Monthly timeline
+      </h3>
 
-      {/* Horizontal Scroll Track */}
-      <div className="relative w-full overflow-x-auto custom-scrollbar pb-3 pt-2">
-        {/* Continuous track line centered on covers */}
-        <div className="absolute top-[4.75rem] left-6 right-6 h-0.5 bg-border-subtle -z-0" />
-
-        <div className="flex items-center gap-4 min-w-max px-4 relative z-10">
-          {stints.map((stint, idx) => (
-            <div key={stint.id} className="flex items-center gap-4">
-              <StintCard
-                stint={stint}
-                isSelected={stint.id === selectedStintId}
-                onSelect={(s) => onSelectStint?.(s)}
-              />
-
-              {/* Connecting Dot between items */}
-              {idx < stints.length - 1 && (
-                <div className="w-2 h-2 rounded-full bg-border-subtle border border-surface shrink-0 self-center mt-[-30px]" />
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-start justify-start gap-x-4 gap-y-5">
+        {stints.map((stint) => (
+          <StintCard
+            key={stint.id}
+            stint={stint}
+            isSelected={stint.id === selectedStintId}
+            onSelect={(s, gameName) => onSelectStint?.(s, gameName)}
+          />
+        ))}
       </div>
     </div>
   );

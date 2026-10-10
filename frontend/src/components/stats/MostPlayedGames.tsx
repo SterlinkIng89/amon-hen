@@ -347,10 +347,11 @@ export default function MostPlayedGames({
               <GamingTimelineStrip
                 stints={monthlyStints}
                 selectedStintId={selectedStintId}
-                onSelectStint={(stint: GameStint) => {
+                onSelectStint={(stint: GameStint, activeGameName?: string) => {
                   setSelectedStintId(stint.id);
-                  if (stint.games[0]) {
-                    setSelectedGameName(stint.games[0].game);
+                  const targetGame = activeGameName || stint.games[0]?.game;
+                  if (targetGame) {
+                    setSelectedGameName(targetGame);
                   }
                 }}
               />
