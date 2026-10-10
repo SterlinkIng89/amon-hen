@@ -307,41 +307,42 @@ export default function MostPlayedGames({
 
         <div className="h-px w-full bg-border-subtle my-1" />
 
-        {/* Lower Row: #1 Highlight + Top Games List + Monthly Timeline */}
+        {/* Grouped Top Games and Timeline */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Column 1: #1 Game Highlight Poster Card */}
-          <div className="lg:col-span-3 flex flex-col gap-2.5">
-            <h3 className="text-xs font-bold text-text-secondary">
-              {activeIndex === 0
-                ? `#1 Game of the ${viewMode === "year" ? "year" : "month"}`
-                : `Selected game (#${activeIndex + 1})`}
-            </h3>
-            {gamesToDisplay.length > 0 && activeGame ? (
-              <TopGameHighlight
-                key={activeGame.game}
-                game={activeGame}
-                rank={activeIndex + 1}
+          {/* Top Games Section: Highlight + List */}
+          <div className="lg:col-span-5 2xl:col-span-4 flex flex-col sm:flex-row gap-4 items-start w-full">
+            <div className="w-full sm:w-[170px] xl:w-[180px] shrink-0 flex flex-col gap-2.5">
+              <h3 className="text-xs font-bold text-text-secondary truncate">
+                {activeIndex === 0
+                  ? `#1 Game of the ${viewMode === "year" ? "year" : "month"}`
+                  : `Selected (#${activeIndex + 1})`}
+              </h3>
+              {gamesToDisplay.length > 0 && activeGame ? (
+                <TopGameHighlight
+                  key={activeGame.game}
+                  game={activeGame}
+                  rank={activeIndex + 1}
+                />
+              ) : (
+                <div className="bg-surface/30 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
+                  No game to highlight
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0 w-full flex flex-col gap-2.5">
+              <TopGamesList
+                games={gamesToDisplay}
+                selectedGameName={selectedGameName}
+                onSelectGame={setSelectedGameName}
+                maxHours={maxGameHours}
+                listTitle={listTitle}
               />
-            ) : (
-              <div className="bg-surface/30 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
-                No game to highlight
-              </div>
-            )}
+            </div>
           </div>
 
-          {/* Column 2: Top Games Leaderboard List */}
-          <div className="lg:col-span-4 flex flex-col gap-2.5">
-            <TopGamesList
-              games={gamesToDisplay}
-              selectedGameName={selectedGameName}
-              onSelectGame={setSelectedGameName}
-              maxHours={maxGameHours}
-              listTitle={listTitle}
-            />
-          </div>
-
-          {/* Column 3: Monthly Timeline (Visible in month view) */}
-          <div className="lg:col-span-5 flex flex-col gap-2.5">
+          {/* Timeline Section */}
+          <div className="lg:col-span-7 2xl:col-span-8 min-w-0 flex flex-col gap-2.5 w-full">
             {viewMode === "month" ? (
               <GamingTimelineStrip
                 stints={monthlyStints}

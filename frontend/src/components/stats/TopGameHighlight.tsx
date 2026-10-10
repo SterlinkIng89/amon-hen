@@ -19,7 +19,7 @@ export function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
       : "");
 
   return (
-    <div className="relative w-full max-w-[260px] aspect-[2/3] rounded-xl overflow-hidden border border-border-subtle shadow-xs group bg-surface">
+    <div className="relative w-full max-w-[220px] aspect-[2/3] rounded-xl overflow-hidden border border-border-subtle shadow-xs group bg-surface">
       {/* Background Poster */}
       {activePoster || appId ? (
         <div
@@ -31,29 +31,33 @@ export function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
           <span className="text-3xl font-black text-text-muted/30 mb-2">
             #{rank}
           </span>
-          <span className="text-sm font-bold text-text-primary">
-            {game.game}
-          </span>
+          <span className="text-sm font-bold text-white">{game.game}</span>
         </div>
       )}
 
       {/* Gradient Overlay for bottom text readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent opacity-95 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/85 via-45% to-transparent opacity-95 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-1.5 z-10">
+      <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 flex flex-col gap-1.5 z-10">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1">
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           <span className="text-[9px] font-bold tracking-wider text-accent">
             {rank === 1 ? "Top played" : `#${rank} selected`}
           </span>
         </span>
-        <h4 className="text-base font-bold text-white leading-snug line-clamp-2">
+        <h4
+          style={{ color: "#ffffff" }}
+          className="text-sm sm:text-base font-bold leading-snug line-clamp-2"
+        >
           {game.game}
         </h4>
 
         <div className="flex items-end mt-1">
-          <span className="text-xl sm:text-2xl font-bold text-accent tabular-nums">
+          <span
+            style={{ color: "#ffffff" }}
+            className="text-lg sm:text-xl font-bold tabular-nums"
+          >
             {formatPlaytimeHoursMinutes(game.hours)}
           </span>
         </div>
