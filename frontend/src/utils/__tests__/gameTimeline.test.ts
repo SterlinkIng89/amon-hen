@@ -81,6 +81,40 @@ describe("gameTimeline utils", () => {
     expect(stints[0].games[1].game).toBe("Street Fighter 6");
   });
 
+  it("sorts games by firstPlayedAt ascending within a day (first played game in front)", () => {
+    // Game B has more hours (4h) but was played later (18:00)
+    // Game A has fewer hours (1h) but was played first (09:00)
+    // Game C was played between them (12:00, 2h)
+    const videos: HistoricalVideo[] = [
+      {
+        title: "Heavy Game - Session 2",
+        published: "2026-10-15T18:00:00Z",
+        duration: "PT4H",
+      },
+      {
+        title: "First Game - Morning Session",
+        published: "2026-10-15T09:00:00Z",
+        duration: "PT1H",
+      },
+      {
+        title: "Midday Game - Lunch Session",
+        published: "2026-10-15T12:00:00Z",
+        duration: "PT2H",
+      },
+    ];
+
+    const stints = buildMonthStints(videos, "2026-10");
+    expect(stints.length).toBe(1);
+    expect(stints[0].games.length).toBe(3);
+    // Should be ordered strictly ascending by firstPlayedAt: First Game -> Midday Game -> Heavy Game
+    expect(stints[0].games[0].game).toBe("First Game");
+    expect(stints[0].games[0].firstPlayedAt).toBe("2026-10-15T09:00:00Z");
+    expect(stints[0].games[1].game).toBe("Midday Game");
+    expect(stints[0].games[1].firstPlayedAt).toBe("2026-10-15T12:00:00Z");
+    expect(stints[0].games[2].game).toBe("Heavy Game");
+    expect(stints[0].games[2].firstPlayedAt).toBe("2026-10-15T18:00:00Z");
+  });
+
   it("skips non-active days smoothly without creating empty gap entries", () => {
     const videos: HistoricalVideo[] = [
       {

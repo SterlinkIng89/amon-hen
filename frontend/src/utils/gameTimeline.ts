@@ -8,6 +8,7 @@ import {
 export interface StintGame {
   readonly game: string;
   readonly hours: number;
+  readonly firstPlayedAt?: string; // Earliest published timestamp or title date
 }
 
 export interface GameStint {
@@ -15,7 +16,7 @@ export interface GameStint {
   readonly startDate: string; // YYYY-MM-DD
   readonly endDate: string; // YYYY-MM-DD
   readonly dayCount: number; // Number of days in the span or played
-  readonly games: readonly StintGame[]; // Sorted descending by hours (primary game first)
+  readonly games: readonly StintGame[]; // Sorted ascending by firstPlayedAt (earliest played game first)
   readonly totalHours: number;
 }
 
@@ -28,18 +29,28 @@ export interface GameStint {
  * 3. Consecutive active days with the exact same primary game (or set of games)
  *    are grouped into a single stint.
  * 4. When a different game is played, a new stint begins (even if the previous game returns later, e.g. A -> B -> A).
- * 5. Days with multiple games have their games grouped together in `games` list, sorted by playtime.
+ * 5. Days with multiple games have their games grouped together in `games` list, sorted by firstPlayedAt ascending.
  */
+function compareStintGames(a: StintGame, b: StintGame): number {
+  if (a.firstPlayedAt && b.firstPlayedAt && a.firstPlayedAt !== b.firstPlayedAt) {
+    return a.firstPlayedAt.localeCompare(b.firstPlayedAt);
+  }
+  return b.hours - a.hours;
+}
+
 export function buildMonthStints(
   videos: readonly HistoricalVideo[],
-  monthKey: string, // "YYYY-MM"
+  monthKey: string,
 ): readonly GameStint[] {
   if (!videos || videos.length === 0 || !monthKey) {
     return [];
   }
 
-  // 1. Group daily activity for this month
-  const dailyGameHours: Record<string, Record<string, number>> = {};
+  interface DailyGameEntry {
+    hours: number;
+    firstPlayedAt: string;
+  }
+  const dailyGameHours: Record<string, Record<string, DailyGameEntry>> = {};
 
   videos.forEach((v) => {
     const titleDate = extractTitleDate(v.title);
@@ -57,14 +68,28 @@ export function buildMonthStints(
     const hours = parseDurationToHours(v.duration);
     if (hours <= 0) return;
 
+    const publishedTimestamp = v.published || pubDate;
+
     if (!dailyGameHours[pubDate]) {
       dailyGameHours[pubDate] = {};
     }
-    dailyGameHours[pubDate][game] =
-      (dailyGameHours[pubDate][game] || 0) + hours;
+    if (!dailyGameHours[pubDate][game]) {
+      dailyGameHours[pubDate][game] = {
+        hours: 0,
+        firstPlayedAt: publishedTimestamp,
+      };
+    }
+
+    dailyGameHours[pubDate][game].hours += hours;
+    if (
+      publishedTimestamp &&
+      (!dailyGameHours[pubDate][game].firstPlayedAt ||
+        publishedTimestamp < dailyGameHours[pubDate][game].firstPlayedAt)
+    ) {
+      dailyGameHours[pubDate][game].firstPlayedAt = publishedTimestamp;
+    }
   });
 
-  // 2. Sort active dates ascending
   const activeDates = Object.keys(dailyGameHours).sort();
   if (activeDates.length === 0) {
     return [];
@@ -80,11 +105,16 @@ export function buildMonthStints(
   const days: DaySummary[] = activeDates.map((date) => {
     const gameMap = dailyGameHours[date] || {};
     const games: StintGame[] = Object.entries(gameMap)
-      .map(([game, hours]) => ({ game, hours }))
-      .sort((a, b) => b.hours - a.hours);
+      .map(([game, data]) => ({
+        game,
+        hours: data.hours,
+        firstPlayedAt: data.firstPlayedAt,
+      }))
+      .sort(compareStintGames);
 
     const totalHours = games.reduce((acc, g) => acc + g.hours, 0);
-    const primaryGame = games[0]?.game || "";
+    const primaryGame =
+      [...games].sort((a, b) => b.hours - a.hours)[0]?.game || "";
 
     return {
       date,
@@ -94,10 +124,6 @@ export function buildMonthStints(
     };
   });
 
-  // 3. Cluster days into stints:
-  // A stint continues across consecutive active days if the primary game is the same
-  // AND the set of games matches or can be reasonably combined into the current stint.
-  // When a day with a different primary game appears, start a new stint.
   const stints: GameStint[] = [];
   let currentDays: DaySummary[] = [];
 
@@ -107,18 +133,36 @@ export function buildMonthStints(
     const startDate = currentDays[0].date;
     const endDate = currentDays[currentDays.length - 1].date;
 
-    // Aggregate all games played during this stint
-    const combinedGamesMap: Record<string, number> = {};
+    const combinedGamesMap: Record<
+      string,
+      { hours: number; firstPlayedAt: string }
+    > = {};
     currentDays.forEach((d) => {
       d.games.forEach((g) => {
-        combinedGamesMap[g.game] =
-          (combinedGamesMap[g.game] || 0) + g.hours;
+        if (!combinedGamesMap[g.game]) {
+          combinedGamesMap[g.game] = {
+            hours: 0,
+            firstPlayedAt: g.firstPlayedAt || "",
+          };
+        }
+        combinedGamesMap[g.game].hours += g.hours;
+        if (
+          g.firstPlayedAt &&
+          (!combinedGamesMap[g.game].firstPlayedAt ||
+            g.firstPlayedAt < combinedGamesMap[g.game].firstPlayedAt)
+        ) {
+          combinedGamesMap[g.game].firstPlayedAt = g.firstPlayedAt;
+        }
       });
     });
 
     const combinedGames: StintGame[] = Object.entries(combinedGamesMap)
-      .map(([game, hours]) => ({ game, hours }))
-      .sort((a, b) => b.hours - a.hours);
+      .map(([game, data]) => ({
+        game,
+        hours: data.hours,
+        firstPlayedAt: data.firstPlayedAt,
+      }))
+      .sort(compareStintGames);
 
     const totalHours = combinedGames.reduce((acc, g) => acc + g.hours, 0);
 

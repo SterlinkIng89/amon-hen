@@ -227,12 +227,17 @@ export default function MostPlayedGames({
     if (viewMode === "year") {
       return `Top games of ${selectedYear}`;
     }
+    if (!selectedMonthKey || !selectedMonthKey.includes("-")) {
+      return "Top games of the month";
+    }
     const parts = selectedMonthKey.split("-");
     const y = parts[0] || selectedYear;
     const m = parseInt(parts[1] || "1", 10) - 1;
     const date = new Date(parseInt(y, 10), m, 1);
-    const monthName = date.toLocaleString("en-US", { month: "long" });
-    return `Top games in ${monthName} ${y}`;
+    const monthName = isNaN(date.getTime())
+      ? ""
+      : date.toLocaleString("en-US", { month: "long" });
+    return monthName ? `Top games in ${monthName} ${y}` : "Top games of the month";
   }, [viewMode, selectedYear, selectedMonthKey]);
 
   if (loading) {
@@ -270,7 +275,7 @@ export default function MostPlayedGames({
 
   return (
     <div className="px-5 pb-5 flex flex-col gap-4">
-      <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden backdrop-blur-xl">
+      <div className="bg-surface border border-border-medium rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
         {/* Header & Playtime Toolbar */}
         <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
@@ -305,13 +310,13 @@ export default function MostPlayedGames({
           }}
         />
 
-        <div className="h-px w-full bg-border-subtle my-1" />
+        <div className="h-px w-full bg-border-medium my-1" />
 
-        {/* Grouped Top Games and Timeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Top Games Section: Highlight + List */}
-          <div className="lg:col-span-5 2xl:col-span-4 flex flex-col sm:flex-row gap-4 items-start w-full">
-            <div className="w-full sm:w-[170px] xl:w-[180px] shrink-0 flex flex-col gap-2.5">
+        {/* Grouped Top Games (40%) and Timeline (60%) with vertical hairline divider */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
+          {/* Top Games Section: Highlight + List (40% width) */}
+          <div className="flex flex-col sm:flex-row gap-5 items-start w-full lg:pr-6 lg:border-r lg:border-border-subtle">
+            <div className="w-full sm:w-[160px] xl:w-[175px] shrink-0 flex flex-col gap-2.5">
               <h3 className="text-xs font-bold text-text-secondary truncate">
                 {activeIndex === 0
                   ? `#1 Game of the ${viewMode === "year" ? "year" : "month"}`
@@ -324,7 +329,7 @@ export default function MostPlayedGames({
                   rank={activeIndex + 1}
                 />
               ) : (
-                <div className="bg-surface/30 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
+                <div className="bg-surface/50 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
                   No game to highlight
                 </div>
               )}
@@ -341,8 +346,8 @@ export default function MostPlayedGames({
             </div>
           </div>
 
-          {/* Timeline Section */}
-          <div className="lg:col-span-7 2xl:col-span-8 min-w-0 flex flex-col gap-2.5 w-full">
+          {/* Timeline Section (60% width) */}
+          <div className="min-w-0 flex flex-col gap-2.5 w-full">
             {viewMode === "month" ? (
               <GamingTimelineStrip
                 stints={monthlyStints}

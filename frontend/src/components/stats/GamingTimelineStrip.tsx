@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { GameStint, StintGame, formatDateLabel } from "../../utils/gameTimeline";
-import { useSteamGameData } from "../../hooks/useSteamGameData";
 import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
+import { getGameColor } from "../../utils/tagColors";
+import { TimelineCardStack } from "./TimelineCardStack";
 
 export interface GamingTimelineStripProps {
   readonly stints: readonly GameStint[];
@@ -12,31 +13,58 @@ export interface GamingTimelineStripProps {
 interface StintCardProps {
   readonly stint: GameStint;
   readonly isSelected: boolean;
+  readonly isFirst: boolean;
+  readonly isLast: boolean;
   readonly onSelect: (stint: GameStint, activeGameName?: string) => void;
 }
 
-function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
+function GameSegments({
+  games,
+  activeGameIndex,
+}: {
+  readonly games: readonly StintGame[];
+  readonly activeGameIndex: number;
+}) {
+  return (
+    <div
+      className="flex items-center gap-0.5 w-28 sm:w-36 my-1.5 px-0.5"
+      aria-label={`${games.length} games recorded`}
+    >
+      {games.map((g, idx) => {
+        const isActive = idx === activeGameIndex;
+        const color = getGameColor(g.game);
+        return (
+          <span
+            key={`${g.game}_${idx}`}
+            className={`flex-1 h-1 rounded-full transition-all duration-200 ${
+              isActive ? "opacity-100 ring-1 ring-white/20" : "opacity-40"
+            }`}
+            style={{ backgroundColor: color }}
+            title={`${g.game}: ${formatPlaytimeHoursMinutes(g.hours)}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function StintCard({
+  stint,
+  isSelected,
+  isFirst,
+  isLast,
+  onSelect,
+}: StintCardProps) {
   const [activeGameIndex, setActiveGameIndex] = useState(0);
 
   const activeGame: StintGame =
     stint.games[activeGameIndex] || stint.games[0] || { game: "", hours: 0 };
-  const backGame: StintGame | undefined =
-    stint.games.length > 1
-      ? stint.games[(activeGameIndex + 1) % stint.games.length]
-      : undefined;
 
-  const { posterUrl: frontPoster } = useSteamGameData(activeGame.game);
-  const { posterUrl: backPoster } = useSteamGameData(backGame?.game || "");
-
-  const handleSwap = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (stint.games.length > 1) {
-      const nextIndex = (activeGameIndex + 1) % stint.games.length;
-      setActiveGameIndex(nextIndex);
-      const nextGame = stint.games[nextIndex];
-      if (nextGame) {
-        onSelect(stint, nextGame.game);
-      }
+  const handleBringToFront = (index: number) => {
+    setActiveGameIndex(index);
+    const targetGame = stint.games[index];
+    if (targetGame) {
+      onSelect(stint, targetGame.game);
     }
   };
 
@@ -57,100 +85,52 @@ function StintCard({ stint, isSelected, onSelect }: StintCardProps) {
       }}
       className="group relative flex flex-col items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-lg p-1 transition-all"
     >
-      {/* Horizontal connector line at date pill level */}
-      <div
-        aria-hidden="true"
-        className="absolute top-[182px] sm:top-[238px] inset-x-0 h-0.5 bg-border-subtle/40 -z-0 pointer-events-none"
+      {/* Cards stack */}
+      <TimelineCardStack
+        games={stint.games}
+        activeIndex={activeGameIndex}
+        isSelected={isSelected}
+        onBringToFront={handleBringToFront}
       />
 
-      <div className="relative w-34 h-44 sm:w-42 sm:h-56 mb-2.5 flex items-center justify-center">
-        {backGame && (
+      {/* Horizontal colored segments */}
+      <GameSegments games={stint.games} activeGameIndex={activeGameIndex} />
+
+      {/* Timeline track connector and Date Pill row */}
+      <div className="relative w-full flex items-center justify-center my-1">
+        {/* Left connector half */}
+        {!isFirst && (
           <div
-            role="button"
-            tabIndex={0}
-            onClick={handleSwap}
-            title={`Switch to ${backGame.game}`}
-            aria-label={`Switch to ${backGame.game}`}
-            className="absolute top-0 right-0 w-28 h-40 sm:w-36 sm:h-52 rounded-xl border border-accent/50 overflow-hidden shadow-xs cursor-pointer z-0 opacity-90 group-hover:opacity-100 group-hover:translate-x-2 group-hover:-translate-y-1 transition-all bg-surface hover:border-accent"
+            aria-hidden="true"
+            className="absolute left-[-10px] right-1/2 top-1/2 -translate-y-1/2 h-[1.5px] bg-[#272732] z-0 pointer-events-none"
+          />
+        )}
+
+        {/* Right connector half with intermediate timeline node */}
+        {!isLast && (
+          <div
+            aria-hidden="true"
+            className="absolute left-1/2 right-[-10px] top-1/2 -translate-y-1/2 h-[1.5px] bg-[#272732] z-0 pointer-events-none flex items-center justify-end"
           >
-            {backPoster ? (
-              <img
-                src={backPoster}
-                alt=""
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-surface/80 p-2 text-center">
-                <span className="text-xs font-bold text-text-muted">
-                  {backGame.game}
-                </span>
-              </div>
-            )}
+            {/* Small circular connector dot between date nodes */}
+            <div className="w-1.5 h-1.5 rounded-full bg-[#363644] -mr-1" />
           </div>
         )}
 
-        {/* Front card */}
-        <div
-          className={`relative w-28 h-40 sm:w-36 sm:h-52 rounded-xl border overflow-hidden shadow-xs z-10 transition-transform bg-surface ${
-            isSelected
-              ? "border-accent ring-2 ring-accent/40"
-              : "border-border-subtle group-hover:border-border-medium group-hover:scale-102"
-          }`}
-        >
-          {frontPoster ? (
-            <img
-              src={frontPoster}
-              alt={activeGame.game}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-surface/90 p-2 text-center gap-1">
-              <span className="text-xs font-bold text-text-primary line-clamp-3">
-                {activeGame.game}
-              </span>
-            </div>
-          )}
-
-          {/* Quick Swap button icon in bottom right */}
-          {hasMultipleGames && (
-            <button
-              type="button"
-              onClick={handleSwap}
-              title={`Switch to ${backGame?.game || "next game"}`}
-              aria-label="Switch to next game"
-              className="absolute bottom-1 right-1 p-1 rounded-md bg-surface/95 hover:bg-accent hover:text-black text-text-secondary border border-border-subtle hover:border-accent shadow-xs z-20 transition-all cursor-pointer opacity-90 group-hover:opacity-100"
-            >
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                <path d="M16 21h5v-5" />
-              </svg>
-            </button>
-          )}
+        {/* Date Pill (styled matching the reference mockup) */}
+        <div className="relative z-10 px-3 py-1 rounded-full bg-[#1e1e26] border border-[#32323e] text-[11px] font-semibold text-text-primary whitespace-nowrap shadow-xs group-hover:border-[#48485a] transition-colors">
+          {dateLabel}
         </div>
       </div>
 
-      {/* Date Pill with timeline node styling */}
-      <div className="relative z-10 px-2.5 py-0.5 rounded-full bg-surface border border-border-subtle text-[10px] font-bold text-text-secondary whitespace-nowrap mb-1 shadow-xs">
-        {dateLabel}
-      </div>
-
-      {/* Playtime and Days subtitle */}
-      <div className="text-[10px] text-text-muted whitespace-nowrap tabular-nums">
+      {/* Playtime subtitle */}
+      <div className="text-[10px] text-text-secondary whitespace-nowrap tabular-nums mt-0.5">
         {formatPlaytimeHoursMinutes(activeGame.hours)} ·{" "}
-        {isSingleDay ? "1 day" : `${stint.dayCount} days`}
+        {hasMultipleGames
+          ? `${stint.games.length} games`
+          : isSingleDay
+          ? "1 day"
+          : `${stint.dayCount} days`}
       </div>
     </div>
   );
@@ -180,11 +160,13 @@ export function GamingTimelineStrip({
         Monthly timeline
       </h3>
 
-      <div className="flex flex-wrap items-start justify-start gap-x-4 gap-y-5">
-        {stints.map((stint) => (
+      <div className="relative flex flex-wrap items-start justify-start gap-x-4 gap-y-6 overflow-visible">
+        {stints.map((stint, idx) => (
           <StintCard
             key={stint.id}
             stint={stint}
+            isFirst={idx === 0}
+            isLast={idx === stints.length - 1}
             isSelected={stint.id === selectedStintId}
             onSelect={(s, gameName) => onSelectStint?.(s, gameName)}
           />

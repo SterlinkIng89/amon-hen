@@ -64,7 +64,7 @@ describe("GamingTimelineStrip Component", () => {
     expect(wrappingContainer).not.toBeNull();
   });
 
-  it("renders stint cards cleanly without game title text overlays", () => {
+  it("renders stint cards with date pills and horizontal game segments", () => {
     render(
       <GamingTimelineStrip
         stints={mockStints}
@@ -77,14 +77,14 @@ describe("GamingTimelineStrip Component", () => {
     expect(screen.getByText("Oct 1 – 3")).toBeDefined();
     expect(screen.getByText("Oct 4")).toBeDefined();
 
-    // Cards should not display title overlays / text labels for game names when poster exists
-    // The image alt attribute can exist for accessibility, but no rendered title badge div
-    const overlayBadges = screen.queryByText("Hades II");
-    // When posterUrl is mocked, Hades II should only be in alt attribute, not as visible text element
-    expect(overlayBadges).toBeNull();
+    // Stint 2 should render subtitle indicating 2 games
+    expect(screen.getByText(/2 games/)).toBeDefined();
+
+    // Stint 1 should render subtitle with days count
+    expect(screen.getByText(/3 days/)).toBeDefined();
   });
 
-  it("allows swapping active game for multiple games stint", () => {
+  it("allows bringing rear game to front in stacked card stint", () => {
     const handleSelect = vi.fn();
     render(
       <GamingTimelineStrip
@@ -94,12 +94,12 @@ describe("GamingTimelineStrip Component", () => {
       />
     );
 
-    // Stint 2 has 2 games, should show swap button
-    const swapBtn = screen.getByRole("button", { name: "Switch to next game" });
-    expect(swapBtn).toBeDefined();
+    // Stint 2 has 2 games, Celeste is behind Silksong
+    const bringCelesteBtn = screen.getByRole("button", { name: "Bring Celeste to front" });
+    expect(bringCelesteBtn).toBeDefined();
 
-    fireEvent.click(swapBtn);
-    // After swapping, callback is invoked with the next game
+    fireEvent.click(bringCelesteBtn);
+    // After clicking rear layer, callback is invoked with the clicked game
     expect(handleSelect).toHaveBeenCalledWith(mockStints[1], "Celeste");
   });
 });
