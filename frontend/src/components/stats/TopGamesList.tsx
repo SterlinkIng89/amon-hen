@@ -32,8 +32,8 @@ function GameRowItem({
   color,
   onSelect,
 }: GameRowItemProps) {
-  const { heroUrl, posterUrl } = useSteamGameData(game);
-  const wideImageUrl = heroUrl || posterUrl;
+  const { headerUrl, heroUrl, posterUrl } = useSteamGameData(game);
+  const bannerUrl = headerUrl || heroUrl || posterUrl;
   const progressPct = maxHours > 0 ? Math.min((hours / maxHours) * 100, 100) : 0;
 
   return (
@@ -54,11 +54,11 @@ function GameRowItem({
           : "hover:bg-[#16161c] border border-transparent"
       }`}
     >
-      {/* Capsule Banner Thumbnail on the left (wider cover without hover zoom) */}
-      <div className="relative w-20 h-11 sm:w-24 sm:h-13 rounded-md overflow-hidden bg-surface shrink-0 border border-border-subtle shadow-xs">
-        {wideImageUrl ? (
+      {/* Framed Wide Capsule Banner (Steam 460x215 aspect ratio) */}
+      <div className="relative w-24 sm:w-28 aspect-[460/215] rounded-md overflow-hidden bg-surface shrink-0 border border-border-subtle group-hover:border-border-medium transition-colors">
+        {bannerUrl ? (
           <img
-            src={wideImageUrl}
+            src={bannerUrl}
             alt=""
             className="w-full h-full object-cover object-center"
             loading="lazy"
