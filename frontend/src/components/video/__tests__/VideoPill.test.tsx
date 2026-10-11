@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import VideoPill from "../VideoPill";
 import { YTVideo } from "../../../types";
@@ -163,5 +163,58 @@ describe("VideoPill Title Placeholder Highlighting", () => {
     expect(screen.getByText("Competitive")).toBeInTheDocument();
     expect(screen.queryByText("Title")).not.toBeInTheDocument();
     expect(screen.queryByText("Mode")).not.toBeInTheDocument();
+  });
+});
+
+describe("VideoPill Delete Action & Top Overlay Alignment", () => {
+  it("renders delete button within top overlay when onDelete is provided", () => {
+    const onDelete = vi.fn();
+    const onSelectToggle = vi.fn();
+    render(
+      <VideoPill
+        video={mockVideo}
+        onDelete={onDelete}
+        onSelectToggle={onSelectToggle}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete video from youtube/i,
+    });
+    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn.className).toContain("w-5");
+    expect(deleteBtn.className).toContain("h-5");
+    expect(deleteBtn.className).toContain("rounded");
+
+    const selectBtn = screen.getByRole("button", { name: /select video/i });
+    expect(selectBtn).toBeInTheDocument();
+    expect(selectBtn.className).toContain("w-5");
+    expect(selectBtn.className).toContain("h-5");
+    expect(selectBtn.className).toContain("rounded");
+  });
+
+  it("triggers onDelete without firing card onClick or selectToggle", () => {
+    const onDelete = vi.fn();
+    const onSelectToggle = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <VideoPill
+        video={mockVideo}
+        onDelete={onDelete}
+        onSelectToggle={onSelectToggle}
+        onClick={onClick}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete video from youtube/i,
+    });
+    fireEvent.click(deleteBtn);
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onSelectToggle).not.toHaveBeenCalled();
   });
 });
