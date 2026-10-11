@@ -102,4 +102,53 @@ describe("GamingTimelineStrip Component", () => {
     // After clicking rear layer, callback is invoked with the clicked game
     expect(handleSelect).toHaveBeenCalledWith(mockStints[1], "Celeste");
   });
+
+  it("renders an inactive break indicator when there is a calendar gap between stints", () => {
+    const stintsWithGap: readonly GameStint[] = [
+      {
+        id: "stint-1",
+        startDate: "2026-10-06",
+        endDate: "2026-10-06",
+        dayCount: 1,
+        totalHours: 1,
+        games: [{ game: "SOS OPS!", hours: 1 }],
+      },
+      {
+        id: "stint-2",
+        startDate: "2026-10-08",
+        endDate: "2026-10-08",
+        dayCount: 1,
+        totalHours: 2,
+        games: [{ game: "Control Resonant", hours: 2 }],
+      },
+    ];
+
+    render(
+      <GamingTimelineStrip
+        stints={stintsWithGap}
+        selectedStintId="stint-1"
+      />
+    );
+
+    // The gap between Oct 6 and Oct 8 is 1 day (Oct 7)
+    expect(screen.getByText("1d break")).toBeDefined();
+    expect(screen.getByText("Oct 7")).toBeDefined();
+  });
+
+  it("renders seamless connector lines and centered intermediate dot between consecutive stints", () => {
+    const { container } = render(
+      <GamingTimelineStrip
+        stints={mockStints}
+        selectedStintId="stint-1"
+      />
+    );
+
+    // Connecting dot between consecutive stints
+    const dotNode = container.querySelector('[class*="translate-x-1/2"]');
+    expect(dotNode).not.toBeNull();
+
+    // StintCards have matching fixed track row height and gap alignment classes
+    const trackRows = container.querySelectorAll(".h-7");
+    expect(trackRows.length).toBe(mockStints.length);
+  });
 });

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildMonthStints,
   formatDateLabel,
+  calculateDayGap,
+  formatGapDateLabel,
 } from "../gameTimeline";
 import { HistoricalVideo } from "../gameStats";
 
@@ -134,5 +136,19 @@ describe("gameTimeline utils", () => {
     expect(stints.length).toBe(2);
     expect(stints[0].startDate).toBe("2026-10-01");
     expect(stints[1].startDate).toBe("2026-10-10");
+  });
+
+  it("calculates day gap and formats gap date label between stints accurately", () => {
+    // Consecutive days: gap is 0
+    expect(calculateDayGap("2026-10-04", "2026-10-05")).toBe(0);
+    expect(formatGapDateLabel("2026-10-04", "2026-10-05")).toBe("");
+
+    // 1-day gap: Oct 7 was inactive between Oct 6 and Oct 8
+    expect(calculateDayGap("2026-10-06", "2026-10-08")).toBe(1);
+    expect(formatGapDateLabel("2026-10-06", "2026-10-08")).toBe("Oct 7");
+
+    // Multi-day gap: Oct 6, 7, 8 were inactive between Oct 5 and Oct 9 (3 days)
+    expect(calculateDayGap("2026-10-05", "2026-10-09")).toBe(3);
+    expect(formatGapDateLabel("2026-10-05", "2026-10-09")).toBe("Oct 6 – 8");
   });
 });

@@ -247,3 +247,37 @@ export function formatDateLabel(startDate: string, endDate: string): string {
   }
   return `${start.month} ${start.day} – ${end.month} ${end.day}`;
 }
+
+/**
+ * Calculates calendar days between the end of prevStint and start of nextStint.
+ * Returns the gap count (number of unplayed days strictly between the two stints).
+ * For example:
+ *   prevEndDate: '2026-10-06', nextStartDate: '2026-10-08' -> 1 day gap (Oct 7)
+ *   prevEndDate: '2026-10-04', nextStartDate: '2026-10-05' -> 0 day gap (consecutive)
+ */
+export function calculateDayGap(prevEndDate: string, nextStartDate: string): number {
+  if (!prevEndDate || !nextStartDate) return 0;
+  const prevDate = new Date(`${prevEndDate}T00:00:00Z`);
+  const nextDate = new Date(`${nextStartDate}T00:00:00Z`);
+  const diffTime = nextDate.getTime() - prevDate.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays - 1);
+}
+
+/**
+ * Formats the inactive gap span label between two dates.
+ * e.g. for prevEndDate '2026-10-06' and nextStartDate '2026-10-08' -> 'Oct 7'
+ * for prevEndDate '2026-10-05' and nextStartDate '2026-10-09' -> 'Oct 6 – 8'
+ */
+export function formatGapDateLabel(prevEndDate: string, nextStartDate: string): string {
+  const gap = calculateDayGap(prevEndDate, nextStartDate);
+  if (gap <= 0) return "";
+
+  const prev = new Date(`${prevEndDate}T00:00:00Z`);
+  const gapStart = new Date(prev.getTime() + 24 * 60 * 60 * 1000);
+  const gapEnd = new Date(prev.getTime() + gap * 24 * 60 * 60 * 1000);
+
+  const startIso = gapStart.toISOString().substring(0, 10);
+  const endIso = gapEnd.toISOString().substring(0, 10);
+  return formatDateLabel(startIso, endIso);
+}
