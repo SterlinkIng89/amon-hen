@@ -16,6 +16,10 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
     tag_playlists: {},
   }),
   SetVideosContentType: vi.fn().mockResolvedValue(undefined),
+  GetDefaultExportFolder: vi.fn().mockResolvedValue("/default/export"),
+  SetDefaultExportFolder: vi.fn().mockResolvedValue(undefined),
+  SelectExportFolder: vi.fn().mockResolvedValue("/custom/export"),
+  ExportVideos: vi.fn().mockResolvedValue({ successCount: 2, failedCount: 0, exportedPaths: [], errors: [] }),
 }));
 
 const mockVideos: VideoFile[] = [
@@ -111,6 +115,30 @@ describe("BulkActionBar ContentType routing", () => {
         "",
       );
       expect(onRescanOnly).toHaveBeenCalled();
+    });
+  });
+
+  it("opens ExportModal when clicking the Export button", async () => {
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const exportBtn = screen.getByRole("button", { name: "Export 2" });
+    expect(exportBtn).toBeInTheDocument();
+
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText("Export Videos")).toBeInTheDocument();
     });
   });
 });

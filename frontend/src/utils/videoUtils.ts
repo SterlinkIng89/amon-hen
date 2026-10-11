@@ -163,6 +163,33 @@ export function generateYouTubeTitle(
   return `${game}${sep}${datePart}${epSuffix}`;
 }
 
+export function resolveDisplayTitle(
+  video: VideoFile,
+  profiles?: Record<string, GameProfile>,
+  titleSeparator?: string,
+): string {
+  if (video.youtubeTitle && video.youtubeTitle.trim() !== "") {
+    return video.youtubeTitle;
+  }
+  const profile = video.game && profiles ? profiles[video.game] : undefined;
+  const contentType = resolveVideoContentType(
+    video.durationSecs,
+    video.contentType,
+  );
+  return generateYouTubeTitle(
+    video.name,
+    video.game,
+    video.episode,
+    profile,
+    video.event,
+    video.gameMode,
+    video.customVars,
+    video.modTime,
+    titleSeparator,
+    contentType,
+  );
+}
+
 export function toLocalDateKey(ms: number) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

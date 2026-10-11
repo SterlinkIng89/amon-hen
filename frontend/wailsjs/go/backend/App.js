@@ -54,6 +54,10 @@ export function DisconnectSteam() {
   return window['go']['backend']['App']['DisconnectSteam']();
 }
 
+export function ExportVideos(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['ExportVideos'](arg1, arg2, arg3);
+}
+
 export function GetAPILogs(arg1) {
   return window['go']['backend']['App']['GetAPILogs'](arg1);
 }
@@ -84,6 +88,10 @@ export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function GetDB() {
   return window['go']['backend']['App']['GetDB']();
+}
+
+export function GetDefaultExportFolder() {
+  return window['go']['backend']['App']['GetDefaultExportFolder']();
 }
 
 export function GetFolderSettings(arg1) {
@@ -234,6 +242,10 @@ export function OpenFolderDialog() {
   return window['go']['backend']['App']['OpenFolderDialog']();
 }
 
+export function OpenFolderInExplorer(arg1) {
+  return window['go']['backend']['App']['OpenFolderInExplorer'](arg1);
+}
+
 export function PurgePlaylistDuplicates(arg1) {
   return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
 }
@@ -278,8 +290,16 @@ export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['backend']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }
 
+export function SelectExportFolder() {
+  return window['go']['backend']['App']['SelectExportFolder']();
+}
+
 export function SetAutoLaunch(arg1) {
   return window['go']['backend']['App']['SetAutoLaunch'](arg1);
+}
+
+export function SetDefaultExportFolder(arg1) {
+  return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
 }
 
 export function SetTagPlaylist(arg1, arg2) {

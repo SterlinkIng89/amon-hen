@@ -62,6 +62,7 @@ type Config struct {
 	TitleSeparator string `json:"title_separator,omitempty"`
 	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
 	SteamID             string                  `json:"steam_id,omitempty"`
+	ExportFolder        string                  `json:"export_folder,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -665,3 +666,4 @@ func (a *App) titleSep() string {
 	}
 	return " - "
 }
+

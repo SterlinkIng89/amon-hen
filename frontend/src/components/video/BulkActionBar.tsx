@@ -18,6 +18,7 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
+import ExportModal from "./ExportModal";
 
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -78,6 +79,8 @@ export default function BulkActionBar({
   );
   const [contentTypeOverride, setContentTypeOverride] = useState("auto");
   const [savingContentType, setSavingContentType] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [titleSeparator, setTitleSeparator] = useState(" - ");
 
   useEffect(() => {
     if (selectedVideos.length > 0) {
@@ -112,6 +115,7 @@ export default function BulkActionBar({
       .then((cfg) => {
         setProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
+        setTitleSeparator(cfg.title_separator || " - ");
       })
       .catch(console.error);
   }, []);
@@ -610,6 +614,25 @@ export default function BulkActionBar({
           </>
         )}
 
+        {/* Export action */}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm flex items-center gap-1.5"
+          onClick={() => setExportModalOpen(true)}
+          title={`Export ${selectedVideos.length} video${selectedVideos.length > 1 ? "s" : ""} to folder`}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+          </svg>
+          Export {selectedVideos.length}
+        </button>
+        <div className="w-px h-5 bg-white/10" />
+
         {/* Delete action */}
         {confirmDelete ? (
           <div className="flex items-center gap-2">
@@ -643,6 +666,16 @@ export default function BulkActionBar({
           </button>
         )}
       </div>
+
+      {exportModalOpen && (
+        <ExportModal
+          open={exportModalOpen}
+          selectedVideos={selectedVideos}
+          profiles={profiles}
+          titleSeparator={titleSeparator}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
 
       {pendingTagForModal && (
         <TagPlaylistModal

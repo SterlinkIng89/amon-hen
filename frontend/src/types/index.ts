@@ -46,6 +46,24 @@ export interface Config {
   recent_field_values?: Record<string, string[]>;
   steam_api_key?: string;
   steam_id?: string;
+  export_folder?: string;
+}
+
+export interface ExportItem {
+  sourcePath: string;
+  targetTitle: string;
+  description: string;
+  game: string;
+  playlistTitle: string;
+  privacy: string;
+  tags: string[];
+}
+
+export interface ExportResult {
+  successCount: number;
+  failedCount: number;
+  exportedPaths: string[];
+  errors: string[];
 }
 
 export interface YTVideo {

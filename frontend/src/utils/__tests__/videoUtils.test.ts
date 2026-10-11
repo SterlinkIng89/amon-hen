@@ -6,6 +6,7 @@ import {
   formatTimeWithSubseconds,
   computeInitialClipRange,
   formatPlaytimeHoursMinutes,
+  resolveDisplayTitle,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -383,6 +384,53 @@ describe("videoUtils - Title generation & placeholder detection", () => {
 
     it("handles rounding near boundaries", () => {
       expect(formatPlaytimeHoursMinutes(1.999)).toBe("2h 00m");
+    });
+  });
+
+  describe("resolveDisplayTitle", () => {
+    it("returns manual youtubeTitle if present and non-empty", () => {
+      const vid: VideoFile = {
+        name: "test.mp4",
+        path: "/path/test.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Hades",
+        youtubeTitle: "Custom Manual Title Here",
+      };
+      expect(resolveDisplayTitle(vid)).toBe("Custom Manual Title Here");
+    });
+
+    it("generates singleplayer title when no custom title", () => {
+      const vid: VideoFile = {
+        name: "2026-08-26 14-30-00.mp4",
+        path: "/path/2026-08-26 14-30-00.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Hades",
+        episode: 3,
+      };
+      expect(resolveDisplayTitle(vid, undefined, " — ")).toBe("Hades — 26/08/26 — 3");
+    });
+
+    it("uses multiplayer profile template when available", () => {
+      const profiles: Record<string, GameProfile> = {
+        Overwatch: {
+          type: "multiplayer",
+          titleTemplate: "{game} - {event} - {date}",
+        },
+      };
+      const vid: VideoFile = {
+        name: "2026-08-26 14-30-00.mp4",
+        path: "/path/2026-08-26 14-30-00.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Overwatch",
+        event: "Ranked Match",
+      };
+      expect(resolveDisplayTitle(vid, profiles)).toBe("Overwatch - Ranked Match - 26/08/26");
     });
   });
 });

@@ -14,6 +14,9 @@ import {
   GetAllGameTags,
   SetTagPlaylist,
   GetChannelPlaylists,
+  GetDefaultExportFolder,
+  SetDefaultExportFolder,
+  SelectExportFolder,
 } from "../../../wailsjs/go/backend/App";
 // @ts-ignore
 import {
@@ -55,6 +58,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [watchFolderSaving, setWatchFolderSaving] = useState(false);
   const [titleSeparator, setTitleSeparator] = useState(" - ");
   const [titleSepSaving, setTitleSepSaving] = useState(false);
+  const [defaultExportFolder, setDefaultExportFolder] = useState("");
+  const [exportFolderSaving, setExportFolderSaving] = useState(false);
 
   // Game Profiles state
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
@@ -101,6 +106,10 @@ export default function SettingsPanel({ open, onClose }: Props) {
         if (cfg.steam_id) setSteamId(cfg.steam_id);
       })
       .catch(() => setCredsLoaded(false));
+
+    GetDefaultExportFolder()
+      .then(setDefaultExportFolder)
+      .catch(() => {});
       
     // Load tag management data
     GetAllGameTags()
@@ -514,6 +523,64 @@ export default function SettingsPanel({ open, onClose }: Props) {
                   placeholder=" - "
                   className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs font-mono text-text-primary outline-none focus:border-accent"
                 />
+              </div>
+            </div>
+          </section>
+
+          {/* Default Export Destination section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="text-text-muted"
+              >
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+              </svg>
+              Default Export Destination
+            </div>
+            <div>
+              <p className="text-[10px] text-text-secondary mt-0.5">
+                Default folder used when bulk exporting videos with renamed application titles for YouTube.
+              </p>
+              <div className="flex gap-2 mt-2 items-center">
+                <input
+                  type="text"
+                  value={defaultExportFolder}
+                  onChange={(e) => setDefaultExportFolder(e.target.value)}
+                  onBlur={async () => {
+                    setExportFolderSaving(true);
+                    try {
+                      await SetDefaultExportFolder(defaultExportFolder);
+                    } catch (e) {
+                      console.error("Failed to save default export folder", e);
+                    } finally {
+                      setExportFolderSaving(false);
+                    }
+                  }}
+                  placeholder="e.g. C:\Users\...\Videos\AmonHen"
+                  className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const dir = await SelectExportFolder();
+                      if (dir) {
+                        setDefaultExportFolder(dir);
+                        await SetDefaultExportFolder(dir);
+                      }
+                    } catch (e) {
+                      console.error("Failed to select export folder", e);
+                    }
+                  }}
+                  disabled={exportFolderSaving}
+                  className="px-2 py-1 rounded text-xs bg-black/20 border border-white/10 text-text-secondary hover:border-white/30 hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  Browse...
+                </button>
               </div>
             </div>
           </section>

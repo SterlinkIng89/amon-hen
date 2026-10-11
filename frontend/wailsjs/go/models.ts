@@ -252,6 +252,7 @@ export namespace backend {
 	    title_separator?: string;
 	    steam_api_key?: string;
 	    steam_id?: string;
+	    export_folder?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -274,6 +275,7 @@ export namespace backend {
 	        this.title_separator = source["title_separator"];
 	        this.steam_api_key = source["steam_api_key"];
 	        this.steam_id = source["steam_id"];
+	        this.export_folder = source["export_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -295,6 +297,48 @@ export namespace backend {
 		}
 	}
 	
+	export class ExportItem {
+	    sourcePath: string;
+	    targetTitle: string;
+	    description: string;
+	    game: string;
+	    playlistTitle: string;
+	    privacy: string;
+	    tags: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourcePath = source["sourcePath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.game = source["game"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.privacy = source["privacy"];
+	        this.tags = source["tags"];
+	    }
+	}
+	export class ExportResult {
+	    successCount: number;
+	    failedCount: number;
+	    exportedPaths: string[];
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.successCount = source["successCount"];
+	        this.failedCount = source["failedCount"];
+	        this.exportedPaths = source["exportedPaths"];
+	        this.errors = source["errors"];
+	    }
+	}
 	
 	
 	

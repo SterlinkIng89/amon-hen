@@ -12,6 +12,9 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetAllGameTags: vi.fn().mockResolvedValue(["GameA", "GameB"]),
   GetChannelPlaylists: vi.fn().mockResolvedValue([{ id: "PL_1", title: "Playlist 1" }]),
   SetTagPlaylist: vi.fn().mockResolvedValue(null),
+  GetDefaultExportFolder: vi.fn().mockResolvedValue("/default/videos/amonhen"),
+  SetDefaultExportFolder: vi.fn().mockResolvedValue(null),
+  SelectExportFolder: vi.fn().mockResolvedValue("/custom/videos/folder"),
 }));
 
 vi.mock("../../../../wailsjs/runtime/runtime", () => ({
@@ -25,5 +28,14 @@ describe("SettingsPanel", () => {
     
     expect(await screen.findByText("Tag Playlists")).toBeInTheDocument();
     expect(await screen.findByText("-- Choose a tag to configure --")).toBeInTheDocument();
+  });
+
+  it("renders the Default Export Destination section", async () => {
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    expect(await screen.findByText("Default Export Destination")).toBeInTheDocument();
+    const input = screen.getByPlaceholderText("e.g. C:\\Users\\...\\Videos\\AmonHen") as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    expect(input.value).toBe("/default/videos/amonhen");
   });
 });
