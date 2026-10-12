@@ -19,9 +19,29 @@ export interface VideoFile {
   contentType?: string;
 }
 
+export type EpisodeNumberPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
+export type EpisodeFormat = "hash" | "ep" | "number" | "pad2";
+
+export interface TagThumbnailConfig {
+  enabled: boolean;
+  source_type: "steam" | "custom";
+  steam_asset_type?: "hero" | "header" | "poster";
+  custom_image_path?: string;
+  episode_position: EpisodeNumberPosition;
+  episode_format: EpisodeFormat;
+  font_color?: string;
+}
+
+export interface SteamGameArtwork {
+  heroUrl?: string;
+  headerUrl?: string;
+  posterUrl?: string;
+}
+
 export interface TagPlaylistConfig {
   vod_playlist_id: string;
   clip_playlist_id: string;
+  thumbnail_config?: TagThumbnailConfig;
 }
 
 export interface GameProfile {

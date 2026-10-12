@@ -10,9 +10,20 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type TagThumbnailConfig struct {
+	Enabled         bool   `json:"enabled"`
+	SourceType      string `json:"source_type"` // "steam" | "custom"
+	SteamAssetType  string `json:"steam_asset_type,omitempty"` // "hero" | "header" | "poster"
+	CustomImagePath string `json:"custom_image_path,omitempty"`
+	EpisodePosition string `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+	EpisodeFormat   string `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
+	FontColor       string `json:"font_color,omitempty"`
+}
+
 type TagPlaylistConfig struct {
-	VodPlaylistID  string `json:"vod_playlist_id"`
-	ClipPlaylistID string `json:"clip_playlist_id"`
+	VodPlaylistID   string             `json:"vod_playlist_id"`
+	ClipPlaylistID  string             `json:"clip_playlist_id"`
+	ThumbnailConfig TagThumbnailConfig `json:"thumbnail_config,omitempty"`
 }
 
 type VideoMeta struct {
@@ -380,12 +391,29 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 	if a.config.TagPlaylists == nil {
 		a.config.TagPlaylists = make(map[string]string)
 	}
-	a.config.TagPlaylistConfigs[tag] = TagPlaylistConfig{
-		VodPlaylistID:  vodPlaylistID,
-		ClipPlaylistID: clipPlaylistID,
-	}
+	existing := a.config.TagPlaylistConfigs[tag]
+	existing.VodPlaylistID = vodPlaylistID
+	existing.ClipPlaylistID = clipPlaylistID
+	a.config.TagPlaylistConfigs[tag] = existing
 	// Keep TagPlaylists backward compatible with VOD playlist
 	a.config.TagPlaylists[tag] = vodPlaylistID
+	a.configMu.Unlock()
+
+	return a.saveConfig()
+}
+
+// SetTagThumbnailConfig updates the automated thumbnail template configuration for a given tag.
+func (a *App) SetTagThumbnailConfig(tag string, thumbConfig TagThumbnailConfig) error {
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	a.configMu.Lock()
+	if a.config.TagPlaylistConfigs == nil {
+		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	existing := a.config.TagPlaylistConfigs[tag]
+	existing.ThumbnailConfig = thumbConfig
+	a.config.TagPlaylistConfigs[tag] = existing
 	a.configMu.Unlock()
 
 	return a.saveConfig()

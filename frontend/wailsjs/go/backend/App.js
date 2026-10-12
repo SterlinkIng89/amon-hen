@@ -26,6 +26,10 @@ export function CreateVideoClip(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['CreateVideoClip'](arg1, arg2, arg3, arg4);
 }
 
+export function DeleteCustomThumbnail(arg1) {
+  return window['go']['backend']['App']['DeleteCustomThumbnail'](arg1);
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }
@@ -84,6 +88,10 @@ export function GetChannelPlaylists(arg1) {
 
 export function GetChannelVideosPaginated(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['backend']['App']['GetChannelVideosPaginated'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function GetCustomThumbnail(arg1) {
+  return window['go']['backend']['App']['GetCustomThumbnail'](arg1);
 }
 
 export function GetDB() {
@@ -262,6 +270,10 @@ export function ResumeUpload(arg1) {
   return window['go']['backend']['App']['ResumeUpload'](arg1);
 }
 
+export function SaveCustomThumbnail(arg1, arg2) {
+  return window['go']['backend']['App']['SaveCustomThumbnail'](arg1, arg2);
+}
+
 export function SaveFolderSettings(arg1, arg2) {
   return window['go']['backend']['App']['SaveFolderSettings'](arg1, arg2);
 }
@@ -290,6 +302,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['backend']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }
 
+export function SelectCustomThumbnailImage() {
+  return window['go']['backend']['App']['SelectCustomThumbnailImage']();
+}
+
 export function SelectExportFolder() {
   return window['go']['backend']['App']['SelectExportFolder']();
 }
@@ -308,6 +324,10 @@ export function SetTagPlaylist(arg1, arg2) {
 
 export function SetTagPlaylistConfig(arg1, arg2, arg3) {
   return window['go']['backend']['App']['SetTagPlaylistConfig'](arg1, arg2, arg3);
+}
+
+export function SetTagThumbnailConfig(arg1, arg2) {
+  return window['go']['backend']['App']['SetTagThumbnailConfig'](arg1, arg2);
 }
 
 export function SetTitleSeparator(arg1) {
@@ -336,6 +356,10 @@ export function SetVideosPlaylist(arg1, arg2, arg3) {
 
 export function SetWatchFolderEnabled(arg1) {
   return window['go']['backend']['App']['SetWatchFolderEnabled'](arg1);
+}
+
+export function SetYouTubeThumbnail(arg1, arg2) {
+  return window['go']['backend']['App']['SetYouTubeThumbnail'](arg1, arg2);
 }
 
 export function ShowUploadNotification(arg1, arg2) {
@@ -382,6 +406,6 @@ export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
 }
 
-export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
-  return window['go']['backend']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['backend']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }

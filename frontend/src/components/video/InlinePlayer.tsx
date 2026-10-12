@@ -23,6 +23,7 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
+import YouTubeThumbnailPicker from "../youtube/YouTubeThumbnailPicker";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import {
@@ -293,6 +294,10 @@ export default function InlinePlayer({
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
     null,
   );
+  const [customThumbnailPath, setCustomThumbnailPath] = useState<string | null>(
+    null,
+  );
+  const pendingSaveAfterTagModalRef = useRef(false);
 
   const effectiveDuration = video.durationSecs || 0;
   const autoResolvedType: "vod" | "clip" =
@@ -415,6 +420,7 @@ export default function InlinePlayer({
     setClipMode(false);
     setClipSaveError(null);
     setClipSaveSuccess(null);
+    setCustomThumbnailPath(null);
   }, [
     video.path,
     video.youtubeTitle,
@@ -769,6 +775,7 @@ export default function InlinePlayer({
     // If tag changed and it's not in our tag_playlists map, ask the user to link it first
     if (tagChanged && tagInput && tagPlaylists[tagInput] === undefined) {
       setSavingInfo(false);
+      pendingSaveAfterTagModalRef.current = true;
       setPendingTagForModal(tagInput);
       return;
     }
@@ -931,6 +938,7 @@ export default function InlinePlayer({
       playlistId,
       gameTag: tagInput,
       episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
+      thumbnailPath: customThumbnailPath || "",
     };
     onAddToQueue(item);
     UploadToYouTube(
@@ -941,6 +949,7 @@ export default function InlinePlayer({
       playlistId || "",
       tagInput,
       episodeInput !== "" ? Number(episodeInput) : video.episode || 0,
+      customThumbnailPath || "",
     ).catch(() => {});
     setTimeout(() => setUploading(false), 1000);
   };
@@ -983,6 +992,7 @@ export default function InlinePlayer({
       playlistId,
       gameTag: tagInput,
       episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
+      thumbnailPath: customThumbnailPath || "",
     };
     onAddToQueue(item);
   };
@@ -1753,6 +1763,20 @@ export default function InlinePlayer({
                     </div>
                   )}
                 </div>
+
+                <YouTubeThumbnailPicker
+                  videoPath={video.path}
+                  gameTag={tagInput}
+                  episodeNumber={
+                    episodeInput !== "" ? Number(episodeInput) : video.episode || 1
+                  }
+                  tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
+                  onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                  onOpenTagSettings={() => {
+                    pendingSaveAfterTagModalRef.current = false;
+                    setPendingTagForModal(tagInput);
+                  }}
+                />
               </div>
 
               {/* Upload & Save actions - Fixed Bottom */}
@@ -2218,6 +2242,20 @@ export default function InlinePlayer({
                   </div>
                 )}
               </div>
+
+              <YouTubeThumbnailPicker
+                videoPath={video.path}
+                gameTag={tagInput}
+                episodeNumber={
+                  episodeInput !== "" ? Number(episodeInput) : video.episode || 1
+                }
+                tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
+                onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                onOpenTagSettings={() => {
+                  pendingSaveAfterTagModalRef.current = false;
+                  setPendingTagForModal(tagInput);
+                }}
+              />
             </div>
 
             <div className="h-px bg-white/10 w-full my-4" />
@@ -2297,6 +2335,27 @@ export default function InlinePlayer({
             </div>
           </div>
         )
+      )}
+
+      {pendingTagForModal && (
+        <TagPlaylistModal
+          tag={pendingTagForModal}
+          onClose={() => setPendingTagForModal(null)}
+          onSaved={() => {
+            setPendingTagForModal(null);
+            LoadConfig()
+              .then((cfg) => {
+                setGameProfiles(cfg.game_profiles || {});
+                setTagPlaylists(cfg.tag_playlists || {});
+                setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
+              })
+              .catch(() => {});
+            if (pendingSaveAfterTagModalRef.current) {
+              pendingSaveAfterTagModalRef.current = false;
+              performSaveInfo(true);
+            }
+          }}
+        />
       )}
     </div>
   );

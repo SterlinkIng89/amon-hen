@@ -827,3 +827,34 @@ func (a *App) PurgePlaylistDuplicates(playlistID string) (int, error) {
 
 	return len(toDelete), nil
 }
+
+// SetYouTubeThumbnail uploads a custom thumbnail for an existing YouTube video.
+func (a *App) SetYouTubeThumbnail(videoID string, imagePath string) error {
+	if videoID == "" {
+		return fmt.Errorf("videoID cannot be empty")
+	}
+	if imagePath == "" {
+		return fmt.Errorf("imagePath cannot be empty")
+	}
+
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to open thumbnail image: %w", err)
+	}
+	defer file.Close()
+
+	svc, err := a.youtubeClient(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get YouTube service: %w", err)
+	}
+
+	call := svc.Thumbnails.Set(videoID).Media(file)
+	_, err = call.Do()
+	if err != nil {
+		appLog("[YouTube] Failed to set thumbnail for video %s: %v", videoID, err)
+		return fmt.Errorf("failed to set thumbnail: %w", err)
+	}
+
+	appLog("[YouTube] Successfully set thumbnail for video %s from %s", videoID, imagePath)
+	return nil
+}

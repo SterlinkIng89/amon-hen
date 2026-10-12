@@ -147,6 +147,7 @@ func (db *DB) migrate() error {
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN monetization_status TEXT DEFAULT 'monetized'")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN rejection_reason TEXT DEFAULT ''")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN status_issues TEXT DEFAULT ''")
+	db.conn.Exec("ALTER TABLE upload_sessions ADD COLUMN thumbnail_path TEXT")
 
 	// Migrate yt_playlist_items if legacy composite primary key exists
 	var isCompositePK bool

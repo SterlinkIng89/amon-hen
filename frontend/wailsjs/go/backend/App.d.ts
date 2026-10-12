@@ -17,6 +17,8 @@ export function CreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<stri
 
 export function CreateVideoClip(arg1:string,arg2:number,arg3:number,arg4:string):Promise<string>;
 
+export function DeleteCustomThumbnail(arg1:string):Promise<void>;
+
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function DeleteGameProfile(arg1:string):Promise<void>;
@@ -46,6 +48,8 @@ export function GetChannelAnalytics():Promise<backend.ChannelAnalytics>;
 export function GetChannelPlaylists(arg1:string):Promise<Array<backend.YTPlaylist>>;
 
 export function GetChannelVideosPaginated(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string,arg6:string):Promise<Record<string, any>>;
+
+export function GetCustomThumbnail(arg1:string):Promise<string>;
 
 export function GetDB():Promise<sql.DB>;
 
@@ -135,6 +139,8 @@ export function RemoveFolder(arg1:string):Promise<void>;
 
 export function ResumeUpload(arg1:string):Promise<void>;
 
+export function SaveCustomThumbnail(arg1:string,arg2:string):Promise<string>;
+
 export function SaveFolderSettings(arg1:string,arg2:backend.FolderConfig):Promise<void>;
 
 export function SaveFolders(arg1:Array<string>):Promise<void>;
@@ -149,6 +155,8 @@ export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
+export function SelectCustomThumbnailImage():Promise<string>;
+
 export function SelectExportFolder():Promise<string>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
@@ -158,6 +166,8 @@ export function SetDefaultExportFolder(arg1:string):Promise<void>;
 export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
 
 export function SetTagPlaylistConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SetTagThumbnailConfig(arg1:string,arg2:backend.TagThumbnailConfig):Promise<void>;
 
 export function SetTitleSeparator(arg1:string):Promise<void>;
 
@@ -172,6 +182,8 @@ export function SetVideosContentType(arg1:Array<string>,arg2:string):Promise<voi
 export function SetVideosPlaylist(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 
 export function SetWatchFolderEnabled(arg1:boolean):Promise<void>;
+
+export function SetYouTubeThumbnail(arg1:string,arg2:string):Promise<void>;
 
 export function ShowUploadNotification(arg1:string,arg2:string):Promise<void>;
 
@@ -195,4 +207,4 @@ export function UpdateVideoMonetizationStatus(arg1:string,arg2:string,arg3:strin
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number):Promise<void>;
+export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string):Promise<void>;

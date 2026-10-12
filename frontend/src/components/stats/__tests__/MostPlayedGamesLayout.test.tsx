@@ -52,11 +52,10 @@ describe("MostPlayedGames Monthly Layout", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Playtime by game")).toBeDefined();
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+      expect(screen.getByText(/Top games in October 2026/i)).toBeDefined();
+      expect(screen.getByText("Monthly timeline")).toBeDefined();
     });
-
-    expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    expect(screen.getByText(/Top games in October 2026/i)).toBeDefined();
-    expect(screen.getByText("Monthly timeline")).toBeDefined();
   });
 
   it("updates the highlight card when selecting a game from the list", async () => {
@@ -67,7 +66,9 @@ describe("MostPlayedGames Monthly Layout", () => {
     });
 
     // Initial highlight is Hades II
-    expect(screen.getAllByText("Hades II").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText("Hades II").length).toBeGreaterThan(0);
+    });
 
     // Click on Silksong in the list
     const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');

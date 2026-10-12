@@ -22,6 +22,10 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetOrCreatePlaylist: vi.fn().mockResolvedValue("pl-123"),
   SetTagPlaylist: vi.fn().mockResolvedValue(undefined),
   SetTagPlaylistConfig: vi.fn().mockResolvedValue(undefined),
+  SetTagThumbnailConfig: vi.fn().mockResolvedValue(undefined),
+  GetSteamAppID: vi.fn().mockResolvedValue(""),
+  GetSteamGameAssets: vi.fn().mockResolvedValue({}),
+  SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
   LoadConfig: vi.fn().mockResolvedValue({
     tag_playlists: {},
     tag_playlist_configs: {},
@@ -279,6 +283,25 @@ describe("TagPlaylistModal", () => {
         "none",
       );
       expect(appBackend.SetTagPlaylist).toHaveBeenCalledWith("Valorant", "none");
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should switch to thumbnail template tab and save thumbnail config", async () => {
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    const thumbTab = screen.getByRole("button", { name: /thumbnail template/i });
+    fireEvent.click(thumbTab);
+
+    expect(screen.getByText(/automate youtube thumbnail for this tag/i)).toBeInTheDocument();
+
+    const saveBtn = screen.getByRole("button", { name: /save thumbnail template/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
       expect(onSaved).toHaveBeenCalled();
     });
   });

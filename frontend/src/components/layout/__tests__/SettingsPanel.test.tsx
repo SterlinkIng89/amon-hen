@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import SettingsPanel from "../SettingsPanel";
 import { describe, it, expect, vi } from "vitest";
 
@@ -15,6 +15,9 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetDefaultExportFolder: vi.fn().mockResolvedValue("/default/videos/amonhen"),
   SetDefaultExportFolder: vi.fn().mockResolvedValue(null),
   SelectExportFolder: vi.fn().mockResolvedValue("/custom/videos/folder"),
+  GetSteamAppID: vi.fn().mockResolvedValue("123"),
+  GetSteamGameAssets: vi.fn().mockResolvedValue({ heroUrl: "", headerUrl: "", posterUrl: "" }),
+  SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
 }));
 
 vi.mock("../../../../wailsjs/runtime/runtime", () => ({
@@ -23,11 +26,39 @@ vi.mock("../../../../wailsjs/runtime/runtime", () => ({
 }));
 
 describe("SettingsPanel", () => {
-  it("renders the Tag Playlists section", async () => {
+  it("renders the Tag Playlists section with searchable tag input and dropdown list", async () => {
     render(<SettingsPanel open={true} onClose={() => {}} />);
     
     expect(await screen.findByText("Tag Playlists")).toBeInTheDocument();
-    expect(await screen.findByText("-- Choose a tag to configure --")).toBeInTheDocument();
+    const tagInput = screen.getByPlaceholderText("Search or select game tag...");
+    expect(tagInput).toBeInTheDocument();
+
+    fireEvent.focus(tagInput);
+
+    expect(await screen.findByText("GameA")).toBeInTheDocument();
+    expect(await screen.findByText("GameB")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("GameA"));
+    expect(tagInput).toHaveValue("GameA");
+    expect(await screen.findByText("Associated YouTube Playlist")).toBeInTheDocument();
+  });
+
+  it("orders game tags in the combobox list from most recently used to oldest", async () => {
+    localStorage.setItem("amon_hen_recent_tags", JSON.stringify(["GameRecent", "GameOld"]));
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    const tagInput = await screen.findByPlaceholderText("Search or select game tag...");
+    fireEvent.focus(tagInput);
+
+    const gameRecent = await screen.findByText("GameRecent");
+    const gameOld = await screen.findByText("GameOld");
+    expect(gameRecent).toBeInTheDocument();
+    expect(gameOld).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole("button");
+    const recentIndex = buttons.findIndex((b) => b.textContent?.includes("GameRecent"));
+    const oldIndex = buttons.findIndex((b) => b.textContent?.includes("GameOld"));
+    expect(recentIndex).toBeLessThan(oldIndex);
   });
 
   it("renders the Default Export Destination section", async () => {

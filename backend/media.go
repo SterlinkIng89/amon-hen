@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // initCache sets up the on-disk cache directory and the thumbnail semaphore.
@@ -24,6 +27,7 @@ func (a *App) initCache() {
 	os.MkdirAll(filepath.Join(a.cacheDir, "thumbs"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "previews"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "durations"), 0755)
+	os.MkdirAll(filepath.Join(a.cacheDir, "yt_thumbs"), 0755)
 	fmt.Println("Cache directory:", a.cacheDir)
 
 	// Limit concurrent ffmpeg/ffprobe processes to half the available CPU cores
@@ -215,4 +219,86 @@ func (a *App) GetVideoDuration(path string) (float64, error) {
 	_ = os.WriteFile(cachePath, []byte(durStr), 0644)
 	appLog("[Media] GetVideoDuration GENERATED for %s in %v (%.2fs)", filepath.Base(path), time.Since(start), duration)
 	return duration, nil
+}
+
+func customThumbKey(videoPath string) string {
+	sum := md5.Sum([]byte(videoPath))
+	return fmt.Sprintf("yt_%x", sum)
+}
+
+// SaveCustomThumbnail decodes a base64 image (data URL or raw base64) and saves it to cache/yt_thumbs/<key>.jpg.
+// Returns the absolute file path on disk.
+func (a *App) SaveCustomThumbnail(videoPath string, base64Data string) (string, error) {
+	if videoPath == "" {
+		return "", fmt.Errorf("videoPath cannot be empty")
+	}
+	dir := filepath.Join(a.cacheDir, "yt_thumbs")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create yt_thumbs dir: %w", err)
+	}
+
+	// Strip potential data URL prefix, e.g. "data:image/jpeg;base64,"
+	commaIdx := strings.Index(base64Data, ",")
+	rawB64 := base64Data
+	if commaIdx != -1 {
+		rawB64 = base64Data[commaIdx+1:]
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(rawB64)
+	if err != nil {
+		return "", fmt.Errorf("invalid base64 image data: %w", err)
+	}
+
+	key := customThumbKey(videoPath)
+	filePath := filepath.Join(dir, key+".jpg")
+	if err := os.WriteFile(filePath, decoded, 0644); err != nil {
+		return "", fmt.Errorf("failed to write custom thumbnail: %w", err)
+	}
+
+	appLog("[Media] Saved custom thumbnail for %s -> %s", filepath.Base(videoPath), filePath)
+	return filePath, nil
+}
+
+// GetCustomThumbnail checks if a custom thumbnail exists for the video and returns its URL path (/cache/yt_thumbs/<key>.jpg),
+// or an empty string if none exists.
+func (a *App) GetCustomThumbnail(videoPath string) (string, error) {
+	if videoPath == "" {
+		return "", nil
+	}
+	key := customThumbKey(videoPath)
+	filePath := filepath.Join(a.cacheDir, "yt_thumbs", key+".jpg")
+	if _, err := os.Stat(filePath); err == nil {
+		return "/cache/yt_thumbs/" + key + ".jpg", nil
+	}
+	return "", nil
+}
+
+// DeleteCustomThumbnail deletes the cached custom thumbnail file for the video if it exists.
+func (a *App) DeleteCustomThumbnail(videoPath string) error {
+	if videoPath == "" {
+		return nil
+	}
+	key := customThumbKey(videoPath)
+	filePath := filepath.Join(a.cacheDir, "yt_thumbs", key+".jpg")
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	appLog("[Media] Deleted custom thumbnail for %s", filepath.Base(videoPath))
+	return nil
+}
+
+// SelectCustomThumbnailImage opens a native file dialog to pick an image file for thumbnail artwork.
+func (a *App) SelectCustomThumbnailImage() (string, error) {
+	if a.ctx == nil {
+		return "", nil
+	}
+	return wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Thumbnail Background Image",
+		Filters: []wruntime.FileFilter{
+			{
+				DisplayName: "Image Files (*.jpg, *.jpeg, *.png, *.webp)",
+				Pattern:     "*.jpg;*.jpeg;*.png;*.webp",
+			},
+		},
+	})
 }

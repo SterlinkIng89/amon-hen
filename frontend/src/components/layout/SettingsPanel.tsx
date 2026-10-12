@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   IsYouTubeAuthed,
   StartYouTubeAuth,
@@ -12,7 +12,6 @@ import {
   DeleteGameProfile,
   SetTitleSeparator,
   GetAllGameTags,
-  SetTagPlaylist,
   GetChannelPlaylists,
   GetDefaultExportFolder,
   SetDefaultExportFolder,
@@ -28,6 +27,8 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { GameProfile, YTPlaylist } from "../../types";
+import { useRecentTags } from "../../hooks/useRecentTags";
+import TagPlaylistsSection from "./TagPlaylistsSection";
 
 interface YouTubeChannel {
   id: string;
@@ -73,13 +74,10 @@ export default function SettingsPanel({ open, onClose }: Props) {
   }>({ tag: "", profile: { type: "singleplayer", titleTemplate: "" } });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Tag Playlists state
+  // Tag Playlists data for TagPlaylistsSection
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [availablePlaylists, setAvailablePlaylists] = useState<YTPlaylist[]>([]);
-  const [tagPlaylistSaving, setTagPlaylistSaving] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string>("");
-  const [selectedPlaylistForTag, setSelectedPlaylistForTag] = useState<string>("none");
+  const { suggestions: recentTagSuggestions } = useRecentTags();
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +98,6 @@ export default function SettingsPanel({ open, onClose }: Props) {
       .then((cfg) => {
         setCredsLoaded(!!cfg.youtube_client_id);
         setGameProfiles(cfg.game_profiles || {});
-        setTagPlaylists(cfg.tag_playlists || {});
         setTitleSeparator(cfg.title_separator || " - ");
         if (cfg.steam_api_key) setSteamApiKey(cfg.steam_api_key);
         if (cfg.steam_id) setSteamId(cfg.steam_id);
@@ -826,103 +823,11 @@ export default function SettingsPanel({ open, onClose }: Props) {
           </section>
 
           {/* Tag Playlists */}
-          <section className="border-b border-white/5 pb-4 last:border-0">
-            <h3 className="text-sm font-semibold text-text-muted mb-3 px-2">
-              Tag Playlists
-            </h3>
-            <div className="bg-elevated border border-border-subtle rounded-md p-3 flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">
-                  Select Game Tag
-                </label>
-                <select
-                  style={{ backgroundColor: "#141416", color: "#f4f4f5" }}
-                  className="bg-[#141416] border border-white/10 rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
-                  value={selectedTag}
-                  onChange={(e) => {
-                    const tag = e.target.value;
-                    setSelectedTag(tag);
-                    if (tag) {
-                      setSelectedPlaylistForTag(tagPlaylists[tag] || "none");
-                    }
-                  }}
-                >
-                  <option value="" style={{ backgroundColor: "#141416", color: "#71717a" }}>
-                    -- Choose a tag to configure --
-                  </option>
-                  {allTags.map((tag) => (
-                    <option key={tag} value={tag} style={{ backgroundColor: "#141416", color: "#f4f4f5" }}>
-                      {tag} {tagPlaylists[tag] && tagPlaylists[tag] !== "none" ? " (Linked)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedTag && (
-                <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-text-secondary">
-                      Associated YouTube Playlist
-                    </label>
-                    <select
-                      style={{ backgroundColor: "#141416", color: "#f4f4f5" }}
-                      className="bg-[#141416] border border-white/10 rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
-                      value={selectedPlaylistForTag}
-                      onChange={(e) => setSelectedPlaylistForTag(e.target.value)}
-                    >
-                      <option value="none" style={{ backgroundColor: "#141416", color: "#71717a" }}>
-                        No Playlist
-                      </option>
-                      {availablePlaylists.map((p) => (
-                        <option key={p.id} value={p.id} style={{ backgroundColor: "#141416", color: "#f4f4f5" }}>
-                          {p.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="text-[11px] text-text-muted truncate max-w-[200px]">
-                      {tagPlaylists[selectedTag] && tagPlaylists[selectedTag] !== "none" ? (
-                        <span>
-                          Current:{" "}
-                          <span className="text-accent">
-                            {availablePlaylists.find((p) => p.id === tagPlaylists[selectedTag])?.title || tagPlaylists[selectedTag]}
-                          </span>
-                        </span>
-                      ) : (
-                        <span>No playlist linked</span>
-                      )}
-                    </div>
-
-                    <button
-                      className="btn btn-primary btn-sm text-xs px-3"
-                      disabled={
-                        tagPlaylistSaving === selectedTag ||
-                        selectedPlaylistForTag === (tagPlaylists[selectedTag] || "none")
-                      }
-                      onClick={async () => {
-                        setTagPlaylistSaving(selectedTag);
-                        try {
-                          await SetTagPlaylist(selectedTag, selectedPlaylistForTag);
-                          setTagPlaylists((prev) => ({
-                            ...prev,
-                            [selectedTag]: selectedPlaylistForTag,
-                          }));
-                        } catch (err) {
-                          console.error("Error setting tag playlist", err);
-                        } finally {
-                          setTagPlaylistSaving(null);
-                        }
-                      }}
-                    >
-                      {tagPlaylistSaving === selectedTag ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+          <TagPlaylistsSection
+            allTags={allTags}
+            recentTagSuggestions={recentTagSuggestions}
+            availablePlaylists={availablePlaylists}
+          />
         </div>
       </aside>
     </>

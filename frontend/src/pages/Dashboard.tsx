@@ -391,6 +391,7 @@ export default function Dashboard() {
         item.playlistId || "",
         item.gameTag || "",
         item.episode || 0,
+        item.thumbnailPath || "",
       ).catch(() => {});
     });
 
@@ -446,6 +447,7 @@ export default function Dashboard() {
       opts.playlistId || "",
       video.game || "",
       video.episode || 0,
+      "",
     ).catch(() => {});
 
     handleRescan();
