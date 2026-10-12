@@ -22,6 +22,28 @@ export interface VideoFile {
 export type EpisodeNumberPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
 export type EpisodeFormat = "hash" | "ep" | "number" | "pad2";
 
+export interface ImageFraming {
+  readonly offset_x: number; // 0..1, 0.5 = centered
+  readonly offset_y: number; // 0..1, 0.5 = centered
+  readonly zoom: number;     // 1..3, 1 = cover fit
+}
+
+export interface ElementLayout {
+  readonly x: number;      // 0..1 center
+  readonly y: number;      // 0..1 center
+  readonly scale: number;  // 0.25..3, 1 = default
+}
+
+export interface LogoLayer extends ElementLayout {
+  readonly enabled: boolean;
+}
+
+export interface TitleLayer extends ElementLayout {
+  readonly enabled: boolean;
+  readonly text_override?: string;
+  readonly color?: string;
+}
+
 export interface TagThumbnailConfig {
   enabled: boolean;
   source_type: "steam" | "custom";
@@ -30,12 +52,18 @@ export interface TagThumbnailConfig {
   episode_position: EpisodeNumberPosition;
   episode_format: EpisodeFormat;
   font_color?: string;
+  image_framing?: ImageFraming;
+  episode_layout?: ElementLayout;
+  logo?: LogoLayer;
+  title?: TitleLayer;
 }
 
 export interface SteamGameArtwork {
+  title?: string;
   heroUrl?: string;
   headerUrl?: string;
   posterUrl?: string;
+  logoUrl?: string;
 }
 
 export interface TagPlaylistConfig {

@@ -1,22 +1,20 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TagThumbnailConfig,
   EpisodeNumberPosition,
   EpisodeFormat,
-  SteamGameArtwork,
 } from "../../types";
 import {
   GetCustomThumbnail,
   SaveCustomThumbnail,
   DeleteCustomThumbnail,
-  GetSteamAppID,
-  GetSteamGameAssets,
   SelectCustomThumbnailImage,
 } from "../../../wailsjs/go/backend/App";
-import {
-  renderThumbnailToCanvas,
-  resolveThumbnailImageUrl,
-} from "../../utils/thumbnailGenerator";
+import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import ThumbnailCanvasEditor from "../ui/ThumbnailCanvasEditor";
+import ThumbnailFramingControls from "../ui/ThumbnailFramingControls";
+import ThumbnailElementControls from "../ui/ThumbnailElementControls";
+import { renderThumbnailToCanvas } from "../../utils/thumbnailGenerator";
 
 export interface YouTubeThumbnailPickerProps {
   readonly videoPath: string;
@@ -35,15 +33,6 @@ export default function YouTubeThumbnailPicker({
   onThumbnailReady,
   onOpenTagSettings,
 }: YouTubeThumbnailPickerProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [canvasNode, setCanvasNode] = useState<HTMLCanvasElement | null>(null);
-
-  const setCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
-    canvasRef.current = node;
-    setCanvasNode(node);
-  }, []);
-  const [steamAssets, setSteamAssets] = useState<SteamGameArtwork | null>(null);
-  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const [customThumbUrl, setCustomThumbUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
@@ -57,6 +46,7 @@ export default function YouTubeThumbnailPicker({
     episode_position: tagThumbnailConfig?.episode_position ?? "bottom-right",
     episode_format: tagThumbnailConfig?.episode_format ?? "pad2",
     font_color: tagThumbnailConfig?.font_color ?? "#ffffff",
+    image_framing: tagThumbnailConfig?.image_framing,
   }));
 
   // Sync when tagThumbnailConfig changes
@@ -70,6 +60,10 @@ export default function YouTubeThumbnailPicker({
         episode_position: tagThumbnailConfig.episode_position,
         episode_format: tagThumbnailConfig.episode_format || "pad2",
         font_color: tagThumbnailConfig.font_color || "#ffffff",
+        image_framing: tagThumbnailConfig.image_framing,
+        episode_layout: tagThumbnailConfig.episode_layout,
+        logo: tagThumbnailConfig.logo,
+        title: tagThumbnailConfig.title,
       });
     }
   }, [tagThumbnailConfig]);
@@ -89,81 +83,39 @@ export default function YouTubeThumbnailPicker({
       .catch(console.error);
   }, [videoPath, onThumbnailReady]);
 
-  // Fetch Steam assets for the game tag
-  useEffect(() => {
-    if (!gameTag) {
-      setSteamAssets(null);
-      return;
-    }
-    let isCancelled = false;
-
-    GetSteamAppID(gameTag)
-      .then((appId) => {
-        if (isCancelled) return;
-        if (appId && appId !== "NOT_FOUND") {
-          return GetSteamGameAssets(appId);
-        }
-        return null;
-      })
-      .then((assets) => {
-        if (!isCancelled && assets) {
-          setSteamAssets(assets);
-        }
-      })
-      .catch(console.error);
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [gameTag]);
-
-  const resolvedImageUrl = useMemo(() => {
-    return resolveThumbnailImageUrl(
-      localConfig.source_type,
-      localConfig.custom_image_path,
-      localConfig.steam_asset_type,
-      steamAssets
-    );
-  }, [localConfig.source_type, localConfig.custom_image_path, localConfig.steam_asset_type, steamAssets]);
-
-  // Preload image element for canvas
-  useEffect(() => {
-    if (!resolvedImageUrl) {
-      setLoadedImage(null);
-      return;
-    }
-    let isCancelled = false;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = resolvedImageUrl;
-    img.onload = () => {
-      if (!isCancelled) setLoadedImage(img);
-    };
-    img.onerror = () => {
-      if (!isCancelled) setLoadedImage(null);
-    };
-    return () => {
-      isCancelled = true;
-    };
-  }, [resolvedImageUrl]);
-
-  // Re-render canvas
-  useEffect(() => {
-    if (!canvasNode) return;
-    renderThumbnailToCanvas(canvasNode, loadedImage, {
-      showEpisode: true,
-      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
-      episodeFormat: localConfig.episode_format || "pad2",
-      position: localConfig.episode_position || "bottom-right",
-      fontColor: localConfig.font_color || "#ffffff",
-    });
-  }, [canvasNode, loadedImage, episodeNumber, localConfig.episode_format, localConfig.episode_position, localConfig.font_color]);
+  const { steamAssets, baseImage, logoImage, gameTitle } = useThumbnailAssets(gameTag, localConfig);
 
   const handleSaveThumbnail = async () => {
-    if (!canvasRef.current || !videoPath) return;
+    if (!videoPath) return;
     setIsSaving(true);
     try {
-      const dataUrl = canvasRef.current.toDataURL("image/jpeg", 0.92);
+      // Offscreen canvas at full 1280x720 resolution
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = 1280;
+      exportCanvas.height = 720;
+      renderThumbnailToCanvas(exportCanvas, baseImage, {
+        showEpisode: true,
+        episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
+        episodeFormat: localConfig.episode_format || "pad2",
+        position: localConfig.episode_position || "bottom-right",
+        fontColor: localConfig.font_color || "#ffffff",
+        framing: localConfig.image_framing,
+        episodeLayout: localConfig.episode_layout,
+        logo: localConfig.logo?.enabled
+          ? {
+              image: logoImage,
+              layout: localConfig.logo,
+            }
+          : undefined,
+        title: localConfig.title?.enabled
+          ? {
+              text: localConfig.title.text_override || gameTitle,
+              layout: localConfig.title,
+            }
+          : undefined,
+      });
+
+      const dataUrl = exportCanvas.toDataURL("image/jpeg", 0.92);
       const savedPath = await SaveCustomThumbnail(videoPath, dataUrl);
       setCustomThumbUrl(savedPath);
       onThumbnailReady?.(savedPath);
@@ -190,6 +142,10 @@ export default function YouTubeThumbnailPicker({
           episode_position: tagThumbnailConfig.episode_position,
           episode_format: tagThumbnailConfig.episode_format || "pad2",
           font_color: tagThumbnailConfig.font_color || "#ffffff",
+          image_framing: tagThumbnailConfig.image_framing,
+          episode_layout: tagThumbnailConfig.episode_layout,
+          logo: tagThumbnailConfig.logo,
+          title: tagThumbnailConfig.title,
         });
       }
     } catch (err) {
@@ -257,12 +213,16 @@ export default function YouTubeThumbnailPicker({
 
           <div className="flex gap-3 items-start">
             {/* Live 16:9 Canvas Preview */}
-            <div className="aspect-video w-[180px] rounded border border-white/10 overflow-hidden bg-black/60 shrink-0">
-              <canvas
-                ref={setCanvasRef}
-                className="w-full h-full object-cover"
-                width={1280}
-                height={720}
+            <div className="w-[180px] shrink-0">
+              <ThumbnailCanvasEditor
+                config={localConfig}
+                baseImage={baseImage}
+                logoImage={logoImage}
+                gameTitle={gameTitle}
+                episodeNumber={episodeNumber || 1}
+                onConfigChange={(patch) =>
+                  setLocalConfig((prev) => ({ ...prev, ...patch }))
+                }
               />
             </div>
 
@@ -300,6 +260,25 @@ export default function YouTubeThumbnailPicker({
           {/* Optional inline adjustments for single video */}
           {isCustomizing && (
             <div className="flex flex-col gap-2 pt-2 border-t border-white/5 animate-fadeIn">
+              {/* Framing controls */}
+              <ThumbnailFramingControls
+                framing={localConfig.image_framing}
+                disabled={!baseImage}
+                onChange={(framing) =>
+                  setLocalConfig((prev) => ({ ...prev, image_framing: framing }))
+                }
+              />
+
+              {/* Title & Logo layer controls */}
+              <ThumbnailElementControls
+                config={localConfig}
+                hasLogo={Boolean(steamAssets?.logoUrl)}
+                defaultTitle={gameTitle}
+                onChange={(patch) =>
+                  setLocalConfig((prev) => ({ ...prev, ...patch }))
+                }
+              />
+
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-text-secondary">
                   Position

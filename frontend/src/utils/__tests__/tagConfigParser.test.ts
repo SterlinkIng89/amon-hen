@@ -61,4 +61,40 @@ describe("tagConfigParser", () => {
     expect(all["Valorant"].clip_playlist_id).toBe("pl-v2");
     expect(all["Minecraft"].vod_playlist_id).toBe("pl-m1");
   });
+
+  describe("image_framing parsing", () => {
+    it("leaves image_framing undefined for legacy configs", () => {
+      const parsed = parseTagThumbnailConfig({
+        source_type: "steam",
+        episode_position: "bottom-right",
+      });
+      expect(parsed?.image_framing).toBeUndefined();
+    });
+
+    it("parses and clamps valid image_framing", () => {
+      const parsed = parseTagThumbnailConfig({
+        enabled: true,
+        source_type: "steam",
+        image_framing: {
+          offset_x: -0.2,
+          offset_y: 1.5,
+          zoom: 4,
+        },
+      });
+      expect(parsed?.image_framing).toEqual({
+        offset_x: 0,
+        offset_y: 1,
+        zoom: 3,
+      });
+    });
+
+    it("ignores non-object or invalid image_framing", () => {
+      const parsed = parseTagThumbnailConfig({
+        enabled: true,
+        source_type: "steam",
+        image_framing: "invalid",
+      });
+      expect(parsed?.image_framing).toBeUndefined();
+    });
+  });
 });

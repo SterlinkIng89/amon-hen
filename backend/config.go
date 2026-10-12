@@ -10,14 +10,42 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type ImageFraming struct {
+	OffsetX float64 `json:"offset_x"`
+	OffsetY float64 `json:"offset_y"`
+	Zoom    float64 `json:"zoom"`
+}
+
+type ElementLayout struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Scale float64 `json:"scale"`
+}
+
+type LogoLayer struct {
+	Enabled bool `json:"enabled"`
+	ElementLayout
+}
+
+type TitleLayer struct {
+	Enabled      bool   `json:"enabled"`
+	TextOverride string `json:"text_override,omitempty"`
+	Color        string `json:"color,omitempty"`
+	ElementLayout
+}
+
 type TagThumbnailConfig struct {
-	Enabled         bool   `json:"enabled"`
-	SourceType      string `json:"source_type"` // "steam" | "custom"
-	SteamAssetType  string `json:"steam_asset_type,omitempty"` // "hero" | "header" | "poster"
-	CustomImagePath string `json:"custom_image_path,omitempty"`
-	EpisodePosition string `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
-	EpisodeFormat   string `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
-	FontColor       string `json:"font_color,omitempty"`
+	Enabled         bool           `json:"enabled"`
+	SourceType      string         `json:"source_type"` // "steam" | "custom"
+	SteamAssetType  string         `json:"steam_asset_type,omitempty"` // "hero" | "header" | "poster"
+	CustomImagePath string         `json:"custom_image_path,omitempty"`
+	EpisodePosition string         `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+	EpisodeFormat   string         `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
+	FontColor       string         `json:"font_color,omitempty"`
+	ImageFraming    *ImageFraming  `json:"image_framing,omitempty"`
+	EpisodeLayout   *ElementLayout `json:"episode_layout,omitempty"`
+	Logo            *LogoLayer     `json:"logo,omitempty"`
+	Title           *TitleLayer    `json:"title,omitempty"`
 }
 
 type TagPlaylistConfig struct {

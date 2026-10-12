@@ -1,20 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React from "react";
 import {
   TagThumbnailConfig,
   EpisodeNumberPosition,
   EpisodeFormat,
-  SteamGameArtwork,
 } from "../../types";
-import {
-  GetSteamAppID,
-  GetSteamGameAssets,
-  SelectCustomThumbnailImage,
-} from "../../../wailsjs/go/backend/App";
-import {
-  renderThumbnailToCanvas,
-  resolveThumbnailImageUrl,
-} from "../../utils/thumbnailGenerator";
+import { SelectCustomThumbnailImage } from "../../../wailsjs/go/backend/App";
 import { parseTagThumbnailConfig } from "../../utils/tagConfigParser";
+import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import ThumbnailCanvasEditor from "./ThumbnailCanvasEditor";
+import ThumbnailFramingControls from "./ThumbnailFramingControls";
+import ThumbnailElementControls from "./ThumbnailElementControls";
 
 export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
@@ -53,92 +48,9 @@ export default function TagThumbnailConfigSection({
     enabled: value?.enabled !== undefined ? value.enabled : Boolean(parsed?.enabled),
     font_color: value?.font_color || parsed?.font_color || DEFAULT_CONFIG.font_color,
   };
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [canvasNode, setCanvasNode] = useState<HTMLCanvasElement | null>(null);
 
-  const setCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
-    canvasRef.current = node;
-    setCanvasNode(node);
-  }, []);
-  const [steamAssets, setSteamAssets] = useState<SteamGameArtwork | null>(null);
-  const [loadingAssets, setLoadingAssets] = useState(false);
-  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
-
-  // Fetch Steam assets whenever tag changes
-  useEffect(() => {
-    if (!tag) {
-      setSteamAssets(null);
-      return;
-    }
-    let isCancelled = false;
-    setLoadingAssets(true);
-
-    GetSteamAppID(tag)
-      .then((appId) => {
-        if (isCancelled) return;
-        if (appId && appId !== "NOT_FOUND") {
-          return GetSteamGameAssets(appId);
-        }
-        return null;
-      })
-      .then((assets) => {
-        if (!isCancelled && assets) {
-          setSteamAssets(assets);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load Steam assets for tag:", tag, err);
-      })
-      .finally(() => {
-        if (!isCancelled) setLoadingAssets(false);
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [tag]);
-
-  const resolvedImageUrl = React.useMemo(() => {
-    return resolveThumbnailImageUrl(
-      config.source_type,
-      config.custom_image_path,
-      config.steam_asset_type,
-      steamAssets
-    );
-  }, [config.source_type, config.custom_image_path, config.steam_asset_type, steamAssets]);
-
-  // Preload image element for canvas
-  useEffect(() => {
-    if (!resolvedImageUrl) {
-      setLoadedImage(null);
-      return;
-    }
-    let isCancelled = false;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = resolvedImageUrl;
-    img.onload = () => {
-      if (!isCancelled) setLoadedImage(img);
-    };
-    img.onerror = () => {
-      if (!isCancelled) setLoadedImage(null);
-    };
-    return () => {
-      isCancelled = true;
-    };
-  }, [resolvedImageUrl]);
-
-  // Render to canvas
-  useEffect(() => {
-    if (!canvasNode || !config.enabled) return;
-    renderThumbnailToCanvas(canvasNode, loadedImage, {
-      showEpisode: true,
-      episodeNumber: 1,
-      episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-right",
-      fontColor: config.font_color || "#ffffff",
-    });
-  }, [canvasNode, config.enabled, loadedImage, config.episode_format, config.episode_position, config.font_color]);
+  const { steamAssets, loadingAssets, baseImage, logoImage, gameTitle } =
+    useThumbnailAssets(tag, config);
 
   const update = (patch: Partial<TagThumbnailConfig>) => {
     onChange({
@@ -197,19 +109,30 @@ export default function TagThumbnailConfigSection({
 
       {config.enabled && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2 border-t border-border-subtle animate-fadeIn">
-          {/* Left Column: Preview Canvas (5 cols) */}
+          {/* Left Column: Preview Canvas, Framing Controls & Elements Controls (5 cols) */}
           <div className="md:col-span-5 flex flex-col gap-2">
             <span className="text-xs font-medium text-text-secondary">
               Thumbnail Preview
             </span>
-            <div className="aspect-video w-full rounded-lg border border-border-subtle overflow-hidden bg-black/60 relative shadow-sm">
-              <canvas
-                ref={setCanvasRef}
-                className="w-full h-full object-cover"
-                width={1280}
-                height={720}
-              />
-            </div>
+            <ThumbnailCanvasEditor
+              config={config}
+              baseImage={baseImage}
+              logoImage={logoImage}
+              gameTitle={gameTitle}
+              episodeNumber={1}
+              onConfigChange={update}
+            />
+            <ThumbnailFramingControls
+              framing={config.image_framing}
+              disabled={!baseImage}
+              onChange={(framing) => update({ image_framing: framing })}
+            />
+            <ThumbnailElementControls
+              config={config}
+              hasLogo={Boolean(steamAssets?.logoUrl)}
+              defaultTitle={gameTitle}
+              onChange={update}
+            />
           </div>
 
           {/* Right Column: Customization Controls (7 cols) */}

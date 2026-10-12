@@ -1,4 +1,4 @@
-import { TagPlaylistConfig, TagThumbnailConfig } from "../types";
+import { ElementLayout, TagPlaylistConfig, TagThumbnailConfig } from "../types";
 
 export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefined {
   if (!raw) return undefined;
@@ -19,6 +19,57 @@ export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefin
       ? raw.steam_asset_type
       : undefined;
 
+  const clampNum = (val: unknown, min: number, max: number, def: number): number => {
+    const num = typeof val === "number" ? val : typeof val === "string" ? parseFloat(val) : NaN;
+    return Number.isFinite(num) ? Math.max(min, Math.min(max, num)) : def;
+  };
+
+  const rawFraming = raw.image_framing;
+  let framing: TagThumbnailConfig["image_framing"];
+  if (rawFraming && typeof rawFraming === "object") {
+    framing = {
+      offset_x: clampNum(rawFraming.offset_x, 0, 1, 0.5),
+      offset_y: clampNum(rawFraming.offset_y, 0, 1, 0.5),
+      zoom: clampNum(rawFraming.zoom, 1, 3, 1),
+    };
+  }
+
+  const parseLayout = (l: unknown): ElementLayout | undefined => {
+    if (!l || typeof l !== "object") return undefined;
+    const obj = l as Record<string, unknown>;
+    return {
+      x: clampNum(obj.x, 0, 1, 0.5),
+      y: clampNum(obj.y, 0, 1, 0.5),
+      scale: clampNum(obj.scale, 0.25, 3, 1),
+    };
+  };
+
+  const episodeLayout = parseLayout(raw.episode_layout);
+
+  let logo: TagThumbnailConfig["logo"];
+  if (raw.logo && typeof raw.logo === "object") {
+    const layout = parseLayout(raw.logo);
+    if (layout) {
+      logo = {
+        ...layout,
+        enabled: Boolean(raw.logo.enabled),
+      };
+    }
+  }
+
+  let title: TagThumbnailConfig["title"];
+  if (raw.title && typeof raw.title === "object") {
+    const layout = parseLayout(raw.title);
+    if (layout) {
+      title = {
+        ...layout,
+        enabled: Boolean(raw.title.enabled),
+        text_override: typeof raw.title.text_override === "string" ? raw.title.text_override : undefined,
+        color: typeof raw.title.color === "string" ? raw.title.color : undefined,
+      };
+    }
+  }
+
   return {
     enabled: isCustomized,
     source_type: sourceType,
@@ -27,6 +78,10 @@ export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefin
     episode_position: raw.episode_position || "bottom-right",
     episode_format: raw.episode_format || "pad2",
     font_color: raw.font_color,
+    image_framing: framing,
+    episode_layout: episodeLayout,
+    logo,
+    title,
   };
 }
 
