@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import {
-  YTPlaylist,
-  TagThumbnailConfig,
-  TagPlaylistConfig,
-} from "../../types";
+import { YTPlaylist, TagThumbnailConfig, TagPlaylistConfig } from "../../types";
+import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import {
   LoadConfig,
   SetTagPlaylist,
@@ -28,7 +25,9 @@ export default function TagPlaylistsSection({
   >({});
   const [selectedTag, setSelectedTag] = useState("");
   const [selectedPlaylistForTag, setSelectedPlaylistForTag] = useState("none");
-  const [tagPlaylistSaving, setTagPlaylistSaving] = useState<string | null>(null);
+  const [tagPlaylistSaving, setTagPlaylistSaving] = useState<string | null>(
+    null,
+  );
   const [tagThumbConfig, setTagThumbConfig] = useState<
     TagThumbnailConfig | undefined
   >(undefined);
@@ -40,7 +39,9 @@ export default function TagPlaylistsSection({
     LoadConfig()
       .then((cfg) => {
         setTagPlaylists(cfg.tag_playlists || {});
-        setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
+        setTagPlaylistConfigs(
+          parseTagPlaylistConfigs(cfg.tag_playlist_configs, cfg.tag_playlists),
+        );
       })
       .catch((err) => {
         console.error("Failed to load tag playlist configs", err);
@@ -259,7 +260,8 @@ export default function TagPlaylistsSection({
 
               {tagSearchQuery.trim() &&
                 !filteredTags.some(
-                  (t) => t.toLowerCase() === tagSearchQuery.trim().toLowerCase()
+                  (t) =>
+                    t.toLowerCase() === tagSearchQuery.trim().toLowerCase(),
                 ) && (
                   <button
                     type="button"
@@ -317,7 +319,7 @@ export default function TagPlaylistsSection({
                     Current:{" "}
                     <span className="text-accent">
                       {availablePlaylists.find(
-                        (p) => p.id === tagPlaylists[selectedTag]
+                        (p) => p.id === tagPlaylists[selectedTag],
                       )?.title || tagPlaylists[selectedTag]}
                     </span>
                   </span>

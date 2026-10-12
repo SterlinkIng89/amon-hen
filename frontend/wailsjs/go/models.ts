@@ -158,11 +158,11 @@ export namespace backend {
 	}
 	export class TagThumbnailConfig {
 	    enabled: boolean;
-	    source_type: "steam" | "custom";
-	    steam_asset_type?: "hero" | "header" | "poster";
+	    source_type: string;
+	    steam_asset_type?: string;
 	    custom_image_path?: string;
-	    episode_position: "bottom-right" | "bottom-left" | "top-right" | "top-left";
-	    episode_format: "hash" | "ep" | "number" | "pad2";
+	    episode_position: string;
+	    episode_format: string;
 	    font_color?: string;
 	
 	    static createFrom(source: any = {}) {

@@ -20,6 +20,8 @@ interface LibrarySubHeaderProps {
   // Advanced filters
   advancedFilters: AdvancedFiltersValue;
   onAdvancedFiltersChange: (v: AdvancedFiltersValue) => void;
+  // Tag management
+  onOpenTagManagement: () => void;
 }
 
 function folderLabel(f: string): string {
@@ -50,6 +52,7 @@ export default function LibrarySubHeader({
   onToggleFilterUploaded,
   advancedFilters,
   onAdvancedFiltersChange,
+  onOpenTagManagement,
 }: LibrarySubHeaderProps) {
   if (folders.length === 0) return null;
 
@@ -247,6 +250,31 @@ export default function LibrarySubHeader({
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
             </svg>
             Hide Uploaded
+          </button>
+
+          <div className="h-4 w-px bg-border-subtle" />
+
+          {/* Tags Configuration button */}
+          <button
+            onClick={onOpenTagManagement}
+            className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"
+            title="Configure YouTube playlists and thumbnail templates for library tags"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+            >
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            Tags
           </button>
 
           <div className="h-4 w-px bg-border-subtle" />

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist, TagPlaylistConfig } from "../../types";
+import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import {
   formatSize,
   formatDuration,
@@ -314,7 +315,9 @@ export default function InlinePlayer({
       .then((cfg) => {
         setGameProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
-        setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
+        setTagPlaylistConfigs(
+          parseTagPlaylistConfigs(cfg.tag_playlist_configs, cfg.tag_playlists),
+        );
       })
       .catch(() => {});
   }, []);
@@ -2347,7 +2350,12 @@ export default function InlinePlayer({
               .then((cfg) => {
                 setGameProfiles(cfg.game_profiles || {});
                 setTagPlaylists(cfg.tag_playlists || {});
-                setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
+                setTagPlaylistConfigs(
+                  parseTagPlaylistConfigs(
+                    cfg.tag_playlist_configs,
+                    cfg.tag_playlists,
+                  ),
+                );
               })
               .catch(() => {});
             if (pendingSaveAfterTagModalRef.current) {
