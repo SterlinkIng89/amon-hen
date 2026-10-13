@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   IsYouTubeAuthed,
   StartYouTubeAuth,
@@ -12,8 +12,10 @@ import {
   DeleteGameProfile,
   SetTitleSeparator,
   GetAllGameTags,
-  SetTagPlaylist,
   GetChannelPlaylists,
+  GetDefaultExportFolder,
+  SetDefaultExportFolder,
+  SelectExportFolder,
 } from "../../../wailsjs/go/backend/App";
 // @ts-ignore
 import {
@@ -25,6 +27,8 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { GameProfile, YTPlaylist } from "../../types";
+import { useRecentTags } from "../../hooks/useRecentTags";
+import TagPlaylistsSection from "./TagPlaylistsSection";
 
 interface YouTubeChannel {
   id: string;
@@ -55,6 +59,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [watchFolderSaving, setWatchFolderSaving] = useState(false);
   const [titleSeparator, setTitleSeparator] = useState(" - ");
   const [titleSepSaving, setTitleSepSaving] = useState(false);
+  const [defaultExportFolder, setDefaultExportFolder] = useState("");
+  const [exportFolderSaving, setExportFolderSaving] = useState(false);
 
   // Game Profiles state
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
@@ -68,13 +74,10 @@ export default function SettingsPanel({ open, onClose }: Props) {
   }>({ tag: "", profile: { type: "singleplayer", titleTemplate: "" } });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Tag Playlists state
+  // Tag Playlists data for TagPlaylistsSection
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [availablePlaylists, setAvailablePlaylists] = useState<YTPlaylist[]>([]);
-  const [tagPlaylistSaving, setTagPlaylistSaving] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string>("");
-  const [selectedPlaylistForTag, setSelectedPlaylistForTag] = useState<string>("none");
+  const { suggestions: recentTagSuggestions } = useRecentTags();
 
   useEffect(() => {
     if (!open) return;
@@ -95,12 +98,15 @@ export default function SettingsPanel({ open, onClose }: Props) {
       .then((cfg) => {
         setCredsLoaded(!!cfg.youtube_client_id);
         setGameProfiles(cfg.game_profiles || {});
-        setTagPlaylists(cfg.tag_playlists || {});
         setTitleSeparator(cfg.title_separator || " - ");
         if (cfg.steam_api_key) setSteamApiKey(cfg.steam_api_key);
         if (cfg.steam_id) setSteamId(cfg.steam_id);
       })
       .catch(() => setCredsLoaded(false));
+
+    GetDefaultExportFolder()
+      .then(setDefaultExportFolder)
+      .catch(() => {});
       
     // Load tag management data
     GetAllGameTags()
@@ -518,6 +524,64 @@ export default function SettingsPanel({ open, onClose }: Props) {
             </div>
           </section>
 
+          {/* Default Export Destination section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="text-text-muted"
+              >
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+              </svg>
+              Default Export Destination
+            </div>
+            <div>
+              <p className="text-[10px] text-text-secondary mt-0.5">
+                Default folder used when bulk exporting videos with renamed application titles for YouTube.
+              </p>
+              <div className="flex gap-2 mt-2 items-center">
+                <input
+                  type="text"
+                  value={defaultExportFolder}
+                  onChange={(e) => setDefaultExportFolder(e.target.value)}
+                  onBlur={async () => {
+                    setExportFolderSaving(true);
+                    try {
+                      await SetDefaultExportFolder(defaultExportFolder);
+                    } catch (e) {
+                      console.error("Failed to save default export folder", e);
+                    } finally {
+                      setExportFolderSaving(false);
+                    }
+                  }}
+                  placeholder="e.g. C:\Users\...\Videos\AmonHen"
+                  className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const dir = await SelectExportFolder();
+                      if (dir) {
+                        setDefaultExportFolder(dir);
+                        await SetDefaultExportFolder(dir);
+                      }
+                    } catch (e) {
+                      console.error("Failed to select export folder", e);
+                    }
+                  }}
+                  disabled={exportFolderSaving}
+                  className="px-2 py-1 rounded text-xs bg-black/20 border border-white/10 text-text-secondary hover:border-white/30 hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  Browse...
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* Game Profiles section */}
           <section className="flex flex-col gap-4">
             <div className="text-xs font-semibold text-text-primary flex items-center justify-between border-b border-border-subtle pb-2 mb-2">
@@ -759,103 +823,11 @@ export default function SettingsPanel({ open, onClose }: Props) {
           </section>
 
           {/* Tag Playlists */}
-          <section className="border-b border-white/5 pb-4 last:border-0">
-            <h3 className="text-sm font-semibold text-text-muted mb-3 px-2">
-              Tag Playlists
-            </h3>
-            <div className="bg-elevated border border-border-subtle rounded-md p-3 flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-secondary">
-                  Select Game Tag
-                </label>
-                <select
-                  style={{ backgroundColor: "#141416", color: "#f4f4f5" }}
-                  className="bg-[#141416] border border-white/10 rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
-                  value={selectedTag}
-                  onChange={(e) => {
-                    const tag = e.target.value;
-                    setSelectedTag(tag);
-                    if (tag) {
-                      setSelectedPlaylistForTag(tagPlaylists[tag] || "none");
-                    }
-                  }}
-                >
-                  <option value="" style={{ backgroundColor: "#141416", color: "#71717a" }}>
-                    -- Choose a tag to configure --
-                  </option>
-                  {allTags.map((tag) => (
-                    <option key={tag} value={tag} style={{ backgroundColor: "#141416", color: "#f4f4f5" }}>
-                      {tag} {tagPlaylists[tag] && tagPlaylists[tag] !== "none" ? " (Linked)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedTag && (
-                <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-text-secondary">
-                      Associated YouTube Playlist
-                    </label>
-                    <select
-                      style={{ backgroundColor: "#141416", color: "#f4f4f5" }}
-                      className="bg-[#141416] border border-white/10 rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
-                      value={selectedPlaylistForTag}
-                      onChange={(e) => setSelectedPlaylistForTag(e.target.value)}
-                    >
-                      <option value="none" style={{ backgroundColor: "#141416", color: "#71717a" }}>
-                        No Playlist
-                      </option>
-                      {availablePlaylists.map((p) => (
-                        <option key={p.id} value={p.id} style={{ backgroundColor: "#141416", color: "#f4f4f5" }}>
-                          {p.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="text-[11px] text-text-muted truncate max-w-[200px]">
-                      {tagPlaylists[selectedTag] && tagPlaylists[selectedTag] !== "none" ? (
-                        <span>
-                          Current:{" "}
-                          <span className="text-accent">
-                            {availablePlaylists.find((p) => p.id === tagPlaylists[selectedTag])?.title || tagPlaylists[selectedTag]}
-                          </span>
-                        </span>
-                      ) : (
-                        <span>No playlist linked</span>
-                      )}
-                    </div>
-
-                    <button
-                      className="btn btn-primary btn-sm text-xs px-3"
-                      disabled={
-                        tagPlaylistSaving === selectedTag ||
-                        selectedPlaylistForTag === (tagPlaylists[selectedTag] || "none")
-                      }
-                      onClick={async () => {
-                        setTagPlaylistSaving(selectedTag);
-                        try {
-                          await SetTagPlaylist(selectedTag, selectedPlaylistForTag);
-                          setTagPlaylists((prev) => ({
-                            ...prev,
-                            [selectedTag]: selectedPlaylistForTag,
-                          }));
-                        } catch (err) {
-                          console.error("Error setting tag playlist", err);
-                        } finally {
-                          setTagPlaylistSaving(null);
-                        }
-                      }}
-                    >
-                      {tagPlaylistSaving === selectedTag ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+          <TagPlaylistsSection
+            allTags={allTags}
+            recentTagSuggestions={recentTagSuggestions}
+            availablePlaylists={availablePlaylists}
+          />
         </div>
       </aside>
     </>

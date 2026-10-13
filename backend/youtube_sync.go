@@ -25,6 +25,7 @@ type YTVideo struct {
 	LocalFile          string   `json:"localFile,omitempty"`
 	PlaylistTitle      string   `json:"playlistTitle,omitempty"`
 	Episode            *int     `json:"episode,omitempty"`
+	GameTag            string   `json:"gameTag,omitempty"`
 	MonetizationStatus string   `json:"monetizationStatus,omitempty"`
 	RejectionReason    string   `json:"rejectionReason,omitempty"`
 	StatusIssues       []string `json:"statusIssues,omitempty"`
@@ -291,7 +292,8 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
-				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at,
+				thumbnail_url=CASE WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url ELSE yt_playlists.thumbnail_url END,
+				published_at=excluded.published_at, synced_at=excluded.synced_at,
 				privacy=excluded.privacy`,
 				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime, privacy)
 
@@ -728,7 +730,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		query := fmt.Sprintf(`
 			SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
-			       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
+			       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
 			FROM yt_videos v
 			WHERE %s`, where)
 
@@ -744,7 +746,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			var localFile sql.NullString
 			var playlistTitle sql.NullString
 			var issuesStr string
-			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr); err != nil {
+			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag); err != nil {
 				continue
 			}
 			if localFile.Valid {
@@ -839,7 +841,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 	query := fmt.Sprintf(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
-		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
 		FROM yt_videos v
 		WHERE %s
 		ORDER BY %s
@@ -859,7 +861,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		var localFile sql.NullString
 		var playlistTitle sql.NullString
 		var issuesStr string
-		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr); err != nil {
+		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag); err != nil {
 			fmt.Println("Error scanning video row:", err)
 			continue
 		}
@@ -948,7 +950,7 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), 
 		       COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
-		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, '')
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
 		FROM yt_videos v
 		JOIN yt_playlist_items pi ON v.id = pi.video_id
 		WHERE pi.playlist_id = ?
@@ -965,7 +967,7 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 		var issuesStr string
 		err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl,
 			&v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile,
-			&v.MonetizationStatus, &v.RejectionReason, &issuesStr)
+			&v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag)
 		if err != nil {
 			continue
 		}

@@ -7,6 +7,7 @@ import {
   GetOrCreatePlaylist,
   LoadConfig,
   SetVideosContentType,
+  GetVideosFromFolders,
 } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
@@ -14,10 +15,14 @@ import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import {
   generateYouTubeTitle,
   extractCustomVars,
+  resolveVideoEpisode,
 } from "../../utils/videoUtils";
 import { useAppStore } from "../../store/useAppStore";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
+import ExportModal from "./ExportModal";
+import { BulkThumbnailModal } from "./BulkThumbnailModal";
+import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
 
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -26,7 +31,7 @@ interface Props {
   selectedVideos: VideoFile[];
   onClearSelection: () => void;
   /** Rescan videos without clearing selection — used after tag/playlist apply */
-  onRescanOnly: () => void;
+  onRescanOnly: () => Promise<VideoFile[]> | void;
   /** Rescan + clear selection — used after a full destructive action */
   onTagsSaved: () => void;
   onFilesDeleted: () => void;
@@ -78,6 +83,17 @@ export default function BulkActionBar({
   );
   const [contentTypeOverride, setContentTypeOverride] = useState("auto");
   const [savingContentType, setSavingContentType] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
+  const [titleSeparator, setTitleSeparator] = useState(" - ");
+
+  // Check if selected videos have YouTube IDs and share a single game tag
+  const ytVideosWithTag = selectedVideos.filter((v) => Boolean(v.youtubeId && v.game));
+  const uniqueTags = Array.from(
+    new Set(ytVideosWithTag.map((v) => v.game?.trim()).filter(Boolean))
+  );
+  const canBatchThumbnails = ytVideosWithTag.length > 0 && uniqueTags.length === 1;
+  const commonTag = canBatchThumbnails ? (uniqueTags[0] as string) : "";
 
   useEffect(() => {
     if (selectedVideos.length > 0) {
@@ -112,6 +128,7 @@ export default function BulkActionBar({
       .then((cfg) => {
         setProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
+        setTitleSeparator(cfg.title_separator || " - ");
       })
       .catch(console.error);
   }, []);
@@ -191,8 +208,27 @@ export default function BulkActionBar({
       setTagPlaylists(cfg.tag_playlists || {});
 
       // Don't clear state — keep selection visible so user sees it applied
-      // Rescan to update video data but keep selection so user can chain more actions
-      onRescanOnly();
+      // Rescan first so backend calculates sequential episodes & titles for the new tag
+      const rescanResult = await onRescanOnly();
+      const updatedVideos =
+        Array.isArray(rescanResult) && rescanResult.length > 0
+          ? rescanResult
+          : await GetVideosFromFolders(cfg.folders || []);
+
+      await Promise.allSettled(
+        selectedPaths.map((p) => {
+          const vid =
+            updatedVideos.find((v) => v.path === p) ||
+            selectedVideos.find((v) => v.path === p);
+          const ep = resolveVideoEpisode(undefined, vid?.episode, vid?.youtubeTitle);
+          return generateAndSaveTagThumbnail({
+            videoPath: p,
+            tag: game,
+            episodeNumber: ep,
+            overwrite: true,
+          });
+        }),
+      );
     } catch (e) {
       console.error("Failed to save tags", e);
     } finally {
@@ -610,6 +646,54 @@ export default function BulkActionBar({
           </>
         )}
 
+        {/* Export action */}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm flex items-center gap-1.5"
+          onClick={() => setExportModalOpen(true)}
+          title={`Export ${selectedVideos.length} video${selectedVideos.length > 1 ? "s" : ""} to folder`}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+          </svg>
+          Export {selectedVideos.length}
+        </button>
+        <div className="w-px h-5 bg-white/10" />
+
+        {/* YouTube thumbnail batch sync */}
+        {canBatchThumbnails && (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm flex items-center gap-1.5"
+              onClick={() => setThumbnailModalOpen(true)}
+              title={`Update YouTube thumbnails for ${ytVideosWithTag.length} video${ytVideosWithTag.length > 1 ? "s" : ""}`}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+              Thumbnails ({ytVideosWithTag.length})
+            </button>
+            <div className="w-px h-5 bg-white/10" />
+          </>
+        )}
+
         {/* Delete action */}
         {confirmDelete ? (
           <div className="flex items-center gap-2">
@@ -644,6 +728,16 @@ export default function BulkActionBar({
         )}
       </div>
 
+      {exportModalOpen && (
+        <ExportModal
+          open={exportModalOpen}
+          selectedVideos={selectedVideos}
+          profiles={profiles}
+          titleSeparator={titleSeparator}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
+
       {pendingTagForModal && (
         <TagPlaylistModal
           tag={pendingTagForModal}
@@ -656,6 +750,16 @@ export default function BulkActionBar({
               .catch(() => {});
             performSave();
           }}
+        />
+      )}
+
+      {thumbnailModalOpen && (
+        <BulkThumbnailModal
+          isOpen={thumbnailModalOpen}
+          onClose={() => setThumbnailModalOpen(false)}
+          tag={commonTag}
+          videos={ytVideosWithTag}
+          onCompleted={onRescanOnly}
         />
       )}
     </div>

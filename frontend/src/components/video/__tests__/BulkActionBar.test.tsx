@@ -16,6 +16,15 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
     tag_playlists: {},
   }),
   SetVideosContentType: vi.fn().mockResolvedValue(undefined),
+  GetDefaultExportFolder: vi.fn().mockResolvedValue("/default/export"),
+  SetDefaultExportFolder: vi.fn().mockResolvedValue(undefined),
+  SelectExportFolder: vi.fn().mockResolvedValue("/custom/export"),
+  ExportVideos: vi.fn().mockResolvedValue({ successCount: 2, failedCount: 0, exportedPaths: [], errors: [] }),
+  GetSteamAppID: vi.fn().mockResolvedValue(""),
+  GetSteamGameAssets: vi.fn().mockResolvedValue(null),
+  GetTagPlaylistConfig: vi.fn().mockResolvedValue(null),
+  UpdateYouTubeThumbnail: vi.fn().mockResolvedValue(""),
+  GetVideosFromFolders: vi.fn().mockResolvedValue([]),
 }));
 
 const mockVideos: VideoFile[] = [
@@ -111,6 +120,149 @@ describe("BulkActionBar ContentType routing", () => {
         "",
       );
       expect(onRescanOnly).toHaveBeenCalled();
+    });
+  });
+
+  it("opens ExportModal when clicking the Export button", async () => {
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const exportBtn = screen.getByRole("button", { name: "Export 2" });
+    expect(exportBtn).toBeInTheDocument();
+
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText("Export Videos")).toBeInTheDocument();
+    });
+  });
+
+  it("renders Thumbnails button and opens BulkThumbnailModal when videos share a tag and have youtubeIds", async () => {
+    const ytVideos: VideoFile[] = [
+      {
+        ...mockVideos[0],
+        youtubeId: "yt-1",
+        game: "Control",
+        episode: 1,
+      },
+      {
+        ...mockVideos[1],
+        youtubeId: "yt-2",
+        game: "Control",
+        episode: 2,
+      },
+    ];
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={ytVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const thumbBtn = screen.getByRole("button", { name: /Thumbnails \(2\)/i });
+    expect(thumbBtn).toBeInTheDocument();
+
+    fireEvent.click(thumbBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Update YouTube Thumbnails")).toBeInTheDocument();
+      expect(screen.getByText(/Control/i)).toBeInTheDocument();
+    });
+  });
+
+  it("calls generateAndSaveTagThumbnail for each selected path on save", async () => {
+    const tagThumb = await import("../../../utils/generateTagThumbnail");
+    const spy = vi
+      .spyOn(tagThumb, "generateAndSaveTagThumbnail")
+      .mockResolvedValue("/cache/yt_thumbs/mock.jpg");
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag");
+    fireEvent.change(tagInput, { target: { value: "Valorant" } });
+
+    const applyBtn = screen.getByRole("button", { name: "Apply" });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video1.mp4",
+          tag: "Valorant",
+        }),
+      );
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video2.mp4",
+          tag: "Valorant",
+        }),
+      );
+    });
+  });
+
+  it("calls generateAndSaveTagThumbnail with updated episode numbers returned from rescan", async () => {
+    const tagThumb = await import("../../../utils/generateTagThumbnail");
+    const spy = vi
+      .spyOn(tagThumb, "generateAndSaveTagThumbnail")
+      .mockResolvedValue("/cache/yt_thumbs/mock.jpg");
+
+    const onRescanOnly = vi.fn().mockResolvedValue([
+      { ...mockVideos[0], path: "/path/video1.mp4", episode: 14, youtubeTitle: "CONTROL - 14" },
+    ]);
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4"]}
+        selectedVideos={mockVideos.slice(0, 1)}
+        onClearSelection={vi.fn()}
+        onRescanOnly={onRescanOnly}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag");
+    fireEvent.change(tagInput, { target: { value: "Valorant" } });
+
+    const applyBtn = screen.getByRole("button", { name: "Apply" });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video1.mp4",
+          tag: "Valorant",
+          episodeNumber: 14,
+        }),
+      );
     });
   });
 });

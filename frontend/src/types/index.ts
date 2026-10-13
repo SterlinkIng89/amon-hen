@@ -19,9 +19,57 @@ export interface VideoFile {
   contentType?: string;
 }
 
+export type EpisodeNumberPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
+export type EpisodeFormat = "hash" | "ep" | "number" | "pad2";
+
+export interface ImageFraming {
+  readonly offset_x: number; // 0..1, 0.5 = centered
+  readonly offset_y: number; // 0..1, 0.5 = centered
+  readonly zoom: number;     // 1..3, 1 = cover fit
+}
+
+export interface ElementLayout {
+  readonly x: number;      // 0..1 center
+  readonly y: number;      // 0..1 center
+  readonly scale: number;  // 0.25..3, 1 = default
+}
+
+export interface LogoLayer extends ElementLayout {
+  readonly enabled: boolean;
+}
+
+export interface TitleLayer extends ElementLayout {
+  readonly enabled: boolean;
+  readonly text_override?: string;
+  readonly color?: string;
+}
+
+export interface TagThumbnailConfig {
+  enabled: boolean;
+  source_type: "steam" | "custom";
+  steam_asset_type?: "hero" | "header" | "poster";
+  custom_image_path?: string;
+  episode_position: EpisodeNumberPosition;
+  episode_format: EpisodeFormat;
+  font_color?: string;
+  image_framing?: ImageFraming;
+  episode_layout?: ElementLayout;
+  logo?: LogoLayer;
+  title?: TitleLayer;
+}
+
+export interface SteamGameArtwork {
+  title?: string;
+  heroUrl?: string;
+  headerUrl?: string;
+  posterUrl?: string;
+  logoUrl?: string;
+}
+
 export interface TagPlaylistConfig {
   vod_playlist_id: string;
   clip_playlist_id: string;
+  thumbnail_config?: TagThumbnailConfig;
 }
 
 export interface GameProfile {
@@ -46,6 +94,24 @@ export interface Config {
   recent_field_values?: Record<string, string[]>;
   steam_api_key?: string;
   steam_id?: string;
+  export_folder?: string;
+}
+
+export interface ExportItem {
+  sourcePath: string;
+  targetTitle: string;
+  description: string;
+  game: string;
+  playlistTitle: string;
+  privacy: string;
+  tags: string[];
+}
+
+export interface ExportResult {
+  successCount: number;
+  failedCount: number;
+  exportedPaths: string[];
+  errors: string[];
 }
 
 export interface YTVideo {
@@ -61,10 +127,40 @@ export interface YTVideo {
   localFile?: string;
   playlistTitle?: string;
   episode?: number;
+  gameTag?: string;
   monetizationStatus?:
     "monetized" | "limited" | "demonetized" | "unknown" | string;
   rejectionReason?: string;
   statusIssues?: string[];
+}
+
+export interface CatalogVideoDraft {
+  readonly videoId: string;
+  readonly title: string;
+  readonly publishedAt: string;
+  readonly thumbnailUrl: string;
+  readonly localFile?: string;
+  readonly position: number;
+  readonly existingEpisode: number;
+  readonly episode: number;
+  readonly source: "db" | "title" | "order" | "none";
+  readonly conflict: boolean;
+}
+
+export type BatchItemStatus =
+  | "pending"
+  | "rendering"
+  | "uploading"
+  | "done"
+  | "failed"
+  | "skipped";
+
+export interface BatchItem {
+  readonly videoId: string;
+  readonly episode: number;
+  readonly cacheKey: string;
+  readonly status: BatchItemStatus;
+  readonly error?: string;
 }
 
 export interface YTPlaylist {

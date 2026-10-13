@@ -20,6 +20,7 @@ describe("LibrarySubHeader", () => {
       onToggleFilterUploaded: vi.fn(),
       advancedFilters: { dateFrom: "", dateTo: "", excludeWords: [] },
       onAdvancedFiltersChange: vi.fn(),
+      onOpenTagManagement: vi.fn(),
     };
 
     const { container } = render(<LibrarySubHeader {...dummyProps} />);

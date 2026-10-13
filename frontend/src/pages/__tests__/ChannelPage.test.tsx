@@ -24,6 +24,9 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   AddVideoToPlaylist: vi.fn().mockResolvedValue(undefined),
   PurgePlaylistDuplicates: vi.fn().mockResolvedValue(0),
   UpdatePlaylistsVisibility: vi.fn().mockResolvedValue(undefined),
+  ListCatalogPlaylists: vi.fn().mockResolvedValue([]),
+  GetPlaylistCatalogDraft: vi.fn().mockResolvedValue(null),
+  GetSteamAppID: vi.fn().mockResolvedValue(""),
 }));
 
 // Mock runtime events
@@ -514,5 +517,20 @@ describe("ChannelPage YouTube Sync State", () => {
     const dupBadge = screen.getByTestId("duplicate-badge");
     expect(dupBadge).toBeInTheDocument();
     expect(dupBadge).toHaveTextContent("2 duplicates");
+  });
+
+  it("switches to catalog tab when clicking the Catalog tab button", async () => {
+    vi.mocked(AppBackend.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-cat-1", title: "Control Playthrough", videoCount: 5, linked: false, tag: "" },
+    ] as any);
+
+    render(<ChannelPage />);
+
+    const catalogTab = await screen.findByRole("button", {
+      name: "Catalog",
+    });
+    fireEvent.click(catalogTab);
+
+    expect(await screen.findByText("Control Playthrough")).toBeInTheDocument();
   });
 });

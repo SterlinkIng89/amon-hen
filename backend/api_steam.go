@@ -161,6 +161,7 @@ func (a *App) GetSteamGameAchievementPct(appId string) float64 {
 
 // SteamGameAssets holds resolved asset URLs for a Steam game.
 type SteamGameAssets struct {
+	Title     string `json:"title,omitempty"`
 	HeroURL   string `json:"heroUrl"`
 	PosterURL string `json:"posterUrl"`
 	HeaderURL string `json:"headerUrl"`
@@ -200,6 +201,14 @@ func (a *App) GetSteamGameAssets(appId string) SteamGameAssets {
 		PosterURL: fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/library_600x900_2x.jpg", appId),
 		HeaderURL: fmt.Sprintf("https://steamcdn-a.akamaihd.net/steam/apps/%s/header.jpg", appId),
 		LogoURL:   fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%s/logo.png", appId),
+	}
+
+	if a.db != nil {
+		a.db.mu.Lock()
+		var title string
+		_ = a.db.conn.QueryRow(`SELECT name FROM steam_games WHERE appid = ? LIMIT 1`, appId).Scan(&title)
+		a.db.mu.Unlock()
+		assets.Title = title
 	}
 
 	steamPath := findSteamInstallPath()

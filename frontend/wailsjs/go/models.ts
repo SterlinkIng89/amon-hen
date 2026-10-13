@@ -28,6 +28,111 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class CatalogAssignment {
+	    videoId: string;
+	    episode: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogAssignment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.episode = source["episode"];
+	    }
+	}
+	export class CatalogApplyRequest {
+	    playlistId: string;
+	    tag: string;
+	    kind: string;
+	    assignments: CatalogAssignment[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogApplyRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playlistId = source["playlistId"];
+	        this.tag = source["tag"];
+	        this.kind = source["kind"];
+	        this.assignments = this.convertValues(source["assignments"], CatalogAssignment);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class CatalogPlaylistSummary {
+	    playlistId: string;
+	    title: string;
+	    videoCount: number;
+	    kind: string;
+	    tag: string;
+	    tagConfidence: string;
+	    linked: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogPlaylistSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playlistId = source["playlistId"];
+	        this.title = source["title"];
+	        this.videoCount = source["videoCount"];
+	        this.kind = source["kind"];
+	        this.tag = source["tag"];
+	        this.tagConfidence = source["tagConfidence"];
+	        this.linked = source["linked"];
+	    }
+	}
+	export class CatalogVideoDraft {
+	    videoId: string;
+	    title: string;
+	    publishedAt: string;
+	    thumbnailUrl: string;
+	    localFile?: string;
+	    position: number;
+	    existingEpisode: number;
+	    episode: number;
+	    source: string;
+	    conflict: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogVideoDraft(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.title = source["title"];
+	        this.publishedAt = source["publishedAt"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.localFile = source["localFile"];
+	        this.position = source["position"];
+	        this.existingEpisode = source["existingEpisode"];
+	        this.episode = source["episode"];
+	        this.source = source["source"];
+	        this.conflict = source["conflict"];
+	    }
+	}
 	export class HistoricalVideo {
 	    title: string;
 	    published: string;
@@ -156,9 +261,132 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class TitleLayer {
+	    enabled: boolean;
+	    text_override?: string;
+	    color?: string;
+	    x: number;
+	    y: number;
+	    scale: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TitleLayer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.text_override = source["text_override"];
+	        this.color = source["color"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.scale = source["scale"];
+	    }
+	}
+	export class LogoLayer {
+	    enabled: boolean;
+	    x: number;
+	    y: number;
+	    scale: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogoLayer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.scale = source["scale"];
+	    }
+	}
+	export class ElementLayout {
+	    x: number;
+	    y: number;
+	    scale: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ElementLayout(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.scale = source["scale"];
+	    }
+	}
+	export class ImageFraming {
+	    offset_x: number;
+	    offset_y: number;
+	    zoom: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImageFraming(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.offset_x = source["offset_x"];
+	        this.offset_y = source["offset_y"];
+	        this.zoom = source["zoom"];
+	    }
+	}
+	export class TagThumbnailConfig {
+	    enabled: boolean;
+	    source_type: string;
+	    steam_asset_type?: string;
+	    custom_image_path?: string;
+	    episode_position: string;
+	    episode_format: string;
+	    font_color?: string;
+	    image_framing?: ImageFraming;
+	    episode_layout?: ElementLayout;
+	    logo?: LogoLayer;
+	    title?: TitleLayer;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagThumbnailConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.source_type = source["source_type"];
+	        this.steam_asset_type = source["steam_asset_type"];
+	        this.custom_image_path = source["custom_image_path"];
+	        this.episode_position = source["episode_position"];
+	        this.episode_format = source["episode_format"];
+	        this.font_color = source["font_color"];
+	        this.image_framing = this.convertValues(source["image_framing"], ImageFraming);
+	        this.episode_layout = this.convertValues(source["episode_layout"], ElementLayout);
+	        this.logo = this.convertValues(source["logo"], LogoLayer);
+	        this.title = this.convertValues(source["title"], TitleLayer);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class TagPlaylistConfig {
 	    vod_playlist_id: string;
 	    clip_playlist_id: string;
+	    thumbnail_config?: TagThumbnailConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new TagPlaylistConfig(source);
@@ -168,7 +396,26 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.vod_playlist_id = source["vod_playlist_id"];
 	        this.clip_playlist_id = source["clip_playlist_id"];
+	        this.thumbnail_config = this.convertValues(source["thumbnail_config"], TagThumbnailConfig);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class GameProfile {
 	    type: string;
@@ -252,6 +499,7 @@ export namespace backend {
 	    title_separator?: string;
 	    steam_api_key?: string;
 	    steam_id?: string;
+	    export_folder?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -274,6 +522,7 @@ export namespace backend {
 	        this.title_separator = source["title_separator"];
 	        this.steam_api_key = source["steam_api_key"];
 	        this.steam_id = source["steam_id"];
+	        this.export_folder = source["export_folder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -296,9 +545,104 @@ export namespace backend {
 	}
 	
 	
+	export class ExportItem {
+	    sourcePath: string;
+	    targetTitle: string;
+	    description: string;
+	    game: string;
+	    playlistTitle: string;
+	    privacy: string;
+	    tags: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourcePath = source["sourcePath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.game = source["game"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.privacy = source["privacy"];
+	        this.tags = source["tags"];
+	    }
+	}
+	export class ExportResult {
+	    successCount: number;
+	    failedCount: number;
+	    exportedPaths: string[];
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.successCount = source["successCount"];
+	        this.failedCount = source["failedCount"];
+	        this.exportedPaths = source["exportedPaths"];
+	        this.errors = source["errors"];
+	    }
+	}
 	
 	
 	
+	
+	
+	
+	export class PlaylistCatalogDraft {
+	    playlistId: string;
+	    title: string;
+	    videoCount: number;
+	    kind: string;
+	    tag: string;
+	    tagConfidence: string;
+	    linked: boolean;
+	    steamAppId: string;
+	    needsSync: boolean;
+	    thumbnailConfig?: TagThumbnailConfig;
+	    videos: CatalogVideoDraft[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PlaylistCatalogDraft(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playlistId = source["playlistId"];
+	        this.title = source["title"];
+	        this.videoCount = source["videoCount"];
+	        this.kind = source["kind"];
+	        this.tag = source["tag"];
+	        this.tagConfidence = source["tagConfidence"];
+	        this.linked = source["linked"];
+	        this.steamAppId = source["steamAppId"];
+	        this.needsSync = source["needsSync"];
+	        this.thumbnailConfig = this.convertValues(source["thumbnailConfig"], TagThumbnailConfig);
+	        this.videos = this.convertValues(source["videos"], CatalogVideoDraft);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SteamDevPubStats {
 	    name: string;
 	    totalHours: number;
@@ -316,6 +660,7 @@ export namespace backend {
 	    }
 	}
 	export class SteamGameAssets {
+	    title?: string;
 	    heroUrl: string;
 	    posterUrl: string;
 	    headerUrl: string;
@@ -327,6 +672,7 @@ export namespace backend {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
 	        this.heroUrl = source["heroUrl"];
 	        this.posterUrl = source["posterUrl"];
 	        this.headerUrl = source["headerUrl"];
@@ -393,6 +739,8 @@ export namespace backend {
 	}
 	
 	
+	
+	
 	export class UploadSession {
 	    videoPath: string;
 	    uploadUrl: string;
@@ -405,6 +753,7 @@ export namespace backend {
 	    playlistId: string;
 	    gameTag: string;
 	    episode: number;
+	    thumbnailPath: string;
 	    status: string;
 	    updatedAt: number;
 	
@@ -425,6 +774,7 @@ export namespace backend {
 	        this.playlistId = source["playlistId"];
 	        this.gameTag = source["gameTag"];
 	        this.episode = source["episode"];
+	        this.thumbnailPath = source["thumbnailPath"];
 	        this.status = source["status"];
 	        this.updatedAt = source["updatedAt"];
 	    }
@@ -515,6 +865,7 @@ export namespace backend {
 	    localFile?: string;
 	    playlistTitle?: string;
 	    episode?: number;
+	    gameTag?: string;
 	    monetizationStatus?: string;
 	    rejectionReason?: string;
 	    statusIssues?: string[];
@@ -537,6 +888,7 @@ export namespace backend {
 	        this.localFile = source["localFile"];
 	        this.playlistTitle = source["playlistTitle"];
 	        this.episode = source["episode"];
+	        this.gameTag = source["gameTag"];
 	        this.monetizationStatus = source["monetizationStatus"];
 	        this.rejectionReason = source["rejectionReason"];
 	        this.statusIssues = source["statusIssues"];

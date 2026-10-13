@@ -22,6 +22,12 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetOrCreatePlaylist: vi.fn().mockResolvedValue("pl-123"),
   SetTagPlaylist: vi.fn().mockResolvedValue(undefined),
   SetTagPlaylistConfig: vi.fn().mockResolvedValue(undefined),
+  SetTagThumbnailConfig: vi.fn().mockResolvedValue(undefined),
+  GetSteamAppID: vi.fn().mockResolvedValue(""),
+  GetSteamGameAssets: vi.fn().mockResolvedValue({}),
+  SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
+  SaveCustomThumbnail: vi.fn().mockResolvedValue("C:/cache/thumbs/custom.jpg"),
+  SetYouTubePlaylistThumbnail: vi.fn().mockResolvedValue("/cache/yt_thumbs/custom.jpg?v=1"),
   LoadConfig: vi.fn().mockResolvedValue({
     tag_playlists: {},
     tag_playlist_configs: {},
@@ -32,6 +38,7 @@ describe("TagPlaylistModal", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue("data:image/jpeg;base64,123");
     useAppStore.setState({ defaultPlaylistPrivacy: "public" });
   });
 
@@ -44,11 +51,11 @@ describe("TagPlaylistModal", () => {
     );
 
     // Check that privacy option Public is selected by default
-    const publicBtn = screen.getByRole("button", { name: /public/i });
-    expect(publicBtn).toBeInTheDocument();
+    const publicBtns = screen.getAllByRole("button", { name: /public/i });
+    expect(publicBtns[0]).toBeInTheDocument();
 
-    const createBtn = screen.getByRole("button", { name: /create & link/i });
-    fireEvent.click(createBtn);
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
 
     await waitFor(() => {
       expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
@@ -72,13 +79,13 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Overwatch" onClose={onClose} onSaved={onSaved} />,
     );
 
-    const unlistedBtn = screen.getByRole("button", { name: /unlisted/i });
-    fireEvent.click(unlistedBtn);
+    const unlistedBtns = screen.getAllByRole("button", { name: /unlisted/i });
+    fireEvent.click(unlistedBtns[0]);
 
     expect(useAppStore.getState().defaultPlaylistPrivacy).toBe("unlisted");
 
-    const createBtn = screen.getByRole("button", { name: /create & link/i });
-    fireEvent.click(createBtn);
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
 
     await waitFor(() => {
       expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
@@ -103,8 +110,8 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />,
     );
 
-    const createBtn = screen.getByRole("button", { name: /create & link/i });
-    fireEvent.click(createBtn);
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
 
     await waitFor(() => {
       expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
@@ -127,7 +134,8 @@ describe("TagPlaylistModal", () => {
     );
 
     await waitFor(() => {
-      const options = screen.getAllByRole("option");
+      const vodSelect = screen.getByLabelText("Select playlist");
+      const options = Array.from(vodSelect.querySelectorAll("option"));
       const optionTexts = options.map((opt) => opt.textContent);
       expect(optionTexts).toEqual([
         "Select a playlist...",
@@ -150,21 +158,22 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Mario" onClose={vi.fn()} onSaved={vi.fn()} />,
     );
 
+    const vodSelect = await screen.findByLabelText("Select playlist");
     await waitFor(() => {
-      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+      expect(vodSelect.textContent).toContain("Apex Legends");
     });
 
     const searchInput = screen.getByLabelText("Search playlists");
     fireEvent.change(searchInput, { target: { value: "mario" } });
 
-    const options = screen.getAllByRole("option").map((opt) => opt.textContent);
+    const options = Array.from(vodSelect.querySelectorAll("option")).map((opt) => opt.textContent);
     expect(options).toEqual([
       "Select a playlist...",
       "Mario Kart",
       "Mario Party",
     ]);
-    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
-    expect(screen.queryByText("Zelda Highlights")).not.toBeInTheDocument();
+    expect(vodSelect.textContent).not.toContain("Apex Legends");
+    expect(vodSelect.textContent).not.toContain("Zelda Highlights");
   });
 
   it("should show empty state when search query matches no playlists and clear restores list", async () => {
@@ -176,20 +185,21 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Test" onClose={vi.fn()} onSaved={vi.fn()} />,
     );
 
+    const vodSelect = await screen.findByLabelText("Select playlist");
     await waitFor(() => {
-      expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+      expect(vodSelect.textContent).toContain("Apex Legends");
     });
 
     const searchInput = screen.getByLabelText("Search playlists");
     fireEvent.change(searchInput, { target: { value: "Unknown Game" } });
 
-    expect(screen.getByText("No playlists found...")).toBeInTheDocument();
-    expect(screen.queryByText("Apex Legends")).not.toBeInTheDocument();
+    expect(vodSelect.textContent).toContain("No playlists found...");
+    expect(vodSelect.textContent).not.toContain("Apex Legends");
 
     const clearBtn = screen.getByLabelText("Clear playlist search");
     fireEvent.click(clearBtn);
 
-    expect(screen.getByText("Apex Legends")).toBeInTheDocument();
+    expect(vodSelect.textContent).toContain("Apex Legends");
   });
 
   it("should link selected existing playlist when user selects one and clicks link", async () => {
@@ -202,11 +212,11 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
     );
 
+    const select = await screen.findByLabelText("Select playlist");
     await waitFor(() => {
-      expect(screen.getByText("Valorant Ranked")).toBeInTheDocument();
+      expect(select.textContent).toContain("Valorant Ranked");
     });
 
-    const select = screen.getByLabelText("Select playlist");
     fireEvent.change(select, { target: { value: "pl-100" } });
 
     const linkBtn = screen.getByRole("button", { name: /link selected/i });
@@ -227,7 +237,7 @@ describe("TagPlaylistModal", () => {
     });
   });
 
-  it("should link selected existing playlist to clip playlist when clip tab is active", async () => {
+  it("should link selected existing playlist to clip playlist", async () => {
     vi.mocked(appBackend.GetChannelPlaylists).mockResolvedValue([
       mockPlaylist("pl-clip-1", "Valorant Clips"),
     ]);
@@ -237,18 +247,14 @@ describe("TagPlaylistModal", () => {
       <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />,
     );
 
-    // Switch to Clip Playlist tab
-    const clipTab = screen.getByRole("button", { name: /clip playlist/i });
-    fireEvent.click(clipTab);
-
+    const select = await screen.findByLabelText("Select clip playlist");
     await waitFor(() => {
-      expect(screen.getByText("Valorant Clips")).toBeInTheDocument();
+      expect(select.textContent).toContain("Valorant Clips");
     });
 
-    const select = screen.getByLabelText("Select playlist");
     fireEvent.change(select, { target: { value: "pl-clip-1" } });
 
-    const linkBtn = screen.getByRole("button", { name: /link selected/i });
+    const linkBtn = screen.getByRole("button", { name: /link clip/i });
     fireEvent.click(linkBtn);
 
     await waitFor(() => {
@@ -282,5 +288,59 @@ describe("TagPlaylistModal", () => {
       expect(onSaved).toHaveBeenCalled();
     });
   });
+
+  it("should save thumbnail template config in the unified view", async () => {
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    expect(screen.getByText(/automate youtube thumbnail for this tag/i)).toBeInTheDocument();
+
+    const saveBtn = screen.getByRole("button", { name: /save thumbnail template/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("should generate and upload cover thumbnail when creating playlist with cover option enabled", async () => {
+    vi.mocked(appBackend.LoadConfig).mockResolvedValue({
+      tag_playlists: {},
+      tag_playlist_configs: {
+        Valorant: {
+          vod_playlist_id: "",
+          clip_playlist_id: "",
+          thumbnail_config: {
+            enabled: true,
+            source_type: "steam",
+            episode_position: "bottom-right",
+            episode_format: "pad2",
+          },
+        },
+      },
+    } as unknown as backend.Config);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/apply cover artwork automatically to vod playlist/i)).toBeInTheDocument();
+    });
+
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
+
+    await waitFor(() => {
+      expect(appBackend.SetYouTubePlaylistThumbnail).toHaveBeenCalledWith(
+        "pl-123",
+        expect.any(String)
+      );
+    });
+  });
 });
+
 

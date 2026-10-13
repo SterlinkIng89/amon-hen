@@ -27,6 +27,7 @@ export interface QueueItem {
   playlistId?: string;
   gameTag?: string;
   episode?: number;
+  thumbnailPath?: string;
   error?: string;
   url?: string;
   uploadSpeed?: number;
@@ -105,6 +106,7 @@ export default function UploadQueue({
         item.playlistId || "",
         item.gameTag || "",
         item.episode || 0,
+        item.thumbnailPath || "",
       ).catch(() => {});
     });
 

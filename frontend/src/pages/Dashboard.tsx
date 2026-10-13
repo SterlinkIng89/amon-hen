@@ -39,6 +39,7 @@ import BulkActionBar from "../components/video/BulkActionBar";
 import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
+import TagManagementModal from "../components/ui/TagManagementModal";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 
 type SortMode = "date" | "name" | "size";
@@ -104,6 +105,7 @@ export default function Dashboard() {
   const [devLogsOpen, setDevLogsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
   );
@@ -391,6 +393,7 @@ export default function Dashboard() {
         item.playlistId || "",
         item.gameTag || "",
         item.episode || 0,
+        item.thumbnailPath || "",
       ).catch(() => {});
     });
 
@@ -446,6 +449,7 @@ export default function Dashboard() {
       opts.playlistId || "",
       video.game || "",
       video.episode || 0,
+      "",
     ).catch(() => {});
 
     handleRescan();
@@ -564,6 +568,7 @@ export default function Dashboard() {
           onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
           advancedFilters={libFilters.value}
           onAdvancedFiltersChange={libFilters.onChange}
+          onOpenTagManagement={() => setTagManagementOpen(true)}
         />
       )}
 
@@ -731,6 +736,9 @@ export default function Dashboard() {
         }}
         onRemoveFolder={handleRemoveFolder}
       />
+      {tagManagementOpen && (
+        <TagManagementModal onClose={() => setTagManagementOpen(false)} />
+      )}
     </div>
   );
 }

@@ -8,6 +8,56 @@
 const thumbCache = new Map<string, string>();
 const durationCache = new Map<string, number>();
 const previewCache = new Map<string, string>();
+const customThumbCache = new Map<string, string | null>();
+
+export type CustomThumbListener = (url: string | null) => void;
+const customThumbSubscribers = new Map<string, Set<CustomThumbListener>>();
+
+export function getCachedCustomThumb(path: string): string | null | undefined {
+  return customThumbCache.get(path);
+}
+
+export function setCachedCustomThumb(path: string, url: string | null): void {
+  customThumbCache.set(path, url);
+}
+
+export function clearCachedCustomThumb(path: string): void {
+  customThumbCache.delete(path);
+}
+
+export function subscribeCustomThumb(
+  path: string,
+  listener: CustomThumbListener,
+): () => void {
+  let listeners = customThumbSubscribers.get(path);
+  if (!listeners) {
+    listeners = new Set<CustomThumbListener>();
+    customThumbSubscribers.set(path, listeners);
+  }
+  listeners.add(listener);
+
+  return () => {
+    const currentListeners = customThumbSubscribers.get(path);
+    if (currentListeners) {
+      currentListeners.delete(listener);
+      if (currentListeners.size === 0) {
+        customThumbSubscribers.delete(path);
+      }
+    }
+  };
+}
+
+export function notifyCustomThumbChanged(path: string, url: string | null): void {
+  const finalUrl = url ? `${url}?v=${Date.now()}` : null;
+  customThumbCache.set(path, finalUrl);
+
+  const listeners = customThumbSubscribers.get(path);
+  if (listeners) {
+    for (const listener of listeners) {
+      listener(finalUrl);
+    }
+  }
+}
 
 export function getCachedThumb(path: string): string | undefined {
   return thumbCache.get(path);
@@ -72,6 +122,9 @@ function createQueue(concurrency: number) {
 
 // High concurrency for fast thumbnail queries (cache hits resolve instantly)
 export const enqueueThumb = createQueue(8);
+
+// Dedicated queue for custom thumbnail checks
+export const enqueueCustomThumb = createQueue(8);
 
 // Dedicated queue for duration probes
 export const enqueueDuration = createQueue(4);

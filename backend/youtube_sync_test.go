@@ -15,7 +15,8 @@ func setupTestDB(t *testing.T) *App {
 	}
 
 	app := &App{
-		db: &DB{conn: conn},
+		db:       &DB{conn: conn},
+		thumbSem: make(chan struct{}, 2),
 	}
 
 	if err := app.db.migrate(); err != nil {
@@ -101,3 +102,70 @@ func TestGetChannelPlaylists_DuplicateCount(t *testing.T) {
 		t.Errorf("pl-3 DuplicateCount expected 0, got %d", p3.DuplicateCount)
 	}
 }
+
+func TestGetChannelVideos_IncludesGameTag(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, game_tag, episode)
+		VALUES ('vid-tag-1', 'Hades Ep 1', '2026-01-01T00:00:00Z', 'Hades', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	res, err := app.GetChannelVideosPaginated(1, 10, "recent", "", "", "")
+	if err != nil {
+		t.Fatalf("GetChannelVideosPaginated failed: %v", err)
+	}
+
+	videos, ok := res["videos"].([]YTVideo)
+	if !ok || len(videos) == 0 {
+		t.Fatalf("expected at least 1 video, got %v", res)
+	}
+
+	if videos[0].GameTag != "Hades" {
+		t.Errorf("expected GameTag 'Hades', got %q", videos[0].GameTag)
+	}
+}
+
+func TestSyncPlaylists_PreservesCustomThumbnail(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	customURL := "/cache/yt_thumbs/yt_custom_pl.jpg?v=999"
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, privacy)
+		VALUES ('pl-preserve-1', 'My Playlist', 'Desc', 0, ?, '2026-01-01', 'public')
+	`, customURL)
+	if err != nil {
+		t.Fatalf("failed to insert initial playlist: %v", err)
+	}
+
+	// Simulate sync upsert where incoming thumbnail is empty
+	incomingThumb := ""
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, synced_at, privacy)
+		VALUES ('pl-preserve-1', 'My Playlist Updated', 'New Desc', 0, ?, '2026-01-01', 12345, 'public')
+		ON CONFLICT(id) DO UPDATE SET
+		title=excluded.title, description=excluded.description, video_count=excluded.video_count,
+		thumbnail_url=CASE WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url ELSE yt_playlists.thumbnail_url END,
+		published_at=excluded.published_at, synced_at=excluded.synced_at,
+		privacy=excluded.privacy
+	`, incomingThumb)
+	if err != nil {
+		t.Fatalf("failed to run sync upsert: %v", err)
+	}
+
+	var savedThumb string
+	err = app.db.conn.QueryRow("SELECT thumbnail_url FROM yt_playlists WHERE id = 'pl-preserve-1'").Scan(&savedThumb)
+	if err != nil {
+		t.Fatalf("failed to query saved thumbnail: %v", err)
+	}
+
+	if savedThumb != customURL {
+		t.Errorf("expected thumbnail_url %q to be preserved, got %q", customURL, savedThumb)
+	}
+}
+

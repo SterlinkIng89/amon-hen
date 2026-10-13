@@ -5,14 +5,54 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type ImageFraming struct {
+	OffsetX float64 `json:"offset_x"`
+	OffsetY float64 `json:"offset_y"`
+	Zoom    float64 `json:"zoom"`
+}
+
+type ElementLayout struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Scale float64 `json:"scale"`
+}
+
+type LogoLayer struct {
+	Enabled bool `json:"enabled"`
+	ElementLayout
+}
+
+type TitleLayer struct {
+	Enabled      bool   `json:"enabled"`
+	TextOverride string `json:"text_override,omitempty"`
+	Color        string `json:"color,omitempty"`
+	ElementLayout
+}
+
+type TagThumbnailConfig struct {
+	Enabled         bool           `json:"enabled"`
+	SourceType      string         `json:"source_type"` // "steam" | "custom"
+	SteamAssetType  string         `json:"steam_asset_type,omitempty"` // "hero" | "header" | "poster"
+	CustomImagePath string         `json:"custom_image_path,omitempty"`
+	EpisodePosition string         `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+	EpisodeFormat   string         `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
+	FontColor       string         `json:"font_color,omitempty"`
+	ImageFraming    *ImageFraming  `json:"image_framing,omitempty"`
+	EpisodeLayout   *ElementLayout `json:"episode_layout,omitempty"`
+	Logo            *LogoLayer     `json:"logo,omitempty"`
+	Title           *TitleLayer    `json:"title,omitempty"`
+}
+
 type TagPlaylistConfig struct {
-	VodPlaylistID  string `json:"vod_playlist_id"`
-	ClipPlaylistID string `json:"clip_playlist_id"`
+	VodPlaylistID   string             `json:"vod_playlist_id"`
+	ClipPlaylistID  string             `json:"clip_playlist_id"`
+	ThumbnailConfig TagThumbnailConfig `json:"thumbnail_config,omitempty"`
 }
 
 type VideoMeta struct {
@@ -62,6 +102,7 @@ type Config struct {
 	TitleSeparator string `json:"title_separator,omitempty"`
 	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
 	SteamID             string                  `json:"steam_id,omitempty"`
+	ExportFolder        string                  `json:"export_folder,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -359,14 +400,7 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 		if len(videoIDs) > 0 {
 			appLog("[SetTagPlaylist] Retroactively adding %d videos to playlist %s", len(videoIDs), playlistID)
 			for _, vid := range videoIDs {
-				var exists int
-				a.db.mu.Lock()
-				a.db.conn.QueryRow("SELECT 1 FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid).Scan(&exists)
-				a.db.mu.Unlock()
-				
-				if exists == 0 {
-					_ = a.AddVideoToPlaylist(playlistID, vid)
-				}
+				_ = a.AddVideoToPlaylist(playlistID, vid)
 			}
 		}
 	}()
@@ -376,7 +410,8 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 
 // SetTagPlaylistConfig updates both VOD and Clip playlist IDs for a given tag.
 func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylistID string) error {
-	if tag == "" {
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
 	a.configMu.Lock()
@@ -386,12 +421,48 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 	if a.config.TagPlaylists == nil {
 		a.config.TagPlaylists = make(map[string]string)
 	}
-	a.config.TagPlaylistConfigs[tag] = TagPlaylistConfig{
-		VodPlaylistID:  vodPlaylistID,
-		ClipPlaylistID: clipPlaylistID,
+
+	canonicalKey := cleanTag
+	for k := range a.config.TagPlaylistConfigs {
+		if strings.EqualFold(k, cleanTag) {
+			canonicalKey = k
+			break
+		}
 	}
+
+	existing := a.config.TagPlaylistConfigs[canonicalKey]
+	existing.VodPlaylistID = vodPlaylistID
+	existing.ClipPlaylistID = clipPlaylistID
+	a.config.TagPlaylistConfigs[canonicalKey] = existing
 	// Keep TagPlaylists backward compatible with VOD playlist
-	a.config.TagPlaylists[tag] = vodPlaylistID
+	a.config.TagPlaylists[canonicalKey] = vodPlaylistID
+	a.configMu.Unlock()
+
+	return a.saveConfig()
+}
+
+// SetTagThumbnailConfig updates the automated thumbnail template configuration for a given tag.
+func (a *App) SetTagThumbnailConfig(tag string, thumbConfig TagThumbnailConfig) error {
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	a.configMu.Lock()
+	if a.config.TagPlaylistConfigs == nil {
+		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+
+	canonicalKey := cleanTag
+	for k := range a.config.TagPlaylistConfigs {
+		if strings.EqualFold(k, cleanTag) {
+			canonicalKey = k
+			break
+		}
+	}
+
+	existing := a.config.TagPlaylistConfigs[canonicalKey]
+	existing.ThumbnailConfig = thumbConfig
+	a.config.TagPlaylistConfigs[canonicalKey] = existing
 	a.configMu.Unlock()
 
 	return a.saveConfig()
@@ -401,14 +472,28 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 func (a *App) GetTagPlaylistConfig(tag string) TagPlaylistConfig {
 	a.configMu.RLock()
 	defer a.configMu.RUnlock()
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
+		return TagPlaylistConfig{}
+	}
 	if a.config.TagPlaylistConfigs != nil {
-		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+		if cfg, ok := a.config.TagPlaylistConfigs[cleanTag]; ok {
 			return cfg
+		}
+		for k, cfg := range a.config.TagPlaylistConfigs {
+			if strings.EqualFold(k, cleanTag) {
+				return cfg
+			}
 		}
 	}
 	if a.config.TagPlaylists != nil {
-		if plId, ok := a.config.TagPlaylists[tag]; ok {
+		if plId, ok := a.config.TagPlaylists[cleanTag]; ok {
 			return TagPlaylistConfig{VodPlaylistID: plId}
+		}
+		for k, plId := range a.config.TagPlaylists {
+			if strings.EqualFold(k, cleanTag) {
+				return TagPlaylistConfig{VodPlaylistID: plId}
+			}
 		}
 	}
 	return TagPlaylistConfig{}
@@ -672,3 +757,4 @@ func (a *App) titleSep() string {
 	}
 	return " - "
 }
+

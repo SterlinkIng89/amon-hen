@@ -64,7 +64,7 @@ let state: AppState = {
   filterUploaded: saved.filterUploaded ?? false,
   selectedIndex: saved.selectedIndex ?? -1,
   defaultPlaylistPrivacy:
-    (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "public",
+    (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "unlisted",
 };
 
 type Listener = () => void;

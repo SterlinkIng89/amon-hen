@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
-import { YTVideo, YTPlaylist } from "../../types";
+import { YTVideo, YTPlaylist, TagPlaylistConfig } from "../../types";
 import {
   UpdateYouTubeVideoMetadata,
   GetChannelPlaylists,
   AddVideoToPlaylist,
   GetOrCreatePlaylist,
+  SelectCustomThumbnailImage,
+  UpdateYouTubeThumbnail,
+  LoadConfig,
 } from "../../../wailsjs/go/backend/App";
+import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
+import YouTubeThumbnailPicker from "./YouTubeThumbnailPicker";
 
 interface YouTubeInlinePlayerProps {
   video: YTVideo;
@@ -46,6 +51,12 @@ export default function YouTubeInlinePlayer({
     useState(false);
   const [playlistCreateError, setPlaylistCreateError] = useState("");
 
+  const [tagPlaylistConfigs, setTagPlaylistConfigs] = useState<
+    Record<string, TagPlaylistConfig>
+  >({});
+  const [isUploadingCustom, setIsUploadingCustom] = useState(false);
+  const [uploadCustomError, setUploadCustomError] = useState("");
+
   const refreshPlaylists = () => {
     GetChannelPlaylists("recent")
       .then(setPlaylists)
@@ -54,6 +65,15 @@ export default function YouTubeInlinePlayer({
 
   useEffect(() => {
     refreshPlaylists();
+    LoadConfig()
+      .then((cfg) => {
+        if (cfg) {
+          const raw = cfg.tag_playlist_configs || {};
+          const legacy = cfg.tag_playlists || {};
+          setTagPlaylistConfigs(parseTagPlaylistConfigs(raw, legacy));
+        }
+      })
+      .catch(() => {});
   }, []);
   const [aspectRatio, setAspectRatio] = useState(
     window.innerWidth / window.innerHeight,
@@ -106,7 +126,11 @@ export default function YouTubeInlinePlayer({
       const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
       const firstScriptTag = document.getElementsByTagName("script")[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      if (firstScriptTag && firstScriptTag.parentNode) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.head?.appendChild(tag);
+      }
       (window as any).onYouTubeIframeAPIReady = createPlayer;
     } else {
       createPlayer();
@@ -137,6 +161,23 @@ export default function YouTubeInlinePlayer({
       alert("Failed to update video metadata");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleUploadCustomImage = async () => {
+    setUploadCustomError("");
+    try {
+      const selected = await SelectCustomThumbnailImage();
+      if (!selected) return;
+
+      setIsUploadingCustom(true);
+      await UpdateYouTubeThumbnail(video.id, selected);
+      if (onUpdate) onUpdate();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUploadCustomError(msg);
+    } finally {
+      setIsUploadingCustom(false);
     }
   };
 
@@ -547,6 +588,43 @@ export default function YouTubeInlinePlayer({
               )}
             </div>
           </div>
+
+          {isEditing && (
+            <div className="flex flex-col gap-3 p-3 rounded-lg bg-[#141416] border border-white/10 my-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/90">
+                  Thumbnail Management
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs text-xs px-2.5 py-1"
+                    onClick={handleUploadCustomImage}
+                    disabled={isUploadingCustom}
+                  >
+                    {isUploadingCustom ? "Uploading..." : "Upload Image File..."}
+                  </button>
+                </div>
+              </div>
+
+              {uploadCustomError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {uploadCustomError}
+                </p>
+              )}
+
+              <YouTubeThumbnailPicker
+                videoPath={video.localFile || `yt:${video.id}`}
+                gameTag={video.gameTag || ""}
+                episodeNumber={video.episode || 1}
+                tagThumbnailConfig={
+                  video.gameTag ? tagPlaylistConfigs[video.gameTag]?.thumbnail_config : undefined
+                }
+                youtubeId={video.id}
+                onYouTubeUpdated={() => onUpdate?.()}
+              />
+            </div>
+          )}
 
           {isEditing ? (
             <textarea

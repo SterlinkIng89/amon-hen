@@ -18,6 +18,7 @@ type UploadSession struct {
 	PlaylistID    string `json:"playlistId"`
 	GameTag       string `json:"gameTag"`
 	Episode       int    `json:"episode"`
+	ThumbnailPath string `json:"thumbnailPath"`
 	Status        string `json:"status"` // "uploading" | "interrupted"
 	UpdatedAt     int64  `json:"updatedAt"`
 }
@@ -43,8 +44,8 @@ func (db *DB) SaveUploadSession(s UploadSession) error {
 		INSERT INTO upload_sessions (
 			video_path, upload_url, total_bytes, bytes_uploaded, file_mtime,
 			title, description, privacy, playlist_id, game_tag, episode,
-			status, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			thumbnail_path, status, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(video_path) DO UPDATE SET
 			upload_url = excluded.upload_url,
 			total_bytes = excluded.total_bytes,
@@ -56,11 +57,12 @@ func (db *DB) SaveUploadSession(s UploadSession) error {
 			playlist_id = excluded.playlist_id,
 			game_tag = excluded.game_tag,
 			episode = excluded.episode,
+			thumbnail_path = excluded.thumbnail_path,
 			status = excluded.status,
 			updated_at = excluded.updated_at
 	`, s.VideoPath, s.UploadURL, s.TotalBytes, s.BytesUploaded, s.FileMtime,
 		s.Title, s.Description, s.Privacy, s.PlaylistID, s.GameTag, s.Episode,
-		status, now)
+		s.ThumbnailPath, status, now)
 
 	return err
 }
@@ -108,17 +110,17 @@ func (db *DB) GetUploadSession(path string) (*UploadSession, error) {
 	row := db.conn.QueryRow(`
 		SELECT video_path, upload_url, total_bytes, bytes_uploaded, file_mtime,
 		       title, description, privacy, playlist_id, game_tag, episode,
-		       status, updated_at
+		       thumbnail_path, status, updated_at
 		FROM upload_sessions
 		WHERE video_path = ?
 	`, path)
 
 	var s UploadSession
-	var desc, priv, plID, gt sql.NullString
+	var desc, priv, plID, gt, thumbPath sql.NullString
 	err := row.Scan(
 		&s.VideoPath, &s.UploadURL, &s.TotalBytes, &s.BytesUploaded, &s.FileMtime,
 		&s.Title, &desc, &priv, &plID, &gt, &s.Episode,
-		&s.Status, &s.UpdatedAt,
+		&thumbPath, &s.Status, &s.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -139,6 +141,9 @@ func (db *DB) GetUploadSession(path string) (*UploadSession, error) {
 	if gt.Valid {
 		s.GameTag = gt.String
 	}
+	if thumbPath.Valid {
+		s.ThumbnailPath = thumbPath.String
+	}
 
 	return &s, nil
 }
@@ -154,7 +159,7 @@ func (db *DB) ListUploadSessions() ([]UploadSession, error) {
 	rows, err := db.conn.Query(`
 		SELECT video_path, upload_url, total_bytes, bytes_uploaded, file_mtime,
 		       title, description, privacy, playlist_id, game_tag, episode,
-		       status, updated_at
+		       thumbnail_path, status, updated_at
 		FROM upload_sessions
 		ORDER BY updated_at DESC
 	`)
@@ -166,11 +171,11 @@ func (db *DB) ListUploadSessions() ([]UploadSession, error) {
 	var sessions []UploadSession
 	for rows.Next() {
 		var s UploadSession
-		var desc, priv, plID, gt sql.NullString
+		var desc, priv, plID, gt, thumbPath sql.NullString
 		if err := rows.Scan(
 			&s.VideoPath, &s.UploadURL, &s.TotalBytes, &s.BytesUploaded, &s.FileMtime,
 			&s.Title, &desc, &priv, &plID, &gt, &s.Episode,
-			&s.Status, &s.UpdatedAt,
+			&thumbPath, &s.Status, &s.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -185,6 +190,9 @@ func (db *DB) ListUploadSessions() ([]UploadSession, error) {
 		}
 		if gt.Valid {
 			s.GameTag = gt.String
+		}
+		if thumbPath.Valid {
+			s.ThumbnailPath = thumbPath.String
 		}
 		sessions = append(sessions, s)
 	}

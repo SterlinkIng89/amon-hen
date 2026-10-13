@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoFile, YTPlaylist, TagPlaylistConfig } from "../../types";
+import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import {
   formatSize,
   formatDuration,
@@ -7,6 +8,8 @@ import {
   extractCustomVars,
   extractOrderedInputVars,
   resolveVideoContentType,
+  resolveVideoEpisode,
+  extractEpisodeFromTitle,
 } from "../../utils/videoUtils";
 import {
   UploadToYouTube,
@@ -20,14 +23,18 @@ import {
   LogFrontendEvent,
   SetVideoContentType,
   CreateVideoClip,
+  GetVideosFromFolders,
 } from "../../../wailsjs/go/backend/App";
 import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
+import YouTubeThumbnailPicker from "../youtube/YouTubeThumbnailPicker";
+import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import {
   setCachedThumb,
   clearCachedPreview,
+  notifyCustomThumbChanged,
 } from "../../hooks/useThumbnailQueue";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
@@ -293,6 +300,10 @@ export default function InlinePlayer({
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
     null,
   );
+  const [customThumbnailPath, setCustomThumbnailPath] = useState<string | null>(
+    null,
+  );
+  const pendingSaveAfterTagModalRef = useRef(false);
 
   const effectiveDuration = video.durationSecs || 0;
   const autoResolvedType: "vod" | "clip" =
@@ -309,7 +320,9 @@ export default function InlinePlayer({
       .then((cfg) => {
         setGameProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
-        setTagPlaylistConfigs(cfg.tag_playlist_configs || {});
+        setTagPlaylistConfigs(
+          parseTagPlaylistConfigs(cfg.tag_playlist_configs, cfg.tag_playlists),
+        );
       })
       .catch(() => {});
   }, []);
@@ -415,6 +428,7 @@ export default function InlinePlayer({
     setClipMode(false);
     setClipSaveError(null);
     setClipSaveSuccess(null);
+    setCustomThumbnailPath(null);
   }, [
     video.path,
     video.youtubeTitle,
@@ -464,9 +478,9 @@ export default function InlinePlayer({
       setPlaylistId(id);
       setPlaylistSearch(newPlaylistTitle.trim());
       refreshPlaylists();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPlaylistCreateError(
-        e?.toString() ?? "Failed to get or create playlist",
+        e instanceof Error ? e.message : String(e ?? "Failed to get or create playlist"),
       );
     } finally {
       setIsCreatingPlaylistLoading(false);
@@ -537,8 +551,7 @@ export default function InlinePlayer({
       const s = formSnapshotRef.current;
       let ep = s.episodeInput !== "" ? Number(s.episodeInput) : 0;
       if (!ep && !(gameProfiles[s.tagInput]?.type === "multiplayer")) {
-        const m = s.ytTitle.match(/ [—\-] (\d+)$/);
-        if (m) ep = parseInt(m[1], 10);
+        ep = extractEpisodeFromTitle(s.ytTitle);
       }
       SaveVideoMetadata(
         path,
@@ -769,6 +782,7 @@ export default function InlinePlayer({
     // If tag changed and it's not in our tag_playlists map, ask the user to link it first
     if (tagChanged && tagInput && tagPlaylists[tagInput] === undefined) {
       setSavingInfo(false);
+      pendingSaveAfterTagModalRef.current = true;
       setPendingTagForModal(tagInput);
       return;
     }
@@ -780,15 +794,11 @@ export default function InlinePlayer({
     // Resolve episode: prefer explicit Episode # field, then parse from title
     // text (supports the old workflow where users edit "— N" in the title),
     // then fall back to the original prop episode.
-    let resolvedEpisode: number;
-    if (episodeInput !== "") {
-      resolvedEpisode = Number(episodeInput);
-    } else {
-      const epFromTitle = ytTitle.match(/ [—\-] (\d+)$/);
-      resolvedEpisode = epFromTitle
-        ? parseInt(epFromTitle[1], 10)
-        : video.episode || 0;
-    }
+    const resolvedEpisode = resolveVideoEpisode(
+      episodeInput,
+      video.episode,
+      ytTitle,
+    );
 
     // When the tag changed, blank the persisted title so the backend scanner
     // re-enumerates this video with the correct episode number for the new tag
@@ -823,6 +833,30 @@ export default function InlinePlayer({
         await SetVideoContentType(p, selectedContentType);
       }
 
+      const cfg = await LoadConfig();
+      setTagPlaylists(cfg.tag_playlists || {});
+      const freshVideos = await GetVideosFromFolders(cfg.folders || []);
+
+      if (tagInput.trim()) {
+        await Promise.allSettled(
+          pathsToSave.map((p) => {
+            const freshVid = freshVideos.find((v) => v.path === p);
+            const ep = resolveVideoEpisode(
+              resolvedEpisode,
+              freshVid?.episode,
+              freshVid?.youtubeTitle,
+            );
+            return generateAndSaveTagThumbnail({
+              videoPath: p,
+              tag: tagInput,
+              episodeNumber: ep,
+              config: tagPlaylistConfigs[tagInput]?.thumbnail_config,
+              overwrite: tagChanged,
+            });
+          }),
+        );
+      }
+
       if (tagInput) addRecentTag(tagInput);
       if (eventInput) addRecentValue("event", eventInput);
       if (customVarsInput) {
@@ -831,9 +865,7 @@ export default function InlinePlayer({
         });
       }
 
-      // Reload config just in case to sync tagPlaylists
-      const cfg = await LoadConfig();
-      setTagPlaylists(cfg.tag_playlists || {});
+
 
       // 2. If video is already on YouTube, push the metadata update to the API
       if (video.youtubeId) {
@@ -844,9 +876,11 @@ export default function InlinePlayer({
             description,
             privacy,
           );
-        } catch (ytErr: any) {
+        } catch (ytErr: unknown) {
           // Don't block local save — just surface the error
-          setYtUpdateError(ytErr?.toString() ?? "Failed to update on YouTube");
+          setYtUpdateError(
+            ytErr instanceof Error ? ytErr.message : String(ytErr ?? "Failed to update on YouTube"),
+          );
         }
       }
 
@@ -869,6 +903,25 @@ export default function InlinePlayer({
         clearCachedPreview(video.path);
         setRegenThumb(fresh);
       }
+
+      const currentTag = tagInput.trim() || video.game?.trim() || "";
+      if (currentTag) {
+        const ep = resolveVideoEpisode(episodeInput, video.episode, ytTitle);
+
+        const newCustomThumb = await generateAndSaveTagThumbnail({
+          videoPath: video.path,
+          tag: currentTag,
+          episodeNumber: ep,
+          config: tagPlaylistConfigs[currentTag]?.thumbnail_config,
+          overwrite: true,
+        });
+
+        if (newCustomThumb) {
+          setCustomThumbnailPath(newCustomThumb);
+          notifyCustomThumbChanged(video.path, newCustomThumb);
+          setRegenThumb(newCustomThumb);
+        }
+      }
     } catch (e) {
       console.error("Failed to regenerate thumbnail", e);
     } finally {
@@ -885,8 +938,8 @@ export default function InlinePlayer({
     try {
       await DeleteFiles([video.path]);
       onDelete?.();
-    } catch (e: any) {
-      alert(e?.message || e || "Failed to delete file");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : String(e ?? "Failed to delete file"));
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -931,6 +984,7 @@ export default function InlinePlayer({
       playlistId,
       gameTag: tagInput,
       episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
+      thumbnailPath: customThumbnailPath || "",
     };
     onAddToQueue(item);
     UploadToYouTube(
@@ -941,6 +995,7 @@ export default function InlinePlayer({
       playlistId || "",
       tagInput,
       episodeInput !== "" ? Number(episodeInput) : video.episode || 0,
+      customThumbnailPath || "",
     ).catch(() => {});
     setTimeout(() => setUploading(false), 1000);
   };
@@ -983,6 +1038,7 @@ export default function InlinePlayer({
       playlistId,
       gameTag: tagInput,
       episode: episodeInput !== "" ? Number(episodeInput) : video.episode,
+      thumbnailPath: customThumbnailPath || "",
     };
     onAddToQueue(item);
   };
@@ -1547,9 +1603,9 @@ export default function InlinePlayer({
                         const val = e.target.value;
                         setYtTitle(val);
                         // Auto-sync Episode # when user types "— N" at end of title
-                        const epMatch = val.match(/ [—\-] (\d+)$/);
-                        if (epMatch && !(activeProfile?.type === "multiplayer"))
-                          setEpisodeInput(parseInt(epMatch[1], 10));
+                        const epMatch = extractEpisodeFromTitle(val);
+                        if (epMatch > 0 && !(activeProfile?.type === "multiplayer"))
+                          setEpisodeInput(epMatch);
                       }}
                       maxLength={100}
                     />
@@ -1753,6 +1809,24 @@ export default function InlinePlayer({
                     </div>
                   )}
                 </div>
+
+                <YouTubeThumbnailPicker
+                  videoPath={video.path}
+                  gameTag={tagInput}
+                  episodeNumber={resolveVideoEpisode(
+                    episodeInput,
+                    video.episode,
+                    ytTitle,
+                  )}
+                  tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
+                  onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                  youtubeId={video.youtubeId}
+                  onYouTubeUpdated={() => onTagSaved?.()}
+                  onOpenTagSettings={() => {
+                    pendingSaveAfterTagModalRef.current = false;
+                    setPendingTagForModal(tagInput);
+                  }}
+                />
               </div>
 
               {/* Upload & Save actions - Fixed Bottom */}
@@ -1762,9 +1836,9 @@ export default function InlinePlayer({
                     className="flex-1 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors"
                     onClick={handleRegenerateThumbnail}
                     disabled={regenLoading}
-                    title="Re-capture a fresh thumbnail frame from this video"
+                    title="Regenerate thumbnail locally with current tag and episode"
                   >
-                    {regenLoading ? "..." : "Regen Thumb"}
+                    {regenLoading ? "Regenerating..." : "Regen Thumbnail"}
                   </button>
                   <button
                     className={`flex-1 py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`}
@@ -2063,9 +2137,9 @@ export default function InlinePlayer({
                       const val = e.target.value;
                       setYtTitle(val);
                       // Auto-sync Episode # when user types "— N" at end of title
-                      const epMatch = val.match(/ [—\-] (\d+)$/);
-                      if (epMatch && !(activeProfile?.type === "multiplayer"))
-                        setEpisodeInput(parseInt(epMatch[1], 10));
+                      const epMatch = extractEpisodeFromTitle(val);
+                      if (epMatch > 0 && !(activeProfile?.type === "multiplayer"))
+                        setEpisodeInput(epMatch);
                     }}
                     maxLength={100}
                   />
@@ -2218,6 +2292,24 @@ export default function InlinePlayer({
                   </div>
                 )}
               </div>
+
+              <YouTubeThumbnailPicker
+                videoPath={video.path}
+                gameTag={tagInput}
+                episodeNumber={resolveVideoEpisode(
+                  episodeInput,
+                  video.episode,
+                  ytTitle,
+                )}
+                tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
+                onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                youtubeId={video.youtubeId}
+                onYouTubeUpdated={() => onTagSaved?.()}
+                onOpenTagSettings={() => {
+                  pendingSaveAfterTagModalRef.current = false;
+                  setPendingTagForModal(tagInput);
+                }}
+              />
             </div>
 
             <div className="h-px bg-white/10 w-full my-4" />
@@ -2236,16 +2328,18 @@ export default function InlinePlayer({
                   className="px-5 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors flex items-center gap-2"
                   onClick={handleRegenerateThumbnail}
                   disabled={regenLoading}
+                  title="Regenerate thumbnail locally with current tag and episode"
                 >
                   <svg
                     width="16"
                     height="16"
                     viewBox="0 0 24 24"
                     fill="currentColor"
+                    className={regenLoading ? "animate-spin" : ""}
                   >
                     <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
                   </svg>
-                  {regenLoading ? "..." : "Regen Thumb"}
+                  {regenLoading ? "Regenerating..." : "Regen Thumbnail"}
                 </button>
                 <button
                   className={`px-6 py-2.5 rounded-full text-sm font-medium transition-colors ${infoSaved || isDirty ? "bg-[#3ea6ff] text-black hover:bg-[#65b8ff]" : "bg-[#272727] text-white/50 cursor-default"}`}
@@ -2297,6 +2391,32 @@ export default function InlinePlayer({
             </div>
           </div>
         )
+      )}
+
+      {pendingTagForModal && (
+        <TagPlaylistModal
+          tag={pendingTagForModal}
+          onClose={() => setPendingTagForModal(null)}
+          onSaved={() => {
+            setPendingTagForModal(null);
+            LoadConfig()
+              .then((cfg) => {
+                setGameProfiles(cfg.game_profiles || {});
+                setTagPlaylists(cfg.tag_playlists || {});
+                setTagPlaylistConfigs(
+                  parseTagPlaylistConfigs(
+                    cfg.tag_playlist_configs,
+                    cfg.tag_playlists,
+                  ),
+                );
+              })
+              .catch(() => {});
+            if (pendingSaveAfterTagModalRef.current) {
+              pendingSaveAfterTagModalRef.current = false;
+              performSaveInfo(true);
+            }
+          }}
+        />
       )}
     </div>
   );

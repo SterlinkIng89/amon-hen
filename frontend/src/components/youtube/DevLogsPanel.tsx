@@ -22,6 +22,8 @@ const OP_COLORS: Record<string, string> = {
   "videos.update": "#eab308", // yellow
   "playlists.insert": "#eab308",
   "playlistItems.insert": "#eab308",
+  "thumbnails.set": "#eab308",
+  "playlistImages.insert": "#eab308",
   "channels.list": "#22d3ee", // cyan — cheap
   "videos.list": "#22d3ee",
   "playlists.list": "#22d3ee",

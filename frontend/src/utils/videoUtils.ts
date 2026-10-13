@@ -163,6 +163,33 @@ export function generateYouTubeTitle(
   return `${game}${sep}${datePart}${epSuffix}`;
 }
 
+export function resolveDisplayTitle(
+  video: VideoFile,
+  profiles?: Record<string, GameProfile>,
+  titleSeparator?: string,
+): string {
+  if (video.youtubeTitle && video.youtubeTitle.trim() !== "") {
+    return video.youtubeTitle;
+  }
+  const profile = video.game && profiles ? profiles[video.game] : undefined;
+  const contentType = resolveVideoContentType(
+    video.durationSecs,
+    video.contentType,
+  );
+  return generateYouTubeTitle(
+    video.name,
+    video.game,
+    video.episode,
+    profile,
+    video.event,
+    video.gameMode,
+    video.customVars,
+    video.modTime,
+    titleSeparator,
+    contentType,
+  );
+}
+
 export function toLocalDateKey(ms: number) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -553,5 +580,38 @@ export function formatPlaytimeHoursMinutes(decimalHours: number): string {
   if (hours === 0 && minutes === 0) return "<1m";
   if (hours === 0) return `${minutes}m`;
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+}
+
+/**
+ * Extracts a trailing episode number from a video title or filename if present.
+ * Matches patterns like " - 14", " — 14", or "#14" while ignoring date segments like "12/10/26".
+ */
+export function extractEpisodeFromTitle(title?: string): number {
+  if (!title) return 0;
+  const match = title.match(/(?:[—\-]\s*|#)(\d+)(?![\d/])(?:\s*|$)/);
+  if (!match) return 0;
+  const parsed = parseInt(match[1], 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Resolves the effective episode number by checking:
+ * 1. Explicit user input if non-empty and > 0
+ * 2. Pre-assigned video episode if > 0
+ * 3. Title fallback parsing
+ */
+export function resolveVideoEpisode(
+  explicitEpisode?: number | string | null,
+  videoEpisode?: number | null,
+  title?: string,
+): number {
+  if (explicitEpisode !== "" && explicitEpisode !== null && explicitEpisode !== undefined) {
+    const num = Number(explicitEpisode);
+    if (!isNaN(num) && num > 0) return num;
+  }
+  if (typeof videoEpisode === "number" && videoEpisode > 0) {
+    return videoEpisode;
+  }
+  return extractEpisodeFromTitle(title);
 }
 

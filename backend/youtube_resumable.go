@@ -285,7 +285,7 @@ func (cpr *chunkProgressReader) Read(p []byte) (int, error) {
 }
 
 // UploadToYouTube uploads a single video to YouTube using resumable uploads and emits progress events.
-func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int) error {
+func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int, thumbnailPath string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.uploadsMu.Lock()
 	a.uploads[path] = cancel
@@ -373,6 +373,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 			PlaylistID:    playlistID,
 			GameTag:       gameTag,
 			Episode:       episode,
+			ThumbnailPath: thumbnailPath,
 			Status:        "uploading",
 			UpdatedAt:     time.Now().Unix(),
 		}
@@ -495,7 +496,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 		a.db.DeleteUploadSession(path)
 	}
 
-	a.finalizeUpload(path, title, playlistID, gameTag, episode, result.Id)
+	a.finalizeUpload(path, title, playlistID, gameTag, episode, result.Id, thumbnailPath)
 
 	runtime.EventsEmit(a.ctx, "youtube:done", map[string]string{
 		"path": path,
@@ -504,8 +505,22 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	return nil
 }
 
-func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode int, videoID string) {
+func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode int, videoID string, thumbnailPath string) {
 	a.LinkLocalToYouTube(path, videoID, gameTag, episode)
+
+	// Automatically upload custom thumbnail if provided or cached
+	resolvedThumb := thumbnailPath
+	if resolvedThumb == "" && a.cacheDir != "" {
+		cand := filepath.Join(a.cacheDir, "yt_thumbs", customThumbKey(path)+".jpg")
+		if _, err := os.Stat(cand); err == nil {
+			resolvedThumb = cand
+		}
+	}
+	if resolvedThumb != "" {
+		if err := a.SetYouTubeThumbnail(videoID, resolvedThumb); err != nil {
+			appLog("[Queue] Warning: Failed to set YouTube thumbnail for video %s: %v", videoID, err)
+		}
+	}
 
 	if a.db != nil && gameTag != "" {
 		dur, _ := a.GetVideoDuration(path)
@@ -585,5 +600,6 @@ func (a *App) ResumeUpload(path string) error {
 		session.PlaylistID,
 		session.GameTag,
 		session.Episode,
+		session.ThumbnailPath,
 	)
 }

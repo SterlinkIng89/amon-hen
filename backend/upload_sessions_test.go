@@ -20,6 +20,7 @@ func TestUploadSession_CRUD(t *testing.T) {
 		PlaylistID:    "PL12345",
 		GameTag:       "EldenRing",
 		Episode:       1,
+		ThumbnailPath: "C:/cache/thumbs/custom.jpg",
 		Status:        "uploading",
 		UpdatedAt:     1710000010,
 	}
@@ -37,7 +38,7 @@ func TestUploadSession_CRUD(t *testing.T) {
 	if got == nil {
 		t.Fatalf("expected upload session, got nil")
 	}
-	if got.Title != session.Title || got.UploadURL != session.UploadURL || got.BytesUploaded != session.BytesUploaded {
+	if got.Title != session.Title || got.UploadURL != session.UploadURL || got.BytesUploaded != session.BytesUploaded || got.ThumbnailPath != session.ThumbnailPath {
 		t.Fatalf("mismatched session data: %+v vs %+v", got, session)
 	}
 

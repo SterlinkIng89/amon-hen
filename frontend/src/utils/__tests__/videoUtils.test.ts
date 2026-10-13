@@ -6,6 +6,9 @@ import {
   formatTimeWithSubseconds,
   computeInitialClipRange,
   formatPlaytimeHoursMinutes,
+  resolveDisplayTitle,
+  extractEpisodeFromTitle,
+  resolveVideoEpisode,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -383,6 +386,88 @@ describe("videoUtils - Title generation & placeholder detection", () => {
 
     it("handles rounding near boundaries", () => {
       expect(formatPlaytimeHoursMinutes(1.999)).toBe("2h 00m");
+    });
+  });
+
+  describe("resolveDisplayTitle", () => {
+    it("returns manual youtubeTitle if present and non-empty", () => {
+      const vid: VideoFile = {
+        name: "test.mp4",
+        path: "/path/test.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Hades",
+        youtubeTitle: "Custom Manual Title Here",
+      };
+      expect(resolveDisplayTitle(vid)).toBe("Custom Manual Title Here");
+    });
+
+    it("generates singleplayer title when no custom title", () => {
+      const vid: VideoFile = {
+        name: "2026-08-26 14-30-00.mp4",
+        path: "/path/2026-08-26 14-30-00.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Hades",
+        episode: 3,
+      };
+      expect(resolveDisplayTitle(vid, undefined, " — ")).toBe("Hades — 26/08/26 — 3");
+    });
+
+    it("uses multiplayer profile template when available", () => {
+      const profiles: Record<string, GameProfile> = {
+        Overwatch: {
+          type: "multiplayer",
+          titleTemplate: "{game} - {event} - {date}",
+        },
+      };
+      const vid: VideoFile = {
+        name: "2026-08-26 14-30-00.mp4",
+        path: "/path/2026-08-26 14-30-00.mp4",
+        size: 100,
+        modTime: 1787754600000,
+        folder: "/path",
+        game: "Overwatch",
+        event: "Ranked Match",
+      };
+      expect(resolveDisplayTitle(vid, profiles)).toBe("Overwatch - Ranked Match - 26/08/26");
+    });
+  });
+
+  describe("extractEpisodeFromTitle", () => {
+    it("extracts trailing episode number from various formats", () => {
+      expect(extractEpisodeFromTitle("CONTROL Resonant - 12/10/26 - 14")).toBe(14);
+      expect(extractEpisodeFromTitle("Cyberpunk 2077 — 26/08/26 — 5")).toBe(5);
+      expect(extractEpisodeFromTitle("Elden Ring #12")).toBe(12);
+      expect(extractEpisodeFromTitle("Dark Souls - 1")).toBe(1);
+    });
+
+    it("does not match dates or titles without episode numbers", () => {
+      expect(extractEpisodeFromTitle("CONTROL Resonant - 12/10/26")).toBe(0);
+      expect(extractEpisodeFromTitle("Overwatch 2 - Clip")).toBe(0);
+      expect(extractEpisodeFromTitle("")).toBe(0);
+      expect(extractEpisodeFromTitle(undefined)).toBe(0);
+    });
+  });
+
+  describe("resolveVideoEpisode", () => {
+    it("prefers explicit input if positive number", () => {
+      expect(resolveVideoEpisode(14, 5, "Game - 2")).toBe(14);
+      expect(resolveVideoEpisode("14", 5, "Game - 2")).toBe(14);
+    });
+
+    it("falls back to video.episode if explicit input is empty or 0", () => {
+      expect(resolveVideoEpisode("", 5, "Game - 2")).toBe(5);
+      expect(resolveVideoEpisode(0, 5, "Game - 2")).toBe(5);
+      expect(resolveVideoEpisode(undefined, 5, "Game - 2")).toBe(5);
+    });
+
+    it("falls back to parsing title if video.episode is 0 or missing", () => {
+      expect(resolveVideoEpisode("", 0, "CONTROL Resonant - 12/10/26 - 14")).toBe(14);
+      expect(resolveVideoEpisode(undefined, undefined, "CONTROL Resonant - 12/10/26 - 14")).toBe(14);
+      expect(resolveVideoEpisode("", 0, "CONTROL Resonant - 12/10/26")).toBe(0);
     });
   });
 });
