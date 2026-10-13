@@ -18,6 +18,11 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   UpdateYouTubeThumbnail: vi.fn().mockResolvedValue("https://yt.com/thumb_up.jpg"),
 }));
 
+vi.mock("../../../hooks/useThumbnailQueue", () => ({
+  notifyCustomThumbChanged: vi.fn(),
+  setCachedCustomThumb: vi.fn(),
+}));
+
 describe("YouTubeThumbnailPicker", () => {
   const tagConfig: TagThumbnailConfig = {
     enabled: true,
@@ -96,6 +101,72 @@ describe("YouTubeThumbnailPicker", () => {
 
     await waitFor(() => {
       expect(onYouTubeUpdated).toHaveBeenCalledWith("https://yt.com/thumb_up.jpg");
+    });
+  });
+
+  it("calls notifyCustomThumbChanged when saving custom thumbnail", async () => {
+    const { notifyCustomThumbChanged } = await import(
+      "../../../hooks/useThumbnailQueue"
+    );
+    const { GetCustomThumbnail } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+    vi.mocked(GetCustomThumbnail).mockResolvedValue(
+      "/cache/yt_thumbs/custom_saved.jpg",
+    );
+
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={tagConfig}
+      />,
+    );
+
+    const saveBtn = screen.getByRole("button", {
+      name: /apply as youtube thumbnail/i,
+    });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(notifyCustomThumbChanged).toHaveBeenCalledWith(
+        "C:/videos/ep1.mp4",
+        "/cache/yt_thumbs/custom_saved.jpg",
+      );
+    });
+  });
+
+  it("calls notifyCustomThumbChanged with null when resetting custom thumbnail", async () => {
+    const { notifyCustomThumbChanged } = await import(
+      "../../../hooks/useThumbnailQueue"
+    );
+    const { GetCustomThumbnail } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+    vi.mocked(GetCustomThumbnail).mockResolvedValue(
+      "/cache/yt_thumbs/custom_saved.jpg",
+    );
+
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={tagConfig}
+      />,
+    );
+
+    const resetBtn = await screen.findByRole("button", {
+      name: /reset to tag template/i,
+    });
+    fireEvent.click(resetBtn);
+
+    await waitFor(() => {
+      expect(notifyCustomThumbChanged).toHaveBeenCalledWith(
+        "C:/videos/ep1.mp4",
+        null,
+      );
     });
   });
 });

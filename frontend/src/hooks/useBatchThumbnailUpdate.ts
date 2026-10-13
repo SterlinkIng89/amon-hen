@@ -4,8 +4,10 @@ import { useThumbnailAssets } from "./useThumbnailAssets";
 import { renderTagThumbnailDataUrl } from "../utils/thumbnailRender";
 import {
   SaveCustomThumbnail,
+  GetCustomThumbnail,
   UpdateYouTubeThumbnail,
 } from "../../wailsjs/go/backend/App";
+import { notifyCustomThumbChanged } from "./useThumbnailQueue";
 
 export interface BatchThumbnailInputItem {
   readonly videoId: string;
@@ -119,6 +121,12 @@ export function useBatchThumbnailUpdate({
 
           updateItemStatus(itemIdx, "uploading");
           const savedPath = await SaveCustomThumbnail(item.cacheKey, dataUrl);
+          try {
+            const url = await GetCustomThumbnail(item.cacheKey);
+            notifyCustomThumbChanged(item.cacheKey, url || null);
+          } catch {
+            notifyCustomThumbChanged(item.cacheKey, savedPath);
+          }
           const newThumbUrl = await UpdateYouTubeThumbnail(item.videoId, savedPath);
 
           updateItemStatus(itemIdx, "done");

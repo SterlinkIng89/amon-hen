@@ -603,6 +603,7 @@ export namespace backend {
 	    linked: boolean;
 	    steamAppId: string;
 	    needsSync: boolean;
+	    thumbnailConfig?: TagThumbnailConfig;
 	    videos: CatalogVideoDraft[];
 	
 	    static createFrom(source: any = {}) {
@@ -620,6 +621,7 @@ export namespace backend {
 	        this.linked = source["linked"];
 	        this.steamAppId = source["steamAppId"];
 	        this.needsSync = source["needsSync"];
+	        this.thumbnailConfig = this.convertValues(source["thumbnailConfig"], TagThumbnailConfig);
 	        this.videos = this.convertValues(source["videos"], CatalogVideoDraft);
 	    }
 	

@@ -9,6 +9,7 @@ import {
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
+import { useCustomThumbnail } from "../../hooks/useCustomThumbnail";
 import {
   enqueueThumb,
   enqueueDuration,
@@ -70,7 +71,14 @@ export default function VideoPill({
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
   const isLocal = "path" in video;
-  const localPath = isLocal ? (video as VideoFile).path : "";
+  const localFile = isLocal ? (video as VideoFile) : null;
+  const localPath = localFile ? localFile.path : "";
+  const fallbackKey =
+    localFile && localFile.youtubeId
+      ? `${localFile.youtubeId}_${localFile.episode || 1}`
+      : undefined;
+
+  const customThumb = useCustomThumbnail(localPath, isLocal && inView, fallbackKey);
 
   // States for local files initialized immediately from memory cache if present
   const [thumb, setThumb] = useState<string>(() =>
@@ -82,7 +90,7 @@ export default function VideoPill({
   const [bgPos, setBgPos] = useState("0% 0%");
   const [hovered, setHovered] = useState(false);
   const [thumbLoaded, setThumbLoaded] = useState<boolean>(() =>
-    isLocal ? !!getCachedThumb(localPath) : true,
+    isLocal ? !!getCachedThumb(localPath) : false,
   );
   const [imgLoaded, setImgLoaded] = useState<boolean>(() =>
     isLocal ? !!getCachedThumb(localPath) : false,
@@ -100,7 +108,7 @@ export default function VideoPill({
     activeProfile,
   );
   const subtitle = isLocal ? video.name : "";
-  const thumbnail = isYT ? video.thumbnailUrl : thumb;
+  const thumbnail = isYT ? video.thumbnailUrl : customThumb || thumb;
   const publishedAt = isYT
     ? new Date(video.publishedAt).toLocaleDateString()
     : "";
@@ -303,7 +311,7 @@ export default function VideoPill({
           </div>
         )}
 
-        {isLocal && !thumbLoaded && (
+        {isLocal && !thumbLoaded && !customThumb && (
           <div className="absolute inset-0 bg-elevated bg-[length:200%_100%] animate-shimmer bg-gradient-to-r from-elevated via-card to-elevated" />
         )}
 
@@ -318,6 +326,7 @@ export default function VideoPill({
           />
         ) : (
           <img
+            key={thumbnail}
             src={thumbnail || "/placeholder-thumb.jpg"}
             alt={title}
             onLoad={() => setImgLoaded(true)}

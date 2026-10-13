@@ -16,6 +16,10 @@ import ThumbnailCanvasEditor from "../ui/ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "../ui/ThumbnailFramingControls";
 import ThumbnailElementControls from "../ui/ThumbnailElementControls";
 import { renderTagThumbnailDataUrl } from "../../utils/thumbnailRender";
+import {
+  notifyCustomThumbChanged,
+  setCachedCustomThumb,
+} from "../../hooks/useThumbnailQueue";
 
 export interface YouTubeThumbnailPickerProps {
   readonly videoPath: string;
@@ -87,9 +91,11 @@ export default function YouTubeThumbnailPicker({
     GetCustomThumbnail(videoPath)
       .then((url) => {
         if (url) {
+          setCachedCustomThumb(videoPath, url);
           setCustomThumbUrl(url);
           onThumbnailReady?.(url);
         } else {
+          setCachedCustomThumb(videoPath, null);
           setCustomThumbUrl(null);
         }
       })
@@ -109,6 +115,14 @@ export default function YouTubeThumbnailPicker({
     const savedPath = await SaveCustomThumbnail(videoPath, dataUrl);
     setCustomThumbUrl(savedPath);
     onThumbnailReady?.(savedPath);
+
+    try {
+      const url = await GetCustomThumbnail(videoPath);
+      notifyCustomThumbChanged(videoPath, url || null);
+    } catch {
+      notifyCustomThumbChanged(videoPath, savedPath);
+    }
+
     return savedPath;
   };
 
@@ -144,6 +158,7 @@ export default function YouTubeThumbnailPicker({
       await DeleteCustomThumbnail(videoPath);
       setCustomThumbUrl(null);
       onThumbnailReady?.(null);
+      notifyCustomThumbChanged(videoPath, null);
       setIsCustomizing(false);
       if (tagThumbnailConfig) {
         setLocalConfig({
