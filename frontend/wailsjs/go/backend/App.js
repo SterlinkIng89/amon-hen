@@ -370,6 +370,10 @@ export function SetWatchFolderEnabled(arg1) {
   return window['go']['backend']['App']['SetWatchFolderEnabled'](arg1);
 }
 
+export function SetYouTubePlaylistThumbnail(arg1, arg2) {
+  return window['go']['backend']['App']['SetYouTubePlaylistThumbnail'](arg1, arg2);
+}
+
 export function SetYouTubeThumbnail(arg1, arg2) {
   return window['go']['backend']['App']['SetYouTubeThumbnail'](arg1, arg2);
 }

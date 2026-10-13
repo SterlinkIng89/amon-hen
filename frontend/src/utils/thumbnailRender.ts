@@ -1,11 +1,21 @@
 import { TagThumbnailConfig } from "../types";
-import { renderThumbnailToCanvas } from "./thumbnailGenerator";
+import {
+  renderThumbnailToCanvas,
+  renderPlaylistCoverToCanvas,
+} from "./thumbnailGenerator";
 
 export interface RenderTagThumbnailParams {
   readonly baseImage: HTMLImageElement | null;
   readonly logoImage: HTMLImageElement | null;
   readonly gameTitle: string;
   readonly episodeNumber: number;
+  readonly config: TagThumbnailConfig;
+}
+
+export interface RenderPlaylistCoverParams {
+  readonly baseImage: HTMLImageElement | null;
+  readonly logoImage: HTMLImageElement | null;
+  readonly gameTitle: string;
   readonly config: TagThumbnailConfig;
 }
 
@@ -48,3 +58,36 @@ export function renderTagThumbnailDataUrl({
 
   return exportCanvas.toDataURL("image/jpeg", 0.92);
 }
+
+/**
+ * Renders a clean 1280x720 JPEG playlist cover data URL without episode counter badges.
+ */
+export function renderPlaylistCoverDataUrl({
+  baseImage,
+  logoImage,
+  gameTitle,
+  config,
+}: RenderPlaylistCoverParams): string {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = 1280;
+  exportCanvas.height = 720;
+
+  renderPlaylistCoverToCanvas(exportCanvas, baseImage, {
+    framing: config.image_framing,
+    logo: config.logo?.enabled
+      ? {
+          image: logoImage,
+          layout: config.logo,
+        }
+      : undefined,
+    title: config.title?.enabled
+      ? {
+          text: config.title.text_override || gameTitle,
+          layout: config.title,
+        }
+      : undefined,
+  });
+
+  return exportCanvas.toDataURL("image/jpeg", 0.92);
+}
+

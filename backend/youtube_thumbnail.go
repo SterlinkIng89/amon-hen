@@ -157,3 +157,90 @@ func (a *App) UpdateYouTubeThumbnail(videoID string, imagePath string) (string, 
 
 	return persistedURL, nil
 }
+
+// persistPlaylistThumbnailURL updates the cached thumbnail_url for the given playlist ID in the local SQLite database.
+func (a *App) persistPlaylistThumbnailURL(playlistID string, url string) error {
+	if a.db == nil || playlistID == "" {
+		return nil
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	_, err := a.db.conn.Exec("UPDATE yt_playlists SET thumbnail_url = ? WHERE id = ?", url, playlistID)
+	return err
+}
+
+// setYouTubePlaylistThumbnailInternal validates the image, sends it to the YouTube API, and returns an error if failed.
+func (a *App) setYouTubePlaylistThumbnailInternal(playlistID string, imagePath string) error {
+	if playlistID == "" {
+		return fmt.Errorf("playlistID cannot be empty")
+	}
+	if imagePath == "" {
+		return fmt.Errorf("imagePath cannot be empty")
+	}
+
+	if err := validateThumbnailFile(imagePath); err != nil {
+		return err
+	}
+
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to open thumbnail image: %w", err)
+	}
+	defer file.Close()
+
+	svc, err := a.youtubeClient(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get YouTube service: %w", err)
+	}
+
+	resource := &youtube.PlaylistImage{
+		Snippet: &youtube.PlaylistImageSnippet{
+			PlaylistId: playlistID,
+			Type:       "hero",
+		},
+	}
+
+	start := time.Now()
+	call := svc.PlaylistImages.Insert(resource).Part("snippet").Media(file)
+	_, err = call.Do()
+	a.logAPICall("playlistImages.insert", playlistID, playlistID, 50, start, err)
+	if err != nil {
+		appLog("[YouTube] Failed to set thumbnail for playlist %s: %v", playlistID, err)
+		return friendlyThumbnailError(err)
+	}
+
+	appLog("[YouTube] Successfully set thumbnail for playlist %s", playlistID)
+	return nil
+}
+
+// SetYouTubePlaylistThumbnail uploads a custom cover image to a YouTube playlist via playlistImages.insert,
+// caches the image locally in yt_thumbs, updates the local yt_playlists table, and returns the cached URL.
+func (a *App) SetYouTubePlaylistThumbnail(playlistID string, imagePath string) (string, error) {
+	if err := a.setYouTubePlaylistThumbnailInternal(playlistID, imagePath); err != nil {
+		return "", err
+	}
+
+	// 2. Cache file locally in yt_thumbs directory for immediate local preview
+	cacheDir := filepath.Join(a.cacheDir, "yt_thumbs")
+	_ = os.MkdirAll(cacheDir, 0755)
+
+	key := customThumbKey("playlist_" + playlistID)
+	destPath := filepath.Join(cacheDir, key+".jpg")
+
+	// If source is not already destination, copy bytes
+	if filepath.Clean(imagePath) != filepath.Clean(destPath) {
+		if data, readErr := os.ReadFile(imagePath); readErr == nil {
+			_ = os.WriteFile(destPath, data, 0644)
+		}
+	}
+
+	cachedURL := fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, time.Now().Unix())
+	if pErr := a.persistPlaylistThumbnailURL(playlistID, cachedURL); pErr != nil {
+		appLog("[YouTube] Warning: failed to persist thumbnail_url in local DB for playlist %s: %v", playlistID, pErr)
+	}
+
+	return cachedURL, nil
+}
+

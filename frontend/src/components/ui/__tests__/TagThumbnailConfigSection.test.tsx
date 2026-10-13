@@ -13,6 +13,8 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
     posterUrl: "https://steam.cdn/poster.jpg",
   }),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue("C:/images/custom.png"),
+  SaveCustomThumbnail: vi.fn().mockResolvedValue("C:/cache/thumbs/custom.jpg"),
+  SetYouTubePlaylistThumbnail: vi.fn().mockResolvedValue("/cache/yt_thumbs/custom.jpg?v=1"),
 }));
 
 describe("TagThumbnailConfigSection", () => {
@@ -26,6 +28,7 @@ describe("TagThumbnailConfigSection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue("data:image/jpeg;base64,123");
   });
 
   it("renders disabled state toggle correctly", () => {
@@ -101,4 +104,34 @@ describe("TagThumbnailConfigSection", () => {
       expect.objectContaining({ episode_format: "ep" })
     );
   });
+
+  it("renders cover upload button and triggers upload when vodPlaylistId is provided", async () => {
+    const onPlaylistCoverUpdated = vi.fn();
+    render(
+      <TagThumbnailConfigSection
+        tag="Cyberpunk 2077"
+        value={defaultConfig}
+        onChange={vi.fn()}
+        vodPlaylistId="vod-pl-123"
+        onPlaylistCoverUpdated={onPlaylistCoverUpdated}
+      />
+    );
+
+    const uploadVodBtn = screen.getByRole("button", { name: /upload to vod/i });
+    expect(uploadVodBtn).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(uploadVodBtn).not.toBeDisabled();
+    });
+
+    fireEvent.click(uploadVodBtn);
+
+    await waitFor(() => {
+      expect(onPlaylistCoverUpdated).toHaveBeenCalledWith(
+        "vod-pl-123",
+        expect.any(String)
+      );
+    });
+  });
 });
+

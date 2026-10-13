@@ -26,6 +26,8 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetSteamAppID: vi.fn().mockResolvedValue(""),
   GetSteamGameAssets: vi.fn().mockResolvedValue({}),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
+  SaveCustomThumbnail: vi.fn().mockResolvedValue("C:/cache/thumbs/custom.jpg"),
+  SetYouTubePlaylistThumbnail: vi.fn().mockResolvedValue("/cache/yt_thumbs/custom.jpg?v=1"),
   LoadConfig: vi.fn().mockResolvedValue({
     tag_playlists: {},
     tag_playlist_configs: {},
@@ -36,6 +38,7 @@ describe("TagPlaylistModal", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue("data:image/jpeg;base64,123");
     useAppStore.setState({ defaultPlaylistPrivacy: "public" });
   });
 
@@ -301,5 +304,43 @@ describe("TagPlaylistModal", () => {
       expect(onSaved).toHaveBeenCalled();
     });
   });
+
+  it("should generate and upload cover thumbnail when creating playlist with cover option enabled", async () => {
+    vi.mocked(appBackend.LoadConfig).mockResolvedValue({
+      tag_playlists: {},
+      tag_playlist_configs: {
+        Valorant: {
+          vod_playlist_id: "",
+          clip_playlist_id: "",
+          thumbnail_config: {
+            enabled: true,
+            source_type: "steam",
+            episode_position: "bottom-right",
+            episode_format: "pad2",
+          },
+        },
+      },
+    } as unknown as backend.Config);
+
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/apply cover artwork automatically to vod playlist/i)).toBeInTheDocument();
+    });
+
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
+
+    await waitFor(() => {
+      expect(appBackend.SetYouTubePlaylistThumbnail).toHaveBeenCalledWith(
+        "pl-123",
+        expect.any(String)
+      );
+    });
+  });
 });
+
 

@@ -10,6 +10,7 @@ import {
   clampLayout,
   pointerToCanvasPoint,
   hitTestElements,
+  renderPlaylistCoverToCanvas,
 } from "../thumbnailGenerator";
 
 describe("thumbnailGenerator utils", () => {
@@ -229,5 +230,38 @@ describe("thumbnailGenerator utils", () => {
       expect(hitTestElements(rects, 10, 10)).toBeNull();
     });
   });
+
+  describe("renderPlaylistCoverToCanvas", () => {
+    it("renders cover without episode badge (rects.episode is undefined)", () => {
+      const canvas = document.createElement("canvas");
+      const rects = renderPlaylistCoverToCanvas(canvas, null, {});
+      expect(rects.episode).toBeUndefined();
+      expect(canvas.width).toBe(1280);
+      expect(canvas.height).toBe(720);
+    });
+
+    it("passes through logo and title options when configured", () => {
+      const canvas = document.createElement("canvas");
+      canvas.getContext = (() => ({
+        fillStyle: "",
+        fillRect: () => {},
+        drawImage: () => {},
+        save: () => {},
+        restore: () => {},
+        measureText: () => ({ width: 100 }),
+        strokeText: () => {},
+        fillText: () => {},
+      })) as unknown as typeof canvas.getContext;
+      const rects = renderPlaylistCoverToCanvas(canvas, null, {
+        title: {
+          text: "Hades",
+          layout: { x: 0.5, y: 0.5, scale: 1, enabled: true },
+        },
+      });
+      expect(rects.title).toBeDefined();
+      expect(rects.episode).toBeUndefined();
+    });
+  });
 });
+
 

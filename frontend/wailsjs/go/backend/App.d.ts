@@ -189,6 +189,8 @@ export function SetVideosPlaylist(arg1:Array<string>,arg2:string,arg3:string):Pr
 
 export function SetWatchFolderEnabled(arg1:boolean):Promise<void>;
 
+export function SetYouTubePlaylistThumbnail(arg1:string,arg2:string):Promise<string>;
+
 export function SetYouTubeThumbnail(arg1:string,arg2:string):Promise<void>;
 
 export function ShowUploadNotification(arg1:string,arg2:string):Promise<void>;

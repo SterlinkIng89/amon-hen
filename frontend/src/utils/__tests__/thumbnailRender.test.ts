@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderTagThumbnailDataUrl } from "../thumbnailRender";
+import {
+  renderTagThumbnailDataUrl,
+  renderPlaylistCoverDataUrl,
+} from "../thumbnailRender";
 import * as generator from "../thumbnailGenerator";
 
-vi.spyOn(generator, "renderThumbnailToCanvas").mockImplementation(() => ({} as any));
+vi.spyOn(generator, "renderThumbnailToCanvas").mockImplementation(() => ({}));
+vi.spyOn(generator, "renderPlaylistCoverToCanvas").mockImplementation(() => ({}));
 
 describe("renderTagThumbnailDataUrl", () => {
   it("renders with showEpisode=true when episodeNumber > 0", () => {
@@ -56,3 +60,35 @@ describe("renderTagThumbnailDataUrl", () => {
     );
   });
 });
+
+describe("renderPlaylistCoverDataUrl", () => {
+  it("renders cover canvas without episode badge and returns data URL", () => {
+    const fakeBase = {} as HTMLImageElement;
+    const fakeLogo = {} as HTMLImageElement;
+
+    const dataUrl = renderPlaylistCoverDataUrl({
+      baseImage: fakeBase,
+      logoImage: fakeLogo,
+      gameTitle: "Hades",
+      config: {
+        enabled: true,
+        source_type: "steam",
+        episode_position: "bottom-right",
+        episode_format: "pad2",
+        logo: { x: 0.5, y: 0.5, scale: 1, enabled: true },
+        title: { x: 0.5, y: 0.5, scale: 1, enabled: true, text_override: "Hades Cover" },
+      },
+    });
+
+    expect(generator.renderPlaylistCoverToCanvas).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      fakeBase,
+      expect.objectContaining({
+        logo: expect.objectContaining({ image: fakeLogo }),
+        title: expect.objectContaining({ text: "Hades Cover" }),
+      })
+    );
+    expect(dataUrl).toBeDefined();
+  });
+});
+

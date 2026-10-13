@@ -292,7 +292,8 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
-				thumbnail_url=excluded.thumbnail_url, published_at=excluded.published_at, synced_at=excluded.synced_at,
+				thumbnail_url=CASE WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url ELSE yt_playlists.thumbnail_url END,
+				published_at=excluded.published_at, synced_at=excluded.synced_at,
 				privacy=excluded.privacy`,
 				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime, privacy)
 

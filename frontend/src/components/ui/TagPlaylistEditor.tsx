@@ -11,6 +11,8 @@ import { backend } from "../../../wailsjs/go/models";
 import { YTPlaylist, PlaylistPrivacy, TagThumbnailConfig } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
 import { parseTagPlaylistConfig } from "../../utils/tagConfigParser";
+import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import TagThumbnailConfigSection from "./TagThumbnailConfigSection";
 
 export interface TagPlaylistEditorProps {
@@ -52,6 +54,17 @@ export default function TagPlaylistEditor({
   const [clipPrivacy, setClipPrivacy] = useState<PlaylistPrivacy>(
     () => useAppStore.getState().defaultPlaylistPrivacy,
   );
+
+  // Cover generation & upload state
+  const [applyCoverOnCreateVod, setApplyCoverOnCreateVod] = useState(true);
+  const [applyCoverOnCreateClip, setApplyCoverOnCreateClip] = useState(true);
+  const [updatingCoverType, setUpdatingCoverType] = useState<"vod" | "clip" | null>(null);
+  const [coverMessage, setCoverMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(tag, thumbConfig);
 
   useEffect(() => {
     setNewVodTitle(tag);
@@ -121,10 +134,25 @@ export default function TagPlaylistEditor({
     }
   };
 
+  const uploadPlaylistCoverImage = async (targetId: string) => {
+    const newThumbUrl = await generateAndUploadPlaylistCover({
+      playlistId: targetId,
+      baseImage,
+      logoImage,
+      gameTitle,
+      config: thumbConfig,
+    });
+    setPlaylists((prev) =>
+      prev.map((p) => (p.id === targetId ? { ...p, thumbnailUrl: newThumbUrl } : p))
+    );
+    return newThumbUrl;
+  };
+
   const handleCreateAndLinkVod = async () => {
     if (!newVodTitle.trim()) return;
     setIsCreating(true);
     setError("");
+    setCoverMessage(null);
     try {
       useAppStore.setState({ defaultPlaylistPrivacy: vodPrivacy });
       const id = await GetOrCreatePlaylist(newVodTitle.trim(), "", vodPrivacy);
@@ -132,6 +160,15 @@ export default function TagPlaylistEditor({
       setSelectedVodId(id);
       await SetTagPlaylistConfig(tag, id, clipPlaylistId);
       await SetTagPlaylist(tag, id);
+
+      if (applyCoverOnCreateVod) {
+        try {
+          await uploadPlaylistCoverImage(id);
+        } catch (coverErr) {
+          console.error("Failed to auto-apply cover thumbnail to VOD playlist:", coverErr);
+        }
+      }
+
       onSaved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -176,6 +213,7 @@ export default function TagPlaylistEditor({
     if (!newClipTitle.trim()) return;
     setIsCreating(true);
     setError("");
+    setCoverMessage(null);
     try {
       useAppStore.setState({ defaultPlaylistPrivacy: clipPrivacy });
       const id = await GetOrCreatePlaylist(
@@ -186,11 +224,41 @@ export default function TagPlaylistEditor({
       setClipPlaylistId(id);
       setSelectedClipId(id);
       await SetTagPlaylistConfig(tag, vodPlaylistId, id);
+
+      if (applyCoverOnCreateClip) {
+        try {
+          await uploadPlaylistCoverImage(id);
+        } catch (coverErr) {
+          console.error("Failed to auto-apply cover thumbnail to clip playlist:", coverErr);
+        }
+      }
+
       onSaved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleApplyCoverToLinked = async (type: "vod" | "clip", targetId: string) => {
+    if (!targetId || updatingCoverType) return;
+    setUpdatingCoverType(type);
+    setCoverMessage(null);
+    try {
+      await uploadPlaylistCoverImage(targetId);
+      setCoverMessage({
+        type: "success",
+        text: `Cover artwork uploaded to ${type === "vod" ? "VOD" : "Clips"} playlist!`,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCoverMessage({
+        type: "error",
+        text: msg.replace(/^Error:\s*/, ""),
+      });
+    } finally {
+      setUpdatingCoverType(null);
     }
   };
 
@@ -281,6 +349,18 @@ export default function TagPlaylistEditor({
         </div>
       )}
 
+      {coverMessage && (
+        <div
+          className={`text-xs px-3 py-2 rounded border ${
+            coverMessage.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border-red-500/30 text-red-400"
+          }`}
+        >
+          {coverMessage.text}
+        </div>
+      )}
+
       {/* Grid: VOD Playlist & Clip Playlist in one screen */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ─── VOD Playlist Card ─── */}
@@ -304,14 +384,27 @@ export default function TagPlaylistEditor({
                   {currentVodPlaylist.title}
                 </strong>
               </span>
-              <button
-                type="button"
-                className="text-[11px] text-red-400 hover:text-red-300 ml-2 underline cursor-pointer"
-                onClick={handleUnlinkVod}
-                disabled={isCreating}
-              >
-                Unlink
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {thumbConfig?.enabled && (
+                  <button
+                    type="button"
+                    className="text-[11px] text-accent hover:underline cursor-pointer font-medium"
+                    onClick={() => void handleApplyCoverToLinked("vod", currentVodPlaylist.id)}
+                    disabled={updatingCoverType !== null}
+                    title="Upload clean cover artwork to this playlist"
+                  >
+                    {updatingCoverType === "vod" ? "Uploading..." : "Update Cover"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-[11px] text-red-400 hover:text-red-300 underline cursor-pointer"
+                  onClick={handleUnlinkVod}
+                  disabled={isCreating}
+                >
+                  Unlink
+                </button>
+              </div>
             </div>
           ) : (
             <div className="text-xs text-text-muted italic px-1">
@@ -452,6 +545,20 @@ export default function TagPlaylistEditor({
                 </button>
               ))}
             </div>
+            <label
+              htmlFor="vod-apply-cover-checkbox"
+              className="text-[11px] text-text-secondary flex items-center gap-1.5 cursor-pointer select-none pt-0.5"
+            >
+              <input
+                id="vod-apply-cover-checkbox"
+                aria-label="Apply cover artwork automatically to VOD playlist"
+                type="checkbox"
+                className="checkbox checkbox-xs rounded border-border-subtle"
+                checked={applyCoverOnCreateVod}
+                onChange={(e) => setApplyCoverOnCreateVod(e.target.checked)}
+              />
+              <span>Apply cover artwork automatically</span>
+            </label>
           </div>
         </div>
 
@@ -476,14 +583,27 @@ export default function TagPlaylistEditor({
                   {currentClipPlaylist.title}
                 </strong>
               </span>
-              <button
-                type="button"
-                className="text-[11px] text-red-400 hover:text-red-300 ml-2 underline cursor-pointer"
-                onClick={handleUnlinkClip}
-                disabled={isCreating}
-              >
-                Unlink
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {thumbConfig?.enabled && (
+                  <button
+                    type="button"
+                    className="text-[11px] text-accent hover:underline cursor-pointer font-medium"
+                    onClick={() => void handleApplyCoverToLinked("clip", currentClipPlaylist.id)}
+                    disabled={updatingCoverType !== null}
+                    title="Upload clean cover artwork to this playlist"
+                  >
+                    {updatingCoverType === "clip" ? "Uploading..." : "Update Cover"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-[11px] text-red-400 hover:text-red-300 underline cursor-pointer"
+                  onClick={handleUnlinkClip}
+                  disabled={isCreating}
+                >
+                  Unlink
+                </button>
+              </div>
             </div>
           ) : (
             <div className="text-xs text-text-muted italic px-1">
@@ -624,6 +744,20 @@ export default function TagPlaylistEditor({
                 </button>
               ))}
             </div>
+            <label
+              htmlFor="clip-apply-cover-checkbox"
+              className="text-[11px] text-text-secondary flex items-center gap-1.5 cursor-pointer select-none pt-0.5"
+            >
+              <input
+                id="clip-apply-cover-checkbox"
+                aria-label="Apply cover artwork automatically to clip playlist"
+                type="checkbox"
+                className="checkbox checkbox-xs rounded border-border-subtle"
+                checked={applyCoverOnCreateClip}
+                onChange={(e) => setApplyCoverOnCreateClip(e.target.checked)}
+              />
+              <span>Apply cover artwork automatically</span>
+            </label>
           </div>
         </div>
       </div>
@@ -648,6 +782,13 @@ export default function TagPlaylistEditor({
           tag={tag}
           value={thumbConfig}
           onChange={setThumbConfig}
+          vodPlaylistId={vodPlaylistId}
+          clipPlaylistId={clipPlaylistId}
+          onPlaylistCoverUpdated={(plId, newThumbUrl) => {
+            setPlaylists((prev) =>
+              prev.map((p) => (p.id === plId ? { ...p, thumbnailUrl: newThumbUrl } : p))
+            );
+          }}
         />
       </div>
 

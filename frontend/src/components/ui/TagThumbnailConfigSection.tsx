@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   TagThumbnailConfig,
   EpisodeNumberPosition,
@@ -7,6 +7,7 @@ import {
 import { SelectCustomThumbnailImage } from "../../../wailsjs/go/backend/App";
 import { parseTagThumbnailConfig } from "../../utils/tagConfigParser";
 import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import ThumbnailCanvasEditor from "./ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "./ThumbnailFramingControls";
 import ThumbnailElementControls from "./ThumbnailElementControls";
@@ -15,6 +16,9 @@ export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
   readonly value?: TagThumbnailConfig;
   readonly onChange: (config: TagThumbnailConfig) => void;
+  readonly vodPlaylistId?: string;
+  readonly clipPlaylistId?: string;
+  readonly onPlaylistCoverUpdated?: (playlistId: string, thumbUrl: string) => void;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -40,6 +44,9 @@ export default function TagThumbnailConfigSection({
   tag,
   value,
   onChange,
+  vodPlaylistId,
+  clipPlaylistId,
+  onPlaylistCoverUpdated,
 }: TagThumbnailConfigSectionProps) {
   const parsed = parseTagThumbnailConfig(value);
   const config: TagThumbnailConfig = {
@@ -51,6 +58,40 @@ export default function TagThumbnailConfigSection({
 
   const { steamAssets, loadingAssets, baseImage, logoImage, gameTitle } =
     useThumbnailAssets(tag, config);
+
+  const [uploadingPlaylist, setUploadingPlaylist] = useState<"vod" | "clip" | null>(null);
+  const [coverStatus, setCoverStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const handleUploadCover = async (target: "vod" | "clip", targetId: string) => {
+    if (!targetId || uploadingPlaylist) return;
+    setUploadingPlaylist(target);
+    setCoverStatus(null);
+    try {
+      const newThumbUrl = await generateAndUploadPlaylistCover({
+        playlistId: targetId,
+        baseImage,
+        logoImage,
+        gameTitle,
+        config,
+      });
+      setCoverStatus({
+        type: "success",
+        message: `Cover updated for ${target === "vod" ? "VOD" : "Clips"} playlist!`,
+      });
+      onPlaylistCoverUpdated?.(targetId, newThumbUrl);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCoverStatus({
+        type: "error",
+        message: msg.replace(/^Error:\s*/, ""),
+      });
+    } finally {
+      setUploadingPlaylist(null);
+    }
+  };
 
   const update = (patch: Partial<TagThumbnailConfig>) => {
     onChange({
@@ -334,6 +375,67 @@ export default function TagThumbnailConfigSection({
                 </div>
               </div>
             </div>
+
+            {/* Playlist Cover Artwork Action Section */}
+            {(vodPlaylistId || clipPlaylistId) && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-border-subtle">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-text-primary">
+                    Playlist Cover Artwork
+                  </span>
+                  <span className="text-[10px] text-text-muted">
+                    No episode badges
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {vodPlaylistId && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm text-xs font-medium px-3 flex items-center gap-1.5"
+                      onClick={() => void handleUploadCover("vod", vodPlaylistId)}
+                      disabled={uploadingPlaylist !== null || loadingAssets}
+                    >
+                      {uploadingPlaylist === "vod" ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <span>Upload to VOD Playlist</span>
+                      )}
+                    </button>
+                  )}
+                  {clipPlaylistId && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm text-xs font-medium px-3 flex items-center gap-1.5"
+                      onClick={() => void handleUploadCover("clip", clipPlaylistId)}
+                      disabled={uploadingPlaylist !== null || loadingAssets}
+                    >
+                      {uploadingPlaylist === "clip" ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <span>Upload to Clips Playlist</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {coverStatus && (
+                  <div
+                    className={`text-xs px-2.5 py-1.5 rounded border ${
+                      coverStatus.type === "success"
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : "bg-red-500/10 border-red-500/30 text-red-400"
+                    }`}
+                  >
+                    {coverStatus.message}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

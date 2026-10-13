@@ -424,3 +424,36 @@ export function renderThumbnailToCanvas(
 
   return rects;
 }
+
+export interface PlaylistCoverOptions {
+  readonly width?: number;
+  readonly height?: number;
+  readonly framing?: ImageFraming;
+  readonly logo?: {
+    readonly image: HTMLImageElement | null;
+    readonly layout: ElementLayout & { readonly enabled: boolean };
+  };
+  readonly title?: {
+    readonly text: string;
+    readonly layout: ElementLayout & { readonly enabled: boolean; readonly color?: string };
+  };
+}
+
+export function renderPlaylistCoverToCanvas(
+  canvas: HTMLCanvasElement,
+  image: HTMLImageElement | null,
+  options: PlaylistCoverOptions
+): ThumbnailRects {
+  return renderThumbnailToCanvas(canvas, image, {
+    width: options.width,
+    height: options.height,
+    showEpisode: false,
+    episodeNumber: 0,
+    episodeFormat: "pad2",
+    position: "bottom-right",
+    framing: options.framing,
+    logo: options.logo,
+    title: options.title,
+  });
+}
+

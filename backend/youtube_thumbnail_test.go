@@ -208,3 +208,53 @@ func TestUpdateYouTubeThumbnail_RejectsEmptyArgs(t *testing.T) {
 		t.Errorf("expected error for empty imagePath, got: %v", err)
 	}
 }
+
+func TestSetYouTubePlaylistThumbnail_RejectsEmptyArgs(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.SetYouTubePlaylistThumbnail("", "some/path.jpg")
+	if err == nil || !strings.Contains(err.Error(), "playlistID cannot be empty") {
+		t.Errorf("expected error for empty playlistID, got: %v", err)
+	}
+
+	_, err = app.SetYouTubePlaylistThumbnail("pl-1", "")
+	if err == nil || !strings.Contains(err.Error(), "imagePath cannot be empty") {
+		t.Errorf("expected error for empty imagePath, got: %v", err)
+	}
+}
+
+func TestPersistPlaylistThumbnailURL(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, privacy)
+		VALUES ('pl-test-1', 'Test Playlist', 'Desc', 5, 'https://example.com/old.jpg', '2026-01-01', 'public')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test playlist: %v", err)
+	}
+
+	targetURL := "/cache/yt_thumbs/yt_custom_pl.jpg?v=12345"
+	err = app.persistPlaylistThumbnailURL("pl-test-1", targetURL)
+	if err != nil {
+		t.Fatalf("persistPlaylistThumbnailURL failed: %v", err)
+	}
+
+	var savedURL string
+	err = app.db.conn.QueryRow("SELECT thumbnail_url FROM yt_playlists WHERE id = 'pl-test-1'").Scan(&savedURL)
+	if err != nil {
+		t.Fatalf("failed to query thumbnail_url: %v", err)
+	}
+	if savedURL != targetURL {
+		t.Errorf("expected %s, got %s", targetURL, savedURL)
+	}
+
+	// Non-existent playlist does not error out
+	err = app.persistPlaylistThumbnailURL("non-existent-pl", "/cache/yt_thumbs/other.jpg")
+	if err != nil {
+		t.Errorf("expected non-existent playlist update to succeed without error, got: %v", err)
+	}
+}
+
