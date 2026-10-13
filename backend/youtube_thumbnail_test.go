@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/youtube/v3"
@@ -331,6 +332,84 @@ func TestEnsureSquareImage(t *testing.T) {
 	}
 	if cfg.Width != 180 || cfg.Height != 180 {
 		t.Errorf("expected 180x180 square, got %dx%d", cfg.Width, cfg.Height)
+	}
+}
+
+func TestLogAPICall_ThumbnailsSet(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, thumbnail_url)
+		VALUES ('vid-test-log', 'Elden Ring Episode 1', '')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	start := time.Now()
+	app.logAPICall("thumbnails.set", "vid-test-log", "Elden Ring Episode 1", QuotaThumbnailsSet, start, nil)
+
+	logs, err := app.GetAPILogs(10)
+	if err != nil {
+		t.Fatalf("GetAPILogs failed: %v", err)
+	}
+	if len(logs) == 0 {
+		t.Fatalf("expected at least 1 log entry, got 0")
+	}
+
+	found := false
+	for _, l := range logs {
+		if l.Operation == "thumbnails.set" && l.ResourceID == "vid-test-log" {
+			found = true
+			if l.QuotaCost != 50 {
+				t.Errorf("expected QuotaCost 50, got %d", l.QuotaCost)
+			}
+			if l.ResourceTitle != "Elden Ring Episode 1" {
+				t.Errorf("expected ResourceTitle 'Elden Ring Episode 1', got %q", l.ResourceTitle)
+			}
+			if !l.Success {
+				t.Errorf("expected success to be true")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("thumbnails.set operation not found in logs")
+	}
+
+	quotaToday, err := app.GetQuotaUsedToday()
+	if err != nil {
+		t.Fatalf("GetQuotaUsedToday failed: %v", err)
+	}
+	if quotaToday != 50 {
+		t.Errorf("expected quotaToday 50, got %d", quotaToday)
+	}
+}
+
+func TestQueryResourceTitle(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title) VALUES ('v1', 'Video Alpha');
+		INSERT INTO yt_playlists (id, title) VALUES ('p1', 'Playlist Omega');
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	if got := app.queryResourceTitle("yt_videos", "v1", "fallback"); got != "Video Alpha" {
+		t.Errorf("expected 'Video Alpha', got %q", got)
+	}
+	if got := app.queryResourceTitle("yt_videos", "unknown", "fallback.jpg"); got != "fallback.jpg" {
+		t.Errorf("expected 'fallback.jpg', got %q", got)
+	}
+	if got := app.queryResourceTitle("yt_playlists", "p1", "p1"); got != "Playlist Omega" {
+		t.Errorf("expected 'Playlist Omega', got %q", got)
+	}
+	if got := app.queryResourceTitle("yt_playlists", "unknown", "p_fallback"); got != "p_fallback" {
+		t.Errorf("expected 'p_fallback', got %q", got)
 	}
 }
 

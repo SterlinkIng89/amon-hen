@@ -119,6 +119,27 @@ func (a *App) persistThumbnailURL(videoID string, url string) error {
 	return err
 }
 
+// queryResourceTitle retrieves the title of a video or playlist from SQLite, returning fallback if unavailable.
+func (a *App) queryResourceTitle(table, id, fallback string) string {
+	if a.db == nil || id == "" {
+		return fallback
+	}
+
+	query := "SELECT title FROM yt_videos WHERE id = ?"
+	if table == "yt_playlists" {
+		query = "SELECT title FROM yt_playlists WHERE id = ?"
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	var title string
+	if err := a.db.conn.QueryRow(query, id).Scan(&title); err == nil && title != "" {
+		return title
+	}
+	return fallback
+}
+
 // setYouTubeThumbnailInternal validates the image, sends it to the YouTube API, and returns the resulting URL.
 func (a *App) setYouTubeThumbnailInternal(videoID string, imagePath string) (string, error) {
 	if videoID == "" {
@@ -143,8 +164,13 @@ func (a *App) setYouTubeThumbnailInternal(videoID string, imagePath string) (str
 		return "", fmt.Errorf("failed to get YouTube service: %w", err)
 	}
 
+	start := time.Now()
 	call := svc.Thumbnails.Set(videoID).Media(file)
 	resp, err := call.Do()
+
+	resTitle := a.queryResourceTitle("yt_videos", videoID, filepath.Base(imagePath))
+	a.logAPICall("thumbnails.set", videoID, resTitle, QuotaThumbnailsSet, start, err)
+
 	if err != nil {
 		appLog("[YouTube] Failed to set thumbnail for video %s: %v", videoID, err)
 		return "", friendlyThumbnailError(err)
@@ -280,7 +306,8 @@ func (a *App) setYouTubePlaylistThumbnailInternal(playlistID string, imagePath s
 	start := time.Now()
 	call := svc.PlaylistImages.Insert(resource).Part("snippet").Media(file)
 	_, err = call.Do()
-	a.logAPICall("playlistImages.insert", playlistID, playlistID, 50, start, err)
+	plTitle := a.queryResourceTitle("yt_playlists", playlistID, playlistID)
+	a.logAPICall("playlistImages.insert", playlistID, plTitle, QuotaPlaylistImagesInsert, start, err)
 	if err != nil {
 		appLog("[YouTube] Failed to set thumbnail for playlist %s: %v", playlistID, err)
 		return friendlyThumbnailError(err)
