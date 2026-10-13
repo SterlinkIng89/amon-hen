@@ -1,0 +1,153 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  ListCatalogPlaylists,
+  GetPlaylistCatalogDraft,
+  ApplyPlaylistCatalog,
+} from "../../wailsjs/go/backend/App";
+import { backend } from "../../wailsjs/go/models";
+
+export function usePlaylistCatalog() {
+  const [playlists, setPlaylists] = useState<backend.CatalogPlaylistSummary[]>([]);
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<backend.PlaylistCatalogDraft | null>(null);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  const [editedTag, setEditedTag] = useState<string>("");
+  const [editedEpisodes, setEditedEpisodes] = useState<Record<string, number>>({});
+
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applySuccess, setApplySuccess] = useState(false);
+
+  const loadPlaylists = useCallback(async () => {
+    setIsLoadingPlaylists(true);
+    setLoadError(null);
+    try {
+      const result = await ListCatalogPlaylists();
+      setPlaylists(result || []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setLoadError(message);
+    } finally {
+      setIsLoadingPlaylists(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPlaylists();
+  }, [loadPlaylists]);
+
+  const selectPlaylist = useCallback(async (playlistId: string) => {
+    setSelectedPlaylistId(playlistId);
+    setIsLoadingDraft(true);
+    setDraftError(null);
+    setApplyError(null);
+    setApplySuccess(false);
+
+    try {
+      const result = await GetPlaylistCatalogDraft(playlistId);
+      setDraft(result);
+      setEditedTag(result.tag || "");
+
+      const episodeMap: Record<string, number> = {};
+      if (result.videos) {
+        for (const vid of result.videos) {
+          episodeMap[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode || 1);
+        }
+      }
+      setEditedEpisodes(episodeMap);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setDraftError(message);
+      setDraft(null);
+    } finally {
+      setIsLoadingDraft(false);
+    }
+  }, []);
+
+  const setEpisode = useCallback((videoId: string, episode: number) => {
+    setEditedEpisodes((prev) => ({
+      ...prev,
+      [videoId]: episode,
+    }));
+  }, []);
+
+  // Check conflicts in editedEpisodes
+  const hasConflicts = useMemo(() => {
+    const seen = new Set<number>();
+    for (const ep of Object.values(editedEpisodes)) {
+      if (ep <= 0) return true;
+      if (seen.has(ep)) return true;
+      seen.add(ep);
+    }
+    return false;
+  }, [editedEpisodes]);
+
+  const canApply = useMemo(() => {
+    return (
+      !isApplying &&
+      editedTag.trim().length > 0 &&
+      !hasConflicts &&
+      (draft?.videos?.length ?? 0) > 0
+    );
+  }, [isApplying, editedTag, hasConflicts, draft?.videos?.length]);
+
+  const applyCatalog = useCallback(
+    async (): Promise<boolean> => {
+      if (!selectedPlaylistId || !canApply) return false;
+
+      setIsApplying(true);
+      setApplyError(null);
+      setApplySuccess(false);
+
+      try {
+        const req = backend.CatalogApplyRequest.createFrom({
+          playlistId: selectedPlaylistId,
+          tag: editedTag.trim(),
+          kind: draft?.kind || "vod",
+          assignments: Object.entries(editedEpisodes).map(([videoId, episode]) =>
+            backend.CatalogAssignment.createFrom({ videoId, episode })
+          ),
+        });
+
+        await ApplyPlaylistCatalog(req);
+        setApplySuccess(true);
+        await loadPlaylists();
+        return true;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setApplyError(message);
+        return false;
+      } finally {
+        setIsApplying(false);
+      }
+    },
+    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists]
+  );
+
+  return {
+    playlists,
+    isLoadingPlaylists,
+    loadError,
+    loadPlaylists,
+    selectedPlaylistId,
+    draft,
+    isLoadingDraft,
+    draftError,
+    selectPlaylist,
+    editedTag,
+    setEditedTag,
+    editedEpisodes,
+    setEpisode,
+    hasConflicts,
+    canApply,
+    isApplying,
+    applyError,
+    applySuccess,
+    applyCatalog,
+  };
+}

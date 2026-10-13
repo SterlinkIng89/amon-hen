@@ -16,7 +16,7 @@ export interface ThumbnailAssetsResult {
 
 export function useThumbnailAssets(
   tag: string,
-  config: TagThumbnailConfig
+  config?: TagThumbnailConfig
 ): ThumbnailAssetsResult {
   const [steamAssets, setSteamAssets] = useState<SteamGameArtwork | null>(null);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -59,15 +59,15 @@ export function useThumbnailAssets(
 
   const resolvedImageUrl = useMemo(() => {
     return resolveThumbnailImageUrl(
-      config.source_type,
-      config.custom_image_path,
-      config.steam_asset_type,
+      config?.source_type ?? "steam",
+      config?.custom_image_path,
+      config?.steam_asset_type ?? "header",
       steamAssets
     );
   }, [
-    config.source_type,
-    config.custom_image_path,
-    config.steam_asset_type,
+    config?.source_type,
+    config?.custom_image_path,
+    config?.steam_asset_type,
     steamAssets,
   ]);
 

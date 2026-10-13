@@ -166,16 +166,28 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		}
 	}
 
-	vRows, err := a.db.conn.Query(`SELECT id, local_file FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
+	type ytLinkedMeta struct {
+		id      string
+		gameTag string
+		episode int
+	}
+	ytMetaMap := make(map[string]ytLinkedMeta)
+
+	vRows, err := a.db.conn.Query(`SELECT id, local_file, COALESCE(game_tag, ''), COALESCE(episode, 0) FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
 	if err == nil {
 		defer vRows.Close()
 		for vRows.Next() {
 			var id string
 			var lpath sql.NullString
-			if err := vRows.Scan(&id, &lpath); err == nil {
+			var gTag string
+			var ep int
+			if err := vRows.Scan(&id, &lpath, &gTag, &ep); err == nil {
 				if lpath.Valid && lpath.String != "" {
 					pathMap[lpath.String] = id
 					linkedFiles[filepath.Base(lpath.String)] = id
+					metaVal := ytLinkedMeta{id: id, gameTag: gTag, episode: ep}
+					ytMetaMap[lpath.String] = metaVal
+					ytMetaMap[filepath.Base(lpath.String)] = metaVal
 				}
 			}
 		}
@@ -274,6 +286,19 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			if videos[vIdx].YouTubeID == "" {
 				if id, ok := linkedFiles[d.Name()]; ok {
 					videos[vIdx].YouTubeID = id
+				}
+			}
+
+			ym, hasMeta := ytMetaMap[path]
+			if !hasMeta {
+				ym, hasMeta = ytMetaMap[d.Name()]
+			}
+			if hasMeta {
+				if videos[vIdx].Game == "" && ym.gameTag != "" {
+					videos[vIdx].Game = ym.gameTag
+				}
+				if videos[vIdx].Episode == 0 && ym.episode > 0 && videos[vIdx].ContentType != "clip" {
+					videos[vIdx].Episode = ym.episode
 				}
 			}
 

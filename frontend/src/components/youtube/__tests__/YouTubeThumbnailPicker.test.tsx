@@ -15,6 +15,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
     posterUrl: "https://steam.cdn/poster.jpg",
   }),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue("C:/images/custom.png"),
+  UpdateYouTubeThumbnail: vi.fn().mockResolvedValue("https://yt.com/thumb_up.jpg"),
 }));
 
 describe("YouTubeThumbnailPicker", () => {
@@ -60,5 +61,41 @@ describe("YouTubeThumbnailPicker", () => {
     fireEvent.click(editBtn);
 
     expect(onOpenTagSettings).toHaveBeenCalled();
+  });
+
+  it("does not render 'Update on YouTube' button when youtubeId is missing", () => {
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={tagConfig}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: /update on youtube/i })).not.toBeInTheDocument();
+  });
+
+  it("renders 'Update on YouTube' button and handles save, push, and success callback", async () => {
+    const onYouTubeUpdated = vi.fn();
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={tagConfig}
+        youtubeId="yt-vid-999"
+        onYouTubeUpdated={onYouTubeUpdated}
+      />
+    );
+
+    const pushBtn = screen.getByRole("button", { name: /update on youtube/i });
+    expect(pushBtn).toBeInTheDocument();
+
+    fireEvent.click(pushBtn);
+
+    await waitFor(() => {
+      expect(onYouTubeUpdated).toHaveBeenCalledWith("https://yt.com/thumb_up.jpg");
+    });
   });
 });

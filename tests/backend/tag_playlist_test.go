@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"amon-hen/backend"
 )
 
 func TestTagPlaylistRetroactiveUpdate(t *testing.T) {
@@ -201,5 +203,48 @@ func TestGetVideosFromFolders_ClipRoutingAndTitles(t *testing.T) {
 				t.Errorf("Expected vod title 'Halo - 29/09/26 - 1', got '%s'", v.YouTubeTitle)
 			}
 		}
+	}
+}
+
+func TestTagThumbnailConfig_CaseInsensitiveSharing(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	// 1. Set template using Title Case from Library (e.g., "Control Resonant")
+	thumbCfg := backend.TagThumbnailConfig{
+		Enabled:         true,
+		SourceType:      "steam",
+		SteamAssetType:  "header",
+		EpisodePosition: "bottom-right",
+		EpisodeFormat:   "pad2",
+	}
+	err := app.SetTagThumbnailConfig("Control Resonant", thumbCfg)
+	if err != nil {
+		t.Fatalf("SetTagThumbnailConfig failed: %v", err)
+	}
+
+	// 2. Retrieve config from YouTube Catalog using lowercase "control resonant"
+	cfg1 := app.GetTagPlaylistConfig("control resonant")
+	if cfg1.ThumbnailConfig.SteamAssetType != "header" || !cfg1.ThumbnailConfig.Enabled {
+		t.Errorf("Expected lowercase query to resolve shared thumbnail template, got: %+v", cfg1.ThumbnailConfig)
+	}
+
+	// 3. Update template from YouTube Catalog using lowercase "control resonant"
+	updatedThumb := backend.TagThumbnailConfig{
+		Enabled:         true,
+		SourceType:      "steam",
+		SteamAssetType:  "hero",
+		EpisodePosition: "top-left",
+		EpisodeFormat:   "hash",
+	}
+	err = app.SetTagThumbnailConfig("control resonant", updatedThumb)
+	if err != nil {
+		t.Fatalf("SetTagThumbnailConfig update failed: %v", err)
+	}
+
+	// 4. Retrieve back in Library using original Title Case "Control Resonant"
+	cfg2 := app.GetTagPlaylistConfig("Control Resonant")
+	if cfg2.ThumbnailConfig.SteamAssetType != "hero" || cfg2.ThumbnailConfig.EpisodePosition != "top-left" {
+		t.Errorf("Expected Library Title Case to retrieve updated config, got: %+v", cfg2.ThumbnailConfig)
 	}
 }

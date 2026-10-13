@@ -20,6 +20,10 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   SetDefaultExportFolder: vi.fn().mockResolvedValue(undefined),
   SelectExportFolder: vi.fn().mockResolvedValue("/custom/export"),
   ExportVideos: vi.fn().mockResolvedValue({ successCount: 2, failedCount: 0, exportedPaths: [], errors: [] }),
+  GetSteamAppID: vi.fn().mockResolvedValue(""),
+  GetSteamGameAssets: vi.fn().mockResolvedValue(null),
+  GetTagPlaylistConfig: vi.fn().mockResolvedValue(null),
+  UpdateYouTubeThumbnail: vi.fn().mockResolvedValue(""),
 }));
 
 const mockVideos: VideoFile[] = [
@@ -139,6 +143,45 @@ describe("BulkActionBar ContentType routing", () => {
     await waitFor(() => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(screen.getByText("Export Videos")).toBeInTheDocument();
+    });
+  });
+
+  it("renders Thumbnails button and opens BulkThumbnailModal when videos share a tag and have youtubeIds", async () => {
+    const ytVideos: VideoFile[] = [
+      {
+        ...mockVideos[0],
+        youtubeId: "yt-1",
+        game: "Control",
+        episode: 1,
+      },
+      {
+        ...mockVideos[1],
+        youtubeId: "yt-2",
+        game: "Control",
+        episode: 2,
+      },
+    ];
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={ytVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const thumbBtn = screen.getByRole("button", { name: /Thumbnails \(2\)/i });
+    expect(thumbBtn).toBeInTheDocument();
+
+    fireEvent.click(thumbBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Update YouTube Thumbnails")).toBeInTheDocument();
+      expect(screen.getByText(/Control/i)).toBeInTheDocument();
     });
   });
 });

@@ -15,7 +15,8 @@ func setupTestDB(t *testing.T) *App {
 	}
 
 	app := &App{
-		db: &DB{conn: conn},
+		db:       &DB{conn: conn},
+		thumbSem: make(chan struct{}, 2),
 	}
 
 	if err := app.db.migrate(); err != nil {
@@ -99,5 +100,32 @@ func TestGetChannelPlaylists_DuplicateCount(t *testing.T) {
 	}
 	if p3.DuplicateCount != 0 {
 		t.Errorf("pl-3 DuplicateCount expected 0, got %d", p3.DuplicateCount)
+	}
+}
+
+func TestGetChannelVideos_IncludesGameTag(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, game_tag, episode)
+		VALUES ('vid-tag-1', 'Hades Ep 1', '2026-01-01T00:00:00Z', 'Hades', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	res, err := app.GetChannelVideosPaginated(1, 10, "recent", "", "", "")
+	if err != nil {
+		t.Fatalf("GetChannelVideosPaginated failed: %v", err)
+	}
+
+	videos, ok := res["videos"].([]YTVideo)
+	if !ok || len(videos) == 0 {
+		t.Fatalf("expected at least 1 video, got %v", res)
+	}
+
+	if videos[0].GameTag != "Hades" {
+		t.Errorf("expected GameTag 'Hades', got %q", videos[0].GameTag)
 	}
 }

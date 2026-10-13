@@ -7,6 +7,7 @@ import {
   SetTagThumbnailConfig,
   LoadConfig,
 } from "../../../wailsjs/go/backend/App";
+import { backend } from "../../../wailsjs/go/models";
 import { YTPlaylist, PlaylistPrivacy, TagThumbnailConfig } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
 import { parseTagPlaylistConfig } from "../../utils/tagConfigParser";
@@ -28,7 +29,9 @@ export default function TagPlaylistEditor({
   // Playlist State
   const [vodPlaylistId, setVodPlaylistId] = useState("");
   const [clipPlaylistId, setClipPlaylistId] = useState("");
-  const [thumbConfig, setThumbConfig] = useState<TagThumbnailConfig | undefined>(undefined);
+  const [thumbConfig, setThumbConfig] = useState<
+    TagThumbnailConfig | undefined
+  >(undefined);
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -175,7 +178,11 @@ export default function TagPlaylistEditor({
     setError("");
     try {
       useAppStore.setState({ defaultPlaylistPrivacy: clipPrivacy });
-      const id = await GetOrCreatePlaylist(newClipTitle.trim(), "", clipPrivacy);
+      const id = await GetOrCreatePlaylist(
+        newClipTitle.trim(),
+        "",
+        clipPrivacy,
+      );
       setClipPlaylistId(id);
       setSelectedClipId(id);
       await SetTagPlaylistConfig(tag, vodPlaylistId, id);
@@ -208,7 +215,10 @@ export default function TagPlaylistEditor({
     setError("");
     try {
       if (thumbConfig) {
-        await SetTagThumbnailConfig(tag, thumbConfig);
+        await SetTagThumbnailConfig(
+          tag,
+          backend.TagThumbnailConfig.createFrom(thumbConfig),
+        );
       }
       onSaved();
     } catch (e: unknown) {
@@ -234,7 +244,10 @@ export default function TagPlaylistEditor({
       <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
         <div>
           <h2 className="text-base font-bold text-text-primary m-0 flex items-center gap-2">
-            Settings for <span data-testid="editor-tag-name" className="text-accent">"{tag}"</span>
+            Settings for{" "}
+            <span data-testid="editor-tag-name" className="text-accent">
+              "{tag}"
+            </span>
           </h2>
         </div>
 
@@ -286,7 +299,10 @@ export default function TagPlaylistEditor({
           {currentVodPlaylist ? (
             <div className="flex items-center justify-between px-3 py-2 rounded bg-card border border-border-subtle text-xs">
               <span className="text-text-secondary truncate">
-                Linked: <strong className="text-text-primary">{currentVodPlaylist.title}</strong>
+                Linked:{" "}
+                <strong className="text-text-primary">
+                  {currentVodPlaylist.title}
+                </strong>
               </span>
               <button
                 type="button"
@@ -305,7 +321,10 @@ export default function TagPlaylistEditor({
 
           {/* Link Existing VOD */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border-subtle">
-            <label htmlFor="vod-playlist-search-input" className="text-xs font-bold text-text-secondary">
+            <label
+              htmlFor="vod-playlist-search-input"
+              className="text-xs font-bold text-text-secondary"
+            >
               Link Existing Playlist
             </label>
             <div className="relative flex items-center">
@@ -340,7 +359,14 @@ export default function TagPlaylistEditor({
                   className="absolute right-2 text-xs text-text-muted hover:text-text-primary p-0.5 cursor-pointer"
                   aria-label="Clear playlist search"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -353,7 +379,9 @@ export default function TagPlaylistEditor({
                 className="flex-1 min-w-0 h-[34px] bg-surface border border-border-subtle rounded px-2 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
                 value={selectedVodId}
                 onChange={(e) => setSelectedVodId(e.target.value)}
-                disabled={isLoading || isCreating || filteredVodPlaylists.length === 0}
+                disabled={
+                  isLoading || isCreating || filteredVodPlaylists.length === 0
+                }
                 aria-label="Select playlist"
               >
                 <option value="">
@@ -402,7 +430,9 @@ export default function TagPlaylistEditor({
               </button>
             </div>
             <div className="flex items-center gap-1.5 pt-0.5">
-              <span className="text-[11px] text-text-muted mr-1 font-medium">Visibility:</span>
+              <span className="text-[11px] text-text-muted mr-1 font-medium">
+                Visibility:
+              </span>
               {(["public", "unlisted", "private"] as const).map((p) => (
                 <button
                   key={p}
@@ -441,7 +471,10 @@ export default function TagPlaylistEditor({
           {currentClipPlaylist ? (
             <div className="flex items-center justify-between px-3 py-2 rounded bg-card border border-border-subtle text-xs">
               <span className="text-text-secondary truncate">
-                Linked: <strong className="text-text-primary">{currentClipPlaylist.title}</strong>
+                Linked:{" "}
+                <strong className="text-text-primary">
+                  {currentClipPlaylist.title}
+                </strong>
               </span>
               <button
                 type="button"
@@ -460,7 +493,10 @@ export default function TagPlaylistEditor({
 
           {/* Link Existing Clip */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border-subtle">
-            <label htmlFor="clip-playlist-search-input" className="text-xs font-bold text-text-secondary">
+            <label
+              htmlFor="clip-playlist-search-input"
+              className="text-xs font-bold text-text-secondary"
+            >
               Link Existing Playlist
             </label>
             <div className="relative flex items-center">
@@ -495,7 +531,14 @@ export default function TagPlaylistEditor({
                   className="absolute right-2 text-xs text-text-muted hover:text-text-primary p-0.5 cursor-pointer"
                   aria-label="Clear playlist search"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -508,7 +551,9 @@ export default function TagPlaylistEditor({
                 className="flex-1 min-w-0 h-[34px] bg-surface border border-border-subtle rounded px-2 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
                 value={selectedClipId}
                 onChange={(e) => setSelectedClipId(e.target.value)}
-                disabled={isLoading || isCreating || filteredClipPlaylists.length === 0}
+                disabled={
+                  isLoading || isCreating || filteredClipPlaylists.length === 0
+                }
                 aria-label="Select clip playlist"
               >
                 <option value="">
@@ -557,7 +602,9 @@ export default function TagPlaylistEditor({
               </button>
             </div>
             <div className="flex items-center gap-1.5 pt-0.5">
-              <span className="text-[11px] text-text-muted mr-1 font-medium">Visibility:</span>
+              <span className="text-[11px] text-text-muted mr-1 font-medium">
+                Visibility:
+              </span>
               {(["public", "unlisted", "private"] as const).map((p) => (
                 <button
                   key={p}

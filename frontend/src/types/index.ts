@@ -127,10 +127,40 @@ export interface YTVideo {
   localFile?: string;
   playlistTitle?: string;
   episode?: number;
+  gameTag?: string;
   monetizationStatus?:
     "monetized" | "limited" | "demonetized" | "unknown" | string;
   rejectionReason?: string;
   statusIssues?: string[];
+}
+
+export interface CatalogVideoDraft {
+  readonly videoId: string;
+  readonly title: string;
+  readonly publishedAt: string;
+  readonly thumbnailUrl: string;
+  readonly localFile?: string;
+  readonly position: number;
+  readonly existingEpisode: number;
+  readonly episode: number;
+  readonly source: "db" | "title" | "order" | "none";
+  readonly conflict: boolean;
+}
+
+export type BatchItemStatus =
+  | "pending"
+  | "rendering"
+  | "uploading"
+  | "done"
+  | "failed"
+  | "skipped";
+
+export interface BatchItem {
+  readonly videoId: string;
+  readonly episode: number;
+  readonly cacheKey: string;
+  readonly status: BatchItemStatus;
+  readonly error?: string;
 }
 
 export interface YTPlaylist {

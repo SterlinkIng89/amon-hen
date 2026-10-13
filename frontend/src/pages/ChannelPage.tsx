@@ -27,9 +27,10 @@ import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
 import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
+import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 
 export default function ChannelPage() {
-  const [activeTab, setActiveTab] = useState<"videos" | "playlists">("videos");
+  const [activeTab, setActiveTab] = useState<"videos" | "playlists" | "catalog">("videos");
   const [playlistSort, setPlaylistSort] = useState<
     "recent" | "title" | "videos" | "updated"
   >(() => (localStorage.getItem("ch:playlistSort_v2") as any) || "updated");
@@ -149,7 +150,7 @@ export default function ChannelPage() {
     loadMoreRef,
     loadData,
   } = useChannelData({
-    activeTab,
+    activeTab: activeTab === "catalog" ? "playlists" : activeTab,
     videoSort,
     playlistSort,
     debouncedSearch,
@@ -757,7 +758,7 @@ export default function ChannelPage() {
           {/* Tab switcher */}
           {!selectedPlaylist && (
             <div className="flex items-center gap-1 bg-elevated/50 p-0.5 rounded-lg border border-border-subtle shrink-0">
-              {(["videos", "playlists"] as const).map((tab) => (
+              {(["videos", "playlists", "catalog"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => {
@@ -774,37 +775,15 @@ export default function ChannelPage() {
             </div>
           )}
 
-          {/* Search */}
-          <div className="relative group flex-1 min-w-[160px] max-w-[340px]">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder={`Search ${selectedPlaylist ? "in playlist" : activeTab}…`}
-              className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-8 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
-              >
+          {/* Search & Filters (hidden in catalog mode which has its own playlist sidebar) */}
+          {activeTab !== "catalog" && (
+            <>
+              {/* Search */}
+              <div className="relative group flex-1 min-w-[160px] max-w-[340px]">
                 <svg
-                  width="11"
-                  height="11"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -812,156 +791,189 @@ export default function ChannelPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
-              </button>
-            )}
-          </div>
+                <input
+                  type="text"
+                  placeholder={`Search ${selectedPlaylist ? "in playlist" : activeTab}…`}
+                  className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-8 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
 
-          {/* ── Advanced Filters component ── */}
-          <AdvancedFilters
-            value={filters.value}
-            onChange={filters.onChange}
-            analyticsDate={analyticsDate}
-            onClearAnalyticsDate={() => setAnalyticsDate("")}
-            align="right"
-          />
+              {/* ── Advanced Filters component ── */}
+              <AdvancedFilters
+                value={filters.value}
+                onChange={filters.onChange}
+                analyticsDate={analyticsDate}
+                onClearAnalyticsDate={() => setAnalyticsDate("")}
+                align="right"
+              />
 
-          {/* Active chips (shown when panel is closed) */}
-          <ActiveFilterChips
-            value={filters.value}
-            analyticsDate={analyticsDate}
-            onClearDateRange={() =>
-              filters.onChange({ ...filters.value, dateFrom: "", dateTo: "" })
-            }
-            onClearAnalyticsDate={() => setAnalyticsDate("")}
-            onClearExcludeWords={() =>
-              filters.onChange({ ...filters.value, excludeWords: [] })
-            }
-          />
+              {/* Active chips (shown when panel is closed) */}
+              <ActiveFilterChips
+                value={filters.value}
+                analyticsDate={analyticsDate}
+                onClearDateRange={() =>
+                  filters.onChange({ ...filters.value, dateFrom: "", dateTo: "" })
+                }
+                onClearAnalyticsDate={() => setAnalyticsDate("")}
+                onClearExcludeWords={() =>
+                  filters.onChange({ ...filters.value, excludeWords: [] })
+                }
+              />
+            </>
+          )}
 
           {/* Right controls */}
           <div className="flex items-center gap-2 ml-auto shrink-0">
-            {/* Analytics toggle */}
-            <button
-              onClick={() => setShowAnalytics((v) => !v)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${showAnalytics ? "bg-accent/10 border-accent/40 text-accent" : "bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"}`}
-              title={
-                showAnalytics ? "Hide analytics" : "Show channel analytics"
-              }
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" />
-              </svg>
-              Analytics
-            </button>
-
-            <div className="w-px h-4 bg-border-subtle" />
-
-            {/* Grid / List toggle */}
-            <div className="flex items-center gap-0.5 bg-elevated/50 p-0.5 rounded-lg border border-border-subtle">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded transition-all ${viewMode === "grid" ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"}`}
-                title="Grid view"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            {activeTab !== "catalog" && (
+              <>
+                {/* Analytics toggle */}
+                <button
+                  onClick={() => setShowAnalytics((v) => !v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${showAnalytics ? "bg-accent/10 border-accent/40 text-accent" : "bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"}`}
+                  title={
+                    showAnalytics ? "Hide analytics" : "Show channel analytics"
+                  }
                 >
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded transition-all ${viewMode === "list" ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"}`}
-                title="List view"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" />
+                  </svg>
+                  Analytics
+                </button>
+
+                <div className="w-px h-4 bg-border-subtle" />
+
+                {/* Grid / List toggle */}
+                <div className="flex items-center gap-0.5 bg-elevated/50 p-0.5 rounded-lg border border-border-subtle">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`p-1.5 rounded transition-all ${viewMode === "grid" ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"}`}
+                    title="Grid view"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="3" width="7" height="7" />
+                      <rect x="14" y="3" width="7" height="7" />
+                      <rect x="14" y="14" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`p-1.5 rounded transition-all ${viewMode === "list" ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"}`}
+                    title="List view"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="8" y1="6" x2="21" y2="6" />
+                      <line x1="8" y1="12" x2="21" y2="12" />
+                      <line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" />
+                      <line x1="3" y1="12" x2="3.01" y2="12" />
+                      <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="w-px h-4 bg-border-subtle" />
+
+                {/* Sort */}
+                <select
+                  className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
+                  value={
+                    activeTab === "videos" || selectedPlaylist
+                      ? videoSort
+                      : playlistSort
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    if (activeTab === "videos" || selectedPlaylist)
+                      setVideoSort(val);
+                    else setPlaylistSort(val);
+                  }}
                 >
-                  <line x1="8" y1="6" x2="21" y2="6" />
-                  <line x1="8" y1="12" x2="21" y2="12" />
-                  <line x1="8" y1="18" x2="21" y2="18" />
-                  <line x1="3" y1="6" x2="3.01" y2="6" />
-                  <line x1="3" y1="12" x2="3.01" y2="12" />
-                  <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
-              </button>
-            </div>
+                  {activeTab === "videos" || selectedPlaylist ? (
+                    <>
+                      <option value="recent">Most recent</option>
+                      <option value="title_date">Date in title</option>
+                      <option value="views">Most viewed</option>
+                      <option value="title">A–Z title</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="recent">Recently created</option>
+                      <option value="updated">Recently updated</option>
+                      <option value="title">A–Z title</option>
+                      <option value="videos">Most videos</option>
+                    </>
+                  )}
+                </select>
 
-            <div className="w-px h-4 bg-border-subtle" />
+                <div className="w-px h-4 bg-border-subtle" />
 
-            {/* Sort */}
-            <select
-              className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
-              value={
-                activeTab === "videos" || selectedPlaylist
-                  ? videoSort
-                  : playlistSort
-              }
-              onChange={(e) => {
-                const val = e.target.value as any;
-                if (activeTab === "videos" || selectedPlaylist)
-                  setVideoSort(val);
-                else setPlaylistSort(val);
-              }}
-            >
-              {activeTab === "videos" || selectedPlaylist ? (
-                <>
-                  <option value="recent">Most recent</option>
-                  <option value="title_date">Date in title</option>
-                  <option value="views">Most viewed</option>
-                  <option value="title">A–Z title</option>
-                </>
-              ) : (
-                <>
-                  <option value="recent">Recently created</option>
-                  <option value="updated">Recently updated</option>
-                  <option value="title">A–Z title</option>
-                  <option value="videos">Most videos</option>
-                </>
-              )}
-            </select>
+                {/* Autoplay toggle */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-elevated/30 border border-border-subtle rounded-lg">
+                  <span className="text-[10px] font-bold text-text-muted">
+                    Autoplay
+                  </span>
+                  <button
+                    onClick={() => setAutoplay(!autoplay)}
+                    className={`w-7 h-3.5 rounded-full transition-all relative ${autoplay ? "bg-accent" : "bg-surface border border-border-subtle"}`}
+                  >
+                    <div
+                      className={`absolute top-[1px] w-2.5 h-2.5 rounded-full transition-all ${autoplay ? "right-[1.5px] bg-white" : "left-[1.5px] bg-text-muted"}`}
+                    />
+                  </button>
+                </div>
 
-            <div className="w-px h-4 bg-border-subtle" />
-
-            {/* Autoplay toggle */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-elevated/30 border border-border-subtle rounded-lg">
-              <span className="text-[10px] font-bold text-text-muted">
-                Autoplay
-              </span>
-              <button
-                onClick={() => setAutoplay(!autoplay)}
-                className={`w-7 h-3.5 rounded-full transition-all relative ${autoplay ? "bg-accent" : "bg-surface border border-border-subtle"}`}
-              >
-                <div
-                  className={`absolute top-[1px] w-2.5 h-2.5 rounded-full transition-all ${autoplay ? "right-[1.5px] bg-white" : "left-[1.5px] bg-text-muted"}`}
-                />
-              </button>
-            </div>
+                <div className="w-px h-4 bg-border-subtle" />
+              </>
+            )}
 
             {/* Sync */}
             <div className="flex items-center gap-2">
@@ -1239,6 +1251,10 @@ export default function ChannelPage() {
               />
             </ErrorBoundary>
           </main>
+        </div>
+      ) : activeTab === "catalog" ? (
+        <div className="flex-1 flex overflow-hidden">
+          <PlaylistCatalogPanel />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">

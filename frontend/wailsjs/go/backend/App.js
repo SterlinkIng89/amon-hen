@@ -10,6 +10,10 @@ export function AddVideoToPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['AddVideoToPlaylist'](arg1, arg2);
 }
 
+export function ApplyPlaylistCatalog(arg1) {
+  return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
+}
+
 export function CacheHandler() {
   return window['go']['backend']['App']['CacheHandler']();
 }
@@ -108,6 +112,10 @@ export function GetFolderSettings(arg1) {
 
 export function GetOrCreatePlaylist(arg1, arg2, arg3) {
   return window['go']['backend']['App']['GetOrCreatePlaylist'](arg1, arg2, arg3);
+}
+
+export function GetPlaylistCatalogDraft(arg1) {
+  return window['go']['backend']['App']['GetPlaylistCatalogDraft'](arg1);
 }
 
 export function GetPlaylistVideos(arg1) {
@@ -232,6 +240,10 @@ export function IsYouTubeAuthed() {
 
 export function LinkLocalToYouTube(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['LinkLocalToYouTube'](arg1, arg2, arg3, arg4);
+}
+
+export function ListCatalogPlaylists() {
+  return window['go']['backend']['App']['ListCatalogPlaylists']();
 }
 
 export function LoadConfig() {
@@ -400,6 +412,10 @@ export function UpdatePlaylistsVisibility(arg1, arg2) {
 
 export function UpdateVideoMonetizationStatus(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateVideoMonetizationStatus'](arg1, arg2, arg3, arg4);
+}
+
+export function UpdateYouTubeThumbnail(arg1, arg2) {
+  return window['go']['backend']['App']['UpdateYouTubeThumbnail'](arg1, arg2);
 }
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {

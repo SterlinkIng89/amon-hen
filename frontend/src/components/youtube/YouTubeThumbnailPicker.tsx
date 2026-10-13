@@ -9,12 +9,13 @@ import {
   SaveCustomThumbnail,
   DeleteCustomThumbnail,
   SelectCustomThumbnailImage,
+  UpdateYouTubeThumbnail,
 } from "../../../wailsjs/go/backend/App";
 import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
 import ThumbnailCanvasEditor from "../ui/ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "../ui/ThumbnailFramingControls";
 import ThumbnailElementControls from "../ui/ThumbnailElementControls";
-import { renderThumbnailToCanvas } from "../../utils/thumbnailGenerator";
+import { renderTagThumbnailDataUrl } from "../../utils/thumbnailRender";
 
 export interface YouTubeThumbnailPickerProps {
   readonly videoPath: string;
@@ -23,6 +24,8 @@ export interface YouTubeThumbnailPickerProps {
   readonly tagThumbnailConfig?: TagThumbnailConfig;
   readonly onThumbnailReady?: (savedPath: string | null) => void;
   readonly onOpenTagSettings?: () => void;
+  readonly youtubeId?: string;
+  readonly onYouTubeUpdated?: (newThumbnailUrl: string) => void;
 }
 
 export default function YouTubeThumbnailPicker({
@@ -32,10 +35,20 @@ export default function YouTubeThumbnailPicker({
   tagThumbnailConfig,
   onThumbnailReady,
   onOpenTagSettings,
+  youtubeId,
+  onYouTubeUpdated,
 }: YouTubeThumbnailPickerProps) {
   const [customThumbUrl, setCustomThumbUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
+
+  type PushState =
+    | { status: "idle" }
+    | { status: "pushing" }
+    | { status: "success" }
+    | { status: "error"; message: string };
+
+  const [pushState, setPushState] = useState<PushState>({ status: "idle" });
 
   // Local overrides if user customizes specifically for this video
   const [localConfig, setLocalConfig] = useState<TagThumbnailConfig>(() => ({
@@ -85,44 +98,43 @@ export default function YouTubeThumbnailPicker({
 
   const { steamAssets, baseImage, logoImage, gameTitle } = useThumbnailAssets(gameTag, localConfig);
 
+  const exportAndSave = async (): Promise<string> => {
+    const dataUrl = renderTagThumbnailDataUrl({
+      baseImage,
+      logoImage,
+      gameTitle,
+      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
+      config: localConfig,
+    });
+    const savedPath = await SaveCustomThumbnail(videoPath, dataUrl);
+    setCustomThumbUrl(savedPath);
+    onThumbnailReady?.(savedPath);
+    return savedPath;
+  };
+
   const handleSaveThumbnail = async () => {
     if (!videoPath) return;
     setIsSaving(true);
     try {
-      // Offscreen canvas at full 1280x720 resolution
-      const exportCanvas = document.createElement("canvas");
-      exportCanvas.width = 1280;
-      exportCanvas.height = 720;
-      renderThumbnailToCanvas(exportCanvas, baseImage, {
-        showEpisode: true,
-        episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
-        episodeFormat: localConfig.episode_format || "pad2",
-        position: localConfig.episode_position || "bottom-right",
-        fontColor: localConfig.font_color || "#ffffff",
-        framing: localConfig.image_framing,
-        episodeLayout: localConfig.episode_layout,
-        logo: localConfig.logo?.enabled
-          ? {
-              image: logoImage,
-              layout: localConfig.logo,
-            }
-          : undefined,
-        title: localConfig.title?.enabled
-          ? {
-              text: localConfig.title.text_override || gameTitle,
-              layout: localConfig.title,
-            }
-          : undefined,
-      });
-
-      const dataUrl = exportCanvas.toDataURL("image/jpeg", 0.92);
-      const savedPath = await SaveCustomThumbnail(videoPath, dataUrl);
-      setCustomThumbUrl(savedPath);
-      onThumbnailReady?.(savedPath);
+      await exportAndSave();
     } catch (err) {
       console.error("Failed to save custom thumbnail", err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePushToYouTube = async () => {
+    if (!videoPath || !youtubeId) return;
+    setPushState({ status: "pushing" });
+    try {
+      const savedPath = await exportAndSave();
+      const updatedUrl = await UpdateYouTubeThumbnail(youtubeId, savedPath);
+      setPushState({ status: "success" });
+      onYouTubeUpdated?.(updatedUrl);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPushState({ status: "error", message: msg });
     }
   };
 
@@ -236,6 +248,29 @@ export default function YouTubeThumbnailPicker({
               >
                 {isSaving ? "Saving..." : customThumbUrl ? "Update Thumbnail" : "Apply as YouTube Thumbnail"}
               </button>
+
+              {youtubeId && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs text-xs py-1 text-accent border border-accent/30 hover:bg-accent/10"
+                  onClick={handlePushToYouTube}
+                  disabled={pushState.status === "pushing"}
+                >
+                  {pushState.status === "pushing" ? "Updating on YouTube..." : "Update on YouTube"}
+                </button>
+              )}
+
+              {pushState.status === "error" && (
+                <p role="alert" className="text-[11px] text-red-400">
+                  {pushState.message}
+                </p>
+              )}
+
+              {pushState.status === "success" && (
+                <p className="text-[11px] text-emerald-400">
+                  Thumbnail updated on YouTube
+                </p>
+              )}
 
               <button
                 type="button"

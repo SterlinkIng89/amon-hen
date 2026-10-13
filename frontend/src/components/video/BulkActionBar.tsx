@@ -19,6 +19,7 @@ import { useAppStore } from "../../store/useAppStore";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import ExportModal from "./ExportModal";
+import { BulkThumbnailModal } from "./BulkThumbnailModal";
 
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -80,7 +81,16 @@ export default function BulkActionBar({
   const [contentTypeOverride, setContentTypeOverride] = useState("auto");
   const [savingContentType, setSavingContentType] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
   const [titleSeparator, setTitleSeparator] = useState(" - ");
+
+  // Check if selected videos have YouTube IDs and share a single game tag
+  const ytVideosWithTag = selectedVideos.filter((v) => Boolean(v.youtubeId && v.game));
+  const uniqueTags = Array.from(
+    new Set(ytVideosWithTag.map((v) => v.game?.trim()).filter(Boolean))
+  );
+  const canBatchThumbnails = ytVideosWithTag.length > 0 && uniqueTags.length === 1;
+  const commonTag = canBatchThumbnails ? (uniqueTags[0] as string) : "";
 
   useEffect(() => {
     if (selectedVideos.length > 0) {
@@ -633,6 +643,35 @@ export default function BulkActionBar({
         </button>
         <div className="w-px h-5 bg-white/10" />
 
+        {/* YouTube thumbnail batch sync */}
+        {canBatchThumbnails && (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm flex items-center gap-1.5"
+              onClick={() => setThumbnailModalOpen(true)}
+              title={`Update YouTube thumbnails for ${ytVideosWithTag.length} video${ytVideosWithTag.length > 1 ? "s" : ""}`}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+              Thumbnails ({ytVideosWithTag.length})
+            </button>
+            <div className="w-px h-5 bg-white/10" />
+          </>
+        )}
+
         {/* Delete action */}
         {confirmDelete ? (
           <div className="flex items-center gap-2">
@@ -689,6 +728,16 @@ export default function BulkActionBar({
               .catch(() => {});
             performSave();
           }}
+        />
+      )}
+
+      {thumbnailModalOpen && (
+        <BulkThumbnailModal
+          isOpen={thumbnailModalOpen}
+          onClose={() => setThumbnailModalOpen(false)}
+          tag={commonTag}
+          videos={ytVideosWithTag}
+          onCompleted={onRescanOnly}
         />
       )}
     </div>

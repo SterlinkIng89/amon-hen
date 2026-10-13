@@ -6,6 +6,7 @@ import {
   SetTagPlaylist,
   SetTagThumbnailConfig,
 } from "../../../wailsjs/go/backend/App";
+import { backend } from "../../../wailsjs/go/models";
 import TagThumbnailConfigSection from "../ui/TagThumbnailConfigSection";
 
 export interface TagPlaylistsSectionProps {
@@ -110,7 +111,10 @@ export default function TagPlaylistsSection({
     try {
       await SetTagPlaylist(selectedTag, selectedPlaylistForTag);
       if (tagThumbConfig) {
-        await SetTagThumbnailConfig(selectedTag, tagThumbConfig);
+        await SetTagThumbnailConfig(
+          selectedTag,
+          new backend.TagThumbnailConfig(tagThumbConfig),
+        );
         setTagPlaylistConfigs((prev) => ({
           ...prev,
           [selectedTag]: {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -409,7 +410,8 @@ func (a *App) SetTagPlaylist(tag string, playlistID string) error {
 
 // SetTagPlaylistConfig updates both VOD and Clip playlist IDs for a given tag.
 func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylistID string) error {
-	if tag == "" {
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
 	a.configMu.Lock()
@@ -419,12 +421,21 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 	if a.config.TagPlaylists == nil {
 		a.config.TagPlaylists = make(map[string]string)
 	}
-	existing := a.config.TagPlaylistConfigs[tag]
+
+	canonicalKey := cleanTag
+	for k := range a.config.TagPlaylistConfigs {
+		if strings.EqualFold(k, cleanTag) {
+			canonicalKey = k
+			break
+		}
+	}
+
+	existing := a.config.TagPlaylistConfigs[canonicalKey]
 	existing.VodPlaylistID = vodPlaylistID
 	existing.ClipPlaylistID = clipPlaylistID
-	a.config.TagPlaylistConfigs[tag] = existing
+	a.config.TagPlaylistConfigs[canonicalKey] = existing
 	// Keep TagPlaylists backward compatible with VOD playlist
-	a.config.TagPlaylists[tag] = vodPlaylistID
+	a.config.TagPlaylists[canonicalKey] = vodPlaylistID
 	a.configMu.Unlock()
 
 	return a.saveConfig()
@@ -432,16 +443,26 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 
 // SetTagThumbnailConfig updates the automated thumbnail template configuration for a given tag.
 func (a *App) SetTagThumbnailConfig(tag string, thumbConfig TagThumbnailConfig) error {
-	if tag == "" {
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
 	a.configMu.Lock()
 	if a.config.TagPlaylistConfigs == nil {
 		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
 	}
-	existing := a.config.TagPlaylistConfigs[tag]
+
+	canonicalKey := cleanTag
+	for k := range a.config.TagPlaylistConfigs {
+		if strings.EqualFold(k, cleanTag) {
+			canonicalKey = k
+			break
+		}
+	}
+
+	existing := a.config.TagPlaylistConfigs[canonicalKey]
 	existing.ThumbnailConfig = thumbConfig
-	a.config.TagPlaylistConfigs[tag] = existing
+	a.config.TagPlaylistConfigs[canonicalKey] = existing
 	a.configMu.Unlock()
 
 	return a.saveConfig()
@@ -451,14 +472,28 @@ func (a *App) SetTagThumbnailConfig(tag string, thumbConfig TagThumbnailConfig) 
 func (a *App) GetTagPlaylistConfig(tag string) TagPlaylistConfig {
 	a.configMu.RLock()
 	defer a.configMu.RUnlock()
+	cleanTag := strings.TrimSpace(tag)
+	if cleanTag == "" {
+		return TagPlaylistConfig{}
+	}
 	if a.config.TagPlaylistConfigs != nil {
-		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+		if cfg, ok := a.config.TagPlaylistConfigs[cleanTag]; ok {
 			return cfg
+		}
+		for k, cfg := range a.config.TagPlaylistConfigs {
+			if strings.EqualFold(k, cleanTag) {
+				return cfg
+			}
 		}
 	}
 	if a.config.TagPlaylists != nil {
-		if plId, ok := a.config.TagPlaylists[tag]; ok {
+		if plId, ok := a.config.TagPlaylists[cleanTag]; ok {
 			return TagPlaylistConfig{VodPlaylistID: plId}
+		}
+		for k, plId := range a.config.TagPlaylists {
+			if strings.EqualFold(k, cleanTag) {
+				return TagPlaylistConfig{VodPlaylistID: plId}
+			}
 		}
 	}
 	return TagPlaylistConfig{}

@@ -1775,6 +1775,8 @@ export default function InlinePlayer({
                   }
                   tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
                   onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                  youtubeId={video.youtubeId}
+                  onYouTubeUpdated={() => onTagSaved?.()}
                   onOpenTagSettings={() => {
                     pendingSaveAfterTagModalRef.current = false;
                     setPendingTagForModal(tagInput);
@@ -2254,6 +2256,8 @@ export default function InlinePlayer({
                 }
                 tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
                 onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+                youtubeId={video.youtubeId}
+                onYouTubeUpdated={() => onTagSaved?.()}
                 onOpenTagSettings={() => {
                   pendingSaveAfterTagModalRef.current = false;
                   setPendingTagForModal(tagInput);
