@@ -184,4 +184,45 @@ describe("BulkActionBar ContentType routing", () => {
       expect(screen.getByText(/Control/i)).toBeInTheDocument();
     });
   });
+
+  it("calls generateAndSaveTagThumbnail for each selected path on save", async () => {
+    const tagThumb = await import("../../../utils/generateTagThumbnail");
+    const spy = vi
+      .spyOn(tagThumb, "generateAndSaveTagThumbnail")
+      .mockResolvedValue("/cache/yt_thumbs/mock.jpg");
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag");
+    fireEvent.change(tagInput, { target: { value: "Valorant" } });
+
+    const applyBtn = screen.getByRole("button", { name: "Apply" });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video1.mp4",
+          tag: "Valorant",
+        }),
+      );
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video2.mp4",
+          tag: "Valorant",
+        }),
+      );
+    });
+  });
 });

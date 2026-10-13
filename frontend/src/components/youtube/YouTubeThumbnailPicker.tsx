@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   TagThumbnailConfig,
   EpisodeNumberPosition,
@@ -85,26 +85,50 @@ export default function YouTubeThumbnailPicker({
     }
   }, [tagThumbnailConfig]);
 
+  const [checkedDisk, setCheckedDisk] = useState(false);
+  const lastGeneratedTagRef = useRef<string | null>(null);
+  const userResetRef = useRef(false);
+  const isAutoGeneratingRef = useRef(false);
+
   // Check if a saved custom thumbnail already exists on disk for this video
   useEffect(() => {
-    if (!videoPath) return;
+    if (!videoPath) {
+      setCheckedDisk(false);
+      return;
+    }
+    setCheckedDisk(false);
+    userResetRef.current = false;
     GetCustomThumbnail(videoPath)
       .then((url) => {
         if (url) {
           setCachedCustomThumb(videoPath, url);
           setCustomThumbUrl(url);
+          lastGeneratedTagRef.current = gameTag;
           onThumbnailReady?.(url);
         } else {
           setCachedCustomThumb(videoPath, null);
           setCustomThumbUrl(null);
+          lastGeneratedTagRef.current = null;
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        setCustomThumbUrl(null);
+      })
+      .finally(() => {
+        setCheckedDisk(true);
+      });
   }, [videoPath, onThumbnailReady]);
 
-  const { steamAssets, baseImage, logoImage, gameTitle } = useThumbnailAssets(gameTag, localConfig);
+  // When gameTag changes, reset userResetRef so the new tag can auto-generate
+  useEffect(() => {
+    userResetRef.current = false;
+  }, [gameTag]);
 
-  const exportAndSave = async (): Promise<string> => {
+  const { steamAssets, baseImage, logoImage, gameTitle, loadingAssets } =
+    useThumbnailAssets(gameTag, localConfig);
+
+  const exportAndSave = useCallback(async (): Promise<string> => {
     const dataUrl = renderTagThumbnailDataUrl({
       baseImage,
       logoImage,
@@ -124,7 +148,47 @@ export default function YouTubeThumbnailPicker({
     }
 
     return savedPath;
-  };
+  }, [
+    baseImage,
+    logoImage,
+    gameTitle,
+    episodeNumber,
+    localConfig,
+    videoPath,
+    onThumbnailReady,
+  ]);
+
+  // Automatically generate and save thumbnail when tag is assigned or changed
+  useEffect(() => {
+    if (!checkedDisk || !videoPath || !gameTag.trim()) return;
+    if (localConfig.enabled === false) return;
+    if (loadingAssets) return;
+    if (userResetRef.current) return;
+    if (isAutoGeneratingRef.current) return;
+
+    const needsGeneration =
+      !customThumbUrl || lastGeneratedTagRef.current !== gameTag;
+
+    if (needsGeneration) {
+      isAutoGeneratingRef.current = true;
+      lastGeneratedTagRef.current = gameTag;
+      exportAndSave()
+        .catch((err) => {
+          console.error("Auto-generation of tag thumbnail failed:", err);
+        })
+        .finally(() => {
+          isAutoGeneratingRef.current = false;
+        });
+    }
+  }, [
+    checkedDisk,
+    videoPath,
+    gameTag,
+    localConfig.enabled,
+    loadingAssets,
+    customThumbUrl,
+    exportAndSave,
+  ]);
 
   const handleSaveThumbnail = async () => {
     if (!videoPath) return;
@@ -154,6 +218,8 @@ export default function YouTubeThumbnailPicker({
 
   const handleReset = async () => {
     if (!videoPath) return;
+    userResetRef.current = true;
+    lastGeneratedTagRef.current = null;
     try {
       await DeleteCustomThumbnail(videoPath);
       setCustomThumbUrl(null);

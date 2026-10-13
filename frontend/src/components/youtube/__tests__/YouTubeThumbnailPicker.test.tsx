@@ -32,8 +32,12 @@ describe("YouTubeThumbnailPicker", () => {
     episode_format: "hash",
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { GetCustomThumbnail } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+    vi.mocked(GetCustomThumbnail).mockResolvedValue("");
   });
 
   it("renders live preview canvas with tag template and episode number", async () => {
@@ -167,6 +171,25 @@ describe("YouTubeThumbnailPicker", () => {
         "C:/videos/ep1.mp4",
         null,
       );
+    });
+  });
+
+  it("automatically generates and saves thumbnail when video has no custom thumbnail and tag is provided", async () => {
+    const { SaveCustomThumbnail } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/new_video.mp4"
+        gameTag="Control Resonant"
+        episodeNumber={1}
+        tagThumbnailConfig={tagConfig}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(SaveCustomThumbnail).toHaveBeenCalled();
     });
   });
 });

@@ -25,6 +25,7 @@ import {
 import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
 import YouTubeThumbnailPicker from "../youtube/YouTubeThumbnailPicker";
+import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import {
@@ -831,6 +832,20 @@ export default function InlinePlayer({
           customVarsInput,
         );
         await SetVideoContentType(p, selectedContentType);
+      }
+
+      if (tagInput.trim()) {
+        await Promise.allSettled(
+          pathsToSave.map((p) =>
+            generateAndSaveTagThumbnail({
+              videoPath: p,
+              tag: tagInput,
+              episodeNumber: resolvedEpisode,
+              config: tagPlaylistConfigs[tagInput]?.thumbnail_config,
+              overwrite: tagChanged,
+            }),
+          ),
+        );
       }
 
       if (tagInput) addRecentTag(tagInput);

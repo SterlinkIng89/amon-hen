@@ -20,6 +20,7 @@ import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import ExportModal from "./ExportModal";
 import { BulkThumbnailModal } from "./BulkThumbnailModal";
+import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
 
 import { QueueItem } from "../youtube/UploadQueue";
 
@@ -200,6 +201,18 @@ export default function BulkActionBar({
     try {
       await SetVideoGames(selectedPaths, game, event, gameMode, customVars);
       if (game) addRecentTag(game);
+
+      await Promise.allSettled(
+        selectedPaths.map((p) => {
+          const vid = selectedVideos.find((v) => v.path === p);
+          return generateAndSaveTagThumbnail({
+            videoPath: p,
+            tag: game,
+            episodeNumber: vid?.episode || 1,
+            overwrite: true,
+          });
+        }),
+      );
 
       const cfg = await LoadConfig();
       setTagPlaylists(cfg.tag_playlists || {});
