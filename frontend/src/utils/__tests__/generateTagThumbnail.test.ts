@@ -89,6 +89,40 @@ describe("generateAndSaveTagThumbnail", () => {
     expect(res).toBe("/cache/yt_thumbs/saved.jpg");
   });
 
+  it("passes correct episode number (e.g. 14) and 0 to renderTagThumbnailDataUrl", async () => {
+    vi.mocked(appBackend.GetCustomThumbnail)
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("/cache/yt_thumbs/saved14.jpg");
+
+    await generateAndSaveTagThumbnail({
+      videoPath: "/path/vid.mp4",
+      tag: "Control Resonant",
+      episodeNumber: 14,
+    });
+
+    expect(thumbRender.renderTagThumbnailDataUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        episodeNumber: 14,
+      })
+    );
+
+    vi.mocked(appBackend.GetCustomThumbnail)
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("/cache/yt_thumbs/saved0.jpg");
+
+    await generateAndSaveTagThumbnail({
+      videoPath: "/path/vid2.mp4",
+      tag: "Control Resonant",
+      episodeNumber: 0,
+    });
+
+    expect(thumbRender.renderTagThumbnailDataUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        episodeNumber: 0,
+      })
+    );
+  });
+
   it("does not generate thumbnail if config has enabled=false", async () => {
     const res = await generateAndSaveTagThumbnail({
       videoPath: "/path/vid.mp4",

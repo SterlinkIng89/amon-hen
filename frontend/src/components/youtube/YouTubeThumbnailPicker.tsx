@@ -87,6 +87,7 @@ export default function YouTubeThumbnailPicker({
 
   const [checkedDisk, setCheckedDisk] = useState(false);
   const lastGeneratedTagRef = useRef<string | null>(null);
+  const lastGeneratedEpRef = useRef<number | null>(null);
   const userResetRef = useRef(false);
   const isAutoGeneratingRef = useRef(false);
 
@@ -129,11 +130,13 @@ export default function YouTubeThumbnailPicker({
     useThumbnailAssets(gameTag, localConfig);
 
   const exportAndSave = useCallback(async (): Promise<string> => {
+    const ep =
+      typeof episodeNumber === "number" && episodeNumber > 0 ? episodeNumber : 0;
     const dataUrl = renderTagThumbnailDataUrl({
       baseImage,
       logoImage,
       gameTitle,
-      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
+      episodeNumber: ep,
       config: localConfig,
     });
     const savedPath = await SaveCustomThumbnail(videoPath, dataUrl);
@@ -166,12 +169,19 @@ export default function YouTubeThumbnailPicker({
     if (userResetRef.current) return;
     if (isAutoGeneratingRef.current) return;
 
+    const currentEp =
+      typeof episodeNumber === "number" && episodeNumber > 0 ? episodeNumber : 0;
     const needsGeneration =
-      !customThumbUrl || lastGeneratedTagRef.current !== gameTag;
+      !customThumbUrl ||
+      lastGeneratedTagRef.current !== gameTag ||
+      (currentEp > 0 &&
+        lastGeneratedEpRef.current !== null &&
+        lastGeneratedEpRef.current !== currentEp);
 
     if (needsGeneration) {
       isAutoGeneratingRef.current = true;
       lastGeneratedTagRef.current = gameTag;
+      lastGeneratedEpRef.current = currentEp;
       exportAndSave()
         .catch((err) => {
           console.error("Auto-generation of tag thumbnail failed:", err);
@@ -184,6 +194,7 @@ export default function YouTubeThumbnailPicker({
     checkedDisk,
     videoPath,
     gameTag,
+    episodeNumber,
     localConfig.enabled,
     loadingAssets,
     customThumbUrl,
@@ -220,6 +231,7 @@ export default function YouTubeThumbnailPicker({
     if (!videoPath) return;
     userResetRef.current = true;
     lastGeneratedTagRef.current = null;
+    lastGeneratedEpRef.current = null;
     try {
       await DeleteCustomThumbnail(videoPath);
       setCustomThumbUrl(null);
@@ -326,8 +338,9 @@ export default function YouTubeThumbnailPicker({
                 className="btn btn-primary btn-xs text-xs py-1"
                 onClick={handleSaveThumbnail}
                 disabled={isSaving}
+                title="Generate or update custom thumbnail locally"
               >
-                {isSaving ? "Saving..." : customThumbUrl ? "Update Thumbnail" : "Apply as YouTube Thumbnail"}
+                {isSaving ? "Regenerating..." : customThumbUrl ? "Regenerate Thumbnail" : "Apply as YouTube Thumbnail"}
               </button>
 
               {youtubeId && (

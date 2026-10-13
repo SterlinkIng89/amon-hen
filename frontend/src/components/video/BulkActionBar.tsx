@@ -7,6 +7,7 @@ import {
   GetOrCreatePlaylist,
   LoadConfig,
   SetVideosContentType,
+  GetVideosFromFolders,
 } from "../../../wailsjs/go/backend/App";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
@@ -14,6 +15,7 @@ import { VideoFile, YTPlaylist, GameProfile } from "../../types";
 import {
   generateYouTubeTitle,
   extractCustomVars,
+  resolveVideoEpisode,
 } from "../../utils/videoUtils";
 import { useAppStore } from "../../store/useAppStore";
 import TagInput from "../ui/TagInput";
@@ -29,7 +31,7 @@ interface Props {
   selectedVideos: VideoFile[];
   onClearSelection: () => void;
   /** Rescan videos without clearing selection — used after tag/playlist apply */
-  onRescanOnly: () => void;
+  onRescanOnly: () => Promise<VideoFile[]> | void;
   /** Rescan + clear selection — used after a full destructive action */
   onTagsSaved: () => void;
   onFilesDeleted: () => void;
@@ -202,24 +204,31 @@ export default function BulkActionBar({
       await SetVideoGames(selectedPaths, game, event, gameMode, customVars);
       if (game) addRecentTag(game);
 
-      await Promise.allSettled(
-        selectedPaths.map((p) => {
-          const vid = selectedVideos.find((v) => v.path === p);
-          return generateAndSaveTagThumbnail({
-            videoPath: p,
-            tag: game,
-            episodeNumber: vid?.episode || 1,
-            overwrite: true,
-          });
-        }),
-      );
-
       const cfg = await LoadConfig();
       setTagPlaylists(cfg.tag_playlists || {});
 
       // Don't clear state — keep selection visible so user sees it applied
-      // Rescan to update video data but keep selection so user can chain more actions
-      onRescanOnly();
+      // Rescan first so backend calculates sequential episodes & titles for the new tag
+      const rescanResult = await onRescanOnly();
+      const updatedVideos =
+        Array.isArray(rescanResult) && rescanResult.length > 0
+          ? rescanResult
+          : await GetVideosFromFolders(cfg.folders || []);
+
+      await Promise.allSettled(
+        selectedPaths.map((p) => {
+          const vid =
+            updatedVideos.find((v) => v.path === p) ||
+            selectedVideos.find((v) => v.path === p);
+          const ep = resolveVideoEpisode(undefined, vid?.episode, vid?.youtubeTitle);
+          return generateAndSaveTagThumbnail({
+            videoPath: p,
+            tag: game,
+            episodeNumber: ep,
+            overwrite: true,
+          });
+        }),
+      );
     } catch (e) {
       console.error("Failed to save tags", e);
     } finally {

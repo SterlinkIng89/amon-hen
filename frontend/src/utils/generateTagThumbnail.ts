@@ -172,7 +172,8 @@ export async function generateAndSaveTagThumbnail({
     effectiveConfig,
   );
 
-  const ep = episodeNumber > 0 ? episodeNumber : 1;
+  const ep =
+    typeof episodeNumber === "number" && episodeNumber > 0 ? episodeNumber : 0;
   const dataUrl = renderTagThumbnailDataUrl({
     baseImage,
     logoImage,

@@ -24,6 +24,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetSteamGameAssets: vi.fn().mockResolvedValue(null),
   GetTagPlaylistConfig: vi.fn().mockResolvedValue(null),
   UpdateYouTubeThumbnail: vi.fn().mockResolvedValue(""),
+  GetVideosFromFolders: vi.fn().mockResolvedValue([]),
 }));
 
 const mockVideos: VideoFile[] = [
@@ -221,6 +222,45 @@ describe("BulkActionBar ContentType routing", () => {
         expect.objectContaining({
           videoPath: "/path/video2.mp4",
           tag: "Valorant",
+        }),
+      );
+    });
+  });
+
+  it("calls generateAndSaveTagThumbnail with updated episode numbers returned from rescan", async () => {
+    const tagThumb = await import("../../../utils/generateTagThumbnail");
+    const spy = vi
+      .spyOn(tagThumb, "generateAndSaveTagThumbnail")
+      .mockResolvedValue("/cache/yt_thumbs/mock.jpg");
+
+    const onRescanOnly = vi.fn().mockResolvedValue([
+      { ...mockVideos[0], path: "/path/video1.mp4", episode: 14, youtubeTitle: "CONTROL - 14" },
+    ]);
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4"]}
+        selectedVideos={mockVideos.slice(0, 1)}
+        onClearSelection={vi.fn()}
+        onRescanOnly={onRescanOnly}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag");
+    fireEvent.change(tagInput, { target: { value: "Valorant" } });
+
+    const applyBtn = screen.getByRole("button", { name: "Apply" });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoPath: "/path/video1.mp4",
+          tag: "Valorant",
+          episodeNumber: 14,
         }),
       );
     });

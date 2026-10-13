@@ -21,8 +21,8 @@ export function useVideoLibrary() {
   const dragCounterRef = useRef(0);
   const { addToast } = useToast();
 
-  const scanFolders = useCallback(async (foldersToScan: string[]) => {
-    if (foldersToScan.length === 0) return;
+  const scanFolders = useCallback(async (foldersToScan: string[]): Promise<VideoFile[]> => {
+    if (foldersToScan.length === 0) return [];
     setScanning(true);
     setError("");
     try {
@@ -31,8 +31,11 @@ export function useVideoLibrary() {
       setVideos(list);
       if (list.length === 0)
         setError("No videos found in the selected folders.");
-    } catch (e: any) {
-      setError(`Scan failed: ${e?.message ?? e}`);
+      return list;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Scan failed: ${msg}`);
+      return [];
     } finally {
       setScanning(false);
     }
