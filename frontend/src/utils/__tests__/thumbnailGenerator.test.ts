@@ -236,8 +236,8 @@ describe("thumbnailGenerator utils", () => {
       const canvas = document.createElement("canvas");
       const rects = renderPlaylistCoverToCanvas(canvas, null, {});
       expect(rects.episode).toBeUndefined();
-      expect(canvas.width).toBe(1280);
-      expect(canvas.height).toBe(720);
+      expect(canvas.width).toBe(1080);
+      expect(canvas.height).toBe(1080);
     });
 
     it("passes through logo and title options when configured", () => {

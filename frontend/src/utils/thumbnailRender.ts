@@ -60,7 +60,7 @@ export function renderTagThumbnailDataUrl({
 }
 
 /**
- * Renders a clean 1280x720 JPEG playlist cover data URL without episode counter badges.
+ * Renders a clean 1080x1080 (1:1 square) JPEG playlist cover data URL without episode counter badges.
  */
 export function renderPlaylistCoverDataUrl({
   baseImage,
@@ -69,8 +69,8 @@ export function renderPlaylistCoverDataUrl({
   config,
 }: RenderPlaylistCoverParams): string {
   const exportCanvas = document.createElement("canvas");
-  exportCanvas.width = 1280;
-  exportCanvas.height = 720;
+  exportCanvas.width = 1080;
+  exportCanvas.height = 1080;
 
   renderPlaylistCoverToCanvas(exportCanvas, baseImage, {
     framing: config.image_framing,

@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/jpeg"
+	_ "image/png"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,6 +74,14 @@ func friendlyThumbnailError(err error) error {
 
 	var gErr *googleapi.Error
 	if errors.As(err, &gErr) {
+		if strings.Contains(strings.ToUpper(gErr.Message), "INVALID_ASPECT_RATIO") {
+			return fmt.Errorf("invalid aspect ratio: YouTube playlist cover images must have a 1:1 (square) aspect ratio")
+		}
+		for _, item := range gErr.Errors {
+			if strings.EqualFold(item.Reason, "INVALID_ASPECT_RATIO") {
+				return fmt.Errorf("invalid aspect ratio: YouTube playlist cover images must have a 1:1 (square) aspect ratio")
+			}
+		}
 		if gErr.Code == http.StatusUnauthorized {
 			return fmt.Errorf("YouTube authentication expired. Please re-authenticate your account in Settings")
 		}
@@ -85,6 +97,10 @@ func friendlyThumbnailError(err error) error {
 			return fmt.Errorf("permission denied: verify that your YouTube channel is phone-verified to upload custom thumbnails")
 		}
 		return fmt.Errorf("YouTube API error (%d): %s", gErr.Code, gErr.Message)
+	}
+
+	if strings.Contains(strings.ToUpper(err.Error()), "INVALID_ASPECT_RATIO") {
+		return fmt.Errorf("invalid aspect ratio: YouTube playlist cover images must have a 1:1 (square) aspect ratio")
 	}
 
 	return err
@@ -171,6 +187,65 @@ func (a *App) persistPlaylistThumbnailURL(playlistID string, url string) error {
 	return err
 }
 
+// ensureSquareImage verifies if an image has a 1:1 aspect ratio. If not, it crops it to a centered square
+// and writes it to a temporary JPEG file, returning the path to use and a cleanup callback.
+func ensureSquareImage(imagePath string) (string, func(), error) {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed to open thumbnail image: %w", err)
+	}
+	defer file.Close()
+
+	cfg, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return imagePath, func() {}, nil
+	}
+
+	if cfg.Width == cfg.Height {
+		return imagePath, func() {}, nil
+	}
+
+	if _, err := file.Seek(0, 0); err != nil {
+		return imagePath, func() {}, nil
+	}
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return imagePath, func() {}, nil
+	}
+
+	bounds := img.Bounds()
+	size := bounds.Dx()
+	if bounds.Dy() < size {
+		size = bounds.Dy()
+	}
+
+	x0 := bounds.Min.X + (bounds.Dx()-size)/2
+	y0 := bounds.Min.Y + (bounds.Dy()-size)/2
+	cropRect := image.Rect(x0, y0, x0+size, y0+size)
+
+	squareImg := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.Draw(squareImg, squareImg.Bounds(), img, cropRect.Min, draw.Src)
+
+	tmpFile, err := os.CreateTemp("", "playlist_square_*.jpg")
+	if err != nil {
+		return imagePath, func() {}, nil
+	}
+	tmpPath := tmpFile.Name()
+
+	if err := jpeg.Encode(tmpFile, squareImg, &jpeg.Options{Quality: 92}); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return imagePath, func() {}, nil
+	}
+	tmpFile.Close()
+
+	cleanup := func() {
+		_ = os.Remove(tmpPath)
+	}
+	return tmpPath, cleanup, nil
+}
+
 // setYouTubePlaylistThumbnailInternal validates the image, sends it to the YouTube API, and returns an error if failed.
 func (a *App) setYouTubePlaylistThumbnailInternal(playlistID string, imagePath string) error {
 	if playlistID == "" {
@@ -218,7 +293,20 @@ func (a *App) setYouTubePlaylistThumbnailInternal(playlistID string, imagePath s
 // SetYouTubePlaylistThumbnail uploads a custom cover image to a YouTube playlist via playlistImages.insert,
 // caches the image locally in yt_thumbs, updates the local yt_playlists table, and returns the cached URL.
 func (a *App) SetYouTubePlaylistThumbnail(playlistID string, imagePath string) (string, error) {
-	if err := a.setYouTubePlaylistThumbnailInternal(playlistID, imagePath); err != nil {
+	if playlistID == "" {
+		return "", fmt.Errorf("playlistID cannot be empty")
+	}
+	if imagePath == "" {
+		return "", fmt.Errorf("imagePath cannot be empty")
+	}
+
+	uploadPath, cleanup, err := ensureSquareImage(imagePath)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	if err := a.setYouTubePlaylistThumbnailInternal(playlistID, uploadPath); err != nil {
 		return "", err
 	}
 
@@ -230,8 +318,8 @@ func (a *App) SetYouTubePlaylistThumbnail(playlistID string, imagePath string) (
 	destPath := filepath.Join(cacheDir, key+".jpg")
 
 	// If source is not already destination, copy bytes
-	if filepath.Clean(imagePath) != filepath.Clean(destPath) {
-		if data, readErr := os.ReadFile(imagePath); readErr == nil {
+	if filepath.Clean(uploadPath) != filepath.Clean(destPath) {
+		if data, readErr := os.ReadFile(uploadPath); readErr == nil {
 			_ = os.WriteFile(destPath, data, 0644)
 		}
 	}

@@ -444,9 +444,10 @@ export function renderPlaylistCoverToCanvas(
   image: HTMLImageElement | null,
   options: PlaylistCoverOptions
 ): ThumbnailRects {
+  const size = options.width || options.height || 1080;
   return renderThumbnailToCanvas(canvas, image, {
-    width: options.width,
-    height: options.height,
+    width: size,
+    height: size,
     showEpisode: false,
     episodeNumber: 0,
     episodeFormat: "pad2",

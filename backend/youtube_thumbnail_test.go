@@ -2,6 +2,8 @@ package backend
 
 import (
 	"fmt"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -151,6 +153,16 @@ func TestFriendlyThumbnailError(t *testing.T) {
 		t.Errorf("expected friendly message to contain 'verified', got: %v", res)
 	}
 
+	// Aspect ratio 1:1 error
+	aspectErr := &googleapi.Error{
+		Code:    http.StatusInternalServerError,
+		Message: "INVALID_ASPECT_RATIO",
+	}
+	res = friendlyThumbnailError(aspectErr)
+	if !strings.Contains(res.Error(), "1:1 (square)") {
+		t.Errorf("expected aspect ratio friendly message, got: %v", res)
+	}
+
 	// Generic error
 	genericErr := fmt.Errorf("network connection dropped")
 	res = friendlyThumbnailError(genericErr)
@@ -255,6 +267,70 @@ func TestPersistPlaylistThumbnailURL(t *testing.T) {
 	err = app.persistPlaylistThumbnailURL("non-existent-pl", "/cache/yt_thumbs/other.jpg")
 	if err != nil {
 		t.Errorf("expected non-existent playlist update to succeed without error, got: %v", err)
+	}
+}
+
+func TestEnsureSquareImage(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Create a 1:1 square JPEG (200x200)
+	squarePath := filepath.Join(tmpDir, "square.jpg")
+	sqFile, err := os.Create(squarePath)
+	if err != nil {
+		t.Fatalf("failed to create square file: %v", err)
+	}
+	sqImg := image.NewRGBA(image.Rect(0, 0, 200, 200))
+	if err := jpeg.Encode(sqFile, sqImg, &jpeg.Options{Quality: 90}); err != nil {
+		sqFile.Close()
+		t.Fatalf("failed to encode square image: %v", err)
+	}
+	sqFile.Close()
+
+	outPath, cleanup, err := ensureSquareImage(squarePath)
+	if err != nil {
+		t.Fatalf("ensureSquareImage failed for square image: %v", err)
+	}
+	defer cleanup()
+	if outPath != squarePath {
+		t.Errorf("expected square image to return original path %s, got %s", squarePath, outPath)
+	}
+
+	// 2. Create a 16:9 rectangular JPEG (320x180)
+	rectPath := filepath.Join(tmpDir, "rect.jpg")
+	rectFile, err := os.Create(rectPath)
+	if err != nil {
+		t.Fatalf("failed to create rect file: %v", err)
+	}
+	rectImg := image.NewRGBA(image.Rect(0, 0, 320, 180))
+	if err := jpeg.Encode(rectFile, rectImg, &jpeg.Options{Quality: 90}); err != nil {
+		rectFile.Close()
+		t.Fatalf("failed to encode rect image: %v", err)
+	}
+	rectFile.Close()
+
+	outRectPath, cleanupRect, err := ensureSquareImage(rectPath)
+	if err != nil {
+		t.Fatalf("ensureSquareImage failed for rect image: %v", err)
+	}
+	defer cleanupRect()
+
+	if outRectPath == rectPath {
+		t.Errorf("expected rect image to be cropped to new path, got original %s", rectPath)
+	}
+
+	// Verify that the output image is 1:1 square (180x180)
+	checkFile, err := os.Open(outRectPath)
+	if err != nil {
+		t.Fatalf("failed to open output square image: %v", err)
+	}
+	defer checkFile.Close()
+
+	cfg, _, err := image.DecodeConfig(checkFile)
+	if err != nil {
+		t.Fatalf("failed to decode config of output square image: %v", err)
+	}
+	if cfg.Width != 180 || cfg.Height != 180 {
+		t.Errorf("expected 180x180 square, got %dx%d", cfg.Width, cfg.Height)
 	}
 }
 
