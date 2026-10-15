@@ -120,7 +120,17 @@ export default function UploadQueue({
     const unsub1 = EventsOn(
       "youtube:progress",
       (data: { path: string; percent: number; speed?: number }) => {
-        SetTrayUploadProgress(data.percent).catch(() => {});
+        const currentItem = queueRef.current.find(
+          (item) => item.videoPath === data.path,
+        );
+        if (
+          currentItem &&
+          currentItem.status === "uploading" &&
+          currentItem.progress === data.percent &&
+          currentItem.uploadSpeed === data.speed
+        ) {
+          return;
+        }
         onUpdateQueue(
           queueRef.current.map((item) =>
             item.videoPath === data.path

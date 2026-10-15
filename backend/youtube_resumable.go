@@ -294,8 +294,12 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	defer func() {
 		a.uploadsMu.Lock()
 		delete(a.uploads, path)
+		remaining := len(a.uploads)
 		a.uploadsMu.Unlock()
 		cancel()
+		if remaining == 0 {
+			a.SetTrayUploadProgress(-1)
+		}
 	}()
 
 	client, err := a.authedHTTPClient(ctx)
@@ -394,6 +398,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 	}
 
 	initialPct := int(float64(startOffset) / float64(info.Size()) * 100)
+	a.SetTrayUploadProgress(initialPct)
 	runtime.EventsEmit(a.ctx, "youtube:progress", map[string]interface{}{
 		"path":    path,
 		"percent": initialPct,
@@ -426,6 +431,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 				if a.db != nil {
 					a.db.UpdateUploadProgress(path, uploaded)
 				}
+				a.SetTrayUploadProgress(pct)
 				runtime.EventsEmit(a.ctx, "youtube:progress", map[string]interface{}{
 					"path":    path,
 					"percent": pct,

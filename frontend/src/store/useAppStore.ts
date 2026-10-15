@@ -78,8 +78,17 @@ function setState(
   patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>),
 ) {
   const incoming = typeof patch === "function" ? patch(state) : patch;
+  const prevState = state;
   state = { ...state, ...incoming };
-  savePersistedPrefs(state);
+  if (
+    prevState.view !== state.view ||
+    prevState.sortMode !== state.sortMode ||
+    prevState.filterUploaded !== state.filterUploaded ||
+    prevState.selectedIndex !== state.selectedIndex ||
+    prevState.defaultPlaylistPrivacy !== state.defaultPlaylistPrivacy
+  ) {
+    savePersistedPrefs(state);
+  }
   listeners.forEach((l) => l());
 }
 
@@ -88,43 +97,62 @@ function subscribe(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
+// ─── Stable Module-level Action Setters ─────────────────────────────────────────
+
+const setQueue = (
+  queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[]),
+) => {
+  setState((prev) => ({
+    queue:
+      typeof queueOrUpdater === "function"
+        ? queueOrUpdater(prev.queue)
+        : queueOrUpdater,
+  }));
+};
+
+const addToQueue = (items: QueueItem[]) =>
+  setState((prev) => ({
+    queue: [...prev.queue, ...items],
+    queueAddedAt: Date.now(),
+  }));
+
+const bumpQueueAdded = () => setState({ queueAddedAt: Date.now() });
+const bumpQueueDone = () => setState({ queueDoneAt: Date.now() });
+const setQueueRunning = (queueRunning: boolean) => setState({ queueRunning });
+const setYtAuthed = (ytAuthed: boolean) => setState({ ytAuthed });
+const setView = (view: ViewMode) => setState({ view });
+const setSortMode = (sortMode: SortMode) => setState({ sortMode });
+const setFilterUploaded = (filterUploaded: boolean) =>
+  setState({ filterUploaded });
+const setSelectedIndex = (selectedIndex: number) => setState({ selectedIndex });
+const setDefaultPlaylistPrivacy = (defaultPlaylistPrivacy: PlaylistPrivacy) =>
+  setState({ defaultPlaylistPrivacy });
+
+const storeActions = {
+  setQueue,
+  addToQueue,
+  bumpQueueAdded,
+  bumpQueueDone,
+  setQueueRunning,
+  setYtAuthed,
+  setView,
+  setSortMode,
+  setFilterUploaded,
+  setSelectedIndex,
+  setDefaultPlaylistPrivacy,
+};
+
 // ─── React hook ───────────────────────────────────────────────────────────────
 
 export function useAppStore() {
   const s = useSyncExternalStore(subscribe, getSnapshot);
 
-  const setQueue = (
-    queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[]),
-  ) => {
-    setState((prev) => ({
-      queue:
-        typeof queueOrUpdater === "function"
-          ? queueOrUpdater(prev.queue)
-          : queueOrUpdater,
-    }));
-  };
-
   return {
     ...s,
-    setQueue,
-    addToQueue: (items: QueueItem[]) =>
-      setState((prev) => ({
-        queue: [...prev.queue, ...items],
-        queueAddedAt: Date.now(),
-      })),
-    bumpQueueAdded: () => setState({ queueAddedAt: Date.now() }),
-    bumpQueueDone: () => setState({ queueDoneAt: Date.now() }),
-    setQueueRunning: (queueRunning: boolean) => setState({ queueRunning }),
-    setYtAuthed: (ytAuthed: boolean) => setState({ ytAuthed }),
-    setView: (view: ViewMode) => setState({ view }),
-    setSortMode: (sortMode: SortMode) => setState({ sortMode }),
-    setFilterUploaded: (filterUploaded: boolean) =>
-      setState({ filterUploaded }),
-    setSelectedIndex: (selectedIndex: number) => setState({ selectedIndex }),
-    setDefaultPlaylistPrivacy: (defaultPlaylistPrivacy: PlaylistPrivacy) =>
-      setState({ defaultPlaylistPrivacy }),
+    ...storeActions,
   };
 }
 
 useAppStore.getState = getSnapshot;
 useAppStore.setState = setState;
+

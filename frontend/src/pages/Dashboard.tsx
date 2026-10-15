@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   GetStreamPort,
   IsYouTubeAuthed,
@@ -155,7 +155,7 @@ export default function Dashboard() {
         });
       })
       .catch(() => {});
-  }, [setQueue]);
+  }, []);
 
   // ── Advanced library filters ─────────────────────────────────────────────────
   const libFilters = useAdvancedFilters();
@@ -173,64 +173,72 @@ export default function Dashboard() {
   }, []);
 
   // ── Derived state ────────────────────────────────────────────────────────────
-  const sortedVideos = applySortMode(videos, sortMode as SortMode);
+  const sortedVideos = useMemo(
+    () => applySortMode(videos, sortMode as SortMode),
+    [videos, sortMode],
+  );
 
-  const filteredByFolder =
-    activeFolders.length === 0
-      ? sortedVideos
-      : sortedVideos.filter((v) => activeFolders.includes(v.folder));
+  const filteredVideos = useMemo(() => {
+    const filteredByFolder =
+      activeFolders.length === 0
+        ? sortedVideos
+        : sortedVideos.filter((v) => activeFolders.includes(v.folder));
 
-  const filteredByUpload = filterUploaded
-    ? filteredByFolder.filter((v) => !v.youtubeId)
-    : filteredByFolder;
+    const filteredByUpload = filterUploaded
+      ? filteredByFolder.filter((v) => !v.youtubeId)
+      : filteredByFolder;
 
-  const filteredBySearch = searchQuery
-    ? filteredByUpload.filter((v) => {
-        const sq = searchQuery.toLowerCase();
-        return (
-          v.name.toLowerCase().includes(sq) ||
-          (v.game && v.game.toLowerCase().includes(sq)) ||
-          (v.event && v.event.toLowerCase().includes(sq)) ||
-          (v.gameMode && v.gameMode.toLowerCase().includes(sq)) ||
-          (v.customVars &&
-            Object.values(v.customVars).some((val) =>
-              val.toLowerCase().includes(sq),
-            ))
-        );
-      })
-    : filteredByUpload;
-
-  // Apply date range filter (uses modTime unix timestamp → date string)
-  const filteredByDate =
-    libFilters.dateFrom || libFilters.dateTo
-      ? filteredBySearch.filter((v) => {
-          const d = new Date(v.modTime * 1000).toISOString().substring(0, 10);
-          if (libFilters.dateFrom && d < libFilters.dateFrom) return false;
-          if (libFilters.dateTo && d > libFilters.dateTo) return false;
-          return true;
-        })
-      : filteredBySearch;
-
-  // Apply exclude words filter (name, game, event)
-  const filteredVideos =
-    libFilters.excludeWords.length > 0
-      ? filteredByDate.filter((v) => {
-          const lowerWords = libFilters.excludeWords.map((w) =>
-            w.toLowerCase(),
+    const filteredBySearch = searchQuery
+      ? filteredByUpload.filter((v) => {
+          const sq = searchQuery.toLowerCase();
+          return (
+            v.name.toLowerCase().includes(sq) ||
+            (v.game && v.game.toLowerCase().includes(sq)) ||
+            (v.event && v.event.toLowerCase().includes(sq)) ||
+            (v.gameMode && v.gameMode.toLowerCase().includes(sq)) ||
+            (v.customVars &&
+              Object.values(v.customVars).some((val) =>
+                val.toLowerCase().includes(sq),
+              ))
           );
-          const haystack = [
-            v.name,
-            v.game || "",
-            v.event || "",
-            v.gameMode || "",
-          ]
-            .join(" ")
-            .toLowerCase();
-          return !lowerWords.some((w) => haystack.includes(w));
         })
-      : filteredByDate;
+      : filteredByUpload;
 
-  const groups = groupByDay(filteredVideos);
+    const filteredByDate =
+      libFilters.dateFrom || libFilters.dateTo
+        ? filteredBySearch.filter((v) => {
+            const d = new Date(v.modTime * 1000).toISOString().substring(0, 10);
+            if (libFilters.dateFrom && d < libFilters.dateFrom) return false;
+            if (libFilters.dateTo && d > libFilters.dateTo) return false;
+            return true;
+          })
+        : filteredBySearch;
+
+    if (libFilters.excludeWords.length === 0) return filteredByDate;
+
+    const lowerWords = libFilters.excludeWords.map((w) => w.toLowerCase());
+    return filteredByDate.filter((v) => {
+      const haystack = [
+        v.name,
+        v.game || "",
+        v.event || "",
+        v.gameMode || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return !lowerWords.some((w) => haystack.includes(w));
+    });
+  }, [
+    sortedVideos,
+    activeFolders,
+    filterUploaded,
+    searchQuery,
+    libFilters.dateFrom,
+    libFilters.dateTo,
+    libFilters.excludeWords,
+  ]);
+
+  const groups = useMemo(() => groupByDay(filteredVideos), [filteredVideos]);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
   // ── Init: stream port + YouTube auth ────────────────────────────────────────
