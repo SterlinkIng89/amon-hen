@@ -7,6 +7,7 @@ export function useInView(
   const [inView, setInView] = useState(false);
 
   useEffect(() => {
+    if (inView) return;
     const el = ref.current;
     if (!el) return;
 
@@ -22,7 +23,7 @@ export function useInView(
 
     obs.observe(el);
     return () => obs.disconnect();
-  }, [ref, root]);
+  }, [ref, root, inView]);
 
   return inView;
 }

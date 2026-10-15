@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { VideoFile, VideoGroup, GameProfile } from "../../types";
 import VideoPill from "./VideoPill";
 import { useAppStore } from "../../store/useAppStore";
@@ -180,12 +180,21 @@ export default function VideoGrid({
   const useGroups = sortMode === "date" && groups.length > 0;
   const { queue } = useAppStore();
 
-  const getUploadProgress = (path: string): number | undefined => {
-    const item = queue.find(
-      (q) => q.videoPath === path && q.status === "uploading",
-    );
-    return item ? item.progress : undefined;
-  };
+  const uploadingProgressMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of queue) {
+      if (item.status === "uploading") {
+        map.set(item.videoPath, item.progress);
+      }
+    }
+    return map;
+  }, [queue]);
+
+  const sortedIdxMap = useMemo(() => {
+    const map = new Map<string, number>();
+    sortedVideos.forEach((v, i) => map.set(v.path, i));
+    return map;
+  }, [sortedVideos]);
 
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
@@ -210,9 +219,7 @@ export default function VideoGrid({
               <GroupHeader group={group} />
               <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
                 {group.videos.map((video) => {
-                  const sortedIdx = sortedVideos.findIndex(
-                    (v) => v.path === video.path,
-                  );
+                  const sortedIdx = sortedIdxMap.get(video.path) ?? -1;
                   const isSelected = selectedPaths.includes(video.path);
                   return (
                     <VideoPill
@@ -222,7 +229,7 @@ export default function VideoGrid({
                       multiSelected={isSelected}
                       onClick={(e) => onOpenVideo(sortedIdx, e)}
                       onUpload={() => onUploadTarget(video)}
-                      uploadProgress={getUploadProgress(video.path)}
+                      uploadProgress={uploadingProgressMap.get(video.path)}
                       gameProfiles={gameProfiles}
                     />
                   );
@@ -245,7 +252,7 @@ export default function VideoGrid({
                   multiSelected={isSelected}
                   onClick={(e) => onOpenVideo(idx, e)}
                   onUpload={() => onUploadTarget(video)}
-                  uploadProgress={getUploadProgress(video.path)}
+                  uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}
                 />
               );

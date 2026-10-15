@@ -53,12 +53,16 @@ export default function PlayerView({
     });
   }, []);
 
-  const getUploadProgress = (path: string): number | undefined => {
-    const item = queue.find(
-      (q) => q.videoPath === path && q.status === "uploading",
-    );
-    return item ? item.progress : undefined;
-  };
+  const uploadingProgressMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of queue) {
+      if (item.status === "uploading") {
+        map.set(item.videoPath, item.progress);
+      }
+    }
+    return map;
+  }, [queue]);
+
   return (
     <div className="flex-1 flex overflow-hidden">
       <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
@@ -81,7 +85,7 @@ export default function PlayerView({
                 compact={true}
                 onClick={(e) => onVideoClick(idx, e)}
                 onUpload={() => onUploadTarget(video)}
-                uploadProgress={getUploadProgress(video.path)}
+                uploadProgress={uploadingProgressMap.get(video.path)}
                 gameProfiles={gameProfiles}
               />
             );

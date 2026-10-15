@@ -47,7 +47,7 @@ interface VideoPillProps {
   onDelete?: () => void;
 }
 
-export default function VideoPill({
+function VideoPillComponent({
   video,
   selected,
   multiSelected,
@@ -67,6 +67,17 @@ export default function VideoPill({
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
+
+  const onClickRef = useRef(onClick);
+  onClickRef.current = onClick;
+  const onUploadRef = useRef(onUpload);
+  onUploadRef.current = onUpload;
+  const onSelectToggleRef = useRef(onSelectToggle);
+  onSelectToggleRef.current = onSelectToggle;
+  const onDeleteRef = useRef(onDelete);
+  onDeleteRef.current = onDelete;
+  const onThumbLoadedRef = useRef(onThumbLoaded);
+  onThumbLoadedRef.current = onThumbLoaded;
 
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
@@ -154,7 +165,7 @@ export default function VideoPill({
             if (d) {
               setCachedThumb(localPath, d);
               setThumb(d);
-              if (onThumbLoaded) onThumbLoaded(d);
+              if (onThumbLoadedRef.current) onThumbLoadedRef.current(d);
             }
             setThumbLoaded(true);
           })
@@ -180,7 +191,6 @@ export default function VideoPill({
     thumb,
     thumbLoaded,
     localDuration,
-    onThumbLoaded,
   ]);
 
   // Secondary preview sprite loading — ONLY triggered when user hovers over card
@@ -225,7 +235,7 @@ export default function VideoPill({
   return (
     <div
       ref={ref}
-      onClick={onClick}
+      onClick={(e) => onClickRef.current?.(e)}
       onMouseEnter={() => {
         if (!readOnlyThumbnail) setHovered(true);
       }}
@@ -268,7 +278,7 @@ export default function VideoPill({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onSelectToggle(e);
+                  onSelectToggleRef.current?.(e);
                 }}
                 title={multiSelected ? "Deselect video" : "Select video"}
                 aria-label={multiSelected ? "Deselect video" : "Select video"}
@@ -298,7 +308,7 @@ export default function VideoPill({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onDelete();
+                  onDeleteRef.current?.();
                 }}
                 title="Delete video from YouTube"
                 aria-label="Delete video from YouTube"
@@ -410,7 +420,7 @@ export default function VideoPill({
             title="Upload to YouTube"
             onClick={(e) => {
               e.stopPropagation();
-              onUpload?.();
+              onUploadRef.current?.();
             }}
           >
             <svg
@@ -544,7 +554,6 @@ export default function VideoPill({
                     style={{
                       width: `${uploadProgress}%`,
                       background: "var(--accent, #f97316)",
-                      boxShadow: "0 0 6px 1px rgba(249,115,22,0.7)",
                     }}
                   />
                 </span>
@@ -562,3 +571,61 @@ export default function VideoPill({
     </div>
   );
 }
+
+function areVideoPillPropsEqual(
+  prev: VideoPillProps,
+  next: VideoPillProps,
+): boolean {
+  if (prev.video !== next.video) {
+    const prevIsLocal = "path" in prev.video;
+    const nextIsLocal = "path" in next.video;
+    if (prevIsLocal !== nextIsLocal) return false;
+
+    if (prevIsLocal && nextIsLocal) {
+      const p = prev.video as VideoFile;
+      const n = next.video as VideoFile;
+      if (
+        p.path !== n.path ||
+        p.modTime !== n.modTime ||
+        p.size !== n.size ||
+        p.youtubeId !== n.youtubeId ||
+        p.game !== n.game ||
+        p.episode !== n.episode ||
+        p.youtubeTitle !== n.youtubeTitle ||
+        p.name !== n.name ||
+        p.contentType !== n.contentType
+      ) {
+        return false;
+      }
+    } else {
+      const p = prev.video as YTVideo;
+      const n = next.video as YTVideo;
+      if (
+        p.id !== n.id ||
+        p.title !== n.title ||
+        p.privacy !== n.privacy ||
+        p.viewCount !== n.viewCount ||
+        p.likeCount !== n.likeCount ||
+        p.monetizationStatus !== n.monetizationStatus
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return (
+    prev.selected === next.selected &&
+    prev.multiSelected === next.multiSelected &&
+    prev.uploadProgress === next.uploadProgress &&
+    prev.uploadSpeed === next.uploadSpeed &&
+    prev.viewMode === next.viewMode &&
+    prev.compact === next.compact &&
+    prev.duplicateCount === next.duplicateCount &&
+    prev.readOnlyThumbnail === next.readOnlyThumbnail &&
+    prev.gameProfiles === next.gameProfiles
+  );
+}
+
+const VideoPill = React.memo(VideoPillComponent, areVideoPillPropsEqual);
+export default VideoPill;
+
