@@ -27,7 +27,7 @@ describe("ContributionHeatmap enriched tooltip", () => {
 
     fireEvent.mouseEnter(activeRects[0]);
 
-    expect(screen.getByText(/Jan 1, 2026/)).toBeInTheDocument();
+    expect(screen.getByText("Thu, Jan 1, 2026")).toBeInTheDocument();
     expect(screen.getByText("3 recordings")).toBeInTheDocument();
     expect(screen.getByText("4h 30m")).toBeInTheDocument();
     expect(screen.getByText("Elden Ring")).toBeInTheDocument();
@@ -75,5 +75,42 @@ describe("ContributionHeatmap enriched tooltip", () => {
       expect(onDateClick).toHaveBeenCalledWith("2026-01-01");
     }
   });
+
+  it("renders contextual summary pills including monthly active days scoped to selected year", () => {
+    Element.prototype.scrollTo = vi.fn();
+
+    const stats: DailyCount[] = [
+      { date: "2025-05-01", count: 2 },
+      { date: "2025-05-02", count: 6 },
+      { date: "2025-05-03", count: 1 },
+      { date: "2026-01-01", count: 3 },
+      { date: "2026-01-02", count: 1 },
+    ];
+
+    render(
+      <ContributionHeatmap
+        stats={stats}
+        label="recording"
+        selectedDate="2025-05-02"
+      />,
+    );
+
+    // Default "All" view: 13 recordings in 5 active days, May 2025: 3/31 active days (10%), longest streak 3d
+    expect(screen.getByText(/recordings in/i)).toBeInTheDocument();
+    expect(screen.getByText("13")).toBeInTheDocument();
+    expect(screen.getByText("May 2025:")).toBeInTheDocument();
+    expect(screen.getByText(/\/31 active days/i)).toBeInTheDocument();
+    expect(screen.getByText("3d")).toBeInTheDocument();
+    expect(screen.queryByText(/Peak:/i)).toBeNull();
+
+    // Switch to 2026 year filter
+    const year2026Btn = screen.getByRole("button", { name: "2026" });
+    fireEvent.click(year2026Btn);
+
+    // Scoped to 2026: 4 recordings in 2 active days, longest streak 2d
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("2d")).toBeInTheDocument();
+  });
 });
+
 

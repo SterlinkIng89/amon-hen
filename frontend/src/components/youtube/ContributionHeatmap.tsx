@@ -4,12 +4,16 @@ import {
   EnrichedDailyCount,
   DailyGameSummary,
   normalizeGameKey,
+  computeHeatmapPeriodSummary,
 } from "../../utils/gameStats";
 import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
 import { getGameColor } from "../../utils/tagColors";
 
 export type DailyCount = EnrichedDailyCount;
 export type { DailyGameSummary };
+
+const SUMMARY_PILL_CLASS =
+  "px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-muted tabular-nums";
 
 interface ContributionHeatmapProps {
   stats: readonly DailyCount[];
@@ -324,9 +328,17 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       }
     };
 
-    const totalCount = useMemo(() => {
-      return Object.values(calendarData).reduce((a, b) => a + b.count, 0);
-    }, [calendarData]);
+    const periodSummary = useMemo(
+      () =>
+        computeHeatmapPeriodSummary(
+          calendarData,
+          currentSelectedYear,
+          availableYears,
+          today,
+          selectedDate,
+        ),
+      [calendarData, currentSelectedYear, availableYears, today, selectedDate],
+    );
 
     const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -490,6 +502,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
 
                   const idx = getColorIndex(uploads);
                   const color = customPanelColors[idx];
+                  const isSelected = selectedDate === d.key;
 
                   return (
                     <rect
@@ -499,8 +512,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                       width={9}
                       height={9}
                       fill={color}
-                      stroke={selectedDate === d.key ? "#f97316" : undefined}
-                      strokeWidth={selectedDate === d.key ? 1.5 : undefined}
+                      stroke={isSelected ? "#f97316" : undefined}
+                      strokeWidth={isSelected ? 1.5 : undefined}
                       rx={2}
                       ry={2}
                       className={`transition-colors duration-150 hover:stroke-accent hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
@@ -556,14 +569,46 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
           </div>
         </div>
 
-        {/* Footer Legend */}
-        <div className="flex flex-wrap items-center justify-between w-full pt-3 border-t border-[#232328] px-1 text-xs text-text-muted">
-          <div>
-            Total:{" "}
-            <strong className="text-text-primary font-semibold tabular-nums">
-              {totalCount}
-            </strong>{" "}
-            {label}s recorded
+        {/* Footer Summary & Legend */}
+        <div className="flex flex-wrap items-center justify-between gap-3 w-full pt-3 border-t border-border-subtle/30 px-1 text-xs text-text-muted">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={ SUMMARY_PILL_CLASS }>
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.totalSessions}
+              </strong>{" "}
+              {label}
+              {periodSummary.totalSessions === 1 ? "" : "s"} in{" "}
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.activeDays}
+              </strong>{" "}
+              active days ({periodSummary.activePercentage}%)
+            </div>
+
+            <div className={ SUMMARY_PILL_CLASS }>
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.monthLabel}:
+              </strong>{" "}
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.monthActiveDays}
+              </strong>
+              /{periodSummary.monthTotalDays} active days (
+              {periodSummary.monthActivePercentage}%)
+            </div>
+
+            <div className={ SUMMARY_PILL_CLASS }>
+              Longest streak:{" "}
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.longestStreak}d
+              </strong>
+              {periodSummary.currentStreak > 0 && (
+                <>
+                  {" · Current: "}
+                  <strong className="text-accent font-semibold">
+                    {periodSummary.currentStreak}d
+                  </strong>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span>Less</span>

@@ -9,6 +9,8 @@ import {
   buildDailyGameBreakdown,
   buildMonthlyGameBreakdown,
   filterHistoricalVideos,
+  computeHeatmapPeriodSummary,
+  EnrichedDailyCount,
   HistoricalVideo,
 } from "../gameStats";
 
@@ -109,4 +111,75 @@ describe("gameStats utils", () => {
     expect(filtered.length).toBe(1);
     expect(filtered[0].title).toBe("Normal Stream");
   });
+
+  it("computes heatmap period summary including monthly active days for All-time, current year, and past year", () => {
+    const calendarData: Record<string, EnrichedDailyCount> = {
+      "2025-05-01": { date: "2025-05-01", count: 2 },
+      "2025-05-02": { date: "2025-05-02", count: 5 },
+      "2025-05-03": { date: "2025-05-03", count: 1 },
+      "2025-05-04": { date: "2025-05-04", count: 1 },
+      "2026-01-08": { date: "2026-01-08", count: 4 },
+      "2026-01-09": { date: "2026-01-09", count: 2 },
+      "2026-01-10": { date: "2026-01-10", count: 3 },
+    };
+    const today = new Date(2026, 0, 10, 15, 0, 0); // Jan 10, 2026
+
+    const pastSummary = computeHeatmapPeriodSummary(
+      calendarData,
+      "2025",
+      ["2026", "2025"],
+      today,
+    );
+    expect(pastSummary).toEqual({
+      totalSessions: 9,
+      activeDays: 4,
+      totalDaysInPeriod: 365,
+      activePercentage: Math.round((4 / 365) * 100),
+      monthLabel: "May",
+      monthActiveDays: 4,
+      monthTotalDays: 31,
+      monthActivePercentage: Math.round((4 / 31) * 100),
+      longestStreak: 4,
+      currentStreak: 0,
+    });
+
+    const currentYearSummary = computeHeatmapPeriodSummary(
+      calendarData,
+      "2026",
+      ["2026", "2025"],
+      today,
+    );
+    expect(currentYearSummary).toEqual({
+      totalSessions: 9,
+      activeDays: 3,
+      totalDaysInPeriod: 10,
+      activePercentage: 30,
+      monthLabel: "Jan",
+      monthActiveDays: 3,
+      monthTotalDays: 10,
+      monthActivePercentage: 30,
+      longestStreak: 3,
+      currentStreak: 3,
+    });
+
+    const allSummary = computeHeatmapPeriodSummary(
+      calendarData,
+      "All",
+      ["2026", "2025"],
+      today,
+    );
+    expect(allSummary).toEqual({
+      totalSessions: 18,
+      activeDays: 7,
+      totalDaysInPeriod: 375, // 365 in 2025 + 10 in 2026
+      activePercentage: Math.round((7 / 375) * 100),
+      monthLabel: "Jan",
+      monthActiveDays: 3,
+      monthTotalDays: 10,
+      monthActivePercentage: 30,
+      longestStreak: 4,
+      currentStreak: 3,
+    });
+  });
 });
+

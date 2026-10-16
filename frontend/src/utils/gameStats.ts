@@ -161,6 +161,159 @@ export function aggregateDailyActivity(
   });
 }
 
+export interface HeatmapPeriodSummary {
+  readonly totalSessions: number;
+  readonly activeDays: number;
+  readonly totalDaysInPeriod: number;
+  readonly activePercentage: number;
+  readonly monthLabel: string;
+  readonly monthActiveDays: number;
+  readonly monthTotalDays: number;
+  readonly monthActivePercentage: number;
+  readonly longestStreak: number;
+  readonly currentStreak: number;
+}
+
+function parseDateToUtcMs(dateStr: string): number {
+  const parts = dateStr.split("-");
+  const y = parseInt(parts[0] || "0", 10);
+  const m = parseInt(parts[1] || "1", 10);
+  const d = parseInt(parts[2] || "1", 10);
+  return Date.UTC(y, m - 1, d);
+}
+
+export function computeHeatmapPeriodSummary(
+  calendarData: Record<string, EnrichedDailyCount>,
+  selectedYear: string,
+  availableYears: readonly string[],
+  today?: Date,
+  selectedDate?: string | null,
+): HeatmapPeriodSummary {
+  const now = today ? new Date(today) : new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth();
+  const currentDayOfMonth = now.getDate();
+  const todayUtcMs = Date.UTC(currentYear, currentMonthIdx, currentDayOfMonth);
+  const todayStr = `${currentYear}-${String(currentMonthIdx + 1).padStart(2, "0")}-${String(currentDayOfMonth).padStart(2, "0")}`;
+
+  const yr =
+    selectedYear === "All"
+      ? Math.min(
+          currentYear,
+          ...[
+            ...availableYears.map((y) => parseInt(y, 10)),
+            ...Object.keys(calendarData).map((k) =>
+              parseInt(k.substring(0, 4), 10),
+            ),
+          ].filter((y) => !isNaN(y)),
+        )
+      : parseInt(selectedYear, 10) || currentYear;
+
+  const startUtcMs = Date.UTC(yr, 0, 1);
+  const endUtcMs =
+    selectedYear === "All" || yr === currentYear
+      ? todayUtcMs
+      : Date.UTC(yr, 11, 31);
+
+  const totalDaysInPeriod = Math.max(
+    1,
+    Math.round((endUtcMs - startUtcMs) / 86_400_000) + 1,
+  );
+
+  const activeEntries = Object.values(calendarData)
+    .filter(
+      (entry) =>
+        Boolean(entry?.date) &&
+        entry.count > 0 &&
+        entry.date <= todayStr &&
+        (selectedYear === "All" || entry.date.startsWith(`${selectedYear}-`)),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const validSelectedDate =
+    selectedDate &&
+    selectedDate.length >= 7 &&
+    (selectedYear === "All" || selectedDate.startsWith(`${selectedYear}-`))
+      ? selectedDate
+      : null;
+
+  const isCurrentPeriod =
+    selectedYear === "All" || selectedYear === currentYear.toString();
+  const referenceDateStr =
+    validSelectedDate ??
+    (isCurrentPeriod
+      ? todayStr
+      : (activeEntries[activeEntries.length - 1]?.date ??
+        `${selectedYear}-12-01`));
+
+  const targetYear =
+    parseInt(referenceDateStr.substring(0, 4), 10) || currentYear;
+  const targetMonth = parseInt(referenceDateStr.substring(5, 7), 10) || 12;
+  const targetMonthPrefix = `${targetYear}-${String(targetMonth).padStart(2, "0")}-`;
+
+  const isCurrentCalendarMonth =
+    targetYear === currentYear && targetMonth === currentMonthIdx + 1;
+  const monthTotalDays = isCurrentCalendarMonth
+    ? Math.max(1, currentDayOfMonth)
+    : new Date(targetYear, targetMonth, 0).getDate();
+  const monthName = MONTH_LABELS[targetMonth - 1] ?? "Jan";
+  const monthLabel =
+    selectedYear === "All" && targetYear !== currentYear
+      ? `${monthName} ${targetYear}`
+      : monthName;
+
+  const monthActiveDays = activeEntries.filter((e) =>
+    e.date.startsWith(targetMonthPrefix),
+  ).length;
+  const monthActivePercentage = Math.round(
+    (monthActiveDays / monthTotalDays) * 100,
+  );
+
+  const totalSessions = activeEntries.reduce((sum, e) => sum + e.count, 0);
+  const activeDays = activeEntries.length;
+  const activePercentage =
+    activeDays > 0 ? Math.round((activeDays / totalDaysInPeriod) * 100) : 0;
+
+  let longestStreak = activeDays > 0 ? 1 : 0;
+  let tempStreak = activeDays > 0 ? 1 : 0;
+
+  for (let i = 1; i < activeEntries.length; i++) {
+    const prevMs = parseDateToUtcMs(activeEntries[i - 1].date);
+    const currMs = parseDateToUtcMs(activeEntries[i].date);
+    const diffDays = Math.round((currMs - prevMs) / 86_400_000);
+
+    if (diffDays === 1) {
+      tempStreak += 1;
+      if (tempStreak > longestStreak) longestStreak = tempStreak;
+    } else if (diffDays > 1) {
+      tempStreak = 1;
+    }
+  }
+
+  let currentStreak = 0;
+  if (isCurrentPeriod && activeDays > 0) {
+    const lastMs = parseDateToUtcMs(
+      activeEntries[activeEntries.length - 1].date,
+    );
+    if (Math.round((todayUtcMs - lastMs) / 86_400_000) <= 1) {
+      currentStreak = tempStreak;
+    }
+  }
+
+  return {
+    totalSessions,
+    activeDays,
+    totalDaysInPeriod,
+    activePercentage,
+    monthLabel,
+    monthActiveDays,
+    monthTotalDays,
+    monthActivePercentage,
+    longestStreak,
+    currentStreak,
+  };
+}
+
 export interface DayGameBreakdown {
   date: string; // YYYY-MM-DD
   dayNum: number; // 1-31
