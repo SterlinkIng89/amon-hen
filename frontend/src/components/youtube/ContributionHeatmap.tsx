@@ -15,6 +15,30 @@ export type { DailyGameSummary };
 const SUMMARY_PILL_CLASS =
   "px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-muted tabular-nums";
 
+const CUSTOM_PANEL_COLORS = [
+  "#202024", // 0 uploads (inactive)
+  "#632516", // 1 upload (low activity)
+  "#a1381d", // 2-3 uploads (medium activity)
+  "#f45124", // 4-5 uploads (high activity)
+  "#ff7e54", // 6+ uploads (intense activity)
+] as const;
+
+const BUCKET_RANGES = [
+  { range: "0", labelSuffix: "s" },
+  { range: "1", labelSuffix: "" },
+  { range: "2-3", labelSuffix: "s" },
+  { range: "4-5", labelSuffix: "s" },
+  { range: "6+", labelSuffix: "s" },
+] as const;
+
+function getColorIndex(value: number): number {
+  if (value === 0) return 0;
+  if (value === 1) return 1;
+  if (value <= 3) return 2;
+  if (value <= 5) return 3;
+  return 4;
+}
+
 interface ContributionHeatmapProps {
   stats: readonly DailyCount[];
   label?: string;
@@ -140,21 +164,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       }
     }, [availableYears, currentSelectedYear]);
 
-    const customPanelColors = [
-      "#202024", // 0 uploads (inactive)
-      "#632516", // 1 upload (low activity)
-      "#a1381d", // 2-3 uploads (medium activity)
-      "#f45124", // 4-5 uploads (high activity)
-      "#ff7e54", // 6+ uploads (intense activity)
-    ];
-
-    const getColorIndex = (value: number) => {
-      if (value === 0) return 0;
-      if (value === 1) return 1;
-      if (value <= 3) return 2;
-      if (value <= 5) return 3;
-      return 4;
-    };
+    const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
+    const customPanelColors = CUSTOM_PANEL_COLORS;
 
     const formatDate = (d: Date) => {
       const y = d.getFullYear();
@@ -340,6 +351,27 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       [calendarData, currentSelectedYear, availableYears, today, selectedDate],
     );
 
+    const matchingBucketDays = useMemo(() => {
+      if (selectedBucket === null) return 0;
+      let count = 0;
+      for (const w of layout.weeks) {
+        for (const d of w.days) {
+          if (!d.date) continue;
+          if (
+            currentSelectedYear !== "All" &&
+            d.date.getFullYear().toString() !== currentSelectedYear
+          ) {
+            continue;
+          }
+          const uploads = calendarData[d.key]?.count ?? 0;
+          if (getColorIndex(uploads) === selectedBucket) {
+            count += 1;
+          }
+        }
+      }
+      return count;
+    }, [selectedBucket, layout.weeks, currentSelectedYear, calendarData]);
+
     const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     return (
@@ -503,6 +535,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                   const idx = getColorIndex(uploads);
                   const color = customPanelColors[idx];
                   const isSelected = selectedDate === d.key;
+                  const isDimmed =
+                    selectedBucket !== null && idx !== selectedBucket;
 
                   return (
                     <rect
@@ -512,6 +546,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                       width={9}
                       height={9}
                       fill={color}
+                      fillOpacity={isDimmed ? 0.15 : 1}
                       stroke={isSelected ? "#f97316" : undefined}
                       strokeWidth={isSelected ? 1.5 : undefined}
                       rx={2}
@@ -611,26 +646,50 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {selectedBucket !== null && (
+              <div className="flex items-center gap-2 text-[11px] tabular-nums mr-1">
+                <span className="text-text-muted">
+                  {matchingBucketDays} {matchingBucketDays === 1 ? "day" : "days"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBucket(null)}
+                  className="text-accent hover:underline font-medium cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <span>Less</span>
             <div className="flex items-center gap-1">
-              {customPanelColors.map((col, idx) => (
-                <div
-                  key={idx}
-                  className="w-3 h-3 rounded-sm border-0"
-                  style={{ backgroundColor: col }}
-                  title={
-                    idx === 0
-                      ? `0 ${label}s`
-                      : idx === 1
-                        ? `1 ${label}`
-                        : idx === 2
-                          ? `2-3 ${label}s`
-                          : idx === 3
-                            ? `4-5 ${label}s`
-                            : `6+ ${label}s`
-                  }
-                />
-              ))}
+              {customPanelColors.map((col, idx) => {
+                const rangeInfo = BUCKET_RANGES[idx];
+                const rangeText = `${rangeInfo.range} ${label}${rangeInfo.labelSuffix}`;
+                const isActive = selectedBucket === idx;
+                const isInactive =
+                  selectedBucket !== null && selectedBucket !== idx;
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    aria-label={`Filter by ${rangeText}`}
+                    aria-pressed={isActive}
+                    title={rangeText}
+                    onClick={() =>
+                      setSelectedBucket((prev) => (prev === idx ? null : idx))
+                    }
+                    className={`w-3.5 h-3.5 rounded-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      isActive
+                        ? "ring-1 ring-text-primary scale-110 opacity-100"
+                        : isInactive
+                          ? "opacity-35 hover:opacity-75"
+                          : "opacity-100 hover:opacity-80"
+                    }`}
+                    style={{ backgroundColor: col }}
+                  />
+                );
+              })}
             </div>
             <span>More</span>
           </div>

@@ -111,6 +111,54 @@ describe("ContributionHeatmap enriched tooltip", () => {
     expect(screen.getByText("4")).toBeInTheDocument();
     expect(screen.getByText("2d")).toBeInTheDocument();
   });
+
+  it("handles interactive intensity bucket filtering and clears selection", () => {
+    const stats: DailyCount[] = [
+      { date: "2026-01-01", count: 1 }, // Bucket 1
+      { date: "2026-01-02", count: 3 }, // Bucket 2 (2-3)
+      { date: "2026-01-03", count: 4 }, // Bucket 3 (4-5)
+      { date: "2026-01-04", count: 6 }, // Bucket 4 (6+)
+    ];
+
+    const { container } = render(
+      <ContributionHeatmap stats={stats} label="recording" />,
+    );
+
+    const bucket1Btn = screen.getByRole("button", {
+      name: "Filter by 1 recording",
+    });
+    expect(bucket1Btn).toHaveAttribute("aria-pressed", "false");
+
+    // Click bucket 1 to filter
+    fireEvent.click(bucket1Btn);
+
+    expect(bucket1Btn).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("1 day")).toBeInTheDocument();
+    const clearBtn = screen.getByRole("button", { name: "Clear" });
+    expect(clearBtn).toBeInTheDocument();
+
+    // Verify cell opacity modulation: bucket 1 cells should have opacity 1, non-bucket 1 cells should be dimmed (0.15)
+    const rects = Array.from(container.querySelectorAll("rect"));
+    const bucket1Rect = rects.find((r) => r.getAttribute("fill") === "#632516");
+    const otherRect = rects.find((r) => r.getAttribute("fill") === "#a1381d");
+
+    expect(bucket1Rect?.getAttribute("fill-opacity")).toBe("1");
+    expect(otherRect?.getAttribute("fill-opacity")).toBe("0.15");
+
+    // Click clear button
+    fireEvent.click(clearBtn);
+
+    expect(bucket1Btn).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByText("Clear")).toBeNull();
+    expect(bucket1Rect?.getAttribute("fill-opacity")).toBe("1");
+    expect(otherRect?.getAttribute("fill-opacity")).toBe("1");
+
+    // Click swatch again to toggle on then off
+    fireEvent.click(bucket1Btn);
+    expect(bucket1Btn).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(bucket1Btn);
+    expect(bucket1Btn).toHaveAttribute("aria-pressed", "false");
+  });
 });
 
 
