@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import ContributionHeatmap, { DailyCount } from "../ContributionHeatmap";
 
 describe("ContributionHeatmap enriched tooltip", () => {
@@ -37,4 +37,43 @@ describe("ContributionHeatmap enriched tooltip", () => {
     expect(screen.getByText("2 Local")).toBeInTheDocument();
     expect(screen.getByText("1 YouTube")).toBeInTheDocument();
   });
+
+  it("applies highlight stroke to selected date cell and triggers onDateClick", () => {
+    const onDateClick = vi.fn();
+    const stats: DailyCount[] = [
+      {
+        date: "2026-01-01",
+        count: 2,
+        totalHours: 1.5,
+        games: [{ game: "Elden Ring", count: 2, hours: 1.5 }],
+      },
+      {
+        date: "2026-01-02",
+        count: 1,
+        totalHours: 0.5,
+        games: [{ game: "Hades II", count: 1, hours: 0.5 }],
+      },
+    ];
+
+    const { container } = render(
+      <ContributionHeatmap
+        stats={stats}
+        selectedDate="2026-01-01"
+        onDateClick={onDateClick}
+      />,
+    );
+
+    const rects = container.querySelectorAll("rect");
+    const selectedRect = Array.from(rects).find(
+      (r) => r.getAttribute("stroke") === "#f97316",
+    );
+    expect(selectedRect).toBeDefined();
+    expect(selectedRect?.getAttribute("stroke-width")).toBe("1.5");
+
+    if (selectedRect) {
+      fireEvent.click(selectedRect);
+      expect(onDateClick).toHaveBeenCalledWith("2026-01-01");
+    }
+  });
 });
+

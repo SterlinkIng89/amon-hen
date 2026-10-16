@@ -8,6 +8,7 @@ import { useAdvancedFilters } from "../components/ui/AdvancedFilters";
 export default function StatsPage() {
   const filters = useAdvancedFilters();
   const [globalYear, setGlobalYear] = useState<string>("All");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
@@ -32,11 +33,17 @@ export default function StatsPage() {
             filters={filters}
             selectedYear={globalYear}
             onYearChange={setGlobalYear}
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
           />
         </ErrorBoundary>
 
         <ErrorBoundary area="Most Played Games">
-          <MostPlayedGames filters={filters} globalYear={globalYear} />
+          <MostPlayedGames
+            filters={filters}
+            globalYear={globalYear}
+            selectedDate={selectedDate}
+          />
         </ErrorBoundary>
 
         <ErrorBoundary area="Gaming Insights">

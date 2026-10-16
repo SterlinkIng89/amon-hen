@@ -17,6 +17,7 @@ interface ContributionHeatmapProps {
   metricSource?: "upload" | "title";
   onMetricChange?: (source: "upload" | "title") => void;
   onDateClick?: (date: string) => void;
+  selectedDate?: string | null;
   title?: React.ReactNode | false;
   extraControls?: React.ReactNode;
   selectedYear?: string;
@@ -30,6 +31,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     metricSource,
     onMetricChange,
     onDateClick,
+    selectedDate,
     title,
     extraControls,
     selectedYear: externalSelectedYear,
@@ -497,9 +499,11 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                       width={9}
                       height={9}
                       fill={color}
+                      stroke={selectedDate === d.key ? "#f97316" : undefined}
+                      strokeWidth={selectedDate === d.key ? 1.5 : undefined}
                       rx={2}
                       ry={2}
-                      className={`transition-colors duration-150 hover:stroke-white hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
+                      className={`transition-colors duration-150 hover:stroke-accent hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
                       onClick={() => {
                         if (uploads > 0 && onDateClick) onDateClick(d.key);
                       }}
@@ -553,7 +557,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
         </div>
 
         {/* Footer Legend */}
-        <div className="flex flex-wrap items-center justify-between w-full pt-3 border-t border-border-subtle/30 px-1 text-xs text-text-muted">
+        <div className="flex flex-wrap items-center justify-between w-full pt-3 border-t border-[#232328] px-1 text-xs text-text-muted">
           <div>
             Total:{" "}
             <strong className="text-text-primary font-semibold tabular-nums">
@@ -628,7 +632,7 @@ function HeatmapTooltipCard({
   const youtubeCount = entry?.youtubeCount ?? 0;
 
   return (
-    <div className="px-3 py-2.5 rounded-lg bg-[#18181c] text-text-primary text-xs shadow-sm border border-border-medium min-w-[185px] max-w-[260px] flex flex-col gap-1.5">
+    <div className="px-3 py-2.5 rounded-lg bg-[#18181c] text-text-primary text-xs shadow-sm border border-[#26262b] min-w-[185px] max-w-[260px] flex flex-col gap-1.5">
       <div className="flex flex-col gap-0.5">
         <span className="text-[11px] font-medium text-text-muted tabular-nums">
           {dateLabel}
@@ -653,7 +657,7 @@ function HeatmapTooltipCard({
       </div>
 
       {count > 0 && games.length > 0 && (
-        <div className="flex flex-col gap-1 pt-1.5 border-t border-border-subtle">
+        <div className="flex flex-col gap-1 pt-1.5 border-t border-[#232328]">
           {games.slice(0, 4).map((g) => (
             <div
               key={g.game}
@@ -683,7 +687,7 @@ function HeatmapTooltipCard({
       )}
 
       {count > 0 && (localCount > 0 || youtubeCount > 0) && (
-        <div className="flex items-center gap-3 pt-1.5 border-t border-border-subtle text-[10px] text-text-muted tabular-nums">
+        <div className="flex items-center gap-3 pt-1.5 border-t border-[#232328] text-[10px] text-text-muted tabular-nums">
           {localCount > 0 && (
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
