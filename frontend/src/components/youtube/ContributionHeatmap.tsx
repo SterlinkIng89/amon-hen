@@ -18,11 +18,6 @@ import { getTopGames, TopGamesScope } from "../../utils/heatmapTopGames";
 export type DailyCount = EnrichedDailyCount;
 export type { DailyGameSummary, HeatmapColorMode };
 
-export interface MonthDividerPath {
-  readonly year: number;
-  readonly d: string;
-}
-
 const SUMMARY_PILL_CLASS =
   "px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-muted tabular-nums";
 
@@ -248,7 +243,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       const yearLabels: { x: number; year: number }[] = [];
       const yearDividers: number[] = [];
       const monthLabels: { year: number; x: number; label: string }[] = [];
-      const monthDividers: MonthDividerPath[] = [];
 
       if (isIsolated) {
         // Discrete month layout with physical gap between months
@@ -317,7 +311,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
           yearLabels,
           yearDividers,
           monthLabels,
-          monthDividers,
           svgWidth: currentX + 16,
           svgHeight: labelPadY + 7 * cellSize + 6,
         };
@@ -325,30 +318,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
 
       // Continuous multi-year layout (when !isIsolated)
       const yearsToRender = [...availableYears].reverse(); // oldest -> newest
-
-      const processWeekDividers = (
-        wk: { date: Date | null; key: string }[],
-        wkX: number,
-        targetYear: number,
-      ) => {
-        wk.forEach((d, splitDayIdx) => {
-          if (
-            d.date !== null &&
-            d.date.getFullYear() === targetYear &&
-            d.date.getDate() === 1 &&
-            d.date.getMonth() > 0
-          ) {
-            if (splitDayIdx > 0) {
-              const ySplit = labelPadY + splitDayIdx * cellSize;
-              const dPath = `M ${wkX + cellSize} ${labelPadY} L ${wkX + cellSize} ${ySplit} L ${wkX} ${ySplit} L ${wkX} ${labelPadY + 7 * cellSize}`;
-              monthDividers.push({ year: targetYear, d: dPath });
-            } else {
-              const dPath = `M ${wkX - 1} ${labelPadY} L ${wkX - 1} ${labelPadY + 7 * cellSize}`;
-              monthDividers.push({ year: targetYear, d: dPath });
-            }
-          }
-        });
-      };
 
       yearsToRender.forEach((yrStr, yrIndex) => {
         const yr = parseInt(yrStr, 10);
@@ -406,8 +375,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               }
             }
 
-            processWeekDividers(week, currentX, yr);
-
             generatedWeeks.push({ year: yr, x: currentX, days: week });
             currentX += cellSize;
             week = [];
@@ -419,7 +386,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
           while (week.length < 7) {
             week.push({ date: null, key: `pad-end-${yr}-${week.length}` });
           }
-          processWeekDividers(week, currentX, yr);
           generatedWeeks.push({ year: yr, x: currentX, days: week });
           currentX += cellSize;
         }
@@ -431,7 +397,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
         yearLabels,
         yearDividers,
         monthLabels,
-        monthDividers,
         svgWidth: currentX + 16,
         svgHeight: labelPadY + 7 * cellSize + 6,
       };
@@ -669,9 +634,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                 const yearMonthLabels = layout.monthLabels.filter(
                   (m) => m.year === yr,
                 );
-                const yearDividersList = layout.monthDividers.filter(
-                  (md) => md.year === yr,
-                );
 
                 return (
                   <g
@@ -711,18 +673,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                       >
                         {m.label}
                       </text>
-                    ))}
-
-                    {yearDividersList.map((div, i) => (
-                      <path
-                        key={`divider-${yr}-${i}`}
-                        data-testid="month-divider"
-                        d={div.d}
-                        stroke={isIsolated ? "#52525b" : "#2e2e36"}
-                        strokeWidth={isIsolated ? 1.5 : 1}
-                        fill="none"
-                        pointerEvents="none"
-                      />
                     ))}
 
                     {yearWeeks.map((week) =>

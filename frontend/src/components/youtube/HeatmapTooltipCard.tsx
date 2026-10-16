@@ -40,7 +40,7 @@ export function HeatmapTooltipCard({
           </div>
         ) : (
           <span className="text-xs font-medium text-text-secondary">
-            No {label}s on {dateLabel}
+            No {label}s
           </span>
         )}
       </div>

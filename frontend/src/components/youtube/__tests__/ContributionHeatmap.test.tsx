@@ -292,7 +292,7 @@ describe("ContributionHeatmap grid navigation (Issue 97)", () => {
     }
   });
 
-  it("renders stepped month divider paths within the SVG", () => {
+  it("renders clean month labels and tooltip with concise empty state without repeating the date", () => {
     const stats: DailyCount[] = [
       { date: "2025-01-15", count: 1 },
       { date: "2025-03-10", count: 2 },
@@ -302,14 +302,24 @@ describe("ContributionHeatmap grid navigation (Issue 97)", () => {
       <ContributionHeatmap stats={stats} label="recording" />,
     );
 
+    // Month dividers are omitted for a clean, uncluttered grid
     const dividerPaths = container.querySelectorAll(
       'path[data-testid="month-divider"]',
     );
-    expect(dividerPaths.length).toBeGreaterThan(0);
-    const firstPath = dividerPaths[0];
-    expect(firstPath.getAttribute("stroke")).toBe("#2e2e36");
-    expect(firstPath.getAttribute("stroke-width")).toBe("1");
-    expect(firstPath.getAttribute("fill")).toBe("none");
+    expect(dividerPaths.length).toBe(0);
+
+    // Month labels are rendered
+    expect(screen.getAllByText("Jan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Mar").length).toBeGreaterThan(0);
+
+    // Hover an empty cell (0 recordings) to verify "No recordings" without repeating the date
+    const rects = Array.from(container.querySelectorAll("rect"));
+    const emptyRect = rects.find((r) => r.getAttribute("fill") === "#202024");
+    if (emptyRect) {
+      fireEvent.mouseEnter(emptyRect);
+      expect(screen.getByText("No recordings")).toBeInTheDocument();
+      expect(screen.queryByText(/No recordings on/i)).toBeNull();
+    }
   });
 
   it("dims non-selected years when a specific year is selected", () => {
