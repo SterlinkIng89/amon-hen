@@ -161,4 +161,103 @@ describe("ContributionHeatmap enriched tooltip", () => {
   });
 });
 
+describe("ContributionHeatmap dominant game color mode", () => {
+  it("does not render color mode toggle when stats have no games metadata", () => {
+    const stats: DailyCount[] = [
+      { date: "2026-01-01", count: 2 },
+      { date: "2026-01-02", count: 1 },
+    ];
+
+    render(<ContributionHeatmap stats={stats} />);
+    expect(screen.queryByRole("button", { name: "Intensity" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Game" })).toBeNull();
+  });
+
+  it("renders color mode toggle when games exist, defaulting to intensity and toggling to game mode", () => {
+    const stats: DailyCount[] = [
+      {
+        date: "2026-01-01",
+        count: 1, // idx 1 -> opacity 0.45
+        games: [{ game: "Hades II", count: 1, hours: 1.0 }],
+      },
+      {
+        date: "2026-01-02",
+        count: 6, // idx 4 -> opacity 1.0
+        games: [{ game: "Elden Ring", count: 6, hours: 5.0 }],
+      },
+    ];
+
+    const { container } = render(<ContributionHeatmap stats={stats} />);
+
+    const intensityBtn = screen.getByRole("button", { name: "Intensity" });
+    const gameBtn = screen.getByRole("button", { name: "Game" });
+    expect(intensityBtn).toBeInTheDocument();
+    expect(gameBtn).toBeInTheDocument();
+
+    // Default mode is intensity: Less / More legend is present
+    expect(screen.getByText("Less")).toBeInTheDocument();
+    expect(screen.getByText("More")).toBeInTheDocument();
+
+    // Switch to game mode
+    fireEvent.click(gameBtn);
+
+    // Legend switches from Less/More to top games
+    expect(screen.queryByText("Less")).toBeNull();
+    expect(screen.queryByText("More")).toBeNull();
+    expect(screen.getByText("Elden Ring")).toBeInTheDocument();
+    expect(screen.getByText("Hades II")).toBeInTheDocument();
+
+    // Check SVG cell colors and fillOpacity in game mode
+    const rects = Array.from(container.querySelectorAll("rect"));
+    const hadesColor = "hsl(100, 56%, 50%)"; // will match getGameColor("Hades II")
+    const eldenColor = "hsl(215, 66%, 53%)"; // will match getGameColor("Elden Ring")
+
+    // Find rects by fill attribute (or dominant game fill)
+    const activeRects = rects.filter(
+      (r) => r.getAttribute("fill") !== "#202024",
+    );
+    expect(activeRects.length).toBe(2);
+
+    // In game mode:
+    // Hades II has 1 session -> idx 1 -> fillOpacity should be "0.45"
+    // Elden Ring has 6 sessions -> idx 4 -> fillOpacity should be "1"
+    const hadesRect = activeRects.find((r) =>
+      r.getAttribute("fillOpacity") === "0.45" || r.getAttribute("fill-opacity") === "0.45",
+    );
+    const eldenRect = activeRects.find((r) =>
+      r.getAttribute("fillOpacity") === "1" || r.getAttribute("fill-opacity") === "1",
+    );
+    expect(hadesRect).toBeDefined();
+    expect(eldenRect).toBeDefined();
+  });
+
+  it("resets bucket filter when switching between intensity and game mode", () => {
+    const stats: DailyCount[] = [
+      {
+        date: "2026-01-01",
+        count: 1,
+        games: [{ game: "Celeste", count: 1, hours: 0.5 }],
+      },
+    ];
+
+    render(<ContributionHeatmap stats={stats} />);
+
+    // Activate bucket filter in intensity mode
+    const bucket1Btn = screen.getByRole("button", {
+      name: "Filter by 1 upload",
+    });
+    fireEvent.click(bucket1Btn);
+    expect(screen.getByText("1 day")).toBeInTheDocument();
+
+    // Switch to game mode
+    const gameBtn = screen.getByRole("button", { name: "Game" });
+    fireEvent.click(gameBtn);
+
+    // Bucket filter indicator should be gone
+    expect(screen.queryByText("1 day")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+});
+
+
 

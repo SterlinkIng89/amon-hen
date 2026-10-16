@@ -8,9 +8,15 @@ import {
 } from "../../utils/gameStats";
 import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
 import { getGameColor } from "../../utils/tagColors";
+import {
+  HeatmapColorModeToggle,
+  HeatmapColorMode,
+} from "./HeatmapColorModeToggle";
+import { HeatmapGameLegend } from "./HeatmapGameLegend";
+import { getTopGames, TopGamesScope } from "../../utils/heatmapTopGames";
 
 export type DailyCount = EnrichedDailyCount;
-export type { DailyGameSummary };
+export type { DailyGameSummary, HeatmapColorMode };
 
 const SUMMARY_PILL_CLASS =
   "px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-muted tabular-nums";
@@ -22,6 +28,8 @@ const CUSTOM_PANEL_COLORS = [
   "#f45124", // 4-5 uploads (high activity)
   "#ff7e54", // 6+ uploads (intense activity)
 ] as const;
+
+const GAME_MODE_OPACITIES = [1.0, 0.45, 0.65, 0.85, 1.0] as const;
 
 const BUCKET_RANGES = [
   { range: "0", labelSuffix: "s" },
@@ -165,7 +173,25 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     }, [availableYears, currentSelectedYear]);
 
     const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
+    const [colorMode, setColorMode] = useState<HeatmapColorMode>("intensity");
+    const [legendScope, setLegendScope] = useState<TopGamesScope>("year");
     const customPanelColors = CUSTOM_PANEL_COLORS;
+
+    const hasGameMetadata = useMemo(() => {
+      return Object.values(calendarData).some(
+        (d) => (d.games?.length ?? 0) > 0,
+      );
+    }, [calendarData]);
+
+    const handleColorModeChange = (mode: HeatmapColorMode) => {
+      setColorMode(mode);
+      setSelectedBucket(null);
+    };
+
+    const topGames = useMemo(() => {
+      if (colorMode !== "game") return [];
+      return getTopGames(calendarData, legendScope, currentSelectedYear, 5);
+    }, [calendarData, colorMode, legendScope, currentSelectedYear]);
 
     const formatDate = (d: Date) => {
       const y = d.getFullYear();
@@ -416,6 +442,14 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               </div>
             )}
 
+            {/* Dominant Game Color Mode Toggle */}
+            {hasGameMetadata && (
+              <HeatmapColorModeToggle
+                value={colorMode}
+                onChange={handleColorModeChange}
+              />
+            )}
+
             {/* Year Switcher with Smooth Scroll Navigation */}
             {availableYears.length > 1 && (
               <div className="flex items-center bg-[#141418] p-1 rounded-lg border-0">
@@ -533,10 +567,22 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                   const dateStr = `${weekdayName}, ${monthName} ${dayNum}, ${yearNum}`;
 
                   const idx = getColorIndex(uploads);
-                  const color = customPanelColors[idx];
+                  let color: string = customPanelColors[idx];
                   const isSelected = selectedDate === d.key;
                   const isDimmed =
                     selectedBucket !== null && idx !== selectedBucket;
+
+                  let cellOpacity: number = isDimmed ? 0.15 : 1;
+
+                  if (colorMode === "game" && uploads > 0) {
+                    const dominantGame = dayEntry?.games?.[0]?.game;
+                    if (dominantGame) {
+                      color = getGameColor(dominantGame);
+                    }
+                    if (!isDimmed) {
+                      cellOpacity = GAME_MODE_OPACITIES[idx] ?? 1.0;
+                    }
+                  }
 
                   return (
                     <rect
@@ -546,7 +592,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                       width={9}
                       height={9}
                       fill={color}
-                      fillOpacity={isDimmed ? 0.15 : 1}
+                      fillOpacity={cellOpacity}
                       stroke={isSelected ? "#f97316" : undefined}
                       strokeWidth={isSelected ? 1.5 : undefined}
                       rx={2}
@@ -645,54 +691,63 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {selectedBucket !== null && (
-              <div className="flex items-center gap-2 text-[11px] tabular-nums mr-1">
-                <span className="text-text-muted">
-                  {matchingBucketDays} {matchingBucketDays === 1 ? "day" : "days"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBucket(null)}
-                  className="text-accent hover:underline font-medium cursor-pointer"
-                >
-                  Clear
-                </button>
-              </div>
-            )}
-            <span>Less</span>
-            <div className="flex items-center gap-1">
-              {customPanelColors.map((col, idx) => {
-                const rangeInfo = BUCKET_RANGES[idx];
-                const rangeText = `${rangeInfo.range} ${label}${rangeInfo.labelSuffix}`;
-                const isActive = selectedBucket === idx;
-                const isInactive =
-                  selectedBucket !== null && selectedBucket !== idx;
-
-                return (
+          {colorMode === "game" ? (
+            <HeatmapGameLegend
+              games={topGames}
+              scope={legendScope}
+              onScopeChange={setLegendScope}
+              showScopeToggle={availableYears.length > 1}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              {selectedBucket !== null && (
+                <div className="flex items-center gap-2 text-[11px] tabular-nums mr-1">
+                  <span className="text-text-muted">
+                    {matchingBucketDays} {matchingBucketDays === 1 ? "day" : "days"}
+                  </span>
                   <button
-                    key={idx}
                     type="button"
-                    aria-label={`Filter by ${rangeText}`}
-                    aria-pressed={isActive}
-                    title={rangeText}
-                    onClick={() =>
-                      setSelectedBucket((prev) => (prev === idx ? null : idx))
-                    }
-                    className={`w-3.5 h-3.5 rounded-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                      isActive
-                        ? "ring-1 ring-text-primary scale-110 opacity-100"
-                        : isInactive
-                          ? "opacity-35 hover:opacity-75"
-                          : "opacity-100 hover:opacity-80"
-                    }`}
-                    style={{ backgroundColor: col }}
-                  />
-                );
-              })}
+                    onClick={() => setSelectedBucket(null)}
+                    className="text-accent hover:underline font-medium cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              <span>Less</span>
+              <div className="flex items-center gap-1">
+                {customPanelColors.map((col, idx) => {
+                  const rangeInfo = BUCKET_RANGES[idx];
+                  const rangeText = `${rangeInfo.range} ${label}${rangeInfo.labelSuffix}`;
+                  const isActive = selectedBucket === idx;
+                  const isInactive =
+                    selectedBucket !== null && selectedBucket !== idx;
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      aria-label={`Filter by ${rangeText}`}
+                      aria-pressed={isActive}
+                      title={rangeText}
+                      onClick={() =>
+                        setSelectedBucket((prev) => (prev === idx ? null : idx))
+                      }
+                      className={`w-3.5 h-3.5 rounded-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                        isActive
+                          ? "ring-1 ring-text-primary scale-110 opacity-100"
+                          : isInactive
+                            ? "opacity-35 hover:opacity-75"
+                            : "opacity-100 hover:opacity-80"
+                      }`}
+                      style={{ backgroundColor: col }}
+                    />
+                  );
+                })}
+              </div>
+              <span>More</span>
             </div>
-            <span>More</span>
-          </div>
+          )}
         </div>
 
         {tooltip.visible &&
