@@ -27,11 +27,13 @@ interface GameStat {
 export interface MostPlayedGamesProps {
   readonly filters?: AdvancedFiltersInput;
   readonly globalYear?: string;
+  readonly selectedDate?: string | null;
 }
 
 export default function MostPlayedGames({
   filters,
   globalYear,
+  selectedDate,
 }: MostPlayedGamesProps) {
   const [videos, setVideos] = useState<HistoricalVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,6 +171,31 @@ export default function MostPlayedGames({
       setSelectedMonthKey(latestMonth);
     }
   }, [globalYear, stats]);
+
+  // 5b. Synchronize with selectedDate from calendar heatmap
+  useEffect(() => {
+    if (!selectedDate || selectedDate.length < 10) return;
+
+    const targetYear = selectedDate.substring(0, 4);
+    const targetMonthKey = selectedDate.substring(0, 7);
+
+    setViewMode("month");
+    setSelectedYear(targetYear);
+    setSelectedMonthKey(targetMonthKey);
+
+    const monthStints = buildMonthStints(filteredVideos, targetMonthKey);
+    const matchingStint = monthStints.find(
+      (s) => s.startDate <= selectedDate && selectedDate <= s.endDate,
+    );
+
+    if (matchingStint) {
+      setSelectedStintId(matchingStint.id);
+      const targetGame = matchingStint.games[0]?.game;
+      if (targetGame) {
+        setSelectedGameName(targetGame);
+      }
+    }
+  }, [selectedDate, filteredVideos]);
 
   // 6. Handle Year change from toolbar
   const handleYearChange = (year: string) => {

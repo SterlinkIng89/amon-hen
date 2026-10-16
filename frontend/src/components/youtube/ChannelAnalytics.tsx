@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  GetChannelAnalytics,
-  GetChannelVideosPaginated,
-} from "../../../wailsjs/go/backend/App";
+import { GetChannelAnalytics } from "../../../wailsjs/go/backend/App";
 import ContributionHeatmap from "./ContributionHeatmap";
+import type { DailyCount } from "./ContributionHeatmap";
 import { extractTitleDate } from "../../utils/videoUtils";
+import {
+  HistoricalVideo,
+  parseDurationToHours,
+  resolveSessionGameName,
+  aggregateDailyActivity,
+  DailyActivityItem,
+} from "../../utils/gameStats";
 
 // ── Types matching the Go structs ───────────────────────────────────────────
 
@@ -23,12 +28,7 @@ interface MonthlyCount {
   count: number;
 }
 
-interface DailyCount {
-  date: string;
-  count: number;
-}
-
-interface ChannelAnalytics {
+interface ChannelAnalyticsData {
   totalVideos: number;
   totalViews: number;
   totalLikes: number;
@@ -43,6 +43,7 @@ interface ChannelAnalytics {
   uploadTrend: MonthlyCount[];
   dailyTrend: DailyCount[];
   titleDailyTrend: DailyCount[];
+  allHistoricalVideos?: HistoricalVideo[];
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -379,24 +380,22 @@ export default function ChannelAnalytics({
   heatmapOnly = false,
   excludeWords = [],
 }: ChannelAnalyticsProps) {
-  const [data, setData] = useState<ChannelAnalytics | null>(null);
+  const [data, setData] = useState<ChannelAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heatmapSource, setHeatmapSource] = useState<"upload" | "title">(
     "title",
   );
-  // Raw YouTube videos — only fetched when excludeWords is non-empty
-  const [rawYtVideos, setRawYtVideos] = useState<any[]>([]);
-  const [loadingYtVideos, setLoadingYtVideos] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await GetChannelAnalytics();
-      setData(res as unknown as ChannelAnalytics);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load analytics");
+      setData(res as unknown as ChannelAnalyticsData);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load analytics";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -406,46 +405,43 @@ export default function ChannelAnalytics({
     load();
   }, [load, refreshKey]);
 
-  // Fetch individual videos when excludeWords is set (so we can filter by title)
-  useEffect(() => {
-    if (excludeWords.length === 0) {
-      setRawYtVideos([]);
-      return;
+  const heatmapStats = useMemo<DailyCount[]>(() => {
+    if (!data?.allHistoricalVideos || data.allHistoricalVideos.length === 0) {
+      return heatmapSource === "upload"
+        ? (data?.dailyTrend ?? [])
+        : (data?.titleDailyTrend ?? []);
     }
-    let cancelled = false;
-    setLoadingYtVideos(true);
-    GetChannelVideosPaginated(1, 9999, "recent", "", "", "")
-      .then((res: any) => {
-        if (!cancelled) setRawYtVideos(res?.videos ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setRawYtVideos([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingYtVideos(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [excludeWords.length > 0]);
 
-  // Build filtered heatmap data from individual videos when excludeWords is active
-  const filteredTitleDailyTrend = useMemo<DailyCount[]>(() => {
-    if (excludeWords.length === 0 || rawYtVideos.length === 0) {
-      return data?.titleDailyTrend ?? [];
-    }
     const lowerWords = excludeWords.map((w) => w.toLowerCase());
-    const counts: Record<string, number> = {};
-    for (const v of rawYtVideos) {
+    const notExcluded = (title: string) =>
+      lowerWords.length === 0 ||
+      !lowerWords.some((w) => title.toLowerCase().includes(w));
+
+    const items: DailyActivityItem[] = [];
+    for (const v of data.allHistoricalVideos) {
       const title = v.title ?? "";
-      if (lowerWords.some((w) => title.toLowerCase().includes(w))) continue;
+      if (!notExcluded(title)) continue;
+      const uploadDate = v.published?.substring(0, 10) || "";
       const dateKey =
-        extractTitleDate(title) || v.publishedAt?.substring(0, 10) || "";
+        heatmapSource === "title"
+          ? extractTitleDate(title) || uploadDate
+          : uploadDate;
       if (!dateKey) continue;
-      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      items.push({
+        date: dateKey,
+        game: resolveSessionGameName(title, v.gameTag),
+        hours: parseDurationToHours(v.duration),
+      });
     }
-    return Object.entries(counts).map(([date, count]) => ({ date, count }));
-  }, [excludeWords, rawYtVideos, data?.titleDailyTrend]);
+
+    return aggregateDailyActivity(items);
+  }, [
+    excludeWords,
+    data?.allHistoricalVideos,
+    data?.dailyTrend,
+    data?.titleDailyTrend,
+    heatmapSource,
+  ]);
 
   // ── Skeleton ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -575,22 +571,12 @@ export default function ChannelAnalytics({
       {(data.dailyTrend?.length > 0 || data.titleDailyTrend?.length > 0) && (
         <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-4">
           <ContributionHeatmap
-            stats={
-              heatmapSource === "upload"
-                ? data.dailyTrend
-                : filteredTitleDailyTrend
-            }
+            stats={heatmapStats}
             label={heatmapSource === "upload" ? "upload" : "recording"}
             metricSource={heatmapSource}
             onMetricChange={setHeatmapSource}
             onDateClick={onDateFilter}
           />
-          {loadingYtVideos && excludeWords.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[10px] text-text-muted animate-pulse">
-              <div className="w-3 h-3 border border-accent border-t-transparent rounded-full animate-spin" />
-              Filtering heatmap by excluded words…
-            </div>
-          )}
         </div>
       )}
 

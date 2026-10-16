@@ -82,4 +82,20 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getByText("Selected (#2)")).toBeDefined();
     });
   });
+
+  it("synchronizes view, stint, and game when selectedDate is provided", async () => {
+    const { rerender } = render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    // Rerender with selectedDate corresponding to Silksong (2026-10-05)
+    rerender(<MostPlayedGames selectedDate="2026-10-05" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+      expect(screen.getAllByText("Hollow Knight: Silksong").length).toBeGreaterThan(0);
+    });
+  });
 });
