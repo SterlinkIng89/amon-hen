@@ -54,8 +54,111 @@ export function extractGameName(title: string, gameTag?: string): string {
   return title.trim();
 }
 
+export function resolveSessionGameName(
+  title?: string,
+  explicitGame?: string,
+): string {
+  if (explicitGame && explicitGame.trim()) {
+    return explicitGame.trim();
+  }
+  if (!title || !title.trim()) return "";
+  const candidate = extractGameName(title);
+  if (!candidate || /^[\d\s_./:-]+$/.test(candidate)) {
+    return "";
+  }
+  return candidate;
+}
+
 export function normalizeGameKey(name: string): string {
   return name.toLowerCase().replace(/[\s\-_]+/g, "");
+}
+
+export interface DailyGameSummary {
+  readonly game: string;
+  readonly count: number;
+  readonly hours: number;
+}
+
+export interface DailyActivityItem {
+  readonly date: string; // YYYY-MM-DD
+  readonly game?: string;
+  readonly hours?: number;
+  readonly source?: "local" | "youtube";
+}
+
+export interface EnrichedDailyCount {
+  readonly date: string; // YYYY-MM-DD
+  readonly count: number;
+  readonly totalHours?: number;
+  readonly localCount?: number;
+  readonly youtubeCount?: number;
+  readonly games?: readonly DailyGameSummary[];
+}
+
+export function aggregateDailyActivity(
+  items: readonly DailyActivityItem[],
+): EnrichedDailyCount[] {
+  const byDate: Record<
+    string,
+    {
+      count: number;
+      totalHours: number;
+      localCount: number;
+      youtubeCount: number;
+      games: Record<string, { display: string; count: number; hours: number }>;
+    }
+  > = {};
+
+  for (const item of items) {
+    if (!item.date) continue;
+    let bucket = byDate[item.date];
+    if (!bucket) {
+      bucket = {
+        count: 0,
+        totalHours: 0,
+        localCount: 0,
+        youtubeCount: 0,
+        games: {},
+      };
+      byDate[item.date] = bucket;
+    }
+
+    const hrs = item.hours && item.hours > 0 ? item.hours : 0;
+    bucket.count += 1;
+    bucket.totalHours += hrs;
+    if (item.source === "local") bucket.localCount += 1;
+    if (item.source === "youtube") bucket.youtubeCount += 1;
+
+    const rawGame = item.game?.trim() || "";
+    if (rawGame) {
+      const norm = normalizeGameKey(rawGame);
+      if (norm) {
+        if (!bucket.games[norm]) {
+          bucket.games[norm] = { display: rawGame, count: 0, hours: 0 };
+        }
+        bucket.games[norm].count += 1;
+        bucket.games[norm].hours += hrs;
+      }
+    }
+  }
+
+  return Object.entries(byDate).map(([date, b]) => {
+    const games: DailyGameSummary[] = Object.values(b.games)
+      .map((g) => ({ game: g.display, count: g.count, hours: g.hours }))
+      .sort(
+        (a, c) =>
+          c.count - a.count || c.hours - a.hours || a.game.localeCompare(c.game),
+      );
+
+    return {
+      date,
+      count: b.count,
+      totalHours: b.totalHours,
+      localCount: b.localCount,
+      youtubeCount: b.youtubeCount,
+      games,
+    };
+  });
 }
 
 export interface DayGameBreakdown {

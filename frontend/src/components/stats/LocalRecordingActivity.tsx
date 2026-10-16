@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
+import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import {
   GetVideosFromFolders,
   LoadConfig,
@@ -8,15 +8,27 @@ import {
 import ContributionHeatmap from "../youtube/ContributionHeatmap";
 import type { DailyCount } from "../youtube/ContributionHeatmap";
 import { toLocalDateKey, extractTitleDate } from "../../utils/videoUtils";
-import AdvancedFilters, { ActiveFilterChips } from "../ui/AdvancedFilters";
+import {
+  parseDurationToHours,
+  resolveSessionGameName,
+  aggregateDailyActivity,
+  DailyActivityItem,
+} from "../../utils/gameStats";
+import AdvancedFilters, {
+  ActiveFilterChips,
+  AdvancedFiltersValue,
+} from "../ui/AdvancedFilters";
 import type { VideoFile, YTVideo } from "../../types";
 
 type Source = "all" | "local" | "youtube";
 
 interface LocalRecordingActivityProps {
-  filters: any;
-  selectedYear?: string;
-  onYearChange?: (year: string) => void;
+  readonly filters: {
+    readonly value: AdvancedFiltersValue;
+    readonly onChange: (v: AdvancedFiltersValue) => void;
+  };
+  readonly selectedYear?: string;
+  readonly onYearChange?: (year: string) => void;
 }
 
 export default function LocalRecordingActivity({
@@ -45,14 +57,14 @@ export default function LocalRecordingActivity({
 
       // ── YouTube individual videos (so we can filter by title) ────────────────
       try {
-        const res: any = await GetChannelVideosPaginated(
+        const res = (await GetChannelVideosPaginated(
           1,
           9999,
           "recent",
           "",
           "",
           "",
-        );
+        )) as { videos?: YTVideo[] } | null;
         setRawYtVideos(res?.videos ?? []);
       } catch {
         setRawYtVideos([]);
@@ -91,49 +103,49 @@ export default function LocalRecordingActivity({
     return !excludeWords.some((w: string) => lower.includes(w.toLowerCase()));
   };
 
-  // ── Aggregate local videos → DailyCount[] ──────────────────────────────────
-  const localData = useMemo<DailyCount[]>(() => {
-    const counts: Record<string, number> = {};
+  // ── Build filtered activity items per source ───────────────────────────────
+  const localItems = useMemo<DailyActivityItem[]>(() => {
+    const items: DailyActivityItem[] = [];
     for (const v of rawLocalVideos) {
       const dateKey = toLocalDateKey(v.modTime);
       if (!matchesDate(dateKey)) continue;
       if (!notExcluded(v.name)) continue;
-      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      items.push({
+        date: dateKey,
+        game: resolveSessionGameName(v.youtubeTitle, v.game),
+        hours: v.durationSecs && v.durationSecs > 0 ? v.durationSecs / 3600 : 0,
+        source: source === "all" ? "local" : undefined,
+      });
     }
-    return Object.entries(counts).map(([date, count]) => ({ date, count }));
-  }, [rawLocalVideos, dateFrom, dateTo, excludeWords]);
+    return items;
+  }, [rawLocalVideos, dateFrom, dateTo, excludeWords, source]);
 
-  // ── Aggregate YouTube videos → DailyCount[] ────────────────────────────────
-  // Use extractTitleDate (recording date in title) matching ChannelAnalytics behavior
-  const ytData = useMemo<DailyCount[]>(() => {
-    const counts: Record<string, number> = {};
+  const ytItems = useMemo<DailyActivityItem[]>(() => {
+    const items: DailyActivityItem[] = [];
     for (const v of rawYtVideos) {
       const titleDate = extractTitleDate(v.title);
       const uploadDate = v.publishedAt?.substring(0, 10) ?? "";
-
       const dateKey =
         metricSource === "title" ? titleDate || uploadDate : uploadDate;
 
       if (!dateKey) continue;
       if (!matchesDate(dateKey)) continue;
       if (!notExcluded(v.title)) continue;
-      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      items.push({
+        date: dateKey,
+        game: resolveSessionGameName(v.title, v.gameTag),
+        hours: parseDurationToHours(v.duration),
+        source: source === "all" ? "youtube" : undefined,
+      });
     }
-    return Object.entries(counts).map(([date, count]) => ({ date, count }));
-  }, [rawYtVideos, dateFrom, dateTo, excludeWords, metricSource]);
+    return items;
+  }, [rawYtVideos, dateFrom, dateTo, excludeWords, metricSource, source]);
 
-  // ── Merge ──────────────────────────────────────────────────────────────────
-  const mergedData = useMemo<DailyCount[]>(() => {
-    const combined: Record<string, number> = {};
-    for (const d of localData)
-      combined[d.date] = (combined[d.date] || 0) + d.count;
-    for (const d of ytData)
-      combined[d.date] = (combined[d.date] || 0) + d.count;
-    return Object.entries(combined).map(([date, count]) => ({ date, count }));
-  }, [localData, ytData]);
-
-  const activeData =
-    source === "local" ? localData : source === "youtube" ? ytData : mergedData;
+  const activeData = useMemo<DailyCount[]>(() => {
+    if (source === "local") return aggregateDailyActivity(localItems);
+    if (source === "youtube") return aggregateDailyActivity(ytItems);
+    return aggregateDailyActivity([...localItems, ...ytItems]);
+  }, [source, localItems, ytItems]);
 
   const SOURCES: { key: Source; label: string }[] = [
     { key: "all", label: "All" },

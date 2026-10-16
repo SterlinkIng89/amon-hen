@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   parseDurationToHours,
   extractGameName,
+  resolveSessionGameName,
+  aggregateDailyActivity,
   normalizeGameKey,
   assignGameColors,
   buildDailyGameBreakdown,
@@ -22,6 +24,32 @@ describe("gameStats utils", () => {
     expect(extractGameName("Metaphor: ReFantazio - Part 1", "Metaphor")).toBe("Metaphor");
     expect(extractGameName("Core Keeper - Episode 5")).toBe("Core Keeper");
     expect(extractGameName("Alone Title")).toBe("Alone Title");
+  });
+
+  it("ignores purely numeric/timestamp prefixes in resolveSessionGameName", () => {
+    expect(resolveSessionGameName("2026-10-15 18-30-00.mp4")).toBe("");
+    expect(resolveSessionGameName("2026-10-15 18-30-00.mp4", "Elden Ring")).toBe("Elden Ring");
+    expect(resolveSessionGameName("Hades II — 15/10/26 — 4")).toBe("Hades II");
+  });
+
+  it("aggregates daily activity counts, hours, games, and sources", () => {
+    const res = aggregateDailyActivity([
+      { date: "2026-10-10", game: "Hades II", hours: 1.5, source: "local" },
+      { date: "2026-10-10", game: "hades ii", hours: 2.0, source: "youtube" },
+      { date: "2026-10-10", game: "Deadlock", hours: 1.0, source: "local" },
+    ]);
+    expect(res).toHaveLength(1);
+    expect(res[0]).toEqual({
+      date: "2026-10-10",
+      count: 3,
+      totalHours: 4.5,
+      localCount: 2,
+      youtubeCount: 1,
+      games: [
+        { game: "Hades II", count: 2, hours: 3.5 },
+        { game: "Deadlock", count: 1, hours: 1.0 },
+      ],
+    });
   });
 
   it("normalizes game key consistently", () => {

@@ -1,13 +1,18 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
+import {
+  EnrichedDailyCount,
+  DailyGameSummary,
+  normalizeGameKey,
+} from "../../utils/gameStats";
+import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
+import { getGameColor } from "../../utils/tagColors";
 
-export interface DailyCount {
-  date: string; // YYYY-MM-DD
-  count: number;
-}
+export type DailyCount = EnrichedDailyCount;
+export type { DailyGameSummary };
 
 interface ContributionHeatmapProps {
-  stats: DailyCount[];
+  stats: readonly DailyCount[];
   label?: string;
   metricSource?: "upload" | "title";
   onMetricChange?: (source: "upload" | "title") => void;
@@ -31,10 +36,66 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     onYearChange: externalOnYearChange,
   }) => {
     const calendarData = useMemo(() => {
-      const acc: Record<string, number> = {};
+      const acc: Record<string, EnrichedDailyCount> = {};
       if (stats) {
         stats.forEach((curr) => {
-          acc[curr.date] = (acc[curr.date] || 0) + curr.count;
+          const existing = acc[curr.date];
+          if (!existing) {
+            acc[curr.date] = {
+              date: curr.date,
+              count: curr.count,
+              totalHours: curr.totalHours ?? 0,
+              localCount: curr.localCount ?? 0,
+              youtubeCount: curr.youtubeCount ?? 0,
+              games: curr.games ? [...curr.games] : [],
+            };
+            return;
+          }
+
+          const mergedGamesMap: Record<
+            string,
+            { game: string; count: number; hours: number }
+          > = {};
+          for (const g of existing.games ?? []) {
+            const k = normalizeGameKey(g.game);
+            if (!k) continue;
+            mergedGamesMap[k] = {
+              game: g.game,
+              count: g.count,
+              hours: g.hours,
+            };
+          }
+          for (const g of curr.games ?? []) {
+            const k = normalizeGameKey(g.game);
+            if (!k) continue;
+            if (!mergedGamesMap[k]) {
+              mergedGamesMap[k] = {
+                game: g.game,
+                count: g.count,
+                hours: g.hours,
+              };
+            } else {
+              mergedGamesMap[k].count += g.count;
+              mergedGamesMap[k].hours += g.hours;
+            }
+          }
+
+          const mergedGames = Object.values(mergedGamesMap).sort(
+            (a, b) =>
+              b.count - a.count ||
+              b.hours - a.hours ||
+              a.game.localeCompare(b.game),
+          );
+
+          acc[curr.date] = {
+            date: curr.date,
+            count: existing.count + curr.count,
+            totalHours: (existing.totalHours ?? 0) + (curr.totalHours ?? 0),
+            localCount: (existing.localCount ?? 0) + (curr.localCount ?? 0),
+            youtubeCount:
+              (existing.youtubeCount ?? 0) + (curr.youtubeCount ?? 0),
+            games: mergedGames,
+          };
         });
       }
       return acc;
@@ -213,13 +274,15 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     const [tooltip, setTooltip] = useState<{
       x: number;
       y: number;
-      content: string;
+      dateLabel: string;
+      entry: EnrichedDailyCount | null;
       visible: boolean;
       transform: string;
     }>({
       x: 0,
       y: 0,
-      content: "",
+      dateLabel: "",
+      entry: null,
       visible: false,
       transform: "translateY(-50%)",
     });
@@ -260,8 +323,10 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     };
 
     const totalCount = useMemo(() => {
-      return Object.values(calendarData).reduce((a, b) => a + b, 0);
+      return Object.values(calendarData).reduce((a, b) => a + b.count, 0);
     }, [calendarData]);
+
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     return (
       <div className="flex flex-col w-full gap-4 relative">
@@ -412,17 +477,14 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                   if (!d.date || d.date > today) return null;
                   const x = week.x;
                   const y = labelPadY + di * cellSize;
-                  const uploads = calendarData[d.key] ?? 0;
+                  const dayEntry = calendarData[d.key] ?? null;
+                  const uploads = dayEntry?.count ?? 0;
 
+                  const weekdayName = weekdayNames[d.date.getDay()];
                   const monthName = monthNames[d.date.getMonth()];
                   const dayNum = d.date.getDate();
                   const yearNum = d.date.getFullYear();
-                  const dateStr = `${monthName} ${dayNum}, ${yearNum}`;
-
-                  const tooltipContent =
-                    uploads > 0
-                      ? `${uploads} ${label}${uploads === 1 ? "" : "s"} on ${dateStr}`
-                      : `No ${label}s on ${dateStr}`;
+                  const dateStr = `${weekdayName}, ${monthName} ${dayNum}, ${yearNum}`;
 
                   const idx = getColorIndex(uploads);
                   const color = customPanelColors[idx];
@@ -445,11 +507,14 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                         const rect = (
                           e.target as SVGRectElement
                         ).getBoundingClientRect();
-                        const approxWidth = Math.max(
-                          tooltipContent.length * 7.5,
-                          90,
-                        );
-                        const padding = 8;
+                        const hasRichDetails =
+                          uploads > 0 &&
+                          ((dayEntry?.games && dayEntry.games.length > 0) ||
+                            (dayEntry?.totalHours ?? 0) > 0 ||
+                            (dayEntry?.localCount ?? 0) > 0 ||
+                            (dayEntry?.youtubeCount ?? 0) > 0);
+                        const approxWidth = hasRichDetails ? 240 : 185;
+                        const padding = 10;
                         let tooltipX = rect.right + padding;
                         let transform = "translateY(-50%)";
 
@@ -461,10 +526,17 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                           transform = "translate(-100%, -50%)";
                         }
 
+                        const rawY = rect.top + rect.height / 2;
+                        const clampedY = Math.min(
+                          Math.max(rawY, 80),
+                          window.innerHeight - 80,
+                        );
+
                         setTooltip({
                           x: tooltipX,
-                          y: rect.top + rect.height / 2,
-                          content: tooltipContent,
+                          y: clampedY,
+                          dateLabel: dateStr,
+                          entry: dayEntry,
                           visible: true,
                           transform: transform,
                         });
@@ -484,7 +556,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
         <div className="flex flex-wrap items-center justify-between w-full pt-3 border-t border-border-subtle/30 px-1 text-xs text-text-muted">
           <div>
             Total:{" "}
-            <strong className="text-text-primary font-semibold">
+            <strong className="text-text-primary font-semibold tabular-nums">
               {totalCount}
             </strong>{" "}
             {label}s recorded
@@ -525,9 +597,11 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                 transform: tooltip.transform,
               }}
             >
-              <div className="px-2.5 py-1 rounded-md bg-[#1c1c20]/95 text-text-primary text-xs font-medium shadow-xl border border-border-subtle/40 backdrop-blur-sm whitespace-nowrap">
-                {tooltip.content}
-              </div>
+              <HeatmapTooltipCard
+                dateLabel={tooltip.dateLabel}
+                entry={tooltip.entry}
+                label={label}
+              />
             </div>,
             document.body,
           )}
@@ -535,5 +609,97 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     );
   },
 );
+
+interface HeatmapTooltipCardProps {
+  readonly dateLabel: string;
+  readonly entry: EnrichedDailyCount | null;
+  readonly label: string;
+}
+
+function HeatmapTooltipCard({
+  dateLabel,
+  entry,
+  label,
+}: HeatmapTooltipCardProps) {
+  const count = entry?.count ?? 0;
+  const totalHours = entry?.totalHours ?? 0;
+  const games = entry?.games ?? [];
+  const localCount = entry?.localCount ?? 0;
+  const youtubeCount = entry?.youtubeCount ?? 0;
+
+  return (
+    <div className="px-3 py-2.5 rounded-lg bg-[#18181c] text-text-primary text-xs shadow-sm border border-border-medium min-w-[185px] max-w-[260px] flex flex-col gap-1.5">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[11px] font-medium text-text-muted tabular-nums">
+          {dateLabel}
+        </span>
+        {count > 0 ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold text-text-primary tabular-nums">
+              {count} {label}
+              {count === 1 ? "" : "s"}
+            </span>
+            {totalHours > 0 && (
+              <span className="text-[11px] font-semibold text-accent tabular-nums">
+                {formatPlaytimeHoursMinutes(totalHours)}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs font-medium text-text-secondary">
+            No {label}s on {dateLabel}
+          </span>
+        )}
+      </div>
+
+      {count > 0 && games.length > 0 && (
+        <div className="flex flex-col gap-1 pt-1.5 border-t border-border-subtle">
+          {games.slice(0, 4).map((g) => (
+            <div
+              key={g.game}
+              className="flex items-center justify-between gap-3"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: getGameColor(g.game) }}
+                />
+                <span className="text-[11px] font-medium text-text-primary truncate">
+                  {g.game}
+                </span>
+              </div>
+              <span className="text-[11px] text-text-secondary tabular-nums shrink-0">
+                {g.count}x
+                {g.hours > 0 ? ` · ${formatPlaytimeHoursMinutes(g.hours)}` : ""}
+              </span>
+            </div>
+          ))}
+          {games.length > 4 && (
+            <span className="text-[10px] text-text-muted tabular-nums">
+              +{games.length - 4} more games
+            </span>
+          )}
+        </div>
+      )}
+
+      {count > 0 && (localCount > 0 || youtubeCount > 0) && (
+        <div className="flex items-center gap-3 pt-1.5 border-t border-border-subtle text-[10px] text-text-muted tabular-nums">
+          {localCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {localCount} Local
+            </span>
+          )}
+          {youtubeCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              {youtubeCount} YouTube
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default ContributionHeatmap;
