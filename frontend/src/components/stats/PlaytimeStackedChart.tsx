@@ -247,7 +247,7 @@ export function PlaytimeStackedChart({
   const hasAnyHovered = hoveredIndex !== null;
 
   return (
-    <div className="flex flex-col gap-2 w-full mt-2">
+    <div className="bg-surface/60 border border-border-subtle rounded-lg p-4 flex flex-col gap-2 w-full mt-1">
       <div className="flex gap-2 w-full items-stretch">
         <div className="flex flex-col justify-between items-end pb-6 pt-1 text-[10px] text-text-muted font-medium shrink-0 w-12 tabular-nums select-none border-r border-border-subtle/50 pr-2">
           <span title="Scale ceiling">{formatAxisHours(chartMax)}</span>

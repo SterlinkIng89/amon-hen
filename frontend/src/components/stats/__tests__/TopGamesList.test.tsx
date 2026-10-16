@@ -94,4 +94,34 @@ describe("TopGamesList", () => {
 
     expect(handleSelect).toHaveBeenCalledWith("Mina the Hollower");
   });
+
+  it("applies semantic warm-neutral tokens to selected/unselected rows and progress track", () => {
+    const { container } = render(
+      <TopGamesList
+        games={sampleGames}
+        selectedGameName="Mina the Hollower"
+        onSelectGame={vi.fn()}
+        maxHours={7.66}
+        listTitle="Top games in October 2026"
+      />
+    );
+
+    const rows = screen.getAllByRole("button");
+    const selectedRow = rows[0];
+    const unselectedRow = rows[1];
+
+    // Selected row uses bg-card border-border-medium
+    expect(selectedRow.className).toContain("bg-card");
+    expect(selectedRow.className).toContain("border-border-medium");
+    expect(selectedRow.className).not.toContain("#1c1c24");
+
+    // Unselected row uses hover:bg-card/60 border-transparent
+    expect(unselectedRow.className).toContain("hover:bg-card/60");
+    expect(unselectedRow.className).not.toContain("#16161c");
+
+    // Progress bar track uses bg-elevated
+    const progressTrack = container.querySelector(".bg-elevated");
+    expect(progressTrack).not.toBeNull();
+    expect(container.innerHTML).not.toContain("#23232c");
+  });
 });

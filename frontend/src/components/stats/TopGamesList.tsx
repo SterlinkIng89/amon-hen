@@ -50,8 +50,8 @@ function GameRowItem({
       }}
       className={`group flex items-center gap-3 w-full py-1.5 px-2 rounded-lg cursor-pointer transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
         isSelected
-          ? "bg-[#1c1c24] border border-[#2e2e3c]"
-          : "hover:bg-[#16161c] border border-transparent"
+          ? "bg-card border border-border-medium"
+          : "hover:bg-card/60 border border-transparent"
       }`}
     >
       {/* Framed Wide Capsule Banner (Steam 460x215 aspect ratio) */}
@@ -96,7 +96,7 @@ function GameRowItem({
         </div>
 
         {/* Thin progress bar underneath spanning full width */}
-        <div className="h-[2px] w-full bg-[#23232c] rounded-full overflow-hidden">
+        <div className="h-[2px] w-full bg-elevated rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{

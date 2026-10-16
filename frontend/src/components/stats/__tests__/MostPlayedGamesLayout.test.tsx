@@ -98,4 +98,20 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getAllByText("Hollow Knight: Silksong").length).toBeGreaterThan(0);
     });
   });
+
+  it("applies warm-neutral elevated card surface, subtle border, and subtle divider", async () => {
+    const { container } = render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const card = container.querySelector(".bg-elevated\\/30");
+    expect(card).not.toBeNull();
+    expect(card?.className).toContain("border-border-subtle");
+    expect(card?.className).not.toContain("bg-surface border-border-medium");
+
+    const divider = container.querySelector(".bg-border-subtle.h-px");
+    expect(divider).not.toBeNull();
+  });
 });

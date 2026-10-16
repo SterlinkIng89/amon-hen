@@ -302,7 +302,7 @@ export default function MostPlayedGames({
 
   return (
     <div className="px-5 pb-5 flex flex-col gap-4">
-      <div className="bg-surface border border-border-medium rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
+      <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
         {/* Header & Playtime Toolbar */}
         <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
@@ -337,7 +337,7 @@ export default function MostPlayedGames({
           }}
         />
 
-        <div className="h-px w-full bg-border-medium my-1" />
+        <div className="h-px w-full bg-border-subtle my-1" />
 
         {/* Grouped Top Games (40%) and Timeline (60%) with vertical hairline divider */}
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
