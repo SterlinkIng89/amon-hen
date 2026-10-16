@@ -6,8 +6,8 @@ import {
   normalizeGameKey,
   computeHeatmapPeriodSummary,
 } from "../../utils/gameStats";
-import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
 import { getGameColor } from "../../utils/tagColors";
+import { HeatmapTooltipCard } from "./HeatmapTooltipCard";
 import {
   HeatmapColorModeToggle,
   HeatmapColorMode,
@@ -17,6 +17,11 @@ import { getTopGames, TopGamesScope } from "../../utils/heatmapTopGames";
 
 export type DailyCount = EnrichedDailyCount;
 export type { DailyGameSummary, HeatmapColorMode };
+
+export interface MonthDividerPath {
+  readonly year: number;
+  readonly d: string;
+}
 
 const SUMMARY_PILL_CLASS =
   "px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-muted tabular-nums";
@@ -163,6 +168,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       }
     };
 
+    const [isolateYear, setIsolateYear] = useState<boolean>(false);
+
     useEffect(() => {
       if (
         currentSelectedYear !== "All" &&
@@ -171,6 +178,16 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
         handleYearChange("All");
       }
     }, [availableYears, currentSelectedYear]);
+
+    useEffect(() => {
+      if (currentSelectedYear === "All") {
+        setIsolateYear(false);
+      }
+    }, [currentSelectedYear]);
+
+    const isIsolated = isolateYear && currentSelectedYear !== "All";
+    const cellSize = isIsolated ? 13 : 11;
+    const cellRectSize = isIsolated ? 11 : 9;
 
     const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
     const [colorMode, setColorMode] = useState<HeatmapColorMode>("intensity");
@@ -201,8 +218,8 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     };
 
     const today = useMemo(() => new Date(), []);
+    const todayKey = useMemo(() => formatDate(today), [today]);
 
-    const cellSize = 11;
     const labelPadX = 18;
     const labelPadY = 28;
     const monthNames = [
@@ -220,18 +237,118 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       "Dec",
     ];
 
-    // Full layout always containing all years in chronological sequence
+    // Layout containing either all years or single isolated year with separated month blocks
     const layout = useMemo(() => {
-      const yearsToRender = [...availableYears].reverse(); // oldest -> newest
-
       let currentX = labelPadX;
       const generatedWeeks: {
+        year: number;
         x: number;
         days: { date: Date | null; key: string }[];
       }[] = [];
       const yearLabels: { x: number; year: number }[] = [];
       const yearDividers: number[] = [];
-      const monthLabels: { x: number; label: string }[] = [];
+      const monthLabels: { year: number; x: number; label: string }[] = [];
+      const monthDividers: MonthDividerPath[] = [];
+
+      if (isIsolated) {
+        // Discrete month layout with physical gap between months
+        const yr = parseInt(currentSelectedYear, 10);
+        yearLabels.push({ x: currentX, year: yr });
+
+        const monthGap = 8;
+        const maxMonth = yr === today.getFullYear() ? today.getMonth() : 11;
+
+        for (let m = 0; m <= maxMonth; m++) {
+          if (m > 0) {
+            currentX += monthGap;
+          }
+
+          const monthStartX = currentX;
+          const monthStart = new Date(yr, m, 1, 0, 0, 0, 0);
+          let monthEnd = new Date(yr, m + 1, 0, 23, 59, 59, 999);
+          if (yr === today.getFullYear() && m === today.getMonth()) {
+            monthEnd = new Date(today);
+            monthEnd.setHours(23, 59, 59, 999);
+          }
+
+          let curDay = new Date(monthStart);
+          let week: { date: Date | null; key: string }[] = [];
+
+          for (let p = 0; p < curDay.getDay(); p++) {
+            week.push({ date: null, key: `pad-start-${yr}-${m}-${p}` });
+          }
+
+          while (curDay <= monthEnd) {
+            week.push({
+              date: new Date(curDay),
+              key: formatDate(curDay),
+            });
+
+            if (week.length === 7) {
+              generatedWeeks.push({ year: yr, x: currentX, days: week });
+              currentX += cellSize;
+              week = [];
+            }
+            curDay.setDate(curDay.getDate() + 1);
+          }
+
+          if (week.length > 0) {
+            while (week.length < 7) {
+              week.push({
+                date: null,
+                key: `pad-end-${yr}-${m}-${week.length}`,
+              });
+            }
+            generatedWeeks.push({ year: yr, x: currentX, days: week });
+            currentX += cellSize;
+          }
+
+          const monthEndX = currentX;
+          monthLabels.push({
+            year: yr,
+            x: (monthStartX + monthEndX) / 2,
+            label: monthNames[m],
+          });
+        }
+
+        return {
+          years: [yr],
+          weeks: generatedWeeks,
+          yearLabels,
+          yearDividers,
+          monthLabels,
+          monthDividers,
+          svgWidth: currentX + 16,
+          svgHeight: labelPadY + 7 * cellSize + 6,
+        };
+      }
+
+      // Continuous multi-year layout (when !isIsolated)
+      const yearsToRender = [...availableYears].reverse(); // oldest -> newest
+
+      const processWeekDividers = (
+        wk: { date: Date | null; key: string }[],
+        wkX: number,
+        targetYear: number,
+      ) => {
+        wk.forEach((d, splitDayIdx) => {
+          if (
+            d.date !== null &&
+            d.date.getFullYear() === targetYear &&
+            d.date.getDate() === 1 &&
+            d.date.getMonth() > 0
+          ) {
+            if (splitDayIdx > 0) {
+              const ySplit = labelPadY + splitDayIdx * cellSize;
+              const dPath = `M ${wkX + cellSize} ${labelPadY} L ${wkX + cellSize} ${ySplit} L ${wkX} ${ySplit} L ${wkX} ${labelPadY + 7 * cellSize}`;
+              monthDividers.push({ year: targetYear, d: dPath });
+            } else {
+              const dPath = `M ${wkX - 1} ${labelPadY} L ${wkX - 1} ${labelPadY + 7 * cellSize}`;
+              monthDividers.push({ year: targetYear, d: dPath });
+            }
+          }
+        });
+      };
 
       yearsToRender.forEach((yrStr, yrIndex) => {
         const yr = parseInt(yrStr, 10);
@@ -280,6 +397,7 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               const mo = firstValid.date.getMonth();
               if (mo !== lastMonth && currentX - lastMonthX >= 26) {
                 monthLabels.push({
+                  year: yr,
                   x: currentX + cellSize / 2,
                   label: monthNames[mo],
                 });
@@ -288,7 +406,9 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               }
             }
 
-            generatedWeeks.push({ x: currentX, days: week });
+            processWeekDividers(week, currentX, yr);
+
+            generatedWeeks.push({ year: yr, x: currentX, days: week });
             currentX += cellSize;
             week = [];
           }
@@ -299,20 +419,23 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
           while (week.length < 7) {
             week.push({ date: null, key: `pad-end-${yr}-${week.length}` });
           }
-          generatedWeeks.push({ x: currentX, days: week });
+          processWeekDividers(week, currentX, yr);
+          generatedWeeks.push({ year: yr, x: currentX, days: week });
           currentX += cellSize;
         }
       });
 
       return {
+        years: yearsToRender.map((yrStr) => parseInt(yrStr, 10)),
         weeks: generatedWeeks,
         yearLabels,
         yearDividers,
         monthLabels,
+        monthDividers,
         svgWidth: currentX + 16,
         svgHeight: labelPadY + 7 * cellSize + 6,
       };
-    }, [availableYears, today]);
+    }, [availableYears, today, isIsolated, currentSelectedYear, cellSize]);
 
     const [tooltip, setTooltip] = useState<{
       x: number;
@@ -329,6 +452,42 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
       visible: false,
       transform: "translateY(-50%)",
     });
+
+    const handleCellMouseEnter = (
+      targetEl: SVGRectElement,
+      dayEntry: EnrichedDailyCount | null,
+      dateStr: string,
+      uploads: number,
+    ) => {
+      const rect = targetEl.getBoundingClientRect();
+      const hasRichDetails =
+        uploads > 0 &&
+        ((dayEntry?.games && dayEntry.games.length > 0) ||
+          (dayEntry?.totalHours ?? 0) > 0 ||
+          (dayEntry?.localCount ?? 0) > 0 ||
+          (dayEntry?.youtubeCount ?? 0) > 0);
+      const approxWidth = hasRichDetails ? 240 : 185;
+      const padding = 10;
+      let tooltipX = rect.right + padding;
+      let transform = "translateY(-50%)";
+
+      if (rect.right + approxWidth + padding > window.innerWidth) {
+        tooltipX = rect.left - padding;
+        transform = "translate(-100%, -50%)";
+      }
+
+      const rawY = rect.top + rect.height / 2;
+      const clampedY = Math.min(Math.max(rawY, 80), window.innerHeight - 80);
+
+      setTooltip({
+        x: tooltipX,
+        y: clampedY,
+        dateLabel: dateStr,
+        entry: dayEntry,
+        visible: true,
+        transform: transform,
+      });
+    };
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -348,6 +507,9 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
 
     // Smooth scroll to target year when button clicked
     const handleYearClick = (yearOption: string) => {
+      if (yearOption === "All") {
+        setIsolateYear(false);
+      }
       handleYearChange(yearOption);
       const container = scrollContainerRef.current;
       if (!container) return;
@@ -452,23 +614,35 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
 
             {/* Year Switcher with Smooth Scroll Navigation */}
             {availableYears.length > 1 && (
-              <div className="flex items-center bg-[#141418] p-1 rounded-lg border-0">
-                {["All", ...availableYears].map((opt) => {
-                  const isActive = currentSelectedYear === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => handleYearClick(opt)}
-                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                        isActive
-                          ? "bg-accent text-white font-semibold shadow-sm"
-                          : "text-text-muted hover:text-text-primary"
-                      }`}
-                    >
-                      {opt === "All" ? "All time" : opt}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-[#141418] p-1 rounded-lg border-0">
+                  {["All", ...availableYears].map((opt) => {
+                    const isActive = currentSelectedYear === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => handleYearClick(opt)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                          isActive
+                            ? "bg-accent text-white font-semibold shadow-sm"
+                            : "text-text-muted hover:text-text-primary"
+                        }`}
+                      >
+                        {opt === "All" ? "All time" : opt}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {currentSelectedYear !== "All" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsolateYear((prev) => !prev)}
+                    className="px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-[#141418] border border-border-subtle/50 text-text-muted hover:text-text-primary cursor-pointer"
+                  >
+                    {isolateYear ? "Show all years" : "Focus year"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -485,55 +659,165 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
               height={layout.svgHeight}
               style={{ height: layout.svgHeight, display: "block" }}
             >
-              {layout.yearLabels.map((yl) => {
-                const isSelected = currentSelectedYear === yl.year.toString();
+              {layout.years.map((yr) => {
+                const isSelected = currentSelectedYear === yr.toString();
+                const isDimmed =
+                  currentSelectedYear !== "All" &&
+                  currentSelectedYear !== yr.toString();
+                const yearLabel = layout.yearLabels.find((yl) => yl.year === yr);
+                const yearWeeks = layout.weeks.filter((w) => w.year === yr);
+                const yearMonthLabels = layout.monthLabels.filter(
+                  (m) => m.year === yr,
+                );
+                const yearDividersList = layout.monthDividers.filter(
+                  (md) => md.year === yr,
+                );
+
                 return (
-                  <text
-                    key={yl.year}
-                    x={yl.x}
-                    y={13}
-                    textAnchor="start"
-                    style={{
-                      fill: isSelected ? "#ffb020" : "#a0a0aa",
-                      fontWeight: isSelected ? 900 : 700,
-                      fontSize: 13,
-                      transition: "fill 0.2s ease",
-                    }}
+                  <g
+                    key={yr}
+                    data-year={yr}
+                    opacity={isDimmed ? 0.3 : 1}
+                    className="transition-opacity duration-200"
                   >
-                    {yl.year}
-                  </text>
+                    {yearLabel && (
+                      <text
+                        x={yearLabel.x}
+                        y={13}
+                        textAnchor="start"
+                        style={{
+                          fill: isSelected ? "#ffb020" : "#a0a0aa",
+                          fontWeight: isSelected ? 900 : 700,
+                          fontSize: 13,
+                          transition: "fill 0.2s ease",
+                        }}
+                      >
+                        {yearLabel.year}
+                      </text>
+                    )}
+
+                    {yearMonthLabels.map((m, i) => (
+                      <text
+                        key={m.label + i}
+                        x={m.x}
+                        y={labelPadY - 6}
+                        textAnchor="middle"
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 600,
+                          fill: "#7e7e88",
+                          alignmentBaseline: "central",
+                        }}
+                      >
+                        {m.label}
+                      </text>
+                    ))}
+
+                    {yearDividersList.map((div, i) => (
+                      <path
+                        key={`divider-${yr}-${i}`}
+                        data-testid="month-divider"
+                        d={div.d}
+                        stroke={isIsolated ? "#52525b" : "#2e2e36"}
+                        strokeWidth={isIsolated ? 1.5 : 1}
+                        fill="none"
+                        pointerEvents="none"
+                      />
+                    ))}
+
+                    {yearWeeks.map((week) =>
+                      week.days.map((d, di) => {
+                        if (!d.date || d.date > today) return null;
+                        const x = week.x;
+                        const y = labelPadY + di * cellSize;
+                        const dayEntry = calendarData[d.key] ?? null;
+                        const uploads = dayEntry?.count ?? 0;
+
+                        const weekdayName = weekdayNames[d.date.getDay()];
+                        const monthName = monthNames[d.date.getMonth()];
+                        const dayNum = d.date.getDate();
+                        const yearNum = d.date.getFullYear();
+                        const isToday = d.key === todayKey;
+                        const dateStr = `${weekdayName}, ${monthName} ${dayNum}, ${yearNum}${isToday ? " (Today)" : ""}`;
+
+                        const idx = getColorIndex(uploads);
+                        let color: string = customPanelColors[idx];
+                        const isSelectedDate = selectedDate === d.key;
+                        const isBucketDimmed =
+                          selectedBucket !== null && idx !== selectedBucket;
+
+                        let cellOpacity: number = isBucketDimmed ? 0.15 : 1;
+
+                        if (colorMode === "game" && uploads > 0) {
+                          const dominantGame = dayEntry?.games?.[0]?.game;
+                          if (dominantGame) {
+                            color = getGameColor(dominantGame);
+                          }
+                          if (!isBucketDimmed) {
+                            cellOpacity = GAME_MODE_OPACITIES[idx] ?? 1.0;
+                          }
+                        }
+
+                        const strokeColor = isSelectedDate
+                          ? "#f97316"
+                          : isToday
+                            ? "#ffb020"
+                            : undefined;
+                        const strokeWidthVal = isSelectedDate
+                          ? 1.5
+                          : isToday
+                            ? 1.25
+                            : undefined;
+
+                        return (
+                          <rect
+                            key={d.key}
+                            x={x}
+                            y={y}
+                            width={cellRectSize}
+                            height={cellRectSize}
+                            fill={color}
+                            fillOpacity={cellOpacity}
+                            stroke={strokeColor}
+                            strokeWidth={strokeWidthVal}
+                            rx={2}
+                            ry={2}
+                            className={`transition-colors duration-150 hover:stroke-accent hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
+                            onClick={() => {
+                              if (uploads > 0 && onDateClick) onDateClick(d.key);
+                            }}
+                            onMouseEnter={(e) =>
+                              handleCellMouseEnter(
+                                e.currentTarget,
+                                dayEntry,
+                                dateStr,
+                                uploads,
+                              )
+                            }
+                            onMouseLeave={() =>
+                              setTooltip((t) => ({ ...t, visible: false }))
+                            }
+                          />
+                        );
+                      }),
+                    )}
+                  </g>
                 );
               })}
 
-              {layout.yearDividers.map((dx) => (
-                <line
-                  key={dx}
-                  x1={dx}
-                  y1={4}
-                  x2={dx}
-                  y2={layout.svgHeight - 2}
-                  stroke="#383840"
-                  strokeDasharray="3 3"
-                  strokeWidth={1}
-                />
-              ))}
-
-              {layout.monthLabels.map((m, i) => (
-                <text
-                  key={m.label + i}
-                  x={m.x}
-                  y={labelPadY - 6}
-                  textAnchor="middle"
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 600,
-                    fill: "#7e7e88",
-                    alignmentBaseline: "central",
-                  }}
-                >
-                  {m.label}
-                </text>
-              ))}
+              {!isIsolated &&
+                layout.yearDividers.map((dx) => (
+                  <line
+                    key={dx}
+                    x1={dx}
+                    y1={4}
+                    x2={dx}
+                    y2={layout.svgHeight - 2}
+                    stroke="#383840"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                  />
+                ))}
 
               {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
                 <text
@@ -551,101 +835,6 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
                   {i % 2 === 1 ? d : ""}
                 </text>
               ))}
-
-              {layout.weeks.map((week) =>
-                week.days.map((d, di) => {
-                  if (!d.date || d.date > today) return null;
-                  const x = week.x;
-                  const y = labelPadY + di * cellSize;
-                  const dayEntry = calendarData[d.key] ?? null;
-                  const uploads = dayEntry?.count ?? 0;
-
-                  const weekdayName = weekdayNames[d.date.getDay()];
-                  const monthName = monthNames[d.date.getMonth()];
-                  const dayNum = d.date.getDate();
-                  const yearNum = d.date.getFullYear();
-                  const dateStr = `${weekdayName}, ${monthName} ${dayNum}, ${yearNum}`;
-
-                  const idx = getColorIndex(uploads);
-                  let color: string = customPanelColors[idx];
-                  const isSelected = selectedDate === d.key;
-                  const isDimmed =
-                    selectedBucket !== null && idx !== selectedBucket;
-
-                  let cellOpacity: number = isDimmed ? 0.15 : 1;
-
-                  if (colorMode === "game" && uploads > 0) {
-                    const dominantGame = dayEntry?.games?.[0]?.game;
-                    if (dominantGame) {
-                      color = getGameColor(dominantGame);
-                    }
-                    if (!isDimmed) {
-                      cellOpacity = GAME_MODE_OPACITIES[idx] ?? 1.0;
-                    }
-                  }
-
-                  return (
-                    <rect
-                      key={d.key}
-                      x={x}
-                      y={y}
-                      width={9}
-                      height={9}
-                      fill={color}
-                      fillOpacity={cellOpacity}
-                      stroke={isSelected ? "#f97316" : undefined}
-                      strokeWidth={isSelected ? 1.5 : undefined}
-                      rx={2}
-                      ry={2}
-                      className={`transition-colors duration-150 hover:stroke-accent hover:stroke-[1.5px]${uploads > 0 ? " cursor-pointer" : ""}`}
-                      onClick={() => {
-                        if (uploads > 0 && onDateClick) onDateClick(d.key);
-                      }}
-                      onMouseEnter={(e) => {
-                        const rect = (
-                          e.target as SVGRectElement
-                        ).getBoundingClientRect();
-                        const hasRichDetails =
-                          uploads > 0 &&
-                          ((dayEntry?.games && dayEntry.games.length > 0) ||
-                            (dayEntry?.totalHours ?? 0) > 0 ||
-                            (dayEntry?.localCount ?? 0) > 0 ||
-                            (dayEntry?.youtubeCount ?? 0) > 0);
-                        const approxWidth = hasRichDetails ? 240 : 185;
-                        const padding = 10;
-                        let tooltipX = rect.right + padding;
-                        let transform = "translateY(-50%)";
-
-                        if (
-                          rect.right + approxWidth + padding >
-                          window.innerWidth
-                        ) {
-                          tooltipX = rect.left - padding;
-                          transform = "translate(-100%, -50%)";
-                        }
-
-                        const rawY = rect.top + rect.height / 2;
-                        const clampedY = Math.min(
-                          Math.max(rawY, 80),
-                          window.innerHeight - 80,
-                        );
-
-                        setTooltip({
-                          x: tooltipX,
-                          y: clampedY,
-                          dateLabel: dateStr,
-                          entry: dayEntry,
-                          visible: true,
-                          transform: transform,
-                        });
-                      }}
-                      onMouseLeave={() =>
-                        setTooltip((t) => ({ ...t, visible: false }))
-                      }
-                    />
-                  );
-                }),
-              )}
             </svg>
           </div>
         </div>
@@ -772,97 +961,5 @@ const ContributionHeatmap: React.FC<ContributionHeatmapProps> = React.memo(
     );
   },
 );
-
-interface HeatmapTooltipCardProps {
-  readonly dateLabel: string;
-  readonly entry: EnrichedDailyCount | null;
-  readonly label: string;
-}
-
-function HeatmapTooltipCard({
-  dateLabel,
-  entry,
-  label,
-}: HeatmapTooltipCardProps) {
-  const count = entry?.count ?? 0;
-  const totalHours = entry?.totalHours ?? 0;
-  const games = entry?.games ?? [];
-  const localCount = entry?.localCount ?? 0;
-  const youtubeCount = entry?.youtubeCount ?? 0;
-
-  return (
-    <div className="px-3 py-2.5 rounded-lg bg-[#18181c] text-text-primary text-xs shadow-sm border border-[#26262b] min-w-[185px] max-w-[260px] flex flex-col gap-1.5">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[11px] font-medium text-text-muted tabular-nums">
-          {dateLabel}
-        </span>
-        {count > 0 ? (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-bold text-text-primary tabular-nums">
-              {count} {label}
-              {count === 1 ? "" : "s"}
-            </span>
-            {totalHours > 0 && (
-              <span className="text-[11px] font-semibold text-accent tabular-nums">
-                {formatPlaytimeHoursMinutes(totalHours)}
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-xs font-medium text-text-secondary">
-            No {label}s on {dateLabel}
-          </span>
-        )}
-      </div>
-
-      {count > 0 && games.length > 0 && (
-        <div className="flex flex-col gap-1 pt-1.5 border-t border-[#232328]">
-          {games.slice(0, 4).map((g) => (
-            <div
-              key={g.game}
-              className="flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: getGameColor(g.game) }}
-                />
-                <span className="text-[11px] font-medium text-text-primary truncate">
-                  {g.game}
-                </span>
-              </div>
-              <span className="text-[11px] text-text-secondary tabular-nums shrink-0">
-                {g.count}x
-                {g.hours > 0 ? ` · ${formatPlaytimeHoursMinutes(g.hours)}` : ""}
-              </span>
-            </div>
-          ))}
-          {games.length > 4 && (
-            <span className="text-[10px] text-text-muted tabular-nums">
-              +{games.length - 4} more games
-            </span>
-          )}
-        </div>
-      )}
-
-      {count > 0 && (localCount > 0 || youtubeCount > 0) && (
-        <div className="flex items-center gap-3 pt-1.5 border-t border-[#232328] text-[10px] text-text-muted tabular-nums">
-          {localCount > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              {localCount} Local
-            </span>
-          )}
-          {youtubeCount > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              {youtubeCount} YouTube
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default ContributionHeatmap;

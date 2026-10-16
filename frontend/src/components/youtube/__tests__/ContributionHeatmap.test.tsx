@@ -259,5 +259,132 @@ describe("ContributionHeatmap dominant game color mode", () => {
   });
 });
 
+describe("ContributionHeatmap grid navigation (Issue 97)", () => {
+  it("renders Today cell with gold stroke and appends (Today) in tooltip header", () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const todayKey = `${y}-${m}-${d}`;
 
+    const stats: DailyCount[] = [
+      {
+        date: todayKey,
+        count: 2,
+        totalHours: 1.0,
+      },
+    ];
 
+    const { container } = render(
+      <ContributionHeatmap stats={stats} label="recording" />,
+    );
+
+    const rects = Array.from(container.querySelectorAll("rect"));
+    const todayRect = rects.find(
+      (r) => r.getAttribute("stroke") === "#ffb020",
+    );
+    expect(todayRect).toBeDefined();
+    expect(todayRect?.getAttribute("stroke-width")).toBe("1.25");
+
+    if (todayRect) {
+      fireEvent.mouseEnter(todayRect);
+      expect(screen.getByText(/\(Today\)/i)).toBeInTheDocument();
+    }
+  });
+
+  it("renders stepped month divider paths within the SVG", () => {
+    const stats: DailyCount[] = [
+      { date: "2025-01-15", count: 1 },
+      { date: "2025-03-10", count: 2 },
+    ];
+
+    const { container } = render(
+      <ContributionHeatmap stats={stats} label="recording" />,
+    );
+
+    const dividerPaths = container.querySelectorAll(
+      'path[data-testid="month-divider"]',
+    );
+    expect(dividerPaths.length).toBeGreaterThan(0);
+    const firstPath = dividerPaths[0];
+    expect(firstPath.getAttribute("stroke")).toBe("#2e2e36");
+    expect(firstPath.getAttribute("stroke-width")).toBe("1");
+    expect(firstPath.getAttribute("fill")).toBe("none");
+  });
+
+  it("dims non-selected years when a specific year is selected", () => {
+    Element.prototype.scrollTo = vi.fn();
+    const stats: DailyCount[] = [
+      { date: "2024-05-01", count: 2 },
+      { date: "2025-06-01", count: 3 },
+    ];
+
+    const { container } = render(<ContributionHeatmap stats={stats} />);
+
+    // Initially in "All" view - no year group should be dimmed
+    const yearGroups = container.querySelectorAll("g[data-year]");
+    expect(yearGroups.length).toBeGreaterThanOrEqual(2);
+    yearGroups.forEach((g) => {
+      expect(g.getAttribute("opacity")).toBe("1");
+    });
+
+    // Select 2024
+    const btn2024 = screen.getByRole("button", { name: "2024" });
+    fireEvent.click(btn2024);
+
+    const g2024 = container.querySelector('g[data-year="2024"]');
+    const g2025 = container.querySelector('g[data-year="2025"]');
+
+    expect(g2024?.getAttribute("opacity")).toBe("1");
+    expect(g2025?.getAttribute("opacity")).toBe("0.3");
+  });
+
+  it("toggles single-year isolation with expanded cellSize when Focus year is clicked", () => {
+    Element.prototype.scrollTo = vi.fn();
+    const stats: DailyCount[] = [
+      { date: "2024-05-01", count: 2 },
+      { date: "2025-06-01", count: 3 },
+    ];
+
+    const { container } = render(<ContributionHeatmap stats={stats} />);
+
+    // Initially, "Focus year" button is not visible in "All" mode
+    expect(screen.queryByRole("button", { name: "Focus year" })).toBeNull();
+
+    // Select 2024
+    const btn2024 = screen.getByRole("button", { name: "2024" });
+    fireEvent.click(btn2024);
+
+    const focusBtn = screen.getByRole("button", { name: "Focus year" });
+    expect(focusBtn).toBeInTheDocument();
+
+    // Default rect width should be 9
+    const rectBefore = container.querySelector('g[data-year="2024"] rect');
+    expect(rectBefore?.getAttribute("width")).toBe("9");
+
+    // Click "Focus year"
+    fireEvent.click(focusBtn);
+
+    // Button label toggles to "Show all years"
+    expect(screen.getByRole("button", { name: "Show all years" })).toBeInTheDocument();
+
+    // In isolated mode, cellSize is 13, rect width is 11
+    const rectAfter = container.querySelector('g[data-year="2024"] rect');
+    expect(rectAfter?.getAttribute("width")).toBe("11");
+
+    // In isolated mode, divider lines are omitted in favor of the physical whitespace gap
+    const divider = container.querySelector('g[data-year="2024"] path[data-testid="month-divider"]');
+    expect(divider).toBeNull();
+
+    // In isolated mode, months have a physical gap (Jan last week to Feb first week is cellSize + monthGap = 21)
+    const allRects2024 = Array.from(container.querySelectorAll('g[data-year="2024"] rect'));
+    const uniqueXs = Array.from(new Set(allRects2024.map((r) => Number(r.getAttribute("x"))))).sort((a, b) => a - b);
+    // Find gaps between consecutive week columns:
+    const gaps = uniqueXs.slice(1).map((x, i) => x - uniqueXs[i]);
+    // The regular column step is 13, and month transitions have 13 + 8 = 21
+    expect(gaps).toContain(21);
+
+    // 2025 group should not be rendered in isolated layout
+    expect(container.querySelector('g[data-year="2025"]')).toBeNull();
+  });
+});
