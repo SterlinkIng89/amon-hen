@@ -396,6 +396,84 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(silksongStint.className).toContain("opacity-35");
     });
   });
+
+  it("renders Yearly timeline and chronological stints across year when switching to By year view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Yearly timeline")).toBeDefined();
+      expect(screen.queryByText("Switch to month view to inspect chronological stints")).toBeNull();
+      expect(screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II")).toBeDefined();
+      expect(screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong")).toBeDefined();
+    });
+  });
+
+  it("updates highlight card when clicking a stint card in year view and toggles off on second click", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Second click deselects
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+  });
+
+  it("resets selected stint when switching view mode", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Monthly timeline")).toBeDefined();
+    });
+
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Yearly timeline")).toBeDefined();
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Clicking Silksong in the list deselects it and restores #1 Game of the year
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+  });
 });
-
-

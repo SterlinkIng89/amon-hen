@@ -376,5 +376,31 @@ describe("GamingTimelineStrip Component", () => {
     expect(screen.getByText("2d break")).toBeDefined();
     expect(screen.getByText("Oct 4 – 5")).toBeDefined();
   });
-});
 
+  it("renders custom title when title prop is provided", () => {
+    // Empty state
+    const { rerender } = render(<GamingTimelineStrip stints={[]} title="Yearly timeline" />);
+    expect(screen.getByText("Yearly timeline")).toBeDefined();
+    expect(screen.queryByText("Monthly timeline")).toBeNull();
+
+    // With stints
+    rerender(<GamingTimelineStrip stints={mockStints} title="Yearly timeline" />);
+    expect(screen.getByText("Yearly timeline")).toBeDefined();
+    expect(screen.queryByText("Monthly timeline")).toBeNull();
+  });
+
+  it("applies vertical scrollable container with max-height and custom scrollbar when stints exceed 6", () => {
+    const manyStints: GameStint[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `stint-${i + 1}`,
+      startDate: `2026-0${i + 1}-01`,
+      endDate: `2026-0${i + 1}-02`,
+      dayCount: 2,
+      totalHours: 3,
+      games: [{ game: `Game ${i + 1}`, hours: 3 }],
+    }));
+
+    const { container } = render(<GamingTimelineStrip stints={manyStints} title="Yearly timeline" />);
+    const scrollContainer = container.querySelector(".max-h-\\[480px\\].overflow-y-auto.custom-scrollbar");
+    expect(scrollContainer).not.toBeNull();
+  });
+});

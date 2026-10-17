@@ -15,6 +15,7 @@ export interface GamingTimelineStripProps {
   readonly selectedStintId?: string | null;
   readonly selectedGameName?: string | null;
   readonly onSelectStint?: (stint: GameStint, activeGameName?: string) => void;
+  readonly title?: string;
 }
 
 interface StintCardProps {
@@ -230,12 +231,13 @@ export function GamingTimelineStrip({
   selectedStintId,
   selectedGameName,
   onSelectStint,
+  title = "Monthly timeline",
 }: GamingTimelineStripProps) {
   if (stints.length === 0) {
     return (
       <div className="flex flex-col gap-2 w-full">
         <h3 className="text-xs font-bold text-text-secondary">
-          Monthly timeline
+          {title}
         </h3>
         <div className="py-10 flex flex-col items-center justify-center gap-1 text-text-muted border border-dashed border-border-subtle rounded-lg">
           <p className="text-xs">No activity recorded for this period</p>
@@ -247,10 +249,16 @@ export function GamingTimelineStrip({
   return (
     <div className="flex flex-col gap-3 w-full">
       <h3 className="text-xs font-bold text-text-secondary">
-        Monthly timeline
+        {title}
       </h3>
 
-      <div className="relative flex flex-wrap items-start justify-start gap-x-4 sm:gap-x-6 gap-y-7 overflow-visible">
+      <div
+        className={`relative flex flex-wrap items-start justify-start gap-x-4 sm:gap-x-6 gap-y-7 ${
+          stints.length > 6
+            ? "max-h-[480px] overflow-y-auto custom-scrollbar pr-1 pt-1.5"
+            : "overflow-visible"
+        }`}
+      >
         {stints.map((stint, idx) => {
           const prevStint = idx > 0 ? stints[idx - 1] : undefined;
           const nextStint = stints[idx + 1];

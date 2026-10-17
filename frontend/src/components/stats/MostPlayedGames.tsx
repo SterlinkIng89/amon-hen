@@ -10,7 +10,11 @@ import {
   buildMonthlyGameBreakdown,
   AdvancedFiltersInput,
 } from "../../utils/gameStats";
-import { buildMonthStints, GameStint } from "../../utils/gameTimeline";
+import {
+  buildMonthStints,
+  buildYearStints,
+  GameStint,
+} from "../../utils/gameTimeline";
 import {
   formatPlaytimeHoursMinutes,
   extractTitleDate,
@@ -232,11 +236,15 @@ export default function MostPlayedGames({
     return buildMonthlyGameBreakdown(filteredVideos, selectedYear);
   }, [filteredVideos, selectedYear]);
 
-  // 8. Stints for the monthly timeline
-  const monthlyStints = useMemo(() => {
-    if (viewMode !== "month" || !selectedMonthKey) return [];
+  // 8. Stints for the timeline (monthly or yearly)
+  const timelineStints = useMemo(() => {
+    if (viewMode === "year") {
+      if (!selectedYear) return [];
+      return buildYearStints(filteredVideos, selectedYear);
+    }
+    if (!selectedMonthKey) return [];
     return buildMonthStints(filteredVideos, selectedMonthKey);
-  }, [filteredVideos, selectedMonthKey, viewMode]);
+  }, [filteredVideos, selectedMonthKey, selectedYear, viewMode]);
 
   // 9. Games to display in the leaderboard/list
   const gamesToDisplay: GameStat[] = useMemo(() => {
@@ -344,7 +352,7 @@ export default function MostPlayedGames({
 
     setSelectedDayKey(key);
 
-    const matchingStint = monthlyStints.find(
+    const matchingStint = timelineStints.find(
       (s) => s.startDate <= key && key <= s.endDate,
     );
     setSelectedStintId(matchingStint?.id ?? null);
@@ -357,9 +365,10 @@ export default function MostPlayedGames({
     }
   };
 
-  const handleStintSelect = (stint: GameStint) => {
+  const handleStintSelect = (stint: GameStint, activeGameName?: string) => {
     if (selectedStintId === stint.id) {
       setSelectedStintId(null);
+      setSelectedGameName(null);
       return;
     }
     setSelectedStintId(stint.id);
@@ -368,6 +377,10 @@ export default function MostPlayedGames({
       (selectedDayKey < stint.startDate || selectedDayKey > stint.endDate)
     ) {
       setSelectedDayKey(null);
+    }
+    const targetGame = activeGameName || stint.games[0]?.game;
+    if (targetGame) {
+      setSelectedGameName(targetGame);
     }
   };
 
@@ -425,6 +438,7 @@ export default function MostPlayedGames({
               onViewModeChange={(mode) => {
                 setViewMode(mode);
                 setSelectedDayKey(null);
+                setSelectedStintId(null);
               }}
               years={stats.years}
               selectedYear={selectedYear}
@@ -515,25 +529,13 @@ export default function MostPlayedGames({
 
           {/* Timeline Section (60% width) */}
           <div className="min-w-0 flex flex-col gap-2.5 w-full">
-            {viewMode === "month" ? (
-              <GamingTimelineStrip
-                stints={monthlyStints}
-                selectedStintId={selectedStintId}
-                selectedGameName={selectedGameName}
-                onSelectStint={handleStintSelect}
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                <h3 className="text-xs font-bold text-text-secondary">
-                  Monthly timeline
-                </h3>
-                <div className="py-12 flex flex-col items-center justify-center gap-1 text-text-muted border border-dashed border-border-subtle rounded-lg text-center p-4">
-                  <p className="text-xs">
-                    Switch to month view to inspect chronological stints
-                  </p>
-                </div>
-              </div>
-            )}
+            <GamingTimelineStrip
+              title={viewMode === "year" ? "Yearly timeline" : "Monthly timeline"}
+              stints={timelineStints}
+              selectedStintId={selectedStintId}
+              selectedGameName={selectedGameName}
+              onSelectStint={handleStintSelect}
+            />
           </div>
         </div>
       </div>
