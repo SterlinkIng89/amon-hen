@@ -107,6 +107,7 @@ function StackedBarColumn({
 
   return (
     <div
+      data-testid={`bar-column-${id}`}
       className="flex-1 flex flex-col justify-end items-center h-full group cursor-pointer relative"
       onClick={() => onSelect?.(id)}
       onMouseEnter={onHover}
@@ -190,6 +191,7 @@ function StackedBarColumn({
         />
       ) : (
         <div
+          data-testid={`stacked-bar-${id}`}
           className={`w-full ${barMaxWidthClass} rounded-t-sm overflow-hidden flex flex-col-reverse gap-[1.5px] transition-all duration-150 relative z-10 ${
             isSelected ? "ring-2 ring-accent" : ""
           } ${

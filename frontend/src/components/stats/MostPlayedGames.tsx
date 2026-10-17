@@ -48,6 +48,7 @@ export default function MostPlayedGames({
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [selectedGameName, setSelectedGameName] = useState<string | null>(null);
   const [selectedStintId, setSelectedStintId] = useState<string | null>(null);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
 
   // 1. Fetch historical videos from backend
   useEffect(() => {
@@ -189,6 +190,7 @@ export default function MostPlayedGames({
     setViewMode("month");
     setSelectedYear(targetYear);
     setSelectedMonthKey(targetMonthKey);
+    setSelectedDayKey(selectedDate);
 
     const monthStints = buildMonthStints(filteredVideos, targetMonthKey);
     const matchingStint = monthStints.find(
@@ -207,6 +209,8 @@ export default function MostPlayedGames({
   // 6. Handle Year change from toolbar
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
+    setSelectedDayKey(null);
+    setSelectedStintId(null);
     if (stats) {
       const availableInYear = Array.from(stats.monthsWithDataSet)
         .filter((k) => k.startsWith(year))
@@ -294,6 +298,53 @@ export default function MostPlayedGames({
     };
   }, [gamesToDisplay, dailyBreakdown, monthlyBreakdown, viewMode]);
 
+  const handleBarSelect = (key: string) => {
+    if (viewMode === "year") {
+      setSelectedMonthKey(key);
+      setSelectedDayKey(null);
+      setViewMode("month");
+      return;
+    }
+
+    const dayEntry = dailyBreakdown.find((d) => d.date === key);
+    if (!dayEntry || dayEntry.totalHours <= 0) return;
+
+    if (selectedDayKey === key) {
+      setSelectedDayKey(null);
+      setSelectedStintId(null);
+      setSelectedGameName(null);
+      return;
+    }
+
+    setSelectedDayKey(key);
+
+    const matchingStint = monthlyStints.find(
+      (s) => s.startDate <= key && key <= s.endDate,
+    );
+    setSelectedStintId(matchingStint?.id ?? null);
+
+    const dominantGame = Object.entries(dayEntry.byGame).sort(
+      ([, a], [, b]) => b - a,
+    )[0]?.[0];
+    if (dominantGame) {
+      setSelectedGameName(dominantGame);
+    }
+  };
+
+  const handleStintSelect = (stint: GameStint, activeGameName?: string) => {
+    setSelectedStintId(stint.id);
+    if (
+      selectedDayKey &&
+      (selectedDayKey < stint.startDate || selectedDayKey > stint.endDate)
+    ) {
+      setSelectedDayKey(null);
+    }
+    const targetGame = activeGameName || stint.games[0]?.game;
+    if (targetGame) {
+      setSelectedGameName(targetGame);
+    }
+  };
+
   if (loading) {
     return (
       <div className="px-5 pb-5">
@@ -339,12 +390,19 @@ export default function MostPlayedGames({
 
             <PlaytimeToolbar
               viewMode={viewMode}
-              onViewModeChange={setViewMode}
+              onViewModeChange={(mode) => {
+                setViewMode(mode);
+                setSelectedDayKey(null);
+              }}
               years={stats.years}
               selectedYear={selectedYear}
               onYearSelect={handleYearChange}
               selectedMonthKey={selectedMonthKey}
-              onMonthSelect={setSelectedMonthKey}
+              onMonthSelect={(monthKey) => {
+                setSelectedMonthKey(monthKey);
+                setSelectedDayKey(null);
+                setSelectedStintId(null);
+              }}
               monthsWithData={stats.monthsWithDataSet}
             />
           </div>
@@ -378,16 +436,10 @@ export default function MostPlayedGames({
           dailyData={dailyBreakdown}
           monthlyData={monthlyBreakdown}
           topGames={topGameNames}
-          selectedKey={viewMode === "month" ? selectedMonthKey : selectedYear}
+          selectedKey={viewMode === "month" ? (selectedDayKey ?? "") : selectedYear}
           selectedGame={selectedGameName}
           onSelectGame={setSelectedGameName}
-          onSelectKey={(key) => {
-            if (viewMode === "year") {
-              // Click on a month bar in year view switches to that month
-              setSelectedMonthKey(key);
-              setViewMode("month");
-            }
-          }}
+          onSelectKey={handleBarSelect}
         />
 
         <div className="h-px w-full bg-border-subtle my-1" />
@@ -434,13 +486,7 @@ export default function MostPlayedGames({
               <GamingTimelineStrip
                 stints={monthlyStints}
                 selectedStintId={selectedStintId}
-                onSelectStint={(stint: GameStint, activeGameName?: string) => {
-                  setSelectedStintId(stint.id);
-                  const targetGame = activeGameName || stint.games[0]?.game;
-                  if (targetGame) {
-                    setSelectedGameName(targetGame);
-                  }
-                }}
+                onSelectStint={handleStintSelect}
               />
             ) : (
               <div className="flex flex-col gap-2">

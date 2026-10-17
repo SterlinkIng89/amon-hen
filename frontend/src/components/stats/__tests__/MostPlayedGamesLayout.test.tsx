@@ -230,5 +230,52 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getByText("#1 Game of the month")).toBeDefined();
     });
   });
+
+  it("selects day bar on click, synchronizes timeline stint and dominant game, and toggles selection off", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const dayColumn = screen.getByTestId("bar-column-2026-10-05");
+    expect(dayColumn).toBeDefined();
+
+    const barEl = screen.getByTestId("stacked-bar-2026-10-05");
+    expect(barEl.className).not.toContain("ring-2 ring-accent");
+
+    // Click active day bar
+    fireEvent.click(dayColumn);
+
+    await waitFor(() => {
+      expect(barEl.className).toContain("ring-2 ring-accent");
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Click again to toggle off
+    fireEvent.click(dayColumn);
+
+    await waitFor(() => {
+      expect(barEl.className).not.toContain("ring-2 ring-accent");
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
+
+  it("ignores click on empty day bar stub with 0 recorded hours", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const emptyStubColumn = screen.getByTestId("bar-column-2026-10-02");
+    expect(emptyStubColumn).toBeDefined();
+
+    fireEvent.click(emptyStubColumn);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
 });
 
