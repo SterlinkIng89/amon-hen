@@ -1,5 +1,6 @@
 import { StintGame } from "../../utils/gameTimeline";
 import { useSteamGameData } from "../../hooks/useSteamGameData";
+import { getGameColor } from "../../utils/tagColors";
 
 export interface TimelineCardStackProps {
   readonly games: readonly StintGame[];
@@ -18,15 +19,26 @@ interface StackLayerProps {
 function StackLayer({ game, depth, isSelected, onClick }: StackLayerProps) {
   const { posterUrl } = useSteamGameData(game.game);
   const isFront = depth === 0;
+  const gameColor = getGameColor(game.game);
 
   if (isFront) {
     return (
       <div
+        data-testid="timeline-front-card"
         className={`relative w-28 h-40 sm:w-36 sm:h-52 rounded-xl border overflow-hidden shadow-xs z-10 transition-transform bg-surface ${
           isSelected
-            ? "border-accent ring-2 ring-accent/40"
+            ? ""
             : "border-border-subtle group-hover:border-border-medium group-hover:scale-102"
         }`}
+        style={
+          isSelected
+            ? {
+                borderColor: gameColor,
+                outline: `2px solid ${gameColor}`,
+                outlineOffset: "1px",
+              }
+            : undefined
+        }
       >
         {posterUrl ? (
           <img
@@ -48,8 +60,8 @@ function StackLayer({ game, depth, isSelected, onClick }: StackLayerProps) {
 
   const offsetClasses =
     depth === 1
-      ? "translate-x-3 -translate-y-2.5 z-5 opacity-75 hover:opacity-100 hover:translate-x-5 hover:-translate-y-4 hover:border-accent"
-      : "translate-x-6 -translate-y-5 z-0 opacity-55 hover:opacity-100 hover:translate-x-8 hover:-translate-y-6 hover:border-accent";
+      ? "translate-x-3.5 -translate-y-3 rotate-[4deg] scale-[0.96] z-5 opacity-85 hover:opacity-100 hover:translate-x-5 hover:-translate-y-4 hover:rotate-[6deg] hover:border-accent"
+      : "translate-x-6 -translate-y-5 rotate-[8deg] scale-[0.92] z-0 opacity-65 hover:opacity-100 hover:translate-x-8 hover:-translate-y-6 hover:rotate-[10deg] hover:border-accent";
 
   return (
     <button

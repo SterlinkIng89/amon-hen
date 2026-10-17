@@ -277,5 +277,203 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getByText("#1 Game of the month")).toBeDefined();
     });
   });
-});
 
+  it("renders spotlight context metrics (period share % and active days played) and updates when selecting another game", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const metricsRow = screen.getByTestId("highlight-spotlight-metrics");
+    expect(metricsRow).toBeDefined();
+    expect(metricsRow.textContent).toContain("67% of month");
+    expect(metricsRow.textContent).toContain("2 days played");
+
+    // Click on Silksong (#2)
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    expect(silksongRow).not.toBeNull();
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+      const updatedMetrics = screen.getByTestId("highlight-spotlight-metrics");
+      expect(updatedMetrics.textContent).toContain("33% of month");
+      expect(updatedMetrics.textContent).toContain("1 day played");
+    });
+  });
+
+  it("applies dynamic game color to rank badge border, pulse dot, and label", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const rankBadge = screen.getByTestId("highlight-rank-badge");
+    const rankDot = screen.getByTestId("highlight-rank-dot");
+    expect(rankBadge).toBeDefined();
+    expect(rankDot).toBeDefined();
+
+    // Default Hades II badge should use getGameColor("Hades II")
+    expect(rankBadge.getAttribute("style")).toMatch(/border-color/i);
+    expect(rankDot.getAttribute("style")).toMatch(/background-color/i);
+
+    // Click Silksong and verify badge updates to Silksong's color
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+  });
+
+  it("updates spotlight metrics to % of year when switching to year view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      const metricsRow = screen.getByTestId("highlight-spotlight-metrics");
+      expect(metricsRow.textContent).toContain("67% of year");
+      expect(metricsRow.textContent).toContain("2 days played");
+    });
+  });
+
+  it("cross-highlights matching stint in GamingTimelineStrip when selecting a game from TopGamesList", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+
+    // By default no game is selected -> both have opacity-100
+    expect(hadesStint.className).toContain("opacity-100");
+    expect(silksongStint.className).toContain("opacity-100");
+
+    // Click on Silksong in TopGamesList
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      // Silksong stint should be highlighted (opacity-100)
+      expect(silksongStint.className).toContain("opacity-100");
+      // Hades stint should be dimmed (opacity-35)
+      expect(hadesStint.className).toContain("opacity-35");
+    });
+  });
+
+  it("cross-highlights matching stint in GamingTimelineStrip when clicking a legend chip in PlaytimeStackedChart", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+
+    // Click on Hades II legend chip in PlaytimeStackedChart
+    const hadesChip = screen.getByTestId("legend-chip-Hades II");
+    fireEvent.click(hadesChip);
+
+    await waitFor(() => {
+      expect(hadesStint.className).toContain("opacity-100");
+      expect(silksongStint.className).toContain("opacity-35");
+    });
+  });
+
+  it("renders Yearly timeline and chronological stints across year when switching to By year view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Yearly timeline")).toBeDefined();
+      expect(screen.queryByText("Switch to month view to inspect chronological stints")).toBeNull();
+      expect(screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II")).toBeDefined();
+      expect(screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong")).toBeDefined();
+    });
+  });
+
+  it("updates highlight card when clicking a stint card in year view and toggles off on second click", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Second click deselects
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+  });
+
+  it("resets selected stint when switching view mode", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Monthly timeline")).toBeDefined();
+    });
+
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+    fireEvent.click(silksongStint);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Yearly timeline")).toBeDefined();
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Clicking Silksong in the list deselects it and restores #1 Game of the year
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+  });
+});

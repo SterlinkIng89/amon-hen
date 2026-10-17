@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildMonthStints,
+  buildYearStints,
   formatDateLabel,
   calculateDayGap,
   formatGapDateLabel,
@@ -150,5 +151,65 @@ describe("gameTimeline utils", () => {
     // Multi-day gap: Oct 6, 7, 8 were inactive between Oct 5 and Oct 9 (3 days)
     expect(calculateDayGap("2026-10-05", "2026-10-09")).toBe(3);
     expect(formatGapDateLabel("2026-10-05", "2026-10-09")).toBe("Oct 6 – 8");
+  });
+
+  describe("buildYearStints", () => {
+    it("returns empty array when videos or year are missing", () => {
+      expect(buildYearStints([], "2026")).toEqual([]);
+      expect(buildYearStints([{ title: "Game", published: "2026-05-01", duration: "PT1H" }], "")).toEqual([]);
+    });
+
+    it("builds chronological stints across multiple months in the selected year", () => {
+      const videos: HistoricalVideo[] = [
+        {
+          title: "Balatro - Run 1",
+          published: "2026-03-10T12:00:00Z",
+          duration: "PT2H",
+        },
+        {
+          title: "Balatro - Run 2",
+          published: "2026-03-11T12:00:00Z",
+          duration: "PT3H",
+        },
+        {
+          title: "Elden Ring - DLC",
+          published: "2026-06-21T18:00:00Z",
+          duration: "PT5H",
+        },
+        {
+          title: "Hades II - Early Access",
+          published: "2026-10-01T15:00:00Z",
+          duration: "PT4H",
+        },
+        // Video from another year should be ignored
+        {
+          title: "Silksong - 2025 Release",
+          published: "2025-11-01T12:00:00Z",
+          duration: "PT10H",
+        },
+      ];
+
+      const stints = buildYearStints(videos, "2026");
+      expect(stints.length).toBe(3);
+
+      // Stint 1: Balatro in March
+      expect(stints[0].startDate).toBe("2026-03-10");
+      expect(stints[0].endDate).toBe("2026-03-11");
+      expect(stints[0].dayCount).toBe(2);
+      expect(stints[0].totalHours).toBe(5);
+      expect(stints[0].games[0].game).toBe("Balatro");
+
+      // Stint 2: Elden Ring in June
+      expect(stints[1].startDate).toBe("2026-06-21");
+      expect(stints[1].endDate).toBe("2026-06-21");
+      expect(stints[1].totalHours).toBe(5);
+      expect(stints[1].games[0].game).toBe("Elden Ring");
+
+      // Stint 3: Hades II in October
+      expect(stints[2].startDate).toBe("2026-10-01");
+      expect(stints[2].endDate).toBe("2026-10-01");
+      expect(stints[2].totalHours).toBe(4);
+      expect(stints[2].games[0].game).toBe("Hades II");
+    });
   });
 });

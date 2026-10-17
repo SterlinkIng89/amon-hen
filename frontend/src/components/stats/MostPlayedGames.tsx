@@ -10,7 +10,11 @@ import {
   buildMonthlyGameBreakdown,
   AdvancedFiltersInput,
 } from "../../utils/gameStats";
-import { buildMonthStints, GameStint } from "../../utils/gameTimeline";
+import {
+  buildMonthStints,
+  buildYearStints,
+  GameStint,
+} from "../../utils/gameTimeline";
 import {
   formatPlaytimeHoursMinutes,
   extractTitleDate,
@@ -232,11 +236,15 @@ export default function MostPlayedGames({
     return buildMonthlyGameBreakdown(filteredVideos, selectedYear);
   }, [filteredVideos, selectedYear]);
 
-  // 8. Stints for the monthly timeline
-  const monthlyStints = useMemo(() => {
-    if (viewMode !== "month" || !selectedMonthKey) return [];
+  // 8. Stints for the timeline (monthly or yearly)
+  const timelineStints = useMemo(() => {
+    if (viewMode === "year") {
+      if (!selectedYear) return [];
+      return buildYearStints(filteredVideos, selectedYear);
+    }
+    if (!selectedMonthKey) return [];
     return buildMonthStints(filteredVideos, selectedMonthKey);
-  }, [filteredVideos, selectedMonthKey, viewMode]);
+  }, [filteredVideos, selectedMonthKey, selectedYear, viewMode]);
 
   // 9. Games to display in the leaderboard/list
   const gamesToDisplay: GameStat[] = useMemo(() => {
@@ -298,6 +306,32 @@ export default function MostPlayedGames({
     };
   }, [gamesToDisplay, dailyBreakdown, monthlyBreakdown, viewMode]);
 
+  // Active days count for the currently highlighted game
+  const activeGameDays = useMemo(() => {
+    if (!activeGame) return 0;
+    if (viewMode === "month") {
+      return dailyBreakdown.filter(
+        (d) => (d.byGame[activeGame.game] ?? 0) > 0,
+      ).length;
+    }
+    const targetNorm = normalizeGameKey(activeGame.game);
+    const uniqueDays = new Set<string>();
+    filteredVideos.forEach((v) => {
+      const titleDate = extractTitleDate(v.title);
+      const pubDate =
+        titleDate ||
+        (v.published && v.published.length >= 10
+          ? v.published.substring(0, 10)
+          : "");
+      if (!pubDate || !pubDate.startsWith(selectedYear)) return;
+      const g = extractGameName(v.title, v.gameTag);
+      if (g && normalizeGameKey(g) === targetNorm) {
+        uniqueDays.add(pubDate);
+      }
+    });
+    return uniqueDays.size;
+  }, [activeGame, viewMode, dailyBreakdown, filteredVideos, selectedYear]);
+
   const handleBarSelect = (key: string) => {
     if (viewMode === "year") {
       setSelectedMonthKey(key);
@@ -318,7 +352,7 @@ export default function MostPlayedGames({
 
     setSelectedDayKey(key);
 
-    const matchingStint = monthlyStints.find(
+    const matchingStint = timelineStints.find(
       (s) => s.startDate <= key && key <= s.endDate,
     );
     setSelectedStintId(matchingStint?.id ?? null);
@@ -332,6 +366,11 @@ export default function MostPlayedGames({
   };
 
   const handleStintSelect = (stint: GameStint, activeGameName?: string) => {
+    if (selectedStintId === stint.id) {
+      setSelectedStintId(null);
+      setSelectedGameName(null);
+      return;
+    }
     setSelectedStintId(stint.id);
     if (
       selectedDayKey &&
@@ -343,6 +382,12 @@ export default function MostPlayedGames({
     if (targetGame) {
       setSelectedGameName(targetGame);
     }
+  };
+
+  const handleGameSelect = (game: string | null) => {
+    setSelectedGameName((prev) => (prev === game ? null : game));
+    setSelectedStintId(null);
+    setSelectedDayKey(null);
   };
 
   if (loading) {
@@ -393,6 +438,7 @@ export default function MostPlayedGames({
               onViewModeChange={(mode) => {
                 setViewMode(mode);
                 setSelectedDayKey(null);
+                setSelectedStintId(null);
               }}
               years={stats.years}
               selectedYear={selectedYear}
@@ -438,7 +484,7 @@ export default function MostPlayedGames({
           topGames={topGameNames}
           selectedKey={viewMode === "month" ? (selectedDayKey ?? "") : selectedYear}
           selectedGame={selectedGameName}
-          onSelectGame={setSelectedGameName}
+          onSelectGame={handleGameSelect}
           onSelectKey={handleBarSelect}
         />
 
@@ -459,6 +505,9 @@ export default function MostPlayedGames({
                   key={activeGame.game}
                   game={activeGame}
                   rank={activeIndex + 1}
+                  totalPeriodHours={periodSummary.totalHours}
+                  activeDays={activeGameDays}
+                  periodLabel={viewMode}
                 />
               ) : (
                 <div className="bg-surface/50 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">
@@ -471,9 +520,7 @@ export default function MostPlayedGames({
               <TopGamesList
                 games={gamesToDisplay}
                 selectedGameName={selectedGameName}
-                onSelectGame={(game) =>
-                  setSelectedGameName((prev) => (prev === game ? null : game))
-                }
+                onSelectGame={handleGameSelect}
                 maxHours={maxGameHours}
                 listTitle={listTitle}
               />
@@ -482,24 +529,13 @@ export default function MostPlayedGames({
 
           {/* Timeline Section (60% width) */}
           <div className="min-w-0 flex flex-col gap-2.5 w-full">
-            {viewMode === "month" ? (
-              <GamingTimelineStrip
-                stints={monthlyStints}
-                selectedStintId={selectedStintId}
-                onSelectStint={handleStintSelect}
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                <h3 className="text-xs font-bold text-text-secondary">
-                  Monthly timeline
-                </h3>
-                <div className="py-12 flex flex-col items-center justify-center gap-1 text-text-muted border border-dashed border-border-subtle rounded-lg text-center p-4">
-                  <p className="text-xs">
-                    Switch to month view to inspect chronological stints
-                  </p>
-                </div>
-              </div>
-            )}
+            <GamingTimelineStrip
+              title={viewMode === "year" ? "Yearly timeline" : "Monthly timeline"}
+              stints={timelineStints}
+              selectedStintId={selectedStintId}
+              selectedGameName={selectedGameName}
+              onSelectStint={handleStintSelect}
+            />
           </div>
         </div>
       </div>

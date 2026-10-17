@@ -38,11 +38,11 @@ function compareStintGames(a: StintGame, b: StintGame): number {
   return b.hours - a.hours;
 }
 
-export function buildMonthStints(
+function buildPeriodStints(
   videos: readonly HistoricalVideo[],
-  monthKey: string,
+  periodPrefix: string,
 ): readonly GameStint[] {
-  if (!videos || videos.length === 0 || !monthKey) {
+  if (!videos || videos.length === 0 || !periodPrefix) {
     return [];
   }
 
@@ -60,7 +60,7 @@ export function buildMonthStints(
         ? v.published.substring(0, 10)
         : "");
 
-    if (!pubDate.startsWith(monthKey)) return;
+    if (!pubDate.startsWith(periodPrefix)) return;
 
     const game = extractGameName(v.title, v.gameTag);
     if (!game) return;
@@ -212,6 +212,22 @@ export function buildMonthStints(
   flushCurrent();
 
   return stints;
+}
+
+export function buildMonthStints(
+  videos: readonly HistoricalVideo[],
+  monthKey: string,
+): readonly GameStint[] {
+  return buildPeriodStints(videos, monthKey);
+}
+
+export function buildYearStints(
+  videos: readonly HistoricalVideo[],
+  year: string,
+): readonly GameStint[] {
+  if (!year) return [];
+  const prefix = year.endsWith("-") ? year : `${year}-`;
+  return buildPeriodStints(videos, prefix);
 }
 
 export function formatDateLabel(startDate: string, endDate: string): string {
