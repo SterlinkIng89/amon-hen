@@ -288,5 +288,54 @@ describe("GamingTimelineStrip Component", () => {
     const datePillDot = stint2Card.querySelector('[data-testid="stint-date-pill-dot"]');
     expect(datePillDot).toBeNull();
   });
+
+  it("keeps front card clean without floating badge overlays on multi-game stints", () => {
+    render(
+      <GamingTimelineStrip
+        stints={mockStints}
+      />
+    );
+
+    const stint1Card = screen.getByTestId("stint-card-stint-1");
+    expect(stint1Card.querySelector('[data-testid="multi-game-stack-badge"]')).toBeNull();
+
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+    expect(stint2Card.querySelector('[data-testid="multi-game-stack-badge"]')).toBeNull();
+  });
+
+  it("applies fanned offset and rotation classes to rear cards in TimelineCardStack", () => {
+    render(
+      <GamingTimelineStrip
+        stints={mockStints}
+      />
+    );
+
+    const bringCelesteBtn = screen.getByRole("button", { name: "Bring Celeste to front" });
+    expect(bringCelesteBtn.className).toContain("translate-x-3.5");
+    expect(bringCelesteBtn.className).toContain("-translate-y-3");
+    expect(bringCelesteBtn.className).toContain("rotate-[4deg]");
+    expect(bringCelesteBtn.className).toContain("scale-[0.96]");
+  });
+
+  it("renders proportional width segments for multi-game stints based on playtime ratio", () => {
+    render(
+      <GamingTimelineStrip
+        stints={mockStints}
+      />
+    );
+
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+    const silksongSegment = stint2Card.querySelector<HTMLElement>('[data-testid="stint-segment-Silksong"]');
+    const celesteSegment = stint2Card.querySelector<HTMLElement>('[data-testid="stint-segment-Celeste"]');
+
+    expect(silksongSegment).not.toBeNull();
+    expect(celesteSegment).not.toBeNull();
+
+    // Stint 2 total is 2.5h (Silksong: 1.5h = 60%, Celeste: 1.0h = 40%)
+    expect(silksongSegment?.style.width).toBe("60%");
+    expect(celesteSegment?.style.width).toBe("40%");
+    expect(silksongSegment?.className).toContain("h-1.5");
+    expect(celesteSegment?.className).toContain("h-1.5");
+  });
 });
 

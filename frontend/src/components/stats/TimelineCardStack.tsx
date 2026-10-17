@@ -60,8 +60,8 @@ function StackLayer({ game, depth, isSelected, onClick }: StackLayerProps) {
 
   const offsetClasses =
     depth === 1
-      ? "translate-x-3 -translate-y-2.5 z-5 opacity-75 hover:opacity-100 hover:translate-x-5 hover:-translate-y-4 hover:border-accent"
-      : "translate-x-6 -translate-y-5 z-0 opacity-55 hover:opacity-100 hover:translate-x-8 hover:-translate-y-6 hover:border-accent";
+      ? "translate-x-3.5 -translate-y-3 rotate-[4deg] scale-[0.96] z-5 opacity-85 hover:opacity-100 hover:translate-x-5 hover:-translate-y-4 hover:rotate-[6deg] hover:border-accent"
+      : "translate-x-6 -translate-y-5 rotate-[8deg] scale-[0.92] z-0 opacity-65 hover:opacity-100 hover:translate-x-8 hover:-translate-y-6 hover:rotate-[10deg] hover:border-accent";
 
   return (
     <button

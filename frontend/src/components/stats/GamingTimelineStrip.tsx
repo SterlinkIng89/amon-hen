@@ -35,6 +35,8 @@ function GameSegments({
   readonly games: readonly StintGame[];
   readonly activeGameIndex: number;
 }) {
+  const totalHours = games.reduce((acc, g) => acc + g.hours, 0);
+
   return (
     <div
       className="flex items-center gap-0.5 w-28 sm:w-36 my-2 px-0.5"
@@ -43,13 +45,19 @@ function GameSegments({
       {games.map((g, idx) => {
         const isActive = idx === activeGameIndex;
         const color = getGameColor(g.game);
+        const rawPct =
+          totalHours > 0 ? (g.hours / totalHours) * 100 : 100 / games.length;
+        const widthPct =
+          games.length === 1 ? 100 : Math.max(Math.round(rawPct), 15);
+
         return (
           <span
             key={`${g.game}_${idx}`}
-            className={`flex-1 h-1 rounded-full transition-all duration-200 ${
+            data-testid={`stint-segment-${g.game}`}
+            className={`h-1.5 rounded-full transition-all duration-200 ${
               isActive ? "opacity-100 ring-1 ring-white/20" : "opacity-40"
             }`}
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: color, width: `${widthPct}%` }}
             title={`${g.game}: ${formatPlaytimeHoursMinutes(g.hours)}`}
           />
         );
