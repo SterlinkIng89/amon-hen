@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -240,9 +239,18 @@ func (a *App) syncAppDetailsForGame(appID int) {
 		appID, devs, pubs, time.Now().Unix())
 
 	for _, pub := range gameData.Data.Publishers {
-		pub = strings.TrimSpace(pub)
-		if pub != "" {
-			_, _ = a.db.conn.Exec(`INSERT OR IGNORE INTO steam_publishers (appid, publisher) VALUES (?, ?)`, appID, pub)
+		for _, p := range splitSteamCompanies(pub) {
+			if p != "" {
+				_, _ = a.db.conn.Exec(`INSERT OR IGNORE INTO steam_publishers (appid, publisher) VALUES (?, ?)`, appID, p)
+			}
+		}
+	}
+
+	for _, dev := range gameData.Data.Developers {
+		for _, d := range splitSteamCompanies(dev) {
+			if d != "" {
+				_, _ = a.db.conn.Exec(`INSERT OR IGNORE INTO steam_developers (appid, developer) VALUES (?, ?)`, appID, d)
+			}
 		}
 	}
 

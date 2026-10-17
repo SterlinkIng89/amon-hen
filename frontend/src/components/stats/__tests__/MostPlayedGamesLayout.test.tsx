@@ -83,19 +83,47 @@ describe("MostPlayedGames Monthly Layout", () => {
     });
   });
 
-  it("synchronizes view, stint, and game when selectedDate is provided", async () => {
+  it("synchronizes view and day highlight without selecting a stint or game when selectedDate is provided", async () => {
     const { rerender } = render(<MostPlayedGames />);
 
     await waitFor(() => {
       expect(screen.getByText("#1 Game of the month")).toBeDefined();
     });
 
-    // Rerender with selectedDate corresponding to Silksong (2026-10-05)
+    // Rerender with selectedDate corresponding to Silksong date (2026-10-05)
     rerender(<MostPlayedGames selectedDate="2026-10-05" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Selected (#2)")).toBeDefined();
-      expect(screen.getAllByText("Hollow Knight: Silksong").length).toBeGreaterThan(0);
+      // Month remains neutral on #1 Game of the month (Hades II) instead of auto-selecting Silksong (#2)
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+      expect(screen.queryByText("Selected (#2)")).toBeNull();
+
+      // Active day bar is highlighted
+      const barEl = screen.getByTestId("stacked-bar-2026-10-05");
+      expect(barEl.className).toContain("ring-2 ring-accent");
+
+      // Stints in timeline remain neutral without dimming
+      const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+      const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+      expect(hadesStint.className).toContain("opacity-100");
+      expect(silksongStint.className).toContain("opacity-100");
+    });
+  });
+
+  it("clears day highlight when selectedDate is reset to null", async () => {
+    const { rerender } = render(<MostPlayedGames selectedDate="2026-10-05" />);
+
+    await waitFor(() => {
+      const barEl = screen.getByTestId("stacked-bar-2026-10-05");
+      expect(barEl.className).toContain("ring-2 ring-accent");
+    });
+
+    rerender(<MostPlayedGames selectedDate={null} />);
+
+    await waitFor(() => {
+      const barEl = screen.getByTestId("stacked-bar-2026-10-05");
+      expect(barEl.className).not.toContain("ring-2 ring-accent");
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
     });
   });
 
