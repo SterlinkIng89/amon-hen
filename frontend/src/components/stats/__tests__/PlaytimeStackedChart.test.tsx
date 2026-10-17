@@ -86,8 +86,8 @@ describe("PlaytimeStackedChart Component", () => {
     expect(stackedBars.length).toBeGreaterThan(0);
   });
 
-  it("renders active average reference line when 2 or more active days exist", () => {
-    render(
+  it("renders active average reference line inside the plot without right gutter and fades badge on hover", () => {
+    const { container } = render(
       <PlaytimeStackedChart
         viewMode="month"
         dailyData={mockDailyData}
@@ -98,7 +98,22 @@ describe("PlaytimeStackedChart Component", () => {
     );
 
     // Active days are day 1 (3.5h) and day 3 (1.5h). Mean is 2.5h -> "2h 30m"
-    expect(screen.getByText("Avg 2h 30m")).toBeDefined();
+    const avgBadge = screen.getByTestId("avg-reference-badge");
+    expect(avgBadge.textContent).toBe("Avg 2h 30m");
+    expect(avgBadge.className).toContain("opacity-90");
+
+    // Ensure no external right-side gutter (w-14 / w-16) steals horizontal width
+    expect(container.querySelector(".w-14")).toBeNull();
+    expect(container.querySelector(".sm\\:w-16")).toBeNull();
+
+    // Hovering a bar column fades the floating Avg badge so bars remain unobstructed
+    const day1Label = screen.getByText("1");
+    if (day1Label.parentElement) {
+      fireEvent.mouseEnter(day1Label.parentElement);
+      expect(avgBadge.className).toContain("opacity-15");
+      fireEvent.mouseLeave(day1Label.parentElement);
+      expect(avgBadge.className).toContain("opacity-90");
+    }
   });
 
   it("does not render average reference line when fewer than 2 active days exist", () => {
@@ -166,24 +181,24 @@ describe("PlaytimeStackedChart Component", () => {
     expect(day5Label.className).toContain("text-text-secondary font-medium");
   });
 
-  it("renders interactive legend chips with hours and share percentage", () => {
+  it("renders compact interactive legend chips ordered by playtime descending", () => {
     render(
       <PlaytimeStackedChart
         viewMode="month"
         dailyData={mockDailyData}
         monthlyData={[]}
-        topGames={["Hades II", "Silksong"]}
+        topGames={["Silksong", "Hades II"]}
         selectedKey="2026-10-01"
       />
     );
 
-    // Total view hours = 3.5 (Day 1) + 1.5 (Day 3) = 5.0h
-    // Hades II = 2.0 + 1.5 = 3.5h (70%)
-    // Silksong = 1.5h (30%)
+    // Hades II (3.5h) should be sorted before Silksong (1.5h)
+    const chips = screen.getAllByTestId(/^legend-chip-/);
+    expect(chips.length).toBe(2);
+    expect(chips[0].getAttribute("data-testid")).toBe("legend-chip-Hades II");
+    expect(chips[1].getAttribute("data-testid")).toBe("legend-chip-Silksong");
     expect(screen.getByText("Hades II")).toBeDefined();
-    expect(screen.getByText("3h 30m (70%)")).toBeDefined();
     expect(screen.getByText("Silksong")).toBeDefined();
-    expect(screen.getByText("1h 30m (30%)")).toBeDefined();
   });
 
   it("calls onSelectGame when clicking legend chips and toggles selection", () => {

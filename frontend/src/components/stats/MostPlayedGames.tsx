@@ -11,7 +11,10 @@ import {
   AdvancedFiltersInput,
 } from "../../utils/gameStats";
 import { buildMonthStints, GameStint } from "../../utils/gameTimeline";
-import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
+import {
+  formatPlaytimeHoursMinutes,
+  extractTitleDate,
+} from "../../utils/videoUtils";
 import { PlaytimeToolbar } from "./PlaytimeToolbar";
 import { PlaytimeStackedChart } from "./PlaytimeStackedChart";
 import { TopGamesList } from "./TopGamesList";
@@ -84,9 +87,12 @@ export default function MostPlayedGames({
     const monthsWithDataSet = new Set<string>();
 
     filteredVideos.forEach((v) => {
-      const pubDate = v.published && v.published.length >= 10
-        ? v.published.substring(0, 10)
-        : "";
+      const titleDate = extractTitleDate(v.title);
+      const pubDate =
+        titleDate ||
+        (v.published && v.published.length >= 10
+          ? v.published.substring(0, 10)
+          : "");
       if (!pubDate) return;
 
       const g = extractGameName(v.title, v.gameTag);

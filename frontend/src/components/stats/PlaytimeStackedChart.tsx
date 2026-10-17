@@ -113,7 +113,7 @@ function StackedBarColumn({
       onMouseLeave={onLeave}
     >
       {isHovered && (
-        <div className="absolute inset-x-0 bottom-6 top-1 rounded-t-xs pointer-events-none bg-card/60" />
+        <div className="absolute inset-x-0 bottom-6 top-3 rounded-t-xs pointer-events-none bg-card/60" />
       )}
 
       {isHovered && (
@@ -280,25 +280,22 @@ export function PlaytimeStackedChart({
   }, [activeCount, avgActiveHours, chartMax]);
 
   const legendItems = useMemo(() => {
-    return topGames.slice(0, 5).map((game) => {
-      const hours = gameHoursMap[game] || 0;
-      const sharePct =
-        totalViewHours > 0 ? Math.round((hours / totalViewHours) * 100) : 0;
-      return {
+    return topGames
+      .slice(0, 5)
+      .map((game) => ({
         name: game,
         color: getGameColor(game),
-        hours,
-        sharePct,
-      };
-    });
-  }, [topGames, gameHoursMap, totalViewHours]);
+        hours: gameHoursMap[game] || 0,
+      }))
+      .sort((a, b) => b.hours - a.hours);
+  }, [topGames, gameHoursMap]);
 
   const hasAnyHovered = hoveredIndex !== null;
 
   return (
-    <div className="bg-surface/60 border border-border-subtle rounded-lg p-4 flex flex-col gap-2 w-full mt-1">
+    <div className="bg-surface/60 border border-border-subtle rounded-lg p-4 sm:p-5 flex flex-col gap-2 w-full mt-2">
       <div className="flex gap-2 w-full items-stretch">
-        <div className="flex flex-col justify-between items-end pb-6 pt-1 text-[10px] text-text-secondary font-medium shrink-0 w-12 tabular-nums select-none pr-1.5">
+        <div className="flex flex-col justify-between items-end pb-6 pt-3 text-[10px] text-text-secondary font-medium shrink-0 w-12 tabular-nums select-none pr-1.5">
           <span title="Scale ceiling">{formatAxisHours(chartMax)}</span>
           <span className="text-text-secondary/80">
             {formatAxisHours(chartMax / 2)}
@@ -306,17 +303,24 @@ export function PlaytimeStackedChart({
           <span>0h</span>
         </div>
 
-        <div className="h-44 flex-1 flex items-end gap-1 sm:gap-1.5 pb-6 pt-1 px-1 relative border-b border-border-subtle">
-          <div className="absolute inset-x-0 top-1 border-b border-dashed border-border-subtle/60 pointer-events-none" />
-          <div className="absolute inset-x-0 top-1/2 -translate-y-2.5 border-b border-dashed border-border-subtle/40 pointer-events-none" />
+        <div className="h-44 flex-1 flex items-end gap-1 sm:gap-1.5 pb-6 pt-3 px-1 relative border-b border-border-subtle">
+          <div className="absolute inset-x-0 top-3 border-b border-dashed border-border-subtle/60 pointer-events-none" />
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1.5 border-b border-dashed border-border-subtle/40 pointer-events-none" />
 
           {avgHeightPct !== null && (
-            <div className="absolute inset-x-0 bottom-6 top-1 pointer-events-none">
+            <div className="absolute inset-x-0 bottom-6 top-3 pointer-events-none select-none z-20">
               <div
-                className="absolute inset-x-0 border-b border-dashed border-accent/40 flex justify-end items-center z-20"
+                className="absolute inset-x-0 border-b border-dashed border-accent/45"
                 style={{ bottom: `${avgHeightPct}%` }}
               >
-                <span className="px-1.5 py-0.5 rounded bg-elevated/90 border border-accent/30 text-[9px] font-semibold text-accent tabular-nums -translate-y-1/2 mr-1">
+                <span
+                  data-testid="avg-reference-badge"
+                  className={`absolute right-1 ${
+                    avgHeightPct > 82 ? "top-1" : "bottom-1"
+                  } px-1.5 py-0.5 rounded bg-elevated/85 backdrop-blur-xs border border-accent/30 text-[9px] leading-none font-semibold text-accent tabular-nums whitespace-nowrap shadow-xs transition-opacity duration-150 ${
+                    hasAnyHovered ? "opacity-15" : "opacity-90"
+                  }`}
+                >
                   Avg {formatAxisHours(avgActiveHours)}
                 </span>
               </div>
@@ -421,11 +425,8 @@ export function PlaytimeStackedChart({
                   className="w-2.5 h-2.5 rounded-sm shrink-0"
                   style={{ backgroundColor: item.color }}
                 />
-                <span className="truncate max-w-[130px] font-medium">
+                <span className="truncate max-w-[140px] font-medium">
                   {item.name}
-                </span>
-                <span className="text-[10px] text-text-secondary tabular-nums">
-                  {formatAxisHours(item.hours)} ({item.sharePct}%)
                 </span>
               </button>
             );
