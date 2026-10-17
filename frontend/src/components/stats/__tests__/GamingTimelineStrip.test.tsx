@@ -389,7 +389,7 @@ describe("GamingTimelineStrip Component", () => {
     expect(screen.queryByText("Monthly timeline")).toBeNull();
   });
 
-  it("applies vertical scrollable container with max-height and custom scrollbar when stints exceed 6", () => {
+  it("renders natural wrapping layout without inner vertical scrollbar when stints exceed 6", () => {
     const manyStints: GameStint[] = Array.from({ length: 8 }, (_, i) => ({
       id: `stint-${i + 1}`,
       startDate: `2026-0${i + 1}-01`,
@@ -400,7 +400,7 @@ describe("GamingTimelineStrip Component", () => {
     }));
 
     const { container } = render(<GamingTimelineStrip stints={manyStints} title="Yearly timeline" />);
-    const scrollContainer = container.querySelector(".max-h-\\[480px\\].overflow-y-auto.custom-scrollbar");
-    expect(scrollContainer).not.toBeNull();
+    const scrollContainer = container.querySelector(".overflow-y-auto");
+    expect(scrollContainer).toBeNull();
   });
 });

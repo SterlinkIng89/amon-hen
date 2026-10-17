@@ -494,7 +494,7 @@ export default function MostPlayedGames({
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
           {/* Top Games Section: Highlight + List (40% width) */}
           <div className="flex flex-col sm:flex-row gap-5 items-start w-full lg:pr-6 lg:border-r lg:border-border-subtle">
-            <div className="w-full sm:w-[160px] xl:w-[175px] shrink-0 flex flex-col gap-2.5">
+            <div className="w-full sm:w-[160px] xl:w-[175px] shrink-0 flex flex-col gap-2.5 sm:sticky sm:top-4">
               <h3 className="text-xs font-bold text-text-secondary truncate">
                 {activeIndex === 0
                   ? `#1 Game of the ${viewMode === "year" ? "year" : "month"}`

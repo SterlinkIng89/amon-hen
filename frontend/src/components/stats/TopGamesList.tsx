@@ -133,7 +133,7 @@ export function TopGamesList({
           <p className="text-xs">No playtime recorded</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-1 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+        <div className="flex flex-col gap-1 pr-1">
           {games.map((g) => (
             <GameRowItem
               key={g.game}
