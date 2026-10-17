@@ -11,6 +11,7 @@ import {
   AdvancedFiltersInput,
 } from "../../utils/gameStats";
 import { buildMonthStints, GameStint } from "../../utils/gameTimeline";
+import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
 import { PlaytimeToolbar } from "./PlaytimeToolbar";
 import { PlaytimeStackedChart } from "./PlaytimeStackedChart";
 import { TopGamesList } from "./TopGamesList";
@@ -267,6 +268,26 @@ export default function MostPlayedGames({
     return monthName ? `Top games in ${monthName} ${y}` : "Top games of the month";
   }, [viewMode, selectedYear, selectedMonthKey]);
 
+  // Period summary metrics for header KPI pills
+  const periodSummary = useMemo(() => {
+    const totalHours = gamesToDisplay.reduce((acc, g) => acc + g.hours, 0);
+    const activeCount =
+      viewMode === "month"
+        ? dailyBreakdown.filter((d) => d.totalHours > 0).length
+        : monthlyBreakdown.filter((m) => m.totalHours > 0).length;
+    const totalUnits = viewMode === "month" ? dailyBreakdown.length : 12;
+    const unitLabel = viewMode === "month" ? "active days" : "active months";
+    const gamesCount = gamesToDisplay.length;
+
+    return {
+      totalHours,
+      activeCount,
+      totalUnits,
+      unitLabel,
+      gamesCount,
+    };
+  }, [gamesToDisplay, dailyBreakdown, monthlyBreakdown, viewMode]);
+
   if (loading) {
     return (
       <div className="px-5 pb-5">
@@ -303,22 +324,46 @@ export default function MostPlayedGames({
   return (
     <div className="px-5 pb-5 flex flex-col gap-4">
       <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
-        {/* Header & Playtime Toolbar */}
-        <div className="flex flex-wrap items-center gap-4">
-          <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
-            Playtime by game
-          </h2>
+        {/* Header, Playtime Toolbar & Summary Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
+              Playtime by game
+            </h2>
 
-          <PlaytimeToolbar
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            years={stats.years}
-            selectedYear={selectedYear}
-            onYearSelect={handleYearChange}
-            selectedMonthKey={selectedMonthKey}
-            onMonthSelect={setSelectedMonthKey}
-            monthsWithData={stats.monthsWithDataSet}
-          />
+            <PlaytimeToolbar
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              years={stats.years}
+              selectedYear={selectedYear}
+              onYearSelect={handleYearChange}
+              selectedMonthKey={selectedMonthKey}
+              onMonthSelect={setSelectedMonthKey}
+              monthsWithData={stats.monthsWithDataSet}
+            />
+          </div>
+
+          {/* Period Summary KPI Pills */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {formatPlaytimeHoursMinutes(periodSummary.totalHours)}
+              </strong>{" "}
+              total
+            </div>
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.activeCount}
+              </strong>
+              /{periodSummary.totalUnits} {periodSummary.unitLabel}
+            </div>
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.gamesCount}
+              </strong>{" "}
+              {periodSummary.gamesCount === 1 ? "game" : "games"}
+            </div>
+          </div>
         </div>
 
         {/* Stacked Chart (Daily in month view, Monthly in year view) */}
