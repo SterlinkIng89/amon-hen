@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   GameStint,
   StintGame,
@@ -13,12 +13,14 @@ import { TimelineCardStack } from "./TimelineCardStack";
 export interface GamingTimelineStripProps {
   readonly stints: readonly GameStint[];
   readonly selectedStintId?: string | null;
+  readonly selectedGameName?: string | null;
   readonly onSelectStint?: (stint: GameStint, activeGameName?: string) => void;
 }
 
 interface StintCardProps {
   readonly stint: GameStint;
   readonly isSelected: boolean;
+  readonly selectedGameName?: string | null;
   readonly isFirst: boolean;
   readonly isLast: boolean;
   readonly hasBreakBefore?: boolean;
@@ -59,6 +61,7 @@ function GameSegments({
 function StintCard({
   stint,
   isSelected,
+  selectedGameName,
   isFirst,
   isLast,
   hasBreakBefore,
@@ -67,25 +70,42 @@ function StintCard({
 }: StintCardProps) {
   const [activeGameIndex, setActiveGameIndex] = useState(0);
 
+  useEffect(() => {
+    if (!selectedGameName) {
+      setActiveGameIndex(0);
+      return;
+    }
+    const matchIdx = stint.games.findIndex((g) => g.game === selectedGameName);
+    if (matchIdx >= 0) {
+      setActiveGameIndex(matchIdx);
+    }
+  }, [selectedGameName, stint.games]);
+
   const activeGame: StintGame =
     stint.games[activeGameIndex] || stint.games[0] || { game: "", hours: 0 };
 
   const handleBringToFront = (index: number) => {
     setActiveGameIndex(index);
-    const targetGame = stint.games[index];
-    if (targetGame) {
-      onSelect(stint, targetGame.game);
-    }
   };
 
   const dateLabel = formatDateLabel(stint.startDate, stint.endDate);
   const isSingleDay = stint.startDate === stint.endDate;
   const hasMultipleGames = stint.games.length > 1;
 
+  const matchesSelectedGame = Boolean(
+    selectedGameName && stint.games.some((g) => g.game === selectedGameName),
+  );
+  const isHighlighted = isSelected || matchesSelectedGame;
+  const isDimmed = Boolean(
+    selectedGameName && !matchesSelectedGame && !isSelected,
+  );
+  const gameColor = getGameColor(activeGame.game);
+
   return (
     <div
       role="button"
       tabIndex={0}
+      data-testid={`stint-card-${stint.id}`}
       onClick={() => onSelect(stint, activeGame.game)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -93,12 +113,14 @@ function StintCard({
           onSelect(stint, activeGame.game);
         }
       }}
-      className="group relative flex flex-col items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-lg py-1.5 px-0 w-28 sm:w-36 transition-all"
+      className={`group relative flex flex-col items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-lg py-1.5 px-0 w-28 sm:w-36 transition-all ${
+        isDimmed ? "opacity-35 hover:opacity-80" : "opacity-100"
+      }`}
     >
       <TimelineCardStack
         games={stint.games}
         activeIndex={activeGameIndex}
-        isSelected={isSelected}
+        isSelected={isHighlighted}
         onBringToFront={handleBringToFront}
       />
 
@@ -131,8 +153,23 @@ function StintCard({
           </div>
         )}
 
-        <div className="relative z-10 px-3 py-1 rounded-full bg-card border border-border-subtle text-[11px] font-semibold text-text-primary whitespace-nowrap shadow-xs group-hover:border-border-medium transition-colors">
-          {dateLabel}
+        <div
+          data-testid="stint-date-pill"
+          className={`relative z-10 px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap shadow-xs transition-colors flex items-center gap-1.5 ${
+            isHighlighted
+              ? "bg-card border text-text-primary"
+              : "bg-card border border-border-subtle text-text-primary group-hover:border-border-medium"
+          }`}
+          style={isHighlighted ? { borderColor: gameColor } : undefined}
+        >
+          {isHighlighted && (
+            <span
+              data-testid="stint-date-pill-dot"
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: gameColor }}
+            />
+          )}
+          <span>{dateLabel}</span>
         </div>
       </div>
 
@@ -187,6 +224,7 @@ function TimelineGapSpacer({
 export function GamingTimelineStrip({
   stints,
   selectedStintId,
+  selectedGameName,
   onSelectStint,
 }: GamingTimelineStripProps) {
   if (stints.length === 0) {
@@ -230,6 +268,7 @@ export function GamingTimelineStrip({
                 hasBreakBefore={hasBreakBefore}
                 hasBreakAfter={hasBreakAfter}
                 isSelected={stint.id === selectedStintId}
+                selectedGameName={selectedGameName}
                 onSelect={(s, gameName) => onSelectStint?.(s, gameName)}
               />
 

@@ -348,5 +348,54 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(metricsRow.textContent).toContain("2 days played");
     });
   });
+
+  it("cross-highlights matching stint in GamingTimelineStrip when selecting a game from TopGamesList", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+
+    // By default no game is selected -> both have opacity-100
+    expect(hadesStint.className).toContain("opacity-100");
+    expect(silksongStint.className).toContain("opacity-100");
+
+    // Click on Silksong in TopGamesList
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      // Silksong stint should be highlighted (opacity-100)
+      expect(silksongStint.className).toContain("opacity-100");
+      // Hades stint should be dimmed (opacity-35)
+      expect(hadesStint.className).toContain("opacity-35");
+    });
+  });
+
+  it("cross-highlights matching stint in GamingTimelineStrip when clicking a legend chip in PlaytimeStackedChart", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
+
+    // Click on Hades II legend chip in PlaytimeStackedChart
+    const hadesChip = screen.getByTestId("legend-chip-Hades II");
+    fireEvent.click(hadesChip);
+
+    await waitFor(() => {
+      expect(hadesStint.className).toContain("opacity-100");
+      expect(silksongStint.className).toContain("opacity-35");
+    });
+  });
 });
+
 

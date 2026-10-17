@@ -357,7 +357,11 @@ export default function MostPlayedGames({
     }
   };
 
-  const handleStintSelect = (stint: GameStint, activeGameName?: string) => {
+  const handleStintSelect = (stint: GameStint) => {
+    if (selectedStintId === stint.id) {
+      setSelectedStintId(null);
+      return;
+    }
     setSelectedStintId(stint.id);
     if (
       selectedDayKey &&
@@ -365,10 +369,12 @@ export default function MostPlayedGames({
     ) {
       setSelectedDayKey(null);
     }
-    const targetGame = activeGameName || stint.games[0]?.game;
-    if (targetGame) {
-      setSelectedGameName(targetGame);
-    }
+  };
+
+  const handleGameSelect = (game: string | null) => {
+    setSelectedGameName((prev) => (prev === game ? null : game));
+    setSelectedStintId(null);
+    setSelectedDayKey(null);
   };
 
   if (loading) {
@@ -464,7 +470,7 @@ export default function MostPlayedGames({
           topGames={topGameNames}
           selectedKey={viewMode === "month" ? (selectedDayKey ?? "") : selectedYear}
           selectedGame={selectedGameName}
-          onSelectGame={setSelectedGameName}
+          onSelectGame={handleGameSelect}
           onSelectKey={handleBarSelect}
         />
 
@@ -500,9 +506,7 @@ export default function MostPlayedGames({
               <TopGamesList
                 games={gamesToDisplay}
                 selectedGameName={selectedGameName}
-                onSelectGame={(game) =>
-                  setSelectedGameName((prev) => (prev === game ? null : game))
-                }
+                onSelectGame={handleGameSelect}
                 maxHours={maxGameHours}
                 listTitle={listTitle}
               />
@@ -515,6 +519,7 @@ export default function MostPlayedGames({
               <GamingTimelineStrip
                 stints={monthlyStints}
                 selectedStintId={selectedStintId}
+                selectedGameName={selectedGameName}
                 onSelectStint={handleStintSelect}
               />
             ) : (

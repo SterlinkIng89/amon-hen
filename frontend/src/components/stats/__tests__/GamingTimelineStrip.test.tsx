@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { GamingTimelineStrip } from "../GamingTimelineStrip";
 import { GameStint } from "../../../utils/gameTimeline";
+import { getGameColor } from "../../../utils/tagColors";
 
 vi.mock("../../../hooks/useSteamGameData", () => ({
   useSteamGameData: vi.fn((gameName: string) => ({
@@ -84,7 +85,7 @@ describe("GamingTimelineStrip Component", () => {
     expect(screen.getByText(/3 days/)).toBeDefined();
   });
 
-  it("allows bringing rear game to front in stacked card stint", () => {
+  it("allows bringing rear game to front in stacked card stint without invoking onSelectStint", () => {
     const handleSelect = vi.fn();
     render(
       <GamingTimelineStrip
@@ -99,7 +100,13 @@ describe("GamingTimelineStrip Component", () => {
     expect(bringCelesteBtn).toBeDefined();
 
     fireEvent.click(bringCelesteBtn);
-    // After clicking rear layer, callback is invoked with the clicked game
+    // Clicking rear layer brings it to front locally without triggering onSelectStint
+    expect(handleSelect).not.toHaveBeenCalled();
+    expect(screen.getByText(/1h 00m/)).toBeDefined();
+
+    // Clicking the stint card container itself does invoke onSelectStint with the active game
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+    fireEvent.click(stint2Card);
     expect(handleSelect).toHaveBeenCalledWith(mockStints[1], "Celeste");
   });
 
@@ -198,4 +205,68 @@ describe("GamingTimelineStrip Component", () => {
     expect(html).not.toContain("#12141a");
     expect(html).not.toContain("#48485c");
   });
+
+  it("cross-highlights matching stint and dims non-matching stint when selectedGameName is provided", () => {
+    const { container } = render(
+      <GamingTimelineStrip
+        stints={mockStints}
+        selectedGameName="Hades II"
+      />
+    );
+
+    const stint1Card = screen.getByTestId("stint-card-stint-1");
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+
+    // stint-1 contains Hades II -> opacity-100, styled with Hades II hash color
+    expect(stint1Card.className).toContain("opacity-100");
+    expect(stint1Card.className).not.toContain("opacity-35");
+
+    const hadesColor = getGameColor("Hades II");
+    const stint1FrontCard = stint1Card.querySelector<HTMLElement>('[data-testid="timeline-front-card"]');
+    expect(stint1FrontCard).not.toBeNull();
+    expect(stint1FrontCard?.style.borderColor).toBeTruthy();
+
+    const datePill = stint1Card.querySelector<HTMLElement>('[data-testid="stint-date-pill"]');
+    expect(datePill?.style.borderColor).toBeTruthy();
+    expect(datePill?.style.borderColor).toBe(stint1FrontCard?.style.borderColor);
+
+    const datePillDot = stint1Card.querySelector<HTMLElement>('[data-testid="stint-date-pill-dot"]');
+    expect(datePillDot?.style.backgroundColor).toBeTruthy();
+    expect(datePillDot?.style.backgroundColor).toBe(stint1FrontCard?.style.borderColor);
+
+    // stint-2 does NOT contain Hades II -> dimmed with opacity-35
+    expect(stint2Card.className).toContain("opacity-35");
+  });
+
+  it("auto-syncs rear game to front in multi-game stint when matching selectedGameName", () => {
+    render(
+      <GamingTimelineStrip
+        stints={mockStints}
+        selectedGameName="Celeste"
+      />
+    );
+
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+    expect(stint2Card.className).toContain("opacity-100");
+
+    // Stint 2 front card should be styled with Celeste's hash color
+    const stint2FrontCard = stint2Card.querySelector<HTMLElement>('[data-testid="timeline-front-card"]');
+    expect(stint2FrontCard).not.toBeNull();
+    expect(stint2FrontCard?.style.borderColor).toBeTruthy();
+
+    const datePillDot = stint2Card.querySelector<HTMLElement>('[data-testid="stint-date-pill-dot"]');
+    expect(datePillDot?.style.backgroundColor).toBe(stint2FrontCard?.style.borderColor);
+
+    // Stint 2 subtitle should show Celeste's playtime (1h 00m) instead of Silksong (1h 30m)
+    expect(screen.getByText(/1h 00m/)).toBeDefined();
+
+    // Bring Celeste to front button should no longer exist since Celeste is now at the front
+    const bringCelesteBtn = screen.queryByRole("button", { name: "Bring Celeste to front" });
+    expect(bringCelesteBtn).toBeNull();
+
+    // Bring Silksong to front button should now exist
+    const bringSilksongBtn = screen.queryByRole("button", { name: "Bring Silksong to front" });
+    expect(bringSilksongBtn).not.toBeNull();
+  });
 });
+

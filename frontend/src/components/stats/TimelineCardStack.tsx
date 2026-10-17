@@ -1,5 +1,6 @@
 import { StintGame } from "../../utils/gameTimeline";
 import { useSteamGameData } from "../../hooks/useSteamGameData";
+import { getGameColor } from "../../utils/tagColors";
 
 export interface TimelineCardStackProps {
   readonly games: readonly StintGame[];
@@ -18,15 +19,26 @@ interface StackLayerProps {
 function StackLayer({ game, depth, isSelected, onClick }: StackLayerProps) {
   const { posterUrl } = useSteamGameData(game.game);
   const isFront = depth === 0;
+  const gameColor = getGameColor(game.game);
 
   if (isFront) {
     return (
       <div
+        data-testid="timeline-front-card"
         className={`relative w-28 h-40 sm:w-36 sm:h-52 rounded-xl border overflow-hidden shadow-xs z-10 transition-transform bg-surface ${
           isSelected
-            ? "border-accent ring-2 ring-accent/40"
+            ? ""
             : "border-border-subtle group-hover:border-border-medium group-hover:scale-102"
         }`}
+        style={
+          isSelected
+            ? {
+                borderColor: gameColor,
+                outline: `2px solid ${gameColor}`,
+                outlineOffset: "1px",
+              }
+            : undefined
+        }
       >
         {posterUrl ? (
           <img
