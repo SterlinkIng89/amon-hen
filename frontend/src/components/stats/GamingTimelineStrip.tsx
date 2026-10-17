@@ -252,13 +252,7 @@ export function GamingTimelineStrip({
         {title}
       </h3>
 
-      <div
-        className={`relative flex flex-wrap items-start justify-start gap-x-4 sm:gap-x-6 gap-y-7 ${
-          stints.length > 6
-            ? "max-h-[480px] overflow-y-auto custom-scrollbar pr-1 pt-1.5"
-            : "overflow-visible"
-        }`}
-      >
+      <div className="relative flex flex-wrap items-start justify-start gap-x-4 sm:gap-x-6 gap-y-7 pr-1 pt-1.5">
         {stints.map((stint, idx) => {
           const prevStint = idx > 0 ? stints[idx - 1] : undefined;
           const nextStint = stints[idx + 1];
