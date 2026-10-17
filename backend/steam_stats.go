@@ -80,15 +80,7 @@ type EnrichedSteamGameItem struct {
 }
 
 func utilityAppIDsFilter() string {
-	ids := steamUtilityAppIDs()
-	if len(ids) == 0 {
-		return "0"
-	}
-	strIDs := make([]string, len(ids))
-	for i, id := range ids {
-		strIDs[i] = strconv.Itoa(id)
-	}
-	return strings.Join(strIDs, ",")
+	return steamUtilityAppIDsFilter
 }
 
 func resolveStatsOrderClause(sortBy string) string {
@@ -114,35 +106,33 @@ func scanSteamGameItems(rows *sql.Rows) []SteamGameItem {
 	return items
 }
 
-// GetSteamDeveloperStats returns the top developers
-func (a *App) GetSteamDeveloperStats(sortBy string) ([]SteamDevPubStats, error) {
+func (a *App) getCompanyStats(table, col, sourceCol, sortBy string) ([]SteamDevPubStats, error) {
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
-	// Check if steam_developers is empty, and backfill if necessary
 	var count int
-	_ = a.db.conn.QueryRow("SELECT COUNT(*) FROM steam_developers").Scan(&count)
+	_ = a.db.conn.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
 	if count == 0 {
-		dRows, err := a.db.conn.Query("SELECT appid, developers FROM steam_game_details WHERE developers != ''")
+		rows, err := a.db.conn.Query(fmt.Sprintf("SELECT appid, %s FROM steam_game_details WHERE %s != ''", sourceCol, sourceCol))
 		if err == nil {
 			type backfillItem struct {
 				appid int
-				devs  string
+				raw   string
 			}
 			var items []backfillItem
-			for dRows.Next() {
+			for rows.Next() {
 				var appid int
-				var devs string
-				if err := dRows.Scan(&appid, &devs); err == nil {
-					items = append(items, backfillItem{appid: appid, devs: devs})
+				var raw string
+				if err := rows.Scan(&appid, &raw); err == nil {
+					items = append(items, backfillItem{appid: appid, raw: raw})
 				}
 			}
-			dRows.Close()
+			rows.Close()
 
 			for _, item := range items {
-				for _, d := range splitSteamCompanies(item.devs) {
-					if d != "" {
-						a.db.conn.Exec("INSERT OR IGNORE INTO steam_developers (appid, developer) VALUES (?, ?)", item.appid, d)
+				for _, comp := range splitSteamCompanies(item.raw) {
+					if comp != "" {
+						a.db.conn.Exec(fmt.Sprintf("INSERT OR IGNORE INTO %s (appid, %s) VALUES (?, ?)", table, col), item.appid, comp)
 					}
 				}
 			}
@@ -150,21 +140,20 @@ func (a *App) GetSteamDeveloperStats(sortBy string) ([]SteamDevPubStats, error) 
 	}
 
 	orderClause := resolveStatsOrderClause(sortBy)
-
 	utilFilter := utilityAppIDsFilter()
 	query := fmt.Sprintf(`
 		SELECT 
-			d.developer, 
+			c.%s, 
 			COALESCE(SUM(g.playtime_forever)/60, 0) as total_hours, 
 			COUNT(DISTINCT g.appid) as games_count,
 			COUNT(DISTINCT CASE WHEN g.playtime_forever > 0 THEN g.appid END) as played_count,
 			COALESCE(ROUND(CAST(SUM(g.playtime_forever) AS REAL) / 60.0 / NULLIF(COUNT(DISTINCT g.appid), 0), 1), 0.0) as avg_hours
-		FROM steam_developers d
-		JOIN steam_games g ON d.appid = g.appid
-		WHERE d.developer != '' AND g.appid NOT IN (%s)
-		GROUP BY d.developer
+		FROM %s c
+		JOIN steam_games g ON c.appid = g.appid
+		WHERE c.%s != '' AND g.appid NOT IN (%s)
+		GROUP BY c.%s
 		ORDER BY %s
-	`, utilFilter, orderClause)
+	`, col, table, col, utilFilter, col, orderClause)
 
 	rows, err := a.db.conn.Query(query)
 	if err != nil {
@@ -182,72 +171,14 @@ func (a *App) GetSteamDeveloperStats(sortBy string) ([]SteamDevPubStats, error) 
 	return stats, nil
 }
 
+// GetSteamDeveloperStats returns the top developers
+func (a *App) GetSteamDeveloperStats(sortBy string) ([]SteamDevPubStats, error) {
+	return a.getCompanyStats("steam_developers", "developer", "developers", sortBy)
+}
+
 // GetSteamPublisherStats returns the top publishers
 func (a *App) GetSteamPublisherStats(sortBy string) ([]SteamDevPubStats, error) {
-	a.db.mu.Lock()
-	defer a.db.mu.Unlock()
-
-	// Check if steam_publishers is empty, and backfill if necessary
-	var count int
-	_ = a.db.conn.QueryRow("SELECT COUNT(*) FROM steam_publishers").Scan(&count)
-	if count == 0 {
-		pRows, err := a.db.conn.Query("SELECT appid, publishers FROM steam_game_details WHERE publishers != ''")
-		if err == nil {
-			type backfillItem struct {
-				appid int
-				pubs  string
-			}
-			var items []backfillItem
-			for pRows.Next() {
-				var appid int
-				var pubs string
-				if err := pRows.Scan(&appid, &pubs); err == nil {
-					items = append(items, backfillItem{appid: appid, pubs: pubs})
-				}
-			}
-			pRows.Close() // Close BEFORE inserting
-
-			for _, item := range items {
-				for _, p := range splitSteamCompanies(item.pubs) {
-					if p != "" {
-						a.db.conn.Exec("INSERT OR IGNORE INTO steam_publishers (appid, publisher) VALUES (?, ?)", item.appid, p)
-					}
-				}
-			}
-		}
-	}
-
-	orderClause := resolveStatsOrderClause(sortBy)
-
-	utilFilter := utilityAppIDsFilter()
-	query := fmt.Sprintf(`
-		SELECT 
-			p.publisher, 
-			COALESCE(SUM(g.playtime_forever)/60, 0) as total_hours, 
-			COUNT(DISTINCT g.appid) as games_count,
-			COUNT(DISTINCT CASE WHEN g.playtime_forever > 0 THEN g.appid END) as played_count,
-			COALESCE(ROUND(CAST(SUM(g.playtime_forever) AS REAL) / 60.0 / NULLIF(COUNT(DISTINCT g.appid), 0), 1), 0.0) as avg_hours
-		FROM steam_publishers p
-		JOIN steam_games g ON p.appid = g.appid
-		WHERE p.publisher != '' AND g.appid NOT IN (%s)
-		GROUP BY p.publisher
-		ORDER BY %s
-	`, utilFilter, orderClause)
-
-	rows, err := a.db.conn.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("query failed: %v", err)
-	}
-	defer rows.Close()
-
-	var stats []SteamDevPubStats
-	for rows.Next() {
-		var stat SteamDevPubStats
-		if err := rows.Scan(&stat.Name, &stat.TotalHours, &stat.GamesCount, &stat.PlayedCount, &stat.AvgHours); err == nil {
-			stats = append(stats, stat)
-		}
-	}
-	return stats, nil
+	return a.getCompanyStats("steam_publishers", "publisher", "publishers", sortBy)
 }
 
 // GetSteamTagStats returns the top tags/genres
@@ -495,17 +426,19 @@ func isSteamStoreFeature(tag string) bool {
 }
 
 // Known non-game utility AppIDs
-var steamUtilityAppIDsList = []int{
-	431960,  // Wallpaper Engine
-	629520,  // Soundpad
-	993090,  // Lossless Scaling
-	223850,  // 3DMark
-	1905180, // OBS Studio
-	365670,  // Blender
-	1366800, // Crosshair X
-	400040,  // ShareX
-	250820,  // SteamVR
+var steamUtilityAppIDsMap = map[int]struct{}{
+	431960:  {}, // Wallpaper Engine
+	629520:  {}, // Soundpad
+	993090:  {}, // Lossless Scaling
+	223850:  {}, // 3DMark
+	1905180: {}, // OBS Studio
+	365670:  {}, // Blender
+	1366800: {}, // Crosshair X
+	400040:  {}, // ShareX
+	250820:  {}, // SteamVR
 }
+
+const steamUtilityAppIDsFilter = "431960,629520,993090,223850,1905180,365670,1366800,400040,250820"
 
 var steamUtilityNames = []string{
 	"wallpaper engine",
@@ -519,16 +452,10 @@ var steamUtilityNames = []string{
 	"sharex",
 }
 
-func steamUtilityAppIDs() []int {
-	return steamUtilityAppIDsList
-}
-
 // isSteamUtilityApp returns true if the app is a known utility/non-game application.
 func isSteamUtilityApp(appID int, name string) bool {
-	for _, id := range steamUtilityAppIDsList {
-		if appID == id {
-			return true
-		}
+	if _, ok := steamUtilityAppIDsMap[appID]; ok {
+		return true
 	}
 	lowerName := strings.ToLower(strings.TrimSpace(name))
 	for _, utilName := range steamUtilityNames {
