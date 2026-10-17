@@ -186,7 +186,10 @@ export default function MostPlayedGames({
 
   // 5b. Synchronize with selectedDate from calendar heatmap
   useEffect(() => {
-    if (!selectedDate || selectedDate.length < 10) return;
+    if (!selectedDate || selectedDate.length < 10) {
+      setSelectedDayKey(null);
+      return;
+    }
 
     const targetYear = selectedDate.substring(0, 4);
     const targetMonthKey = selectedDate.substring(0, 7);
@@ -195,20 +198,9 @@ export default function MostPlayedGames({
     setSelectedYear(targetYear);
     setSelectedMonthKey(targetMonthKey);
     setSelectedDayKey(selectedDate);
-
-    const monthStints = buildMonthStints(filteredVideos, targetMonthKey);
-    const matchingStint = monthStints.find(
-      (s) => s.startDate <= selectedDate && selectedDate <= s.endDate,
-    );
-
-    if (matchingStint) {
-      setSelectedStintId(matchingStint.id);
-      const targetGame = matchingStint.games[0]?.game;
-      if (targetGame) {
-        setSelectedGameName(targetGame);
-      }
-    }
-  }, [selectedDate, filteredVideos]);
+    setSelectedStintId(null);
+    setSelectedGameName(null);
+  }, [selectedDate]);
 
   // 6. Handle Year change from toolbar
   const handleYearChange = (year: string) => {
