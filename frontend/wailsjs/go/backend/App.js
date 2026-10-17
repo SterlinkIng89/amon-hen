@@ -106,6 +106,10 @@ export function GetDefaultExportFolder() {
   return window['go']['backend']['App']['GetDefaultExportFolder']();
 }
 
+export function GetEnrichedSteamGames(arg1) {
+  return window['go']['backend']['App']['GetEnrichedSteamGames'](arg1);
+}
+
 export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
 }
@@ -162,6 +166,10 @@ export function GetSteamID() {
   return window['go']['backend']['App']['GetSteamID']();
 }
 
+export function GetSteamLibraryPulse(arg1) {
+  return window['go']['backend']['App']['GetSteamLibraryPulse'](arg1);
+}
+
 export function GetSteamOverallStats() {
   return window['go']['backend']['App']['GetSteamOverallStats']();
 }
@@ -172,34 +180,6 @@ export function GetSteamPublisherStats(arg1) {
 
 export function GetSteamTagStats(arg1) {
   return window['go']['backend']['App']['GetSteamTagStats'](arg1);
-}
-
-export function GetSteamLibraryPulse(arg1) {
-  return window['go']['backend']['App']['GetSteamLibraryPulse'](arg1);
-}
-
-export function GetEnrichedSteamGames(arg1) {
-  return window['go']['backend']['App']['GetEnrichedSteamGames'](arg1);
-}
-
-export function UpsertSteamBacklogItem(arg1, arg2, arg3) {
-  return window['go']['backend']['App']['UpsertSteamBacklogItem'](arg1, arg2, arg3);
-}
-
-export function ReorderSteamBacklog(arg1) {
-  return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
-}
-
-export function RemoveSteamBacklogItem(arg1) {
-  return window['go']['backend']['App']['RemoveSteamBacklogItem'](arg1);
-}
-
-export function UpsertSteamGameRating(arg1, arg2, arg3, arg4) {
-  return window['go']['backend']['App']['UpsertSteamGameRating'](arg1, arg2, arg3, arg4);
-}
-
-export function RemoveSteamGameRating(arg1) {
-  return window['go']['backend']['App']['RemoveSteamGameRating'](arg1);
 }
 
 export function GetStreamPort() {
@@ -304,6 +284,18 @@ export function RegenerateThumbnail(arg1) {
 
 export function RemoveFolder(arg1) {
   return window['go']['backend']['App']['RemoveFolder'](arg1);
+}
+
+export function RemoveSteamBacklogItem(arg1) {
+  return window['go']['backend']['App']['RemoveSteamBacklogItem'](arg1);
+}
+
+export function RemoveSteamGameRating(arg1) {
+  return window['go']['backend']['App']['RemoveSteamGameRating'](arg1);
+}
+
+export function ReorderSteamBacklog(arg1) {
+  return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
 }
 
 export function ResumeUpload(arg1) {
@@ -456,4 +448,12 @@ export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
 
 export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['backend']['App']['UploadToYouTube'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+}
+
+export function UpsertSteamBacklogItem(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['UpsertSteamBacklogItem'](arg1, arg2, arg3);
+}
+
+export function UpsertSteamGameRating(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpsertSteamGameRating'](arg1, arg2, arg3, arg4);
 }
