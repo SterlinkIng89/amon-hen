@@ -12,6 +12,8 @@ export interface PlaytimeStackedChartProps {
   readonly topGames: readonly string[];
   readonly selectedKey: string;
   readonly onSelectKey?: (key: string) => void;
+  readonly selectedGame?: string | null;
+  readonly onSelectGame?: (game: string | null) => void;
 }
 
 function formatChartDate(dateStr: string): string {
@@ -68,6 +70,7 @@ interface StackedBarColumnProps {
   readonly isSelected: boolean;
   readonly isHovered: boolean;
   readonly hasAnyHovered: boolean;
+  readonly highlightedGame?: string | null;
   readonly tooltipSide: "left" | "right";
   readonly barMaxWidthClass: string;
   readonly labelNode: React.ReactNode;
@@ -86,6 +89,7 @@ function StackedBarColumn({
   isSelected,
   isHovered,
   hasAnyHovered,
+  highlightedGame,
   tooltipSide,
   barMaxWidthClass,
   labelNode,
@@ -103,13 +107,14 @@ function StackedBarColumn({
 
   return (
     <div
+      data-testid={`bar-column-${id}`}
       className="flex-1 flex flex-col justify-end items-center h-full group cursor-pointer relative"
       onClick={() => onSelect?.(id)}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
     >
       {isHovered && (
-        <div className="absolute inset-x-0 bottom-6 top-1 rounded-t-xs pointer-events-none bg-card/60" />
+        <div className="absolute inset-x-0 bottom-6 top-3 rounded-t-xs pointer-events-none bg-card/60" />
       )}
 
       {isHovered && (
@@ -145,7 +150,7 @@ function StackedBarColumn({
                   >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <span
-                        className="w-2 h-2 rounded-xs shrink-0"
+                        className="w-2.5 h-2.5 rounded-sm shrink-0"
                         style={{ backgroundColor: color }}
                       />
                       <span className="text-text-primary font-medium truncate max-w-[130px]">
@@ -179,33 +184,46 @@ function StackedBarColumn({
         </div>
       )}
 
-      <div
-        className={`w-full ${barMaxWidthClass} rounded-t-xs overflow-hidden flex flex-col-reverse transition-all duration-150 relative z-10 ${
-          isSelected ? "ring-2 ring-accent" : ""
-        } ${
-          isHovered
-            ? "brightness-125 ring-1 ring-border-medium"
-            : hasAnyHovered
-              ? "opacity-35"
-              : "opacity-100"
-        }`}
-        style={{ height: `${totalHeightPct}%` }}
-      >
-        {entries.map(([game, h]) => {
-          const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
-          const color = getGameColor(game);
-          return (
-            <div
-              key={game}
-              style={{
-                height: `${segPct}%`,
-                backgroundColor: color,
-              }}
-              className="w-full shrink-0"
-            />
-          );
-        })}
-      </div>
+      {totalHours === 0 ? (
+        <div
+          data-testid={`empty-bar-stub-${id}`}
+          className={`w-full ${barMaxWidthClass} h-[2px] rounded-t-xs bg-border-subtle/70 group-hover:bg-border-medium transition-colors relative z-10`}
+        />
+      ) : (
+        <div
+          data-testid={`stacked-bar-${id}`}
+          className={`w-full ${barMaxWidthClass} rounded-t-sm overflow-hidden flex flex-col-reverse gap-[1.5px] transition-all duration-150 relative z-10 ${
+            isSelected ? "ring-2 ring-accent" : ""
+          } ${
+            isHovered
+              ? "brightness-125 ring-1 ring-border-medium"
+              : hasAnyHovered
+                ? "opacity-35"
+                : "opacity-100"
+          }`}
+          style={{ height: `${totalHeightPct}%` }}
+        >
+          {entries.map(([game, h]) => {
+            const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
+            const color = getGameColor(game);
+            const isDimmed = Boolean(
+              highlightedGame && highlightedGame !== game
+            );
+            return (
+              <div
+                key={game}
+                style={{
+                  height: `${segPct}%`,
+                  backgroundColor: color,
+                }}
+                className={`w-full shrink-0 transition-opacity duration-150 ${
+                  isDimmed ? "opacity-20" : "opacity-100"
+                }`}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {labelNode}
     </div>
@@ -219,47 +237,97 @@ export function PlaytimeStackedChart({
   topGames,
   selectedKey,
   onSelectKey,
+  selectedGame,
+  onSelectGame,
 }: PlaytimeStackedChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredLegendGame, setHoveredLegendGame] = useState<string | null>(null);
+
+  const highlightedGame = hoveredLegendGame ?? selectedGame ?? null;
+
+  const currentViewItems: readonly { readonly totalHours: number }[] =
+    viewMode === "month" ? dailyData : monthlyData;
 
   const chartMax = useMemo(() => {
-    const raw =
-      viewMode === "month"
-        ? Math.max(...dailyData.map((d) => d.totalHours), 0)
-        : Math.max(...monthlyData.map((m) => m.totalHours), 0);
+    const raw = Math.max(...currentViewItems.map((item) => item.totalHours), 0);
     return computeNiceChartMax(raw);
-  }, [viewMode, dailyData, monthlyData]);
+  }, [currentViewItems]);
 
   const totalViewHours = useMemo(() => {
-    if (viewMode === "month") {
-      return dailyData.reduce((acc, d) => acc + d.totalHours, 0);
+    return currentViewItems.reduce((acc, item) => acc + item.totalHours, 0);
+  }, [currentViewItems]);
+
+  const gameHoursMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    const items = viewMode === "month" ? dailyData : monthlyData;
+    for (const item of items) {
+      for (const [game, hours] of Object.entries(item.byGame)) {
+        map[game] = (map[game] || 0) + hours;
+      }
     }
-    return monthlyData.reduce((acc, m) => acc + m.totalHours, 0);
+    return map;
   }, [viewMode, dailyData, monthlyData]);
 
+  const { avgActiveHours, activeCount } = useMemo(() => {
+    const active = currentViewItems.filter((item) => item.totalHours > 0);
+    const count = active.length;
+    if (count === 0) return { avgActiveHours: 0, activeCount: 0 };
+    const sum = active.reduce((acc, item) => acc + item.totalHours, 0);
+    return { avgActiveHours: sum / count, activeCount: count };
+  }, [currentViewItems]);
+
+  const avgHeightPct = useMemo(() => {
+    if (activeCount < 2 || avgActiveHours <= 0 || chartMax <= 0) return null;
+    return Math.min(Math.max((avgActiveHours / chartMax) * 100, 5), 95);
+  }, [activeCount, avgActiveHours, chartMax]);
+
   const legendItems = useMemo(() => {
-    return topGames.slice(0, 5).map((game) => ({
-      name: game,
-      color: getGameColor(game),
-    }));
-  }, [topGames]);
+    return topGames
+      .slice(0, 5)
+      .map((game) => ({
+        name: game,
+        color: getGameColor(game),
+        hours: gameHoursMap[game] || 0,
+      }))
+      .sort((a, b) => b.hours - a.hours);
+  }, [topGames, gameHoursMap]);
 
   const hasAnyHovered = hoveredIndex !== null;
 
   return (
-    <div className="flex flex-col gap-2 w-full mt-2">
+    <div className="bg-surface/60 border border-border-subtle rounded-lg p-4 sm:p-5 flex flex-col gap-2 w-full mt-2">
       <div className="flex gap-2 w-full items-stretch">
-        <div className="flex flex-col justify-between items-end pb-6 pt-1 text-[10px] text-text-muted font-medium shrink-0 w-12 tabular-nums select-none border-r border-border-subtle/50 pr-2">
+        <div className="flex flex-col justify-between items-end pb-6 pt-3 text-[10px] text-text-secondary font-medium shrink-0 w-12 tabular-nums select-none pr-1.5">
           <span title="Scale ceiling">{formatAxisHours(chartMax)}</span>
-          <span className="text-text-muted/60">
+          <span className="text-text-secondary/80">
             {formatAxisHours(chartMax / 2)}
           </span>
           <span>0h</span>
         </div>
 
-        <div className="h-44 flex-1 flex items-end gap-1 sm:gap-1.5 pb-6 pt-1 px-1 relative border-b border-border-subtle">
-          <div className="absolute inset-x-0 top-1 border-b border-dashed border-border-subtle/30 pointer-events-none" />
-          <div className="absolute inset-x-0 top-1/2 -translate-y-2.5 border-b border-dashed border-border-subtle/20 pointer-events-none" />
+        <div className="h-44 flex-1 flex items-end gap-1 sm:gap-1.5 pb-6 pt-3 px-1 relative border-b border-border-subtle">
+          <div className="absolute inset-x-0 top-3 border-b border-dashed border-border-subtle/60 pointer-events-none" />
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1.5 border-b border-dashed border-border-subtle/40 pointer-events-none" />
+
+          {avgHeightPct !== null && (
+            <div className="absolute inset-x-0 bottom-6 top-3 pointer-events-none select-none z-20">
+              <div
+                className="absolute inset-x-0 border-b border-dashed border-accent/45"
+                style={{ bottom: `${avgHeightPct}%` }}
+              >
+                <span
+                  data-testid="avg-reference-badge"
+                  className={`absolute right-1 ${
+                    avgHeightPct > 82 ? "top-1" : "bottom-1"
+                  } px-1.5 py-0.5 rounded bg-elevated/85 backdrop-blur-xs border border-accent/30 text-[9px] leading-none font-semibold text-accent tabular-nums whitespace-nowrap shadow-xs transition-opacity duration-150 ${
+                    hasAnyHovered ? "opacity-15" : "opacity-90"
+                  }`}
+                >
+                  Avg {formatAxisHours(avgActiveHours)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {viewMode === "month"
             ? dailyData.map((day, idx) => (
@@ -274,6 +342,7 @@ export function PlaytimeStackedChart({
                   isSelected={selectedKey === day.date}
                   isHovered={hoveredIndex === idx}
                   hasAnyHovered={hasAnyHovered}
+                  highlightedGame={highlightedGame}
                   tooltipSide={idx < 18 ? "right" : "left"}
                   barMaxWidthClass="max-w-[28px]"
                   onSelect={onSelectKey}
@@ -284,9 +353,11 @@ export function PlaytimeStackedChart({
                       className={`text-[9px] mt-1 tabular-nums transition-colors ${
                         hoveredIndex === idx
                           ? "text-accent font-bold"
-                          : day.dayNum % 5 === 1 || day.dayNum === dailyData.length
-                            ? "text-text-secondary"
-                            : "hidden sm:block text-text-muted"
+                          : day.dayNum === 1 ||
+                              day.dayNum % 5 === 0 ||
+                              day.dayNum === dailyData.length
+                            ? "text-text-secondary font-medium"
+                            : "hidden sm:block text-text-secondary/60"
                       }`}
                     >
                       {day.dayNum}
@@ -306,6 +377,7 @@ export function PlaytimeStackedChart({
                   isSelected={selectedKey === month.monthKey}
                   isHovered={hoveredIndex === idx}
                   hasAnyHovered={hasAnyHovered}
+                  highlightedGame={highlightedGame}
                   tooltipSide={idx < 6 ? "right" : "left"}
                   barMaxWidthClass="max-w-[36px]"
                   onSelect={onSelectKey}
@@ -328,20 +400,55 @@ export function PlaytimeStackedChart({
       </div>
 
       {legendItems.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-2 pb-1 text-[11px] text-text-secondary">
-          {legendItems.map((item) => (
-            <div key={item.name} className="flex items-center gap-1.5">
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="truncate max-w-[130px]">{item.name}</span>
-            </div>
-          ))}
+        <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 pt-2 pb-1 text-[11px] text-text-secondary">
+          {legendItems.map((item) => {
+            const isSelected = selectedGame === item.name;
+            const isAnotherSelected = Boolean(selectedGame && !isSelected);
+
+            return (
+              <button
+                key={item.name}
+                type="button"
+                data-testid={`legend-chip-${item.name}`}
+                onClick={() =>
+                  onSelectGame?.(isSelected ? null : item.name)
+                }
+                onMouseEnter={() => setHoveredLegendGame(item.name)}
+                onMouseLeave={() => setHoveredLegendGame(null)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-all cursor-pointer select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+                  isSelected
+                    ? "bg-card border-border-medium text-text-primary ring-1 ring-accent/50 font-semibold"
+                    : isAnotherSelected
+                      ? "bg-elevated/40 border-border-subtle text-text-secondary opacity-60 hover:opacity-100 hover:text-text-primary hover:border-border-medium"
+                      : "bg-elevated/40 border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-medium"
+                }`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="truncate max-w-[140px] font-medium">
+                  {item.name}
+                </span>
+              </button>
+            );
+          })}
+
           {topGames.length > 5 && (
-            <span className="text-[10px] text-text-muted">
+            <span className="text-[10px] text-text-muted px-1">
               +{topGames.length - 5} more
             </span>
+          )}
+
+          {selectedGame && (
+            <button
+              type="button"
+              data-testid="legend-reset-button"
+              onClick={() => onSelectGame?.(null)}
+              className="text-[11px] text-accent hover:underline font-medium px-1.5 py-0.5 cursor-pointer ml-1 select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded"
+            >
+              Reset
+            </button>
           )}
         </div>
       )}

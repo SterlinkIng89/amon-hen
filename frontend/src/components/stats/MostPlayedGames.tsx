@@ -11,6 +11,10 @@ import {
   AdvancedFiltersInput,
 } from "../../utils/gameStats";
 import { buildMonthStints, GameStint } from "../../utils/gameTimeline";
+import {
+  formatPlaytimeHoursMinutes,
+  extractTitleDate,
+} from "../../utils/videoUtils";
 import { PlaytimeToolbar } from "./PlaytimeToolbar";
 import { PlaytimeStackedChart } from "./PlaytimeStackedChart";
 import { TopGamesList } from "./TopGamesList";
@@ -44,6 +48,7 @@ export default function MostPlayedGames({
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [selectedGameName, setSelectedGameName] = useState<string | null>(null);
   const [selectedStintId, setSelectedStintId] = useState<string | null>(null);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
 
   // 1. Fetch historical videos from backend
   useEffect(() => {
@@ -83,9 +88,12 @@ export default function MostPlayedGames({
     const monthsWithDataSet = new Set<string>();
 
     filteredVideos.forEach((v) => {
-      const pubDate = v.published && v.published.length >= 10
-        ? v.published.substring(0, 10)
-        : "";
+      const titleDate = extractTitleDate(v.title);
+      const pubDate =
+        titleDate ||
+        (v.published && v.published.length >= 10
+          ? v.published.substring(0, 10)
+          : "");
       if (!pubDate) return;
 
       const g = extractGameName(v.title, v.gameTag);
@@ -182,6 +190,7 @@ export default function MostPlayedGames({
     setViewMode("month");
     setSelectedYear(targetYear);
     setSelectedMonthKey(targetMonthKey);
+    setSelectedDayKey(selectedDate);
 
     const monthStints = buildMonthStints(filteredVideos, targetMonthKey);
     const matchingStint = monthStints.find(
@@ -200,6 +209,8 @@ export default function MostPlayedGames({
   // 6. Handle Year change from toolbar
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
+    setSelectedDayKey(null);
+    setSelectedStintId(null);
     if (stats) {
       const availableInYear = Array.from(stats.monthsWithDataSet)
         .filter((k) => k.startsWith(year))
@@ -267,6 +278,73 @@ export default function MostPlayedGames({
     return monthName ? `Top games in ${monthName} ${y}` : "Top games of the month";
   }, [viewMode, selectedYear, selectedMonthKey]);
 
+  // Period summary metrics for header KPI pills
+  const periodSummary = useMemo(() => {
+    const totalHours = gamesToDisplay.reduce((acc, g) => acc + g.hours, 0);
+    const activeCount =
+      viewMode === "month"
+        ? dailyBreakdown.filter((d) => d.totalHours > 0).length
+        : monthlyBreakdown.filter((m) => m.totalHours > 0).length;
+    const totalUnits = viewMode === "month" ? dailyBreakdown.length : 12;
+    const unitLabel = viewMode === "month" ? "active days" : "active months";
+    const gamesCount = gamesToDisplay.length;
+
+    return {
+      totalHours,
+      activeCount,
+      totalUnits,
+      unitLabel,
+      gamesCount,
+    };
+  }, [gamesToDisplay, dailyBreakdown, monthlyBreakdown, viewMode]);
+
+  const handleBarSelect = (key: string) => {
+    if (viewMode === "year") {
+      setSelectedMonthKey(key);
+      setSelectedDayKey(null);
+      setViewMode("month");
+      return;
+    }
+
+    const dayEntry = dailyBreakdown.find((d) => d.date === key);
+    if (!dayEntry || dayEntry.totalHours <= 0) return;
+
+    if (selectedDayKey === key) {
+      setSelectedDayKey(null);
+      setSelectedStintId(null);
+      setSelectedGameName(null);
+      return;
+    }
+
+    setSelectedDayKey(key);
+
+    const matchingStint = monthlyStints.find(
+      (s) => s.startDate <= key && key <= s.endDate,
+    );
+    setSelectedStintId(matchingStint?.id ?? null);
+
+    const dominantGame = Object.entries(dayEntry.byGame).sort(
+      ([, a], [, b]) => b - a,
+    )[0]?.[0];
+    if (dominantGame) {
+      setSelectedGameName(dominantGame);
+    }
+  };
+
+  const handleStintSelect = (stint: GameStint, activeGameName?: string) => {
+    setSelectedStintId(stint.id);
+    if (
+      selectedDayKey &&
+      (selectedDayKey < stint.startDate || selectedDayKey > stint.endDate)
+    ) {
+      setSelectedDayKey(null);
+    }
+    const targetGame = activeGameName || stint.games[0]?.game;
+    if (targetGame) {
+      setSelectedGameName(targetGame);
+    }
+  };
+
   if (loading) {
     return (
       <div className="px-5 pb-5">
@@ -302,23 +380,54 @@ export default function MostPlayedGames({
 
   return (
     <div className="px-5 pb-5 flex flex-col gap-4">
-      <div className="bg-surface border border-border-medium rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
-        {/* Header & Playtime Toolbar */}
-        <div className="flex flex-wrap items-center gap-4">
-          <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
-            Playtime by game
-          </h2>
+      <div className="bg-elevated/30 border border-border-subtle rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden shadow-sm">
+        {/* Header, Playtime Toolbar & Summary Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <h2 className="text-base font-bold text-text-primary tracking-tight shrink-0">
+              Playtime by game
+            </h2>
 
-          <PlaytimeToolbar
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            years={stats.years}
-            selectedYear={selectedYear}
-            onYearSelect={handleYearChange}
-            selectedMonthKey={selectedMonthKey}
-            onMonthSelect={setSelectedMonthKey}
-            monthsWithData={stats.monthsWithDataSet}
-          />
+            <PlaytimeToolbar
+              viewMode={viewMode}
+              onViewModeChange={(mode) => {
+                setViewMode(mode);
+                setSelectedDayKey(null);
+              }}
+              years={stats.years}
+              selectedYear={selectedYear}
+              onYearSelect={handleYearChange}
+              selectedMonthKey={selectedMonthKey}
+              onMonthSelect={(monthKey) => {
+                setSelectedMonthKey(monthKey);
+                setSelectedDayKey(null);
+                setSelectedStintId(null);
+              }}
+              monthsWithData={stats.monthsWithDataSet}
+            />
+          </div>
+
+          {/* Period Summary KPI Pills */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {formatPlaytimeHoursMinutes(periodSummary.totalHours)}
+              </strong>{" "}
+              total
+            </div>
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.activeCount}
+              </strong>
+              /{periodSummary.totalUnits} {periodSummary.unitLabel}
+            </div>
+            <div className="px-2.5 py-1 rounded-md bg-[#141418] border border-border-subtle text-xs text-text-secondary tabular-nums">
+              <strong className="text-text-primary font-semibold">
+                {periodSummary.gamesCount}
+              </strong>{" "}
+              {periodSummary.gamesCount === 1 ? "game" : "games"}
+            </div>
+          </div>
         </div>
 
         {/* Stacked Chart (Daily in month view, Monthly in year view) */}
@@ -327,17 +436,13 @@ export default function MostPlayedGames({
           dailyData={dailyBreakdown}
           monthlyData={monthlyBreakdown}
           topGames={topGameNames}
-          selectedKey={viewMode === "month" ? selectedMonthKey : selectedYear}
-          onSelectKey={(key) => {
-            if (viewMode === "year") {
-              // Click on a month bar in year view switches to that month
-              setSelectedMonthKey(key);
-              setViewMode("month");
-            }
-          }}
+          selectedKey={viewMode === "month" ? (selectedDayKey ?? "") : selectedYear}
+          selectedGame={selectedGameName}
+          onSelectGame={setSelectedGameName}
+          onSelectKey={handleBarSelect}
         />
 
-        <div className="h-px w-full bg-border-medium my-1" />
+        <div className="h-px w-full bg-border-subtle my-1" />
 
         {/* Grouped Top Games (40%) and Timeline (60%) with vertical hairline divider */}
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
@@ -366,7 +471,9 @@ export default function MostPlayedGames({
               <TopGamesList
                 games={gamesToDisplay}
                 selectedGameName={selectedGameName}
-                onSelectGame={setSelectedGameName}
+                onSelectGame={(game) =>
+                  setSelectedGameName((prev) => (prev === game ? null : game))
+                }
                 maxHours={maxGameHours}
                 listTitle={listTitle}
               />
@@ -379,13 +486,7 @@ export default function MostPlayedGames({
               <GamingTimelineStrip
                 stints={monthlyStints}
                 selectedStintId={selectedStintId}
-                onSelectStint={(stint: GameStint, activeGameName?: string) => {
-                  setSelectedStintId(stint.id);
-                  const targetGame = activeGameName || stint.games[0]?.game;
-                  if (targetGame) {
-                    setSelectedGameName(targetGame);
-                  }
-                }}
+                onSelectStint={handleStintSelect}
               />
             ) : (
               <div className="flex flex-col gap-2">

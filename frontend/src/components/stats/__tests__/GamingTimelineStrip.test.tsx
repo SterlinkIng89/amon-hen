@@ -151,4 +151,51 @@ describe("GamingTimelineStrip Component", () => {
     const trackRows = container.querySelectorAll(".h-7");
     expect(trackRows.length).toBe(mockStints.length);
   });
+
+  it("applies semantic tokens for connector lines, dots, date pills, and break gap indicators", () => {
+    const stintsWithGap: readonly GameStint[] = [
+      {
+        id: "stint-1",
+        startDate: "2026-10-06",
+        endDate: "2026-10-06",
+        dayCount: 1,
+        totalHours: 1,
+        games: [{ game: "SOS OPS!", hours: 1 }],
+      },
+      {
+        id: "stint-2",
+        startDate: "2026-10-08",
+        endDate: "2026-10-08",
+        dayCount: 1,
+        totalHours: 2,
+        games: [{ game: "Control Resonant", hours: 2 }],
+      },
+    ];
+
+    const { container } = render(
+      <GamingTimelineStrip
+        stints={stintsWithGap}
+        selectedStintId="stint-1"
+      />
+    );
+
+    // Verify date pill uses bg-card border-border-subtle
+    const datePills = container.querySelectorAll(".bg-card");
+    expect(datePills.length).toBeGreaterThan(0);
+
+    // Verify break pill uses bg-surface
+    const breakPill = container.querySelector(".bg-surface");
+    expect(breakPill).not.toBeNull();
+
+    // Verify no hardcoded blue-tinted hex codes remain
+    const html = container.innerHTML;
+    expect(html).not.toContain("#444458");
+    expect(html).not.toContain("#2d2d3b");
+    expect(html).not.toContain("#525266");
+    expect(html).not.toContain("#1e1e26");
+    expect(html).not.toContain("#32323e");
+    expect(html).not.toContain("#48485a");
+    expect(html).not.toContain("#12141a");
+    expect(html).not.toContain("#48485c");
+  });
 });

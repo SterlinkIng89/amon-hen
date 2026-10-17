@@ -110,8 +110,8 @@ function StintCard({
             aria-hidden="true"
             className={`absolute -left-2 sm:-left-3 right-1/2 top-1/2 -translate-y-1/2 z-0 pointer-events-none ${
               hasBreakBefore
-                ? "h-0 border-t-2 border-dashed border-[#444458] bg-transparent"
-                : "h-[2px] bg-[#2d2d3b]"
+                ? "h-0 border-t-2 border-dashed border-border-medium bg-transparent"
+                : "h-[2px] bg-border-subtle"
             }`}
           />
         )}
@@ -121,17 +121,17 @@ function StintCard({
             aria-hidden="true"
             className={`absolute left-1/2 -right-2 sm:-right-3 top-1/2 -translate-y-1/2 z-0 pointer-events-none flex items-center justify-end ${
               hasBreakAfter
-                ? "h-0 border-t-2 border-dashed border-[#444458] bg-transparent"
-                : "h-[2px] bg-[#2d2d3b]"
+                ? "h-0 border-t-2 border-dashed border-border-medium bg-transparent"
+                : "h-[2px] bg-border-subtle"
             }`}
           >
             {!hasBreakAfter && (
-              <div className="w-1.5 h-1.5 rounded-full bg-[#525266] translate-x-1/2 shrink-0 pointer-events-none" />
+              <div className="w-1.5 h-1.5 rounded-full bg-text-muted translate-x-1/2 shrink-0 pointer-events-none" />
             )}
           </div>
         )}
 
-        <div className="relative z-10 px-3 py-1 rounded-full bg-[#1e1e26] border border-[#32323e] text-[11px] font-semibold text-text-primary whitespace-nowrap shadow-xs group-hover:border-[#48485a] transition-colors">
+        <div className="relative z-10 px-3 py-1 rounded-full bg-card border border-border-subtle text-[11px] font-semibold text-text-primary whitespace-nowrap shadow-xs group-hover:border-border-medium transition-colors">
           {dateLabel}
         </div>
       </div>
@@ -166,10 +166,10 @@ function TimelineGapSpacer({
       <div className="relative w-full h-7 flex items-center justify-center my-1.5">
         <div
           aria-hidden="true"
-          className="absolute -left-2 sm:-left-3 -right-2 sm:-right-3 top-1/2 -translate-y-1/2 h-0 border-t-2 border-dashed border-[#444458] z-0 pointer-events-none"
+          className="absolute -left-2 sm:-left-3 -right-2 sm:-right-3 top-1/2 -translate-y-1/2 h-0 border-t-2 border-dashed border-border-medium z-0 pointer-events-none"
         />
 
-        <div className="relative z-10 px-2.5 py-0.5 rounded-full bg-[#12141a] border border-dashed border-[#48485c] flex items-center gap-1.5 shadow-xs">
+        <div className="relative z-10 px-2.5 py-0.5 rounded-full bg-surface border border-dashed border-border-medium flex items-center gap-1.5 shadow-xs">
           <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
           <span className="text-[10px] font-mono font-medium text-text-secondary whitespace-nowrap">
             {dayGap === 1 ? "1d break" : `${dayGap}d break`}

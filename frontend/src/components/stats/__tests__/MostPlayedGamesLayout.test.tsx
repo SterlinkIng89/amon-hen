@@ -98,4 +98,184 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getAllByText("Hollow Knight: Silksong").length).toBeGreaterThan(0);
     });
   });
+
+  it("applies warm-neutral elevated card surface, subtle border, and subtle divider", async () => {
+    const { container } = render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const card = container.querySelector(".bg-elevated\\/30");
+    expect(card).not.toBeNull();
+    expect(card?.className).toContain("border-border-subtle");
+    expect(card?.className).not.toContain("bg-surface border-border-medium");
+
+    const divider = container.querySelector(".bg-border-subtle.h-px");
+    expect(divider).not.toBeNull();
+  });
+
+  it("renders period summary KPI pills for total playtime, active days, and game count in month view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("7h 30m")).toBeDefined();
+      expect(screen.getByText((_, el) => el?.textContent?.trim() === "3/31 active days")).toBeDefined();
+      expect(screen.getByText("2 games")).toBeDefined();
+    });
+  });
+
+  it("updates period summary KPI pills to active months when switching to year view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    const yearModeButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearModeButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("7h 30m")).toBeDefined();
+      expect(screen.getByText((_, el) => el?.textContent?.trim() === "1/12 active months")).toBeDefined();
+      expect(screen.getByText("2 games")).toBeDefined();
+    });
+  });
+
+  it("renders PlaytimeToolbar with unified segmented control styling and no hairline divider", async () => {
+    const { container } = render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Playtime by game")).toBeDefined();
+    });
+
+    // Segmented track containers (mode switcher, year track, month track)
+    const segmentedContainers = container.querySelectorAll('[class*="bg-[#141418]"][class*="rounded-lg"]');
+    expect(segmentedContainers.length).toBeGreaterThanOrEqual(3);
+
+    // Active year button has unified rounded-md accent styling
+    const yearButton = screen.getByRole("button", { name: "2026" });
+    expect(yearButton.className).toContain("rounded-md");
+    expect(yearButton.className).toContain("bg-accent/15");
+    expect(yearButton.className).toContain("border-accent/40");
+    expect(yearButton.className).not.toContain("rounded-full");
+
+    // Active month button has unified rounded-md accent styling
+    const monthButton = screen.getByRole("button", { name: "Oct" });
+    expect(monthButton.className).toContain("rounded-md");
+    expect(monthButton.className).toContain("bg-accent/15");
+    expect(monthButton.className).toContain("border-accent/40");
+
+    // Redundant hairline divider removed
+    const toolbarDivider = container.querySelector(".h-5.w-px.bg-border-subtle");
+    expect(toolbarDivider).toBeNull();
+  });
+
+  it("toggles game selection off when clicking an already selected game in TopGamesList", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    // Select Silksong (#2)
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    expect(silksongRow).not.toBeNull();
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Clicking Silksong again should toggle back to null and restore #1 Game
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
+
+  it("allows selecting a game and resetting via PlaytimeStackedChart legend filter chips", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    // Locate the legend chip for Silksong via test id
+    const silksongChip = screen.getByTestId("legend-chip-Hollow Knight: Silksong");
+    expect(silksongChip).toBeDefined();
+
+    fireEvent.click(silksongChip);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Click Reset button to clear selection
+    const resetButton = screen.getByTestId("legend-reset-button");
+    expect(resetButton).toBeDefined();
+
+    fireEvent.click(resetButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
+
+  it("selects day bar on click, synchronizes timeline stint and dominant game, and toggles selection off", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const dayColumn = screen.getByTestId("bar-column-2026-10-05");
+    expect(dayColumn).toBeDefined();
+
+    const barEl = screen.getByTestId("stacked-bar-2026-10-05");
+    expect(barEl.className).not.toContain("ring-2 ring-accent");
+
+    // Click active day bar
+    fireEvent.click(dayColumn);
+
+    await waitFor(() => {
+      expect(barEl.className).toContain("ring-2 ring-accent");
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Click again to toggle off
+    fireEvent.click(dayColumn);
+
+    await waitFor(() => {
+      expect(barEl.className).not.toContain("ring-2 ring-accent");
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
+
+  it("ignores click on empty day bar stub with 0 recorded hours", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const emptyStubColumn = screen.getByTestId("bar-column-2026-10-02");
+    expect(emptyStubColumn).toBeDefined();
+
+    fireEvent.click(emptyStubColumn);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
 });
+

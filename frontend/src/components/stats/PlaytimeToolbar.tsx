@@ -41,7 +41,7 @@ export function PlaytimeToolbar({
   return (
     <div className={`flex flex-wrap items-center gap-3 ${className}`.trim()}>
       {/* 1. Mode Switcher (By month / By year) */}
-      <div className="flex items-center bg-surface/60 p-0.5 rounded-lg border border-border-subtle shrink-0">
+      <div className="flex items-center bg-[#141418] p-1 rounded-lg border border-border-subtle shrink-0">
         <button
           type="button"
           onClick={() => onViewModeChange("month")}
@@ -67,7 +67,7 @@ export function PlaytimeToolbar({
       </div>
 
       {/* 2. Year Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+      <div className="flex items-center gap-1 bg-[#141418] p-1 rounded-lg border border-border-subtle overflow-x-auto scrollbar-none">
         {years.map((y) => {
           const isSelected = selectedYear === y;
           return (
@@ -75,10 +75,10 @@ export function PlaytimeToolbar({
               key={y}
               type="button"
               onClick={() => onYearSelect(y)}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all border whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-md text-xs transition-all whitespace-nowrap ${
                 isSelected
-                  ? "bg-surface border-accent text-accent"
-                  : "bg-transparent border-border-subtle text-text-muted hover:text-text-secondary hover:border-text-muted"
+                  ? "font-bold bg-accent/15 border border-accent/40 text-accent"
+                  : "font-medium border border-transparent text-text-secondary hover:text-text-primary hover:bg-elevated/60"
               }`}
             >
               {y}
@@ -87,39 +87,35 @@ export function PlaytimeToolbar({
         })}
       </div>
 
-      {/* 3. Divider & Month Pills (Visible in "month" view) */}
+      {/* 3. Month Pills (Visible in "month" view) */}
       {viewMode === "month" && (
-        <>
-          <div className="h-5 w-px bg-border-subtle shrink-0 hidden sm:block" />
+        <div className="flex items-center gap-0.5 bg-[#141418] p-1 rounded-lg border border-border-subtle overflow-x-auto scrollbar-none">
+          {MONTH_NAMES.map((name, idx) => {
+            const monthNum = idx + 1;
+            const monthKey = `${selectedYear}-${String(monthNum).padStart(2, "0")}`;
+            const isSelected = currentMonthNum === monthNum;
+            const hasData = monthsWithData.has(monthKey);
 
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
-            {MONTH_NAMES.map((name, idx) => {
-              const monthNum = idx + 1;
-              const monthKey = `${selectedYear}-${String(monthNum).padStart(2, "0")}`;
-              const isSelected = currentMonthNum === monthNum;
-              const hasData = monthsWithData.has(monthKey);
-
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  disabled={!hasData}
-                  onClick={() => onMonthSelect(monthKey)}
-                  title={hasData ? `${name} ${selectedYear}` : `No data for ${name}`}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
-                    isSelected
-                      ? "border border-accent text-accent bg-accent/10 font-bold"
-                      : hasData
-                        ? "text-text-secondary hover:text-text-primary hover:bg-surface/50"
-                        : "text-text-muted/40 cursor-not-allowed"
-                  }`}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        </>
+            return (
+              <button
+                key={name}
+                type="button"
+                disabled={!hasData}
+                onClick={() => onMonthSelect(monthKey)}
+                title={hasData ? `${name} ${selectedYear}` : `No data for ${name}`}
+                className={`px-2 py-1 rounded-md text-xs transition-all whitespace-nowrap ${
+                  isSelected
+                    ? "font-bold bg-accent/15 border border-accent/40 text-accent"
+                    : hasData
+                      ? "font-medium border border-transparent text-text-secondary hover:text-text-primary hover:bg-elevated/60"
+                      : "font-medium border border-transparent text-text-muted/40 cursor-not-allowed"
+                }`}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
