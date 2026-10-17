@@ -1,0 +1,267 @@
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { SteamGameInspectorGrid } from "../SteamGameInspectorGrid";
+import { SteamGameInsight } from "../../../utils/steamInsightsUtils";
+
+describe("SteamGameInspectorGrid", () => {
+  const sampleGames: readonly SteamGameInsight[] = [
+    {
+      appid: 105600,
+      name: "Terraria",
+      playtimeHours: 150.5,
+      playtimeForever: 9030,
+      playtime2Weeks: 120,
+      headerUrl: "https://cdn.akamai.steamstatic.com/steam/apps/105600/header.jpg",
+      posterUrl: "https://cdn.akamai.steamstatic.com/steam/apps/105600/library_600x900_2x.jpg",
+      achievementsPct: 80,
+      developers: "Re-Logic",
+      publishers: "Re-Logic",
+      genres: "Action, Adventure",
+      ytVideosCount: 5,
+      ytRecordedHours: 12.5,
+    },
+    {
+      appid: 292030,
+      name: "The Witcher 3: Wild Hunt",
+      playtimeHours: 85.0,
+      playtimeForever: 5100,
+      playtime2Weeks: 0,
+      headerUrl: "https://cdn.akamai.steamstatic.com/steam/apps/292030/header.jpg",
+      posterUrl: "https://cdn.akamai.steamstatic.com/steam/apps/292030/library_600x900_2x.jpg",
+      achievementsPct: 65,
+      developers: "CD PROJEKT RED",
+      publishers: "CD PROJEKT RED",
+      genres: "RPG",
+      ytVideosCount: 0,
+      ytRecordedHours: 0,
+      backlogStatus: "up_next",
+      personalTier: "S",
+      personalScore: 10,
+    },
+    {
+      appid: 550,
+      name: "Left 4 Dead 2",
+      playtimeHours: 25.0,
+      playtimeForever: 1500,
+      playtime2Weeks: 0,
+      headerUrl: "https://cdn.akamai.steamstatic.com/steam/apps/550/header.jpg",
+      posterUrl: "https://cdn.akamai.steamstatic.com/steam/apps/550/library_600x900_2x.jpg",
+      achievementsPct: 40,
+      developers: "Valve",
+      publishers: "Valve",
+      genres: "Action",
+      ytVideosCount: 0,
+      ytRecordedHours: 0,
+    },
+    {
+      appid: 730,
+      name: "Counter-Strike 2",
+      playtimeHours: 5.0,
+      playtimeForever: 300,
+      playtime2Weeks: 0,
+      headerUrl: "https://cdn.akamai.steamstatic.com/steam/apps/730/header.jpg",
+      posterUrl: "https://cdn.akamai.steamstatic.com/steam/apps/730/library_600x900_2x.jpg",
+      achievementsPct: 10,
+      developers: "Valve",
+      publishers: "Valve",
+      genres: "Action",
+      ytVideosCount: 0,
+      ytRecordedHours: 0,
+    },
+  ];
+
+  it("renders header bar with title, game count, and search input", () => {
+    const onSearchChange = vi.fn();
+    const onClearFilters = vi.fn();
+
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={true}
+        searchQuery=""
+        onSearchChange={onSearchChange}
+        onClearFilters={onClearFilters}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("All games")).toBeDefined();
+    expect(screen.getByText("4 games")).toBeDefined();
+
+    const clearBtn = screen.getByTestId("inspector-clear-filter");
+    expect(clearBtn).toBeDefined();
+    fireEvent.click(clearBtn);
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
+
+    const searchInput = screen.getByTestId("inspector-game-search");
+    fireEvent.change(searchInput, { target: { value: "witcher" } });
+    expect(onSearchChange).toHaveBeenCalledWith("witcher");
+  });
+
+  it("renders clean empty state when games list is empty", () => {
+    const onClearFilters = vi.fn();
+    render(
+      <SteamGameInspectorGrid
+        games={[]}
+        activeFilterTitle="Genre: Simulation"
+        hasActiveFilter={true}
+        searchQuery="NonExistent"
+        onSearchChange={vi.fn()}
+        onClearFilters={onClearFilters}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/no matching games found/i)).toBeDefined();
+    const resetBtn = screen.getByTestId("empty-reset-filters");
+    fireEvent.click(resetBtn);
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders spotlight card for games[0] by default and switches when clicking another card", () => {
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    const spotlight = screen.getByTestId("inspector-spotlight-card");
+    expect(spotlight.textContent).toContain("Terraria");
+    expect(spotlight.textContent).toContain("150.5h");
+    expect(spotlight.textContent).toContain("Top played");
+
+    const witcherCard = screen.getByTestId("game-card-292030");
+    fireEvent.click(witcherCard);
+
+    expect(spotlight.textContent).toContain("The Witcher 3: Wild Hunt");
+    expect(spotlight.textContent).toContain("85h");
+    expect(spotlight.textContent).toContain("#2 selected");
+  });
+
+  it("renders YouTube bridge badge or unrecorded gem badge accurately", () => {
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    const ytBadge = screen.getByTestId("yt-badge-105600");
+    expect(ytBadge.textContent).toContain("5 YT vids");
+
+    const gemBadge = screen.getByTestId("unrecorded-gem-550");
+    expect(gemBadge.textContent).toContain("Unrecorded gem");
+
+    expect(screen.queryByTestId("yt-badge-730")).toBeNull();
+    expect(screen.queryByTestId("unrecorded-gem-730")).toBeNull();
+  });
+
+  it("handles quick queue button clicks without triggering card selection", () => {
+    const onQuickQueue = vi.fn();
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={onQuickQueue}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    const queueBtn = screen.getByTestId("quick-queue-105600");
+    expect(queueBtn.textContent).toContain("+ Up next");
+    fireEvent.click(queueBtn);
+    expect(onQuickQueue).toHaveBeenCalledWith(105600, "up_next");
+
+    const queuedBadge = screen.getByTestId("quick-queue-292030");
+    expect(queuedBadge.textContent).toContain("Up next");
+  });
+
+  it("handles quick rating tier buttons and displays rated tier pill", () => {
+    const onQuickRate = vi.fn();
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={onQuickRate}
+      />
+    );
+
+    const rateContainer = screen.getByTestId("quick-rate-105600");
+    const sBtn = rateContainer.querySelector('[data-tier="S"]')!;
+    expect(sBtn).toBeDefined();
+
+    fireEvent.click(sBtn);
+    expect(onQuickRate).toHaveBeenCalledWith(105600, "S", 10);
+
+    const ratedPill = screen.getByTestId("quick-rate-292030");
+    expect(ratedPill.textContent).toContain("Tier S");
+  });
+
+  it("limits visible items to 24 and supports load more pagination", () => {
+    const manyGames: SteamGameInsight[] = Array.from({ length: 30 }, (_, i) => ({
+      appid: 1000 + i,
+      name: `Game ${i + 1}`,
+      playtimeHours: 100 - i,
+      playtimeForever: (100 - i) * 60,
+      playtime2Weeks: 0,
+      headerUrl: "",
+      posterUrl: "",
+      achievementsPct: 50,
+      developers: "Studio",
+      publishers: "Publisher",
+      genres: "Genre",
+      ytVideosCount: 0,
+      ytRecordedHours: 0,
+    }));
+
+    render(
+      <SteamGameInspectorGrid
+        games={manyGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("game-card-1000")).toBeDefined();
+    expect(screen.getByTestId("game-card-1023")).toBeDefined();
+    expect(screen.queryByTestId("game-card-1024")).toBeNull();
+
+    const loadMoreBtn = screen.getByTestId("inspector-load-more");
+    fireEvent.click(loadMoreBtn);
+
+    expect(screen.getByTestId("game-card-1024")).toBeDefined();
+    expect(screen.getByTestId("game-card-1029")).toBeDefined();
+    expect(screen.queryByTestId("inspector-load-more")).toBeNull();
+  });
+});
