@@ -12,6 +12,8 @@ export interface PlaytimeStackedChartProps {
   readonly topGames: readonly string[];
   readonly selectedKey: string;
   readonly onSelectKey?: (key: string) => void;
+  readonly selectedGame?: string | null;
+  readonly onSelectGame?: (game: string | null) => void;
 }
 
 function formatChartDate(dateStr: string): string {
@@ -68,6 +70,7 @@ interface StackedBarColumnProps {
   readonly isSelected: boolean;
   readonly isHovered: boolean;
   readonly hasAnyHovered: boolean;
+  readonly highlightedGame?: string | null;
   readonly tooltipSide: "left" | "right";
   readonly barMaxWidthClass: string;
   readonly labelNode: React.ReactNode;
@@ -86,6 +89,7 @@ function StackedBarColumn({
   isSelected,
   isHovered,
   hasAnyHovered,
+  highlightedGame,
   tooltipSide,
   barMaxWidthClass,
   labelNode,
@@ -200,6 +204,9 @@ function StackedBarColumn({
           {entries.map(([game, h]) => {
             const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
             const color = getGameColor(game);
+            const isDimmed = Boolean(
+              highlightedGame && highlightedGame !== game
+            );
             return (
               <div
                 key={game}
@@ -207,7 +214,9 @@ function StackedBarColumn({
                   height: `${segPct}%`,
                   backgroundColor: color,
                 }}
-                className="w-full shrink-0"
+                className={`w-full shrink-0 transition-opacity duration-150 ${
+                  isDimmed ? "opacity-20" : "opacity-100"
+                }`}
               />
             );
           })}
@@ -226,8 +235,13 @@ export function PlaytimeStackedChart({
   topGames,
   selectedKey,
   onSelectKey,
+  selectedGame,
+  onSelectGame,
 }: PlaytimeStackedChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredLegendGame, setHoveredLegendGame] = useState<string | null>(null);
+
+  const highlightedGame = hoveredLegendGame ?? selectedGame ?? null;
 
   const currentViewItems: readonly { readonly totalHours: number }[] =
     viewMode === "month" ? dailyData : monthlyData;
@@ -240,6 +254,17 @@ export function PlaytimeStackedChart({
   const totalViewHours = useMemo(() => {
     return currentViewItems.reduce((acc, item) => acc + item.totalHours, 0);
   }, [currentViewItems]);
+
+  const gameHoursMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    const items = viewMode === "month" ? dailyData : monthlyData;
+    for (const item of items) {
+      for (const [game, hours] of Object.entries(item.byGame)) {
+        map[game] = (map[game] || 0) + hours;
+      }
+    }
+    return map;
+  }, [viewMode, dailyData, monthlyData]);
 
   const { avgActiveHours, activeCount } = useMemo(() => {
     const active = currentViewItems.filter((item) => item.totalHours > 0);
@@ -255,11 +280,18 @@ export function PlaytimeStackedChart({
   }, [activeCount, avgActiveHours, chartMax]);
 
   const legendItems = useMemo(() => {
-    return topGames.slice(0, 5).map((game) => ({
-      name: game,
-      color: getGameColor(game),
-    }));
-  }, [topGames]);
+    return topGames.slice(0, 5).map((game) => {
+      const hours = gameHoursMap[game] || 0;
+      const sharePct =
+        totalViewHours > 0 ? Math.round((hours / totalViewHours) * 100) : 0;
+      return {
+        name: game,
+        color: getGameColor(game),
+        hours,
+        sharePct,
+      };
+    });
+  }, [topGames, gameHoursMap, totalViewHours]);
 
   const hasAnyHovered = hoveredIndex !== null;
 
@@ -304,6 +336,7 @@ export function PlaytimeStackedChart({
                   isSelected={selectedKey === day.date}
                   isHovered={hoveredIndex === idx}
                   hasAnyHovered={hasAnyHovered}
+                  highlightedGame={highlightedGame}
                   tooltipSide={idx < 18 ? "right" : "left"}
                   barMaxWidthClass="max-w-[28px]"
                   onSelect={onSelectKey}
@@ -338,6 +371,7 @@ export function PlaytimeStackedChart({
                   isSelected={selectedKey === month.monthKey}
                   isHovered={hoveredIndex === idx}
                   hasAnyHovered={hasAnyHovered}
+                  highlightedGame={highlightedGame}
                   tooltipSide={idx < 6 ? "right" : "left"}
                   barMaxWidthClass="max-w-[36px]"
                   onSelect={onSelectKey}
@@ -360,20 +394,58 @@ export function PlaytimeStackedChart({
       </div>
 
       {legendItems.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-2 pb-1 text-[11px] text-text-secondary">
-          {legendItems.map((item) => (
-            <div key={item.name} className="flex items-center gap-1.5">
-              <span
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="truncate max-w-[130px]">{item.name}</span>
-            </div>
-          ))}
+        <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 pt-2 pb-1 text-[11px] text-text-secondary">
+          {legendItems.map((item) => {
+            const isSelected = selectedGame === item.name;
+            const isAnotherSelected = Boolean(selectedGame && !isSelected);
+
+            return (
+              <button
+                key={item.name}
+                type="button"
+                data-testid={`legend-chip-${item.name}`}
+                onClick={() =>
+                  onSelectGame?.(isSelected ? null : item.name)
+                }
+                onMouseEnter={() => setHoveredLegendGame(item.name)}
+                onMouseLeave={() => setHoveredLegendGame(null)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-all cursor-pointer select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+                  isSelected
+                    ? "bg-card border-border-medium text-text-primary ring-1 ring-accent/50 font-semibold"
+                    : isAnotherSelected
+                      ? "bg-elevated/40 border-border-subtle text-text-secondary opacity-60 hover:opacity-100 hover:text-text-primary hover:border-border-medium"
+                      : "bg-elevated/40 border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-medium"
+                }`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="truncate max-w-[130px] font-medium">
+                  {item.name}
+                </span>
+                <span className="text-[10px] text-text-secondary tabular-nums">
+                  {formatAxisHours(item.hours)} ({item.sharePct}%)
+                </span>
+              </button>
+            );
+          })}
+
           {topGames.length > 5 && (
-            <span className="text-[10px] text-text-muted">
+            <span className="text-[10px] text-text-muted px-1">
               +{topGames.length - 5} more
             </span>
+          )}
+
+          {selectedGame && (
+            <button
+              type="button"
+              data-testid="legend-reset-button"
+              onClick={() => onSelectGame?.(null)}
+              className="text-[11px] text-accent hover:underline font-medium px-1.5 py-0.5 cursor-pointer ml-1 select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded"
+            >
+              Reset
+            </button>
           )}
         </div>
       )}

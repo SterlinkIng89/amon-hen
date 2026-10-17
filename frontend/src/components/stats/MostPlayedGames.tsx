@@ -373,6 +373,8 @@ export default function MostPlayedGames({
           monthlyData={monthlyBreakdown}
           topGames={topGameNames}
           selectedKey={viewMode === "month" ? selectedMonthKey : selectedYear}
+          selectedGame={selectedGameName}
+          onSelectGame={setSelectedGameName}
           onSelectKey={(key) => {
             if (viewMode === "year") {
               // Click on a month bar in year view switches to that month
@@ -411,7 +413,9 @@ export default function MostPlayedGames({
               <TopGamesList
                 games={gamesToDisplay}
                 selectedGameName={selectedGameName}
-                onSelectGame={setSelectedGameName}
+                onSelectGame={(game) =>
+                  setSelectedGameName((prev) => (prev === game ? null : game))
+                }
                 maxHours={maxGameHours}
                 listTitle={listTitle}
               />

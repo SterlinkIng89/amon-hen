@@ -174,5 +174,61 @@ describe("MostPlayedGames Monthly Layout", () => {
     const toolbarDivider = container.querySelector(".h-5.w-px.bg-border-subtle");
     expect(toolbarDivider).toBeNull();
   });
+
+  it("toggles game selection off when clicking an already selected game in TopGamesList", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    // Select Silksong (#2)
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    expect(silksongRow).not.toBeNull();
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Clicking Silksong again should toggle back to null and restore #1 Game
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
+
+  it("allows selecting a game and resetting via PlaytimeStackedChart legend filter chips", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    // Locate the legend chip for Silksong via test id
+    const silksongChip = screen.getByTestId("legend-chip-Hollow Knight: Silksong");
+    expect(silksongChip).toBeDefined();
+
+    fireEvent.click(silksongChip);
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+
+    // Click Reset button to clear selection
+    const resetButton = screen.getByTestId("legend-reset-button");
+    expect(resetButton).toBeDefined();
+
+    fireEvent.click(resetButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+  });
 });
 

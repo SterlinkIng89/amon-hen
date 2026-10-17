@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import { PlaytimeStackedChart } from "../PlaytimeStackedChart";
 import { DayGameBreakdown, MonthGameBreakdown } from "../../../utils/gameStats";
 
@@ -164,5 +164,102 @@ describe("PlaytimeStackedChart Component", () => {
 
     const day5Label = screen.getByText("5");
     expect(day5Label.className).toContain("text-text-secondary font-medium");
+  });
+
+  it("renders interactive legend chips with hours and share percentage", () => {
+    render(
+      <PlaytimeStackedChart
+        viewMode="month"
+        dailyData={mockDailyData}
+        monthlyData={[]}
+        topGames={["Hades II", "Silksong"]}
+        selectedKey="2026-10-01"
+      />
+    );
+
+    // Total view hours = 3.5 (Day 1) + 1.5 (Day 3) = 5.0h
+    // Hades II = 2.0 + 1.5 = 3.5h (70%)
+    // Silksong = 1.5h (30%)
+    expect(screen.getByText("Hades II")).toBeDefined();
+    expect(screen.getByText("3h 30m (70%)")).toBeDefined();
+    expect(screen.getByText("Silksong")).toBeDefined();
+    expect(screen.getByText("1h 30m (30%)")).toBeDefined();
+  });
+
+  it("calls onSelectGame when clicking legend chips and toggles selection", () => {
+    const handleSelectGame = vi.fn();
+    const { rerender } = render(
+      <PlaytimeStackedChart
+        viewMode="month"
+        dailyData={mockDailyData}
+        monthlyData={[]}
+        topGames={["Hades II", "Silksong"]}
+        selectedKey="2026-10-01"
+        selectedGame={null}
+        onSelectGame={handleSelectGame}
+      />
+    );
+
+    const hadesChip = screen.getByRole("button", { name: /Hades II/ });
+    fireEvent.click(hadesChip);
+    expect(handleSelectGame).toHaveBeenCalledWith("Hades II");
+
+    // When rerendered with selectedGame="Hades II", clicking it again toggles it off (null)
+    rerender(
+      <PlaytimeStackedChart
+        viewMode="month"
+        dailyData={mockDailyData}
+        monthlyData={[]}
+        topGames={["Hades II", "Silksong"]}
+        selectedKey="2026-10-01"
+        selectedGame="Hades II"
+        onSelectGame={handleSelectGame}
+      />
+    );
+
+    fireEvent.click(hadesChip);
+    expect(handleSelectGame).toHaveBeenCalledWith(null);
+  });
+
+  it("renders Reset button when a game is selected and clears selection on click", () => {
+    const handleSelectGame = vi.fn();
+    render(
+      <PlaytimeStackedChart
+        viewMode="month"
+        dailyData={mockDailyData}
+        monthlyData={[]}
+        topGames={["Hades II", "Silksong"]}
+        selectedKey="2026-10-01"
+        selectedGame="Hades II"
+        onSelectGame={handleSelectGame}
+      />
+    );
+
+    const resetButton = screen.getByRole("button", { name: "Reset" });
+    expect(resetButton).toBeDefined();
+
+    fireEvent.click(resetButton);
+    expect(handleSelectGame).toHaveBeenCalledWith(null);
+  });
+
+  it("dims non-matching bar segments to opacity-20 when a game is selected", () => {
+    const { container } = render(
+      <PlaytimeStackedChart
+        viewMode="month"
+        dailyData={mockDailyData}
+        monthlyData={[]}
+        topGames={["Hades II", "Silksong"]}
+        selectedKey="2026-10-01"
+        selectedGame="Hades II"
+      />
+    );
+
+    // On Day 1 (Hades II + Silksong):
+    // Hades II segment has opacity-100, Silksong segment has opacity-20
+    const opacity20Segments = container.querySelectorAll(".opacity-20");
+    const opacity100Segments = container.querySelectorAll(".opacity-100");
+
+    expect(opacity20Segments.length).toBeGreaterThan(0);
+    expect(opacity100Segments.length).toBeGreaterThan(0);
   });
 });
