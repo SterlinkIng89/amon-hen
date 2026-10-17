@@ -92,13 +92,10 @@ function StintCard({
   const isSingleDay = stint.startDate === stint.endDate;
   const hasMultipleGames = stint.games.length > 1;
 
-  const matchesSelectedGame = Boolean(
+  const isGameFiltered = Boolean(
     selectedGameName && stint.games.some((g) => g.game === selectedGameName),
   );
-  const isHighlighted = isSelected || matchesSelectedGame;
-  const isDimmed = Boolean(
-    selectedGameName && !matchesSelectedGame && !isSelected,
-  );
+  const isDimmed = Boolean(selectedGameName && !isGameFiltered);
   const gameColor = getGameColor(activeGame.game);
 
   return (
@@ -120,7 +117,7 @@ function StintCard({
       <TimelineCardStack
         games={stint.games}
         activeIndex={activeGameIndex}
-        isSelected={isHighlighted}
+        isSelected={isGameFiltered}
         onBringToFront={handleBringToFront}
       />
 
@@ -156,13 +153,13 @@ function StintCard({
         <div
           data-testid="stint-date-pill"
           className={`relative z-10 px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap shadow-xs transition-colors flex items-center gap-1.5 ${
-            isHighlighted
+            isGameFiltered
               ? "bg-card border text-text-primary"
               : "bg-card border border-border-subtle text-text-primary group-hover:border-border-medium"
           }`}
-          style={isHighlighted ? { borderColor: gameColor } : undefined}
+          style={isGameFiltered ? { borderColor: gameColor } : undefined}
         >
-          {isHighlighted && (
+          {isGameFiltered && (
             <span
               data-testid="stint-date-pill-dot"
               className="w-1.5 h-1.5 rounded-full shrink-0"

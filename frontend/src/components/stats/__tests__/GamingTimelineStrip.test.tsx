@@ -268,5 +268,25 @@ describe("GamingTimelineStrip Component", () => {
     const bringSilksongBtn = screen.queryByRole("button", { name: "Bring Silksong to front" });
     expect(bringSilksongBtn).not.toBeNull();
   });
+
+  it("does not apply colored border when clicking or switching cards without an active game filter", () => {
+    render(
+      <GamingTimelineStrip
+        stints={mockStints}
+        selectedStintId="stint-2"
+      />
+    );
+
+    const stint2Card = screen.getByTestId("stint-card-stint-2");
+    const frontCard = stint2Card.querySelector<HTMLElement>('[data-testid="timeline-front-card"]');
+    // Front card should NOT have colored border style
+    expect(frontCard?.style.borderColor).toBe("");
+
+    const datePill = stint2Card.querySelector<HTMLElement>('[data-testid="stint-date-pill"]');
+    expect(datePill?.style.borderColor).toBe("");
+
+    const datePillDot = stint2Card.querySelector('[data-testid="stint-date-pill-dot"]');
+    expect(datePillDot).toBeNull();
+  });
 });
 
