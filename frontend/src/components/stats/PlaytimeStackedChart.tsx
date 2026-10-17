@@ -145,7 +145,7 @@ function StackedBarColumn({
                   >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <span
-                        className="w-2 h-2 rounded-xs shrink-0"
+                        className="w-2.5 h-2.5 rounded-sm shrink-0"
                         style={{ backgroundColor: color }}
                       />
                       <span className="text-text-primary font-medium truncate max-w-[130px]">
@@ -179,33 +179,40 @@ function StackedBarColumn({
         </div>
       )}
 
-      <div
-        className={`w-full ${barMaxWidthClass} rounded-t-xs overflow-hidden flex flex-col-reverse transition-all duration-150 relative z-10 ${
-          isSelected ? "ring-2 ring-accent" : ""
-        } ${
-          isHovered
-            ? "brightness-125 ring-1 ring-border-medium"
-            : hasAnyHovered
-              ? "opacity-35"
-              : "opacity-100"
-        }`}
-        style={{ height: `${totalHeightPct}%` }}
-      >
-        {entries.map(([game, h]) => {
-          const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
-          const color = getGameColor(game);
-          return (
-            <div
-              key={game}
-              style={{
-                height: `${segPct}%`,
-                backgroundColor: color,
-              }}
-              className="w-full shrink-0"
-            />
-          );
-        })}
-      </div>
+      {totalHours === 0 ? (
+        <div
+          data-testid={`empty-bar-stub-${id}`}
+          className={`w-full ${barMaxWidthClass} h-[2px] rounded-t-xs bg-border-subtle/70 group-hover:bg-border-medium transition-colors relative z-10`}
+        />
+      ) : (
+        <div
+          className={`w-full ${barMaxWidthClass} rounded-t-sm overflow-hidden flex flex-col-reverse gap-[1.5px] transition-all duration-150 relative z-10 ${
+            isSelected ? "ring-2 ring-accent" : ""
+          } ${
+            isHovered
+              ? "brightness-125 ring-1 ring-border-medium"
+              : hasAnyHovered
+                ? "opacity-35"
+                : "opacity-100"
+          }`}
+          style={{ height: `${totalHeightPct}%` }}
+        >
+          {entries.map(([game, h]) => {
+            const segPct = totalHours > 0 ? (h / totalHours) * 100 : 0;
+            const color = getGameColor(game);
+            return (
+              <div
+                key={game}
+                style={{
+                  height: `${segPct}%`,
+                  backgroundColor: color,
+                }}
+                className="w-full shrink-0"
+              />
+            );
+          })}
+        </div>
+      )}
 
       {labelNode}
     </div>
@@ -222,20 +229,30 @@ export function PlaytimeStackedChart({
 }: PlaytimeStackedChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const currentViewItems: readonly { readonly totalHours: number }[] =
+    viewMode === "month" ? dailyData : monthlyData;
+
   const chartMax = useMemo(() => {
-    const raw =
-      viewMode === "month"
-        ? Math.max(...dailyData.map((d) => d.totalHours), 0)
-        : Math.max(...monthlyData.map((m) => m.totalHours), 0);
+    const raw = Math.max(...currentViewItems.map((item) => item.totalHours), 0);
     return computeNiceChartMax(raw);
-  }, [viewMode, dailyData, monthlyData]);
+  }, [currentViewItems]);
 
   const totalViewHours = useMemo(() => {
-    if (viewMode === "month") {
-      return dailyData.reduce((acc, d) => acc + d.totalHours, 0);
-    }
-    return monthlyData.reduce((acc, m) => acc + m.totalHours, 0);
-  }, [viewMode, dailyData, monthlyData]);
+    return currentViewItems.reduce((acc, item) => acc + item.totalHours, 0);
+  }, [currentViewItems]);
+
+  const { avgActiveHours, activeCount } = useMemo(() => {
+    const active = currentViewItems.filter((item) => item.totalHours > 0);
+    const count = active.length;
+    if (count === 0) return { avgActiveHours: 0, activeCount: 0 };
+    const sum = active.reduce((acc, item) => acc + item.totalHours, 0);
+    return { avgActiveHours: sum / count, activeCount: count };
+  }, [currentViewItems]);
+
+  const avgHeightPct = useMemo(() => {
+    if (activeCount < 2 || avgActiveHours <= 0 || chartMax <= 0) return null;
+    return Math.min(Math.max((avgActiveHours / chartMax) * 100, 5), 95);
+  }, [activeCount, avgActiveHours, chartMax]);
 
   const legendItems = useMemo(() => {
     return topGames.slice(0, 5).map((game) => ({
@@ -249,17 +266,30 @@ export function PlaytimeStackedChart({
   return (
     <div className="bg-surface/60 border border-border-subtle rounded-lg p-4 flex flex-col gap-2 w-full mt-1">
       <div className="flex gap-2 w-full items-stretch">
-        <div className="flex flex-col justify-between items-end pb-6 pt-1 text-[10px] text-text-muted font-medium shrink-0 w-12 tabular-nums select-none border-r border-border-subtle/50 pr-2">
+        <div className="flex flex-col justify-between items-end pb-6 pt-1 text-[10px] text-text-secondary font-medium shrink-0 w-12 tabular-nums select-none pr-1.5">
           <span title="Scale ceiling">{formatAxisHours(chartMax)}</span>
-          <span className="text-text-muted/60">
+          <span className="text-text-secondary/80">
             {formatAxisHours(chartMax / 2)}
           </span>
           <span>0h</span>
         </div>
 
         <div className="h-44 flex-1 flex items-end gap-1 sm:gap-1.5 pb-6 pt-1 px-1 relative border-b border-border-subtle">
-          <div className="absolute inset-x-0 top-1 border-b border-dashed border-border-subtle/30 pointer-events-none" />
-          <div className="absolute inset-x-0 top-1/2 -translate-y-2.5 border-b border-dashed border-border-subtle/20 pointer-events-none" />
+          <div className="absolute inset-x-0 top-1 border-b border-dashed border-border-subtle/60 pointer-events-none" />
+          <div className="absolute inset-x-0 top-1/2 -translate-y-2.5 border-b border-dashed border-border-subtle/40 pointer-events-none" />
+
+          {avgHeightPct !== null && (
+            <div className="absolute inset-x-0 bottom-6 top-1 pointer-events-none">
+              <div
+                className="absolute inset-x-0 border-b border-dashed border-accent/40 flex justify-end items-center z-20"
+                style={{ bottom: `${avgHeightPct}%` }}
+              >
+                <span className="px-1.5 py-0.5 rounded bg-elevated/90 border border-accent/30 text-[9px] font-semibold text-accent tabular-nums -translate-y-1/2 mr-1">
+                  Avg {formatAxisHours(avgActiveHours)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {viewMode === "month"
             ? dailyData.map((day, idx) => (
@@ -284,9 +314,11 @@ export function PlaytimeStackedChart({
                       className={`text-[9px] mt-1 tabular-nums transition-colors ${
                         hoveredIndex === idx
                           ? "text-accent font-bold"
-                          : day.dayNum % 5 === 1 || day.dayNum === dailyData.length
-                            ? "text-text-secondary"
-                            : "hidden sm:block text-text-muted"
+                          : day.dayNum === 1 ||
+                              day.dayNum % 5 === 0 ||
+                              day.dayNum === dailyData.length
+                            ? "text-text-secondary font-medium"
+                            : "hidden sm:block text-text-secondary/60"
                       }`}
                     >
                       {day.dayNum}
@@ -332,7 +364,7 @@ export function PlaytimeStackedChart({
           {legendItems.map((item) => (
             <div key={item.name} className="flex items-center gap-1.5">
               <span
-                className="w-2 h-2 rounded-full shrink-0"
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
                 style={{ backgroundColor: item.color }}
               />
               <span className="truncate max-w-[130px]">{item.name}</span>
