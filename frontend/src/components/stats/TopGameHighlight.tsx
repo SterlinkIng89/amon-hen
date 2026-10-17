@@ -1,5 +1,6 @@
 import { useSteamGameData } from "../../hooks/useSteamGameData";
 import { formatPlaytimeHoursMinutes } from "../../utils/videoUtils";
+import { getGameColor } from "../../utils/tagColors";
 
 export interface TopGameHighlightProps {
   readonly game: {
@@ -7,10 +8,27 @@ export interface TopGameHighlightProps {
     readonly hours: number;
   };
   readonly rank: number;
+  readonly totalPeriodHours?: number;
+  readonly activeDays?: number;
+  readonly periodLabel?: "month" | "year";
 }
 
-export function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
+export function TopGameHighlight({
+  game,
+  rank,
+  totalPeriodHours,
+  activeDays,
+  periodLabel = "month",
+}: TopGameHighlightProps) {
   const { appId, posterUrl, achievementsPct } = useSteamGameData(game.game);
+  const gameColor = getGameColor(game.game);
+
+  const sharePct =
+    totalPeriodHours && totalPeriodHours > 0
+      ? Math.round((game.hours / totalPeriodHours) * 100)
+      : null;
+  const hasActiveDays = Boolean(activeDays && activeDays > 0);
+  const hasSpotlightMetrics = sharePct !== null || hasActiveDays;
 
   const activePoster =
     posterUrl ||
@@ -36,35 +54,67 @@ export function TopGameHighlight({ game, rank }: TopGameHighlightProps) {
       )}
 
       {/* Gradient Overlay for bottom text readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/85 via-45% to-transparent opacity-95 group-hover:opacity-100 transition-opacity pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/75 via-35% to-transparent opacity-95 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 flex flex-col gap-1.5 z-10">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent/20 border border-accent/40 w-fit backdrop-blur-md mb-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          <span className="text-[9px] font-bold tracking-wider text-accent">
+      <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-3 flex flex-col gap-1 z-10">
+        <span
+          data-testid="highlight-rank-badge"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface/85 border w-fit backdrop-blur-md"
+          style={{ borderColor: gameColor }}
+        >
+          <span
+            data-testid="highlight-rank-dot"
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: gameColor }}
+          />
+          <span
+            className="text-[9px] font-bold tracking-wider"
+            style={{ color: gameColor }}
+          >
             {rank === 1 ? "Top played" : `#${rank} selected`}
           </span>
         </span>
         <h4
           style={{ color: "#ffffff" }}
-          className="text-sm sm:text-base font-bold leading-snug line-clamp-2"
+          className="text-xs sm:text-sm font-bold leading-tight line-clamp-2"
         >
           {game.game}
         </h4>
 
-        <div className="flex items-end mt-1">
+        <div className="flex items-baseline justify-between gap-1">
           <span
             style={{ color: "#ffffff" }}
-            className="text-lg sm:text-xl font-bold tabular-nums"
+            className="text-base sm:text-lg font-bold tabular-nums"
           >
             {formatPlaytimeHoursMinutes(game.hours)}
           </span>
         </div>
 
+        {hasSpotlightMetrics && (
+          <div
+            data-testid="highlight-spotlight-metrics"
+            className="text-[10px] font-medium text-text-secondary tabular-nums flex items-center gap-1 leading-tight flex-wrap"
+          >
+            {sharePct !== null && (
+              <span>
+                {sharePct}% of {periodLabel}
+              </span>
+            )}
+            {sharePct !== null && hasActiveDays && (
+              <span aria-hidden="true">·</span>
+            )}
+            {hasActiveDays && (
+              <span>
+                {activeDays} {activeDays === 1 ? "day" : "days"} played
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Achievements */}
         {achievementsPct > 0 && (
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-1">
             <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
               <div
                 className="h-full bg-emerald-500 transition-all duration-1000 ease-out"

@@ -298,6 +298,32 @@ export default function MostPlayedGames({
     };
   }, [gamesToDisplay, dailyBreakdown, monthlyBreakdown, viewMode]);
 
+  // Active days count for the currently highlighted game
+  const activeGameDays = useMemo(() => {
+    if (!activeGame) return 0;
+    if (viewMode === "month") {
+      return dailyBreakdown.filter(
+        (d) => (d.byGame[activeGame.game] ?? 0) > 0,
+      ).length;
+    }
+    const targetNorm = normalizeGameKey(activeGame.game);
+    const uniqueDays = new Set<string>();
+    filteredVideos.forEach((v) => {
+      const titleDate = extractTitleDate(v.title);
+      const pubDate =
+        titleDate ||
+        (v.published && v.published.length >= 10
+          ? v.published.substring(0, 10)
+          : "");
+      if (!pubDate || !pubDate.startsWith(selectedYear)) return;
+      const g = extractGameName(v.title, v.gameTag);
+      if (g && normalizeGameKey(g) === targetNorm) {
+        uniqueDays.add(pubDate);
+      }
+    });
+    return uniqueDays.size;
+  }, [activeGame, viewMode, dailyBreakdown, filteredVideos, selectedYear]);
+
   const handleBarSelect = (key: string) => {
     if (viewMode === "year") {
       setSelectedMonthKey(key);
@@ -459,6 +485,9 @@ export default function MostPlayedGames({
                   key={activeGame.game}
                   game={activeGame}
                   rank={activeIndex + 1}
+                  totalPeriodHours={periodSummary.totalHours}
+                  activeDays={activeGameDays}
+                  periodLabel={viewMode}
                 />
               ) : (
                 <div className="bg-surface/50 rounded-xl aspect-[2/3] border border-border-subtle flex items-center justify-center text-text-muted text-xs">

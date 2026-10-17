@@ -277,5 +277,76 @@ describe("MostPlayedGames Monthly Layout", () => {
       expect(screen.getByText("#1 Game of the month")).toBeDefined();
     });
   });
+
+  it("renders spotlight context metrics (period share % and active days played) and updates when selecting another game", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const metricsRow = screen.getByTestId("highlight-spotlight-metrics");
+    expect(metricsRow).toBeDefined();
+    expect(metricsRow.textContent).toContain("67% of month");
+    expect(metricsRow.textContent).toContain("2 days played");
+
+    // Click on Silksong (#2)
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    expect(silksongRow).not.toBeNull();
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+      const updatedMetrics = screen.getByTestId("highlight-spotlight-metrics");
+      expect(updatedMetrics.textContent).toContain("33% of month");
+      expect(updatedMetrics.textContent).toContain("1 day played");
+    });
+  });
+
+  it("applies dynamic game color to rank badge border, pulse dot, and label", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const rankBadge = screen.getByTestId("highlight-rank-badge");
+    const rankDot = screen.getByTestId("highlight-rank-dot");
+    expect(rankBadge).toBeDefined();
+    expect(rankDot).toBeDefined();
+
+    // Default Hades II badge should use getGameColor("Hades II")
+    expect(rankBadge.getAttribute("style")).toMatch(/border-color/i);
+    expect(rankDot.getAttribute("style")).toMatch(/background-color/i);
+
+    // Click Silksong and verify badge updates to Silksong's color
+    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    if (silksongRow) {
+      fireEvent.click(silksongRow);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText("Selected (#2)")).toBeDefined();
+    });
+  });
+
+  it("updates spotlight metrics to % of year when switching to year view", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(screen.getByText("#1 Game of the month")).toBeDefined();
+    });
+
+    const yearButton = screen.getByRole("button", { name: "By year" });
+    fireEvent.click(yearButton);
+
+    await waitFor(() => {
+      const metricsRow = screen.getByTestId("highlight-spotlight-metrics");
+      expect(metricsRow.textContent).toContain("67% of year");
+      expect(metricsRow.textContent).toContain("2 days played");
+    });
+  });
 });
 
