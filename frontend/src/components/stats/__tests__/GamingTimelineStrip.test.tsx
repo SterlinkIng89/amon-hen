@@ -337,5 +337,44 @@ describe("GamingTimelineStrip Component", () => {
     expect(silksongSegment?.className).toContain("h-1.5");
     expect(celesteSegment?.className).toContain("h-1.5");
   });
+
+  it("renders compact TimelineGapSpacer without ghost marker when stints have an inactive gap", () => {
+    const stintsWithGap: readonly GameStint[] = [
+      {
+        id: "stint-1",
+        startDate: "2026-10-01",
+        endDate: "2026-10-03",
+        dayCount: 3,
+        totalHours: 5,
+        games: [{ game: "Hades II", hours: 5 }],
+      },
+      {
+        id: "stint-2",
+        startDate: "2026-10-06",
+        endDate: "2026-10-07",
+        dayCount: 2,
+        totalHours: 4,
+        games: [{ game: "Celeste", hours: 4 }],
+      },
+    ];
+
+    render(<GamingTimelineStrip stints={stintsWithGap} />);
+
+    const spacer = screen.getByTestId("timeline-gap-spacer-2026-10-03_2026-10-06");
+    expect(spacer).toBeDefined();
+    expect(spacer.className).toContain("w-16");
+    expect(spacer.className).toContain("sm:w-[72px]");
+    expect(spacer.className).toContain("shrink-0");
+    expect(spacer.className).not.toContain("min-w-[90px]");
+    expect(spacer.className).not.toContain("sm:min-w-[110px]");
+
+    // Should not render vertical dashed ghost marker between cards
+    const ghostMarker = spacer.querySelector('[data-testid="timeline-gap-ghost"]');
+    expect(ghostMarker).toBeNull();
+
+    // Break pill and date text
+    expect(screen.getByText("2d break")).toBeDefined();
+    expect(screen.getByText("Oct 4 – 5")).toBeDefined();
+  });
 });
 

@@ -19,7 +19,6 @@ export interface GamingTimelineStripProps {
 
 interface StintCardProps {
   readonly stint: GameStint;
-  readonly isSelected: boolean;
   readonly selectedGameName?: string | null;
   readonly isFirst: boolean;
   readonly isLast: boolean;
@@ -68,7 +67,6 @@ function GameSegments({
 
 function StintCard({
   stint,
-  isSelected,
   selectedGameName,
   isFirst,
   isLast,
@@ -202,7 +200,8 @@ function TimelineGapSpacer({
 
   return (
     <div
-      className="self-stretch flex flex-col items-center justify-end py-1.5 px-0 min-w-[90px] sm:min-w-[110px]"
+      data-testid={`timeline-gap-spacer-${prevStint.endDate}_${nextStint.startDate}`}
+      className="self-stretch flex flex-col items-center justify-end py-1.5 px-0 w-16 sm:w-[72px] shrink-0"
       aria-label={`${dayGap} days inactive (${gapLabel})`}
     >
       <div className="relative w-full h-7 flex items-center justify-center my-1.5">
@@ -211,8 +210,8 @@ function TimelineGapSpacer({
           className="absolute -left-2 sm:-left-3 -right-2 sm:-right-3 top-1/2 -translate-y-1/2 h-0 border-t-2 border-dashed border-border-medium z-0 pointer-events-none"
         />
 
-        <div className="relative z-10 px-2.5 py-0.5 rounded-full bg-surface border border-dashed border-border-medium flex items-center gap-1.5 shadow-xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+        <div className="relative z-10 px-2 py-0.5 rounded-full bg-surface border border-dashed border-border-medium flex items-center gap-1 shadow-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0" />
           <span className="text-[10px] font-mono font-medium text-text-secondary whitespace-nowrap">
             {dayGap === 1 ? "1d break" : `${dayGap}d break`}
           </span>
@@ -272,7 +271,6 @@ export function GamingTimelineStrip({
                 isLast={idx === stints.length - 1}
                 hasBreakBefore={hasBreakBefore}
                 hasBreakAfter={hasBreakAfter}
-                isSelected={stint.id === selectedStintId}
                 selectedGameName={selectedGameName}
                 onSelect={(s, gameName) => onSelectStint?.(s, gameName)}
               />
