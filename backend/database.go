@@ -135,6 +135,20 @@ func (db *DB) migrate() error {
 			status TEXT DEFAULT 'uploading',
 			updated_at INTEGER
 		)`,
+		`CREATE TABLE IF NOT EXISTS steam_backlog_queue (
+			appid INTEGER PRIMARY KEY,
+			rank_order INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'candidate',
+			notes TEXT NOT NULL DEFAULT '',
+			added_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_game_ratings (
+			appid INTEGER PRIMARY KEY,
+			tier TEXT NOT NULL DEFAULT 'A',
+			score INTEGER NOT NULL DEFAULT 8,
+			notes TEXT NOT NULL DEFAULT '',
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 	
 	for _, q := range queries {

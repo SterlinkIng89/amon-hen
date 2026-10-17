@@ -3,6 +3,7 @@ package backend
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -38,6 +39,44 @@ type SteamOverallStats struct {
 	TotalHours           int `json:"totalHours"`
 	TotalAchievements    int `json:"totalAchievements"`
 	UnlockedAchievements int `json:"unlockedAchievements"`
+}
+
+type SteamLibraryPulse struct {
+	TotalGames           int     `json:"totalGames"`
+	TotalHours           int     `json:"totalHours"`
+	UnplayedGames        int     `json:"unplayedGames"`
+	TriedGames           int     `json:"triedGames"`     // >0m and <120m
+	PlayedGames          int     `json:"playedGames"`    // >=120m and <3000m (2h..50h)
+	ObsessionGames       int     `json:"obsessionGames"` // >=3000m (50h+)
+	Top10SharePct        float64 `json:"top10SharePct"`
+	TotalAchievements    int     `json:"totalAchievements"`
+	UnlockedAchievements int     `json:"unlockedAchievements"`
+	PerfectGamesCount    int     `json:"perfectGamesCount"`
+	AlmostThereCount     int     `json:"almostThereCount"`
+	RecordedGamesCount   int     `json:"recordedGamesCount"`
+}
+
+type EnrichedSteamGameItem struct {
+	AppID           int     `json:"appid"`
+	Name            string  `json:"name"`
+	PlaytimeHours   float64 `json:"playtimeHours"`
+	PlaytimeForever int     `json:"playtimeForever"`
+	Playtime2Weeks  int     `json:"playtime2Weeks"`
+	HeaderURL       string  `json:"headerUrl"`
+	PosterURL       string  `json:"posterUrl"`
+	AchievementsPct float64 `json:"achievementsPct"`
+	Developers      string  `json:"developers"`
+	Publishers      string  `json:"publishers"`
+	Genres          string  `json:"genres"`
+	IsUtility       bool    `json:"isUtility"`
+	YTVideosCount   int     `json:"ytVideosCount"`
+	YTRecordedHours float64 `json:"ytRecordedHours"`
+	BacklogStatus   string  `json:"backlogStatus,omitempty"`
+	BacklogRank     int     `json:"backlogRank,omitempty"`
+	BacklogNotes    string  `json:"backlogNotes,omitempty"`
+	PersonalTier    string  `json:"personalTier,omitempty"`
+	PersonalScore   int     `json:"personalScore,omitempty"`
+	PersonalNotes   string  `json:"personalNotes,omitempty"`
 }
 
 func utilityAppIDsFilter() string {
@@ -499,3 +538,302 @@ func isSteamUtilityApp(appID int, name string) bool {
 	}
 	return false
 }
+
+var isoDurationRegex = regexp.MustCompile(`(?i)^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$`)
+
+// parseDurationToHours converts ISO 8601, HH:MM:SS, MM:SS, or raw seconds string into fractional hours.
+func parseDurationToHours(raw string) float64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+
+	// 1. ISO 8601 (PT1H2M3S)
+	if match := isoDurationRegex.FindStringSubmatch(raw); match != nil && (match[1] != "" || match[2] != "" || match[3] != "") {
+		var h, m, s float64
+		if match[1] != "" {
+			h, _ = strconv.ParseFloat(match[1], 64)
+		}
+		if match[2] != "" {
+			m, _ = strconv.ParseFloat(match[2], 64)
+		}
+		if match[3] != "" {
+			s, _ = strconv.ParseFloat(match[3], 64)
+		}
+		return h + (m / 60.0) + (s / 3600.0)
+	}
+
+	// 2. Standard timestamp HH:MM:SS or MM:SS
+	if strings.Contains(raw, ":") {
+		parts := strings.Split(raw, ":")
+		if len(parts) == 3 {
+			h, err1 := strconv.ParseFloat(parts[0], 64)
+			m, err2 := strconv.ParseFloat(parts[1], 64)
+			s, err3 := strconv.ParseFloat(parts[2], 64)
+			if err1 == nil && err2 == nil && err3 == nil {
+				return h + (m / 60.0) + (s / 3600.0)
+			}
+		} else if len(parts) == 2 {
+			m, err1 := strconv.ParseFloat(parts[0], 64)
+			s, err2 := strconv.ParseFloat(parts[1], 64)
+			if err1 == nil && err2 == nil {
+				return (m / 60.0) + (s / 3600.0)
+			}
+		}
+	}
+
+	// 3. Raw seconds
+	if secs, err := strconv.ParseFloat(raw, 64); err == nil && secs > 0 {
+		return secs / 3600.0
+	}
+
+	return 0
+}
+
+type ytGameAgg struct {
+	count int
+	hours float64
+}
+
+func extractGameTitleFromVideo(title string, gameTag string) string {
+	if strings.TrimSpace(gameTag) != "" {
+		return strings.TrimSpace(gameTag)
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	for _, sep := range []string{" - ", " | ", " — "} {
+		if idx := strings.Index(title, sep); idx > 0 {
+			prefix := strings.TrimSpace(title[:idx])
+			if prefix != "" {
+				return prefix
+			}
+		}
+	}
+	return title
+}
+
+// loadYouTubeGameStats queries yt_videos in a single pass and returns aggregated video counts and hours keyed by normalized game title.
+func (a *App) loadYouTubeGameStats() map[string]ytGameAgg {
+	aggMap := make(map[string]ytGameAgg)
+	rows, err := a.db.conn.Query("SELECT COALESCE(title, ''), COALESCE(game_tag, ''), COALESCE(duration, '') FROM yt_videos")
+	if err != nil {
+		return aggMap
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var title, gameTag, duration string
+		if err := rows.Scan(&title, &gameTag, &duration); err == nil {
+			gameName := extractGameTitleFromVideo(title, gameTag)
+			norm := normalizeGameTitle(gameName)
+			if norm == "" {
+				continue
+			}
+			hours := parseDurationToHours(duration)
+			cur := aggMap[norm]
+			cur.count++
+			cur.hours += hours
+			aggMap[norm] = cur
+		}
+	}
+	return aggMap
+}
+
+// GetSteamLibraryPulse returns aggregated playtime buckets, Top 10 concentration, achievement counts, and YouTube bridge stats.
+func (a *App) GetSteamLibraryPulse(hideUtilities bool) (SteamLibraryPulse, error) {
+	if a.db == nil {
+		return SteamLibraryPulse{}, fmt.Errorf("database not initialized")
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	ytStats := a.loadYouTubeGameStats()
+
+	rows, err := a.db.conn.Query("SELECT appid, name, playtime_forever FROM steam_games ORDER BY playtime_forever DESC")
+	if err != nil {
+		return SteamLibraryPulse{}, fmt.Errorf("failed to query steam_games: %w", err)
+	}
+	defer rows.Close()
+
+	var pulse SteamLibraryPulse
+	var totalMinutes int
+	var top10Sum int
+	var top10Count int
+
+	for rows.Next() {
+		var appID int
+		var name string
+		var playtime int
+		if err := rows.Scan(&appID, &name, &playtime); err == nil {
+			if hideUtilities && isSteamUtilityApp(appID, name) {
+				continue
+			}
+			pulse.TotalGames++
+			totalMinutes += playtime
+
+			if top10Count < 10 {
+				top10Sum += playtime
+				top10Count++
+			}
+
+			// Buckets
+			if playtime == 0 {
+				pulse.UnplayedGames++
+			} else if playtime < 120 {
+				pulse.TriedGames++
+			} else if playtime < 3000 {
+				pulse.PlayedGames++
+			} else {
+				pulse.ObsessionGames++
+			}
+
+			// YouTube bridge cross-reference
+			norm := normalizeGameTitle(name)
+			if yt, exists := ytStats[norm]; exists && yt.count > 0 {
+				pulse.RecordedGamesCount++
+			}
+		}
+	}
+
+	pulse.TotalHours = totalMinutes / 60
+	if totalMinutes > 0 {
+		pulse.Top10SharePct = (float64(top10Sum) / float64(totalMinutes)) * 100.0
+	}
+
+	// Achievements aggregation
+	achRows, err := a.db.conn.Query(`
+		SELECT a.appid, a.total_achievements, a.achieved, a.progress_percent, g.name
+		FROM steam_achievements a
+		JOIN steam_games g ON a.appid = g.appid
+	`)
+	if err == nil {
+		defer achRows.Close()
+		for achRows.Next() {
+			var appID int
+			var total, achieved int
+			var progress float64
+			var name string
+			if err := achRows.Scan(&appID, &total, &achieved, &progress, &name); err == nil {
+				if hideUtilities && isSteamUtilityApp(appID, name) {
+					continue
+				}
+				pulse.TotalAchievements += total
+				pulse.UnlockedAchievements += achieved
+				if total > 0 && progress >= 100.0 {
+					pulse.PerfectGamesCount++
+				} else if progress >= 75.0 && progress < 100.0 {
+					pulse.AlmostThereCount++
+				}
+			}
+		}
+	}
+
+	return pulse, nil
+}
+
+// GetEnrichedSteamGames returns all owned games enriched with developers, publishers, genres, vertical poster, YouTube metrics, backlog queue status, and personal ratings.
+func (a *App) GetEnrichedSteamGames(hideUtilities bool) ([]EnrichedSteamGameItem, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	ytStats := a.loadYouTubeGameStats()
+
+	// Load non-feature genres grouped by appid
+	tagRows, err := a.db.conn.Query("SELECT appid, tag FROM steam_tags")
+	tagMap := make(map[int][]string)
+	if err == nil {
+		for tagRows.Next() {
+			var appID int
+			var tag string
+			if err := tagRows.Scan(&appID, &tag); err == nil {
+				if !isSteamStoreFeature(tag) {
+					tagMap[appID] = append(tagMap[appID], tag)
+				}
+			}
+		}
+		tagRows.Close()
+	}
+
+	query := `
+		SELECT 
+			g.appid, 
+			g.name, 
+			g.playtime_forever, 
+			g.playtime_2weeks, 
+			COALESCE(g.header_url, ''),
+			COALESCE(a.progress_percent, 0.0),
+			COALESCE(d.developers, ''),
+			COALESCE(d.publishers, ''),
+			COALESCE(b.status, ''),
+			COALESCE(b.rank_order, 0),
+			COALESCE(b.notes, ''),
+			COALESCE(r.tier, ''),
+			COALESCE(r.score, 0),
+			COALESCE(r.notes, '')
+		FROM steam_games g
+		LEFT JOIN steam_achievements a ON g.appid = a.appid
+		LEFT JOIN steam_game_details d ON g.appid = d.appid
+		LEFT JOIN steam_backlog_queue b ON g.appid = b.appid
+		LEFT JOIN steam_game_ratings r ON g.appid = r.appid
+		ORDER BY g.playtime_forever DESC, g.name ASC
+	`
+	rows, err := a.db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query enriched steam games: %w", err)
+	}
+	defer rows.Close()
+
+	var items []EnrichedSteamGameItem
+	for rows.Next() {
+		var item EnrichedSteamGameItem
+		err := rows.Scan(
+			&item.AppID,
+			&item.Name,
+			&item.PlaytimeForever,
+			&item.Playtime2Weeks,
+			&item.HeaderURL,
+			&item.AchievementsPct,
+			&item.Developers,
+			&item.Publishers,
+			&item.BacklogStatus,
+			&item.BacklogRank,
+			&item.BacklogNotes,
+			&item.PersonalTier,
+			&item.PersonalScore,
+			&item.PersonalNotes,
+		)
+		if err != nil {
+			continue
+		}
+
+		item.IsUtility = isSteamUtilityApp(item.AppID, item.Name)
+		if hideUtilities && item.IsUtility {
+			continue
+		}
+
+		item.PlaytimeHours = float64(item.PlaytimeForever) / 60.0
+		item.PosterURL = fmt.Sprintf("https://cdn.akamai.steamstatic.com/steam/apps/%d/library_600x900_2x.jpg", item.AppID)
+
+		if tags, ok := tagMap[item.AppID]; ok && len(tags) > 0 {
+			item.Genres = strings.Join(tags, ", ")
+		}
+
+		norm := normalizeGameTitle(item.Name)
+		if yt, ok := ytStats[norm]; ok {
+			item.YTVideosCount = yt.count
+			item.YTRecordedHours = yt.hours
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+

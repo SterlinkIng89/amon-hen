@@ -174,6 +174,34 @@ export function GetSteamTagStats(arg1) {
   return window['go']['backend']['App']['GetSteamTagStats'](arg1);
 }
 
+export function GetSteamLibraryPulse(arg1) {
+  return window['go']['backend']['App']['GetSteamLibraryPulse'](arg1);
+}
+
+export function GetEnrichedSteamGames(arg1) {
+  return window['go']['backend']['App']['GetEnrichedSteamGames'](arg1);
+}
+
+export function UpsertSteamBacklogItem(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['UpsertSteamBacklogItem'](arg1, arg2, arg3);
+}
+
+export function ReorderSteamBacklog(arg1) {
+  return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
+}
+
+export function RemoveSteamBacklogItem(arg1) {
+  return window['go']['backend']['App']['RemoveSteamBacklogItem'](arg1);
+}
+
+export function UpsertSteamGameRating(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpsertSteamGameRating'](arg1, arg2, arg3, arg4);
+}
+
+export function RemoveSteamGameRating(arg1) {
+  return window['go']['backend']['App']['RemoveSteamGameRating'](arg1);
+}
+
 export function GetStreamPort() {
   return window['go']['backend']['App']['GetStreamPort']();
 }

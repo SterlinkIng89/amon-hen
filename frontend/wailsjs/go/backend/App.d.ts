@@ -91,6 +91,20 @@ export function GetSteamPublisherStats(arg1:string):Promise<Array<backend.SteamD
 
 export function GetSteamTagStats(arg1:string):Promise<Array<backend.SteamTagStats>>;
 
+export function GetSteamLibraryPulse(arg1:boolean):Promise<backend.SteamLibraryPulse>;
+
+export function GetEnrichedSteamGames(arg1:boolean):Promise<Array<backend.EnrichedSteamGameItem>>;
+
+export function UpsertSteamBacklogItem(arg1:number,arg2:string,arg3:string):Promise<void>;
+
+export function ReorderSteamBacklog(arg1:Array<number>):Promise<void>;
+
+export function RemoveSteamBacklogItem(arg1:number):Promise<void>;
+
+export function UpsertSteamGameRating(arg1:number,arg2:string,arg3:number,arg4:string):Promise<void>;
+
+export function RemoveSteamGameRating(arg1:number):Promise<void>;
+
 export function GetStreamPort():Promise<number>;
 
 export function GetSyncStatus():Promise<Record<string, any>>;

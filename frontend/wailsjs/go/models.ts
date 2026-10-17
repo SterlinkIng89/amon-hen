@@ -737,6 +737,92 @@ export namespace backend {
 	        this.gamesCount = source["gamesCount"];
 	    }
 	}
+
+	export class SteamLibraryPulse {
+	    totalGames: number;
+	    totalHours: number;
+	    unplayedGames: number;
+	    triedGames: number;
+	    playedGames: number;
+	    obsessionGames: number;
+	    top10SharePct: number;
+	    totalAchievements: number;
+	    unlockedAchievements: number;
+	    perfectGamesCount: number;
+	    almostThereCount: number;
+	    recordedGamesCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new SteamLibraryPulse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalGames = source["totalGames"];
+	        this.totalHours = source["totalHours"];
+	        this.unplayedGames = source["unplayedGames"];
+	        this.triedGames = source["triedGames"];
+	        this.playedGames = source["playedGames"];
+	        this.obsessionGames = source["obsessionGames"];
+	        this.top10SharePct = source["top10SharePct"];
+	        this.totalAchievements = source["totalAchievements"];
+	        this.unlockedAchievements = source["unlockedAchievements"];
+	        this.perfectGamesCount = source["perfectGamesCount"];
+	        this.almostThereCount = source["almostThereCount"];
+	        this.recordedGamesCount = source["recordedGamesCount"];
+	    }
+	}
+
+	export class EnrichedSteamGameItem {
+	    appid: number;
+	    name: string;
+	    playtimeHours: number;
+	    playtimeForever: number;
+	    playtime2Weeks: number;
+	    headerUrl: string;
+	    posterUrl: string;
+	    achievementsPct: number;
+	    developers: string;
+	    publishers: string;
+	    genres: string;
+	    isUtility: boolean;
+	    ytVideosCount: number;
+	    ytRecordedHours: number;
+	    backlogStatus?: string;
+	    backlogRank?: number;
+	    backlogNotes?: string;
+	    personalTier?: string;
+	    personalScore?: number;
+	    personalNotes?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EnrichedSteamGameItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appid = source["appid"];
+	        this.name = source["name"];
+	        this.playtimeHours = source["playtimeHours"];
+	        this.playtimeForever = source["playtimeForever"];
+	        this.playtime2Weeks = source["playtime2Weeks"];
+	        this.headerUrl = source["headerUrl"];
+	        this.posterUrl = source["posterUrl"];
+	        this.achievementsPct = source["achievementsPct"];
+	        this.developers = source["developers"];
+	        this.publishers = source["publishers"];
+	        this.genres = source["genres"];
+	        this.isUtility = source["isUtility"];
+	        this.ytVideosCount = source["ytVideosCount"];
+	        this.ytRecordedHours = source["ytRecordedHours"];
+	        this.backlogStatus = source["backlogStatus"];
+	        this.backlogRank = source["backlogRank"];
+	        this.backlogNotes = source["backlogNotes"];
+	        this.personalTier = source["personalTier"];
+	        this.personalScore = source["personalScore"];
+	        this.personalNotes = source["personalNotes"];
+	    }
+	}
 	
 	
 	
