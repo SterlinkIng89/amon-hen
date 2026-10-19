@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { YTVideo, YTPlaylist, TagPlaylistConfig } from "../../types";
 import {
   UpdateYouTubeVideoMetadata,
@@ -11,6 +11,24 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import YouTubeThumbnailPicker from "./YouTubeThumbnailPicker";
+import {
+  resolvePlayerKeyAction,
+  clampSeek,
+  isTypingTarget,
+} from "../../utils/playerKeys";
+
+interface YTPlayerLike {
+  getCurrentTime(): number;
+  getDuration(): number;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  getPlayerState(): number;
+  playVideo(): void;
+  pauseVideo(): void;
+  mute(): void;
+  unMute(): void;
+  isMuted(): boolean;
+  destroy(): void;
+}
 
 interface YouTubeInlinePlayerProps {
   video: YTVideo;
@@ -36,6 +54,7 @@ export default function YouTubeInlinePlayer({
   };
 
   const [isEditing, setIsEditing] = useState(false);
+  const playerRef = useRef<YTPlayerLike | null>(null);
   const [editableTitle, setEditableTitle] = useState(video.title);
   const [editableDescription, setEditableDescription] = useState(
     video.description,
@@ -120,6 +139,7 @@ export default function YouTubeInlinePlayer({
           },
         },
       });
+      playerRef.current = player;
     };
 
     if (!(window as any).YT || !(window as any).YT.Player) {
@@ -137,6 +157,7 @@ export default function YouTubeInlinePlayer({
     }
 
     return () => {
+      playerRef.current = null;
       if (player && player.destroy) {
         try {
           player.destroy();
@@ -144,6 +165,74 @@ export default function YouTubeInlinePlayer({
       }
     };
   }, [video.id]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(document.activeElement) || isEditing) {
+        return;
+      }
+
+      const action = resolvePlayerKeyAction(e);
+      if (!action) return;
+
+      const p = playerRef.current;
+
+      if (action.type === "seek") {
+        if (!p) return;
+        e.preventDefault();
+        try {
+          p.seekTo(clampSeek(p.getCurrentTime(), action.delta, p.getDuration()), true);
+        } catch {
+          // Player iframe may not be ready
+        }
+        return;
+      }
+
+      if (action.type === "nav") {
+        if (action.dir === "prev" && onPrev) {
+          e.preventDefault();
+          onPrev();
+        } else if (action.dir === "next" && onNext) {
+          e.preventDefault();
+          onNext();
+        }
+        return;
+      }
+
+      if (action.type === "toggle-play") {
+        if (!p) return;
+        e.preventDefault();
+        try {
+          if (p.getPlayerState() === 1) {
+            p.pauseVideo();
+          } else {
+            p.playVideo();
+          }
+        } catch {
+          // Player iframe may not be ready
+        }
+        return;
+      }
+
+      if (action.type === "toggle-mute") {
+        if (!p) return;
+        e.preventDefault();
+        try {
+          if (p.isMuted()) {
+            p.unMute();
+          } else {
+            p.mute();
+          }
+        } catch {
+          // Player iframe may not be ready
+        }
+        return;
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onPrev, onNext, isEditing]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -232,6 +321,8 @@ export default function YouTubeInlinePlayer({
         {onPrev && (
           <button
             onClick={onPrev}
+            title="Previous (Shift+←)"
+            aria-label="Previous (Shift+←)"
             className="absolute left-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
           >
             <svg
@@ -251,6 +342,8 @@ export default function YouTubeInlinePlayer({
         {onNext && (
           <button
             onClick={onNext}
+            title="Next (Shift+→)"
+            aria-label="Next (Shift+→)"
             className="absolute right-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
           >
             <svg

@@ -43,6 +43,11 @@ import FieldInput from "../ui/FieldInput";
 import { ContentTypeToggle } from "./ContentTypeToggle";
 import { useAppStore } from "../../store/useAppStore";
 import { PlaylistPrivacy } from "../../types";
+import {
+  resolvePlayerKeyAction,
+  clampSeek,
+  isTypingTarget,
+} from "../../utils/playerKeys";
 
 interface InlinePlayerProps {
   video: VideoFile;
@@ -99,6 +104,7 @@ export default function InlinePlayer({
   const [isInfoExpanded, setIsInfoExpanded] = useState(() => {
     return localStorage.getItem("player_info_expanded") !== "false";
   });
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   const enterClipMode = () => {
     const current = videoRef.current?.currentTime ?? 0;
@@ -209,37 +215,61 @@ export default function InlinePlayer({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const activeTag = document.activeElement?.tagName;
-      // Do not fire shortcuts when user is typing
-      if (
-        activeTag === "INPUT" ||
-        activeTag === "TEXTAREA" ||
-        activeTag === "SELECT"
-      ) {
+      // Do not fire shortcuts when user is typing in form controls
+      if (isTypingTarget(document.activeElement)) {
         return;
       }
       if (clipMode) {
         return; // When in clipMode, ClipTimelineSelector handles its own keyboard shortcuts
       }
+
+      const action = resolvePlayerKeyAction(e);
+      if (!action) return;
+
       const el = videoRef.current;
-      if (e.key === "ArrowLeft" && onPrev) {
-        e.preventDefault();
-        onPrev();
+
+      // Native <video controls> already handles plain ArrowLeft/ArrowRight seek (5s) and Space play/pause when focused
+      if (document.activeElement === el) {
+        if (
+          (action.type === "seek" && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.altKey) ||
+          action.type === "toggle-play"
+        ) {
+          return;
+        }
       }
-      if (e.key === "ArrowRight" && onNext) {
+
+      if (action.type === "seek") {
         e.preventDefault();
-        onNext();
+        if (el) {
+          el.currentTime = clampSeek(el.currentTime, action.delta, el.duration);
+        }
+        return;
       }
-      if (e.key === " " || e.key === "Spacebar") {
-        // Prevent page scroll
+
+      if (action.type === "nav") {
+        if (action.dir === "prev" && onPrev) {
+          e.preventDefault();
+          onPrev();
+        } else if (action.dir === "next" && onNext) {
+          e.preventDefault();
+          onNext();
+        }
+        return;
+      }
+
+      if (action.type === "toggle-play") {
         e.preventDefault();
         if (!el) return;
         if (el.paused) el.play().catch(() => {});
         else el.pause();
+        return;
       }
-      if (e.key === "m" || e.key === "M") {
+
+      if (action.type === "toggle-mute") {
+        e.preventDefault();
         if (!el) return;
         el.muted = !el.muted;
+        return;
       }
     };
     document.addEventListener("keydown", onKey);
@@ -1248,6 +1278,102 @@ export default function InlinePlayer({
 
           {/* Center: Controls */}
           <div className="flex items-center gap-2">
+            {/* Keyboard Shortcuts Help */}
+            <div
+              className="relative"
+              onMouseEnter={() => setShowShortcutsHelp(true)}
+              onMouseLeave={() => setShowShortcutsHelp(false)}
+            >
+              <button
+                type="button"
+                className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${showShortcutsHelp ? "bg-white/20 text-white" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
+                onClick={() => setShowShortcutsHelp((v) => !v)}
+                title="Keyboard shortcuts"
+                aria-label="Keyboard shortcuts"
+              >
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M6 8h.001" />
+                  <path d="M10 8h.001" />
+                  <path d="M14 8h.001" />
+                  <path d="M18 8h.001" />
+                  <path d="M8 12h.001" />
+                  <path d="M12 12h.001" />
+                  <path d="M16 12h.001" />
+                  <path d="M7 16h10" />
+                </svg>
+              </button>
+
+              {showShortcutsHelp && (
+                <div
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-64 rounded-lg bg-[#181818] border border-white/10 shadow-lg p-3 text-white z-50 pointer-events-auto"
+                  role="tooltip"
+                >
+                  <div className="font-medium text-xs text-white/90 pb-2 mb-2 border-b border-white/10">
+                    Keyboard shortcuts
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Seek</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">←</kbd>
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">→</kbd>
+                        <span className="text-white/40 text-[10px]">5s</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Fine seek</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">Alt</kbd>
+                        <span className="text-white/40">+</span>
+                        <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">← / →</kbd>
+                        <span className="text-white/40 text-[10px]">1s</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Seek 10s</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">J</kbd>
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">L</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Next / Previous</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">Shift</kbd>
+                        <span className="text-white/40">+</span>
+                        <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">← / →</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Next / Previous</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">[</kbd>
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">]</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Play / Pause</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">Space</kbd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Mute / Unmute</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">M</kbd>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${autoRepeatEnabled ? "bg-[#3ea6ff]/20 text-[#3ea6ff]" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
               onClick={() => {
@@ -1278,7 +1404,7 @@ export default function InlinePlayer({
               className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent"
               onClick={onPrev ?? undefined}
               disabled={!onPrev}
-              title="Previous (←)"
+              title="Previous (Shift+←)"
             >
               <svg
                 width="20"
@@ -1294,7 +1420,7 @@ export default function InlinePlayer({
               className="px-5 py-2.5 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium text-white/90 disabled:opacity-30 disabled:hover:bg-transparent"
               onClick={onNext ?? undefined}
               disabled={!onNext}
-              title="Next (→)"
+              title="Next (Shift+→)"
             >
               Next
               <svg
