@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Dashboard from "../Dashboard";
 import { useAppStore } from "../../store/useAppStore";
+import { GetStreamPort } from "../../../wailsjs/go/backend/App";
 
 // Mock Wails backend App APIs
 vi.mock("../../../wailsjs/go/backend/App", () => ({
@@ -22,8 +23,20 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
 }));
 
 // Mock runtime
+const eventListeners: Record<string, Function[]> = {};
+
 vi.mock("../../../wailsjs/runtime/runtime", () => ({
-  EventsOn: vi.fn(() => vi.fn()),
+  EventsOn: vi.fn((event: string, callback: Function) => {
+    if (!eventListeners[event]) {
+      eventListeners[event] = [];
+    }
+    eventListeners[event].push(callback);
+    return () => {
+      eventListeners[event] = eventListeners[event].filter(
+        (cb) => cb !== callback,
+      );
+    };
+  }),
   EventsOff: vi.fn(),
 }));
 
@@ -104,6 +117,10 @@ vi.mock("../SteamStats", () => ({
   default: () => <div data-testid="steam-page">Steam Page</div>,
 }));
 
+vi.mock("../../components/video/PlayerView", () => ({
+  default: () => <div data-testid="player-view">Player View</div>,
+}));
+
 describe("Dashboard Bulk Selection Navigation", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -166,3 +183,62 @@ describe("Dashboard Bulk Selection Navigation", () => {
     expect(screen.queryByTestId("bulk-action-bar")).not.toBeInTheDocument();
   });
 });
+
+describe("Dashboard Stream Port & Player View State", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(GetStreamPort).mockReset();
+  });
+
+  it("should show stream loading or error state when view is player and streamPort is 0 instead of pitch black empty screen", async () => {
+    vi.mocked(GetStreamPort).mockResolvedValue(0);
+    useAppStore.setState({ view: "player", selectedIndex: 0 });
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    const streamStatus = screen.queryByTestId("stream-status");
+    expect(streamStatus).toBeInTheDocument();
+    expect(screen.queryByTestId("player-view")).not.toBeInTheDocument();
+  });
+
+  it("should render PlayerView when streamPort resolves to a valid port", async () => {
+    vi.mocked(GetStreamPort).mockResolvedValue(54321);
+    useAppStore.setState({ view: "player", selectedIndex: 0 });
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    expect(await screen.findByTestId("player-view")).toBeInTheDocument();
+    expect(screen.queryByTestId("stream-status")).not.toBeInTheDocument();
+  });
+
+  it("should display error message and allow returning to library or retrying when stream error occurs", async () => {
+    vi.mocked(GetStreamPort).mockResolvedValue(0);
+    useAppStore.setState({ view: "player", selectedIndex: 0 });
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    // Simulate stream:error event from backend
+    await act(async () => {
+      const callbacks = eventListeners["stream:error"] || [];
+      callbacks.forEach((cb) => cb("Failed to bind stream server port"));
+    });
+
+    expect(screen.getByText("Unable to connect to stream server")).toBeInTheDocument();
+    expect(screen.getByText("Failed to bind stream server port")).toBeInTheDocument();
+
+    // Click "Back to library"
+    const backBtn = screen.getByText("Back to library");
+    await act(async () => {
+      fireEvent.click(backBtn);
+    });
+
+    expect(useAppStore.getState().view).toBe("grid");
+  });
+});
+

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  GetStreamPort,
   IsYouTubeAuthed,
   SaveVideoMetadata,
   SyncRecentVideos,
@@ -20,11 +19,13 @@ import { useAppStore } from "../store/useAppStore";
 // Hooks
 import { useVideoLibrary } from "../hooks/useVideoLibrary";
 import { useAdvancedFilters } from "../components/ui/AdvancedFilters";
+import { useStreamPort } from "../hooks/useStreamPort";
 
 // UI
 import AppHeader from "../components/layout/AppHeader";
 import VideoGrid from "../components/video/VideoGrid";
 import PlayerView from "../components/video/PlayerView";
+import StreamStatus from "../components/video/StreamStatus";
 import ChannelPage from "./ChannelPage";
 import QueuePage from "./QueuePage";
 import StatsPage from "./StatsPage";
@@ -97,7 +98,9 @@ export default function Dashboard() {
   } = useVideoLibrary();
 
   // ── Local UI state ───────────────────────────────────────────────────────────
-  const [streamPort, setStreamPort] = useState(0);
+  const { streamPort, streamError, retryStream } = useStreamPort(
+    view === "player",
+  );
   const [uploadTarget, setUploadTarget] = useState<VideoFile | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
@@ -241,16 +244,15 @@ export default function Dashboard() {
   const groups = useMemo(() => groupByDay(filteredVideos), [filteredVideos]);
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
-  // ── Init: stream port + YouTube auth ────────────────────────────────────────
+  // ── Init: YouTube auth ──────────────────────────────────────────────────────
   useEffect(() => {
-    GetStreamPort().then(setStreamPort).catch(console.error);
     IsYouTubeAuthed()
       .then(setYtAuthed)
       .catch(() => {});
 
-    const unsub = EventsOn("youtube:auth-complete", () => setYtAuthed(true));
+    const unsubAuth = EventsOn("youtube:auth-complete", () => setYtAuthed(true));
     return () => {
-      unsub();
+      unsubAuth();
     };
   }, []);
 
@@ -638,29 +640,36 @@ export default function Dashboard() {
           </ErrorBoundary>
         )}
 
-        {view === "player" && streamPort > 0 && (
-          <ErrorBoundary area="Player">
-            <PlayerView
-              sortedVideos={filteredVideos}
-              allVideos={sortedVideos}
-              selectedVideo={selectedVideo}
-              selectedIndex={selectedIndex}
-              streamPort={streamPort}
-              listRef={listRef}
-              listRoot={listRoot}
-              selectedPaths={selectedPaths}
-              onGoTo={goTo}
-              onVideoClick={handleVideoClick}
-              onUploadTarget={setUploadTarget}
-              onTagSaved={handleRescan}
-              onFilesDeleted={() => {
-                setSelectedIndex(-1);
-                handleRescan();
-              }}
-              onAddToQueue={handleAddToQueue}
+        {view === "player" &&
+          (streamPort > 0 ? (
+            <ErrorBoundary area="Player">
+              <PlayerView
+                sortedVideos={filteredVideos}
+                allVideos={sortedVideos}
+                selectedVideo={selectedVideo}
+                selectedIndex={selectedIndex}
+                streamPort={streamPort}
+                listRef={listRef}
+                listRoot={listRoot}
+                selectedPaths={selectedPaths}
+                onGoTo={goTo}
+                onVideoClick={handleVideoClick}
+                onUploadTarget={setUploadTarget}
+                onTagSaved={handleRescan}
+                onFilesDeleted={() => {
+                  setSelectedIndex(-1);
+                  handleRescan();
+                }}
+                onAddToQueue={handleAddToQueue}
+              />
+            </ErrorBoundary>
+          ) : (
+            <StreamStatus
+              error={streamError}
+              onRetry={retryStream}
+              onBackToLibrary={() => setView("grid")}
             />
-          </ErrorBoundary>
-        )}
+          ))}
 
         {view === "channel" && (
           <ErrorBoundary area="Channel">

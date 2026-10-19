@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -18,7 +19,9 @@ import (
 // App struct
 type App struct {
 	ctx        context.Context
-	streamPort int
+	streamPort atomic.Int32
+	streamMu   sync.Mutex
+	streamSrv  *http.Server
 	cacheDir   string
 	configPath string
 	config     Config
@@ -102,7 +105,14 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 // Shutdown is called when the app is closing.
-func (a *App) Shutdown(_ context.Context) {
+func (a *App) Shutdown(ctx context.Context) {
+	a.streamMu.Lock()
+	if a.streamSrv != nil {
+		_ = a.streamSrv.Shutdown(ctx)
+		a.streamSrv = nil
+		a.streamPort.Store(0)
+	}
+	a.streamMu.Unlock()
 	closeSessionLogger()
 }
 
