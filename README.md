@@ -169,7 +169,7 @@ amon-hen/
 
 ## Configuration
 
-All settings are stored in `%AppData%\AmonHen\config.json` (Windows) or the equivalent OS config directory. There is no manual editing required — the Settings panel in the app handles everything.
+All settings are stored in `%AppData%\AmonHen\config.json` (Windows) or the equivalent OS config directory. Both development and release builds share this unified directory so that settings, database records, and cache are consistent across environments. There is no manual editing required — the Settings panel in the app handles everything.
 
 | Setting                    | Description                                                       |
 | -------------------------- | ----------------------------------------------------------------- |

@@ -4,21 +4,15 @@ import (
 	"testing"
 )
 
-func TestResolveAppDirName(t *testing.T) {
-	if got := resolveAppDirName(false); got != "AmonHen" {
-		t.Errorf("resolveAppDirName(false) = %q; want %q", got, "AmonHen")
-	}
-	if got := resolveAppDirName(true); got != "AmonHen-Dev" {
-		t.Errorf("resolveAppDirName(true) = %q; want %q", got, "AmonHen-Dev")
+func TestAppDirName(t *testing.T) {
+	if got := appDirName(); got != "AmonHen" {
+		t.Errorf("appDirName() = %q; want %q", got, "AmonHen")
 	}
 }
 
-func TestResolveMutexName(t *testing.T) {
-	if got := resolveMutexName(false); got != `Local\AmonHenSingleInstance` {
-		t.Errorf("resolveMutexName(false) = %q; want %q", got, `Local\AmonHenSingleInstance`)
-	}
-	if got := resolveMutexName(true); got != `Local\AmonHenSingleInstance_Dev` {
-		t.Errorf("resolveMutexName(true) = %q; want %q", got, `Local\AmonHenSingleInstance_Dev`)
+func TestSingleMutexName(t *testing.T) {
+	if got := singleMutexName(); got != `Local\AmonHenSingleInstance` {
+		t.Errorf("singleMutexName() = %q; want %q", got, `Local\AmonHenSingleInstance`)
 	}
 }
 
@@ -40,12 +34,7 @@ func TestResolveTrayTooltip(t *testing.T) {
 	}
 }
 
-func TestAppDirNameMatchesBuildTag(t *testing.T) {
-	expected := resolveAppDirName(isDevBuild)
-	if got := appDirName(); got != expected {
-		t.Errorf("appDirName() = %q; want %q", got, expected)
-	}
-}
+
 
 func TestWindowTitleMatchesBuildTag(t *testing.T) {
 	expected := resolveWindowTitle(isDevBuild)
