@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -116,6 +115,11 @@ func (db *DB) migrate() error {
 			publisher TEXT,
 			PRIMARY KEY (appid, publisher)
 		)`,
+		`CREATE TABLE IF NOT EXISTS steam_developers (
+			appid INTEGER,
+			developer TEXT,
+			PRIMARY KEY (appid, developer)
+		)`,
 		`CREATE TABLE IF NOT EXISTS upload_sessions (
 			video_path TEXT PRIMARY KEY,
 			upload_url TEXT NOT NULL,
@@ -130,6 +134,20 @@ func (db *DB) migrate() error {
 			episode INTEGER DEFAULT 0,
 			status TEXT DEFAULT 'uploading',
 			updated_at INTEGER
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_backlog_queue (
+			appid INTEGER PRIMARY KEY,
+			rank_order INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'candidate',
+			notes TEXT NOT NULL DEFAULT '',
+			added_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS steam_game_ratings (
+			appid INTEGER PRIMARY KEY,
+			tier TEXT NOT NULL DEFAULT 'A',
+			score INTEGER NOT NULL DEFAULT 8,
+			notes TEXT NOT NULL DEFAULT '',
+			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
 	}
 	
@@ -191,28 +209,36 @@ func (db *DB) migrate() error {
 		}
 	}
 
-	// Backfill steam_publishers a partir de steam_game_details
-	pRows, err := db.conn.Query("SELECT appid, publishers FROM steam_game_details WHERE publishers != ''")
+	// Clean up bogus corporate suffix rows from steam_publishers
+	db.conn.Exec(`DELETE FROM steam_publishers WHERE LOWER(TRIM(publisher)) IN ('inc.', 'inc', 'ltd.', 'ltd', 'llc', 'l.l.c.', 's.a.', 's.a', 'gmbh', 'co.', 'co', 'corp.', 'corp', 'corporation', 'interactive entertainment')`)
+
+	// Backfill steam_publishers and steam_developers from steam_game_details
+	pRows, err := db.conn.Query("SELECT appid, developers, publishers FROM steam_game_details WHERE developers != '' OR publishers != ''")
 	if err == nil {
 		type backfillItem struct {
 			appid int
+			devs  string
 			pubs  string
 		}
 		var items []backfillItem
 		for pRows.Next() {
 			var appid int
-			var pubs string
-			if err := pRows.Scan(&appid, &pubs); err == nil {
-				items = append(items, backfillItem{appid: appid, pubs: pubs})
+			var devs, pubs string
+			if err := pRows.Scan(&appid, &devs, &pubs); err == nil {
+				items = append(items, backfillItem{appid: appid, devs: devs, pubs: pubs})
 			}
 		}
 		pRows.Close()
 
 		for _, item := range items {
-			for _, p := range strings.Split(item.pubs, ",") {
-				p = strings.TrimSpace(p)
+			for _, p := range splitSteamCompanies(item.pubs) {
 				if p != "" {
 					db.conn.Exec("INSERT OR IGNORE INTO steam_publishers (appid, publisher) VALUES (?, ?)", item.appid, p)
+				}
+			}
+			for _, d := range splitSteamCompanies(item.devs) {
+				if d != "" {
+					db.conn.Exec("INSERT OR IGNORE INTO steam_developers (appid, developer) VALUES (?, ?)", item.appid, d)
 				}
 			}
 		}

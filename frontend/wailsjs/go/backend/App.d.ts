@@ -57,6 +57,8 @@ export function GetDB():Promise<sql.DB>;
 
 export function GetDefaultExportFolder():Promise<string>;
 
+export function GetEnrichedSteamGames(arg1:boolean):Promise<Array<backend.EnrichedSteamGameItem>>;
+
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
 
 export function GetOrCreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
@@ -84,6 +86,8 @@ export function GetSteamGamesByPublisher(arg1:string):Promise<Array<backend.Stea
 export function GetSteamGamesByTag(arg1:string):Promise<Array<backend.SteamGameItem>>;
 
 export function GetSteamID():Promise<string>;
+
+export function GetSteamLibraryPulse(arg1:boolean):Promise<backend.SteamLibraryPulse>;
 
 export function GetSteamOverallStats():Promise<backend.SteamOverallStats>;
 
@@ -142,6 +146,12 @@ export function PurgePlaylistDuplicates(arg1:string):Promise<number>;
 export function RegenerateThumbnail(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
+
+export function RemoveSteamBacklogItem(arg1:number):Promise<void>;
+
+export function RemoveSteamGameRating(arg1:number):Promise<void>;
+
+export function ReorderSteamBacklog(arg1:Array<number>):Promise<void>;
 
 export function ResumeUpload(arg1:string):Promise<void>;
 
@@ -218,3 +228,7 @@ export function UpdateYouTubeThumbnail(arg1:string,arg2:string):Promise<string>;
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string):Promise<void>;
+
+export function UpsertSteamBacklogItem(arg1:number,arg2:string,arg3:string):Promise<void>;
+
+export function UpsertSteamGameRating(arg1:number,arg2:string,arg3:number,arg4:string):Promise<void>;
