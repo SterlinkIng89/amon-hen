@@ -325,3 +325,52 @@ export function pickBacklogRouletteGame(
   const index = Math.floor(randomFn() * eligiblePool.length);
   return eligiblePool[index] ?? null;
 }
+
+export interface RawSteamGameItem {
+  readonly appid: number;
+  readonly name: string;
+  readonly playtimeHours: number;
+  readonly playtimeForever: number;
+  readonly playtime2Weeks: number;
+  readonly headerUrl: string;
+  readonly posterUrl: string;
+  readonly achievementsPct: number;
+  readonly developers: string;
+  readonly publishers: string;
+  readonly genres: string;
+  readonly isUtility?: boolean;
+  readonly ytVideosCount: number;
+  readonly ytRecordedHours: number;
+  readonly backlogStatus?: string;
+  readonly backlogRank?: number;
+  readonly backlogNotes?: string;
+  readonly personalTier?: string;
+  readonly personalScore?: number;
+  readonly personalNotes?: string;
+}
+
+export function normalizeGameInsight(game: RawSteamGameItem): SteamGameInsight {
+  const validStatus: BacklogStatus | undefined =
+    game.backlogStatus === "playing" ||
+    game.backlogStatus === "up_next" ||
+    game.backlogStatus === "candidate" ||
+    game.backlogStatus === "on_hold" ||
+    game.backlogStatus === "dropped"
+      ? game.backlogStatus
+      : undefined;
+
+  const validTier: TierLevel | undefined =
+    game.personalTier === "S" ||
+    game.personalTier === "A" ||
+    game.personalTier === "B" ||
+    game.personalTier === "C" ||
+    game.personalTier === "D"
+      ? game.personalTier
+      : undefined;
+
+  return {
+    ...game,
+    backlogStatus: validStatus,
+    personalTier: validTier,
+  };
+}
