@@ -426,3 +426,50 @@ describe("VideoPill Custom Thumbnail Integration", () => {
   });
 });
 
+describe("VideoPill Content Type Thumbnail Badge", () => {
+  const clipVideo: VideoFile = {
+    name: "clip-sample.mp4",
+    path: "/videos/clip-sample.mp4",
+    size: 5242880,
+    modTime: 1787754600000,
+    folder: "/videos",
+    game: "Test Game",
+    durationSecs: 45,
+    contentType: "clip",
+  };
+
+  const vodVideo: VideoFile = {
+    name: "vod-sample.mp4",
+    path: "/videos/vod-sample.mp4",
+    size: 524288000,
+    modTime: 1787754600000,
+    folder: "/videos",
+    game: "Test Game",
+    durationSecs: 3600,
+    contentType: "vod",
+  };
+
+  it("does not render Clip or VOD badge on thumbnail in grid mode", () => {
+    const { rerender } = render(
+      <VideoPill video={clipVideo} viewMode="grid" />
+    );
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+
+    rerender(<VideoPill video={vodVideo} viewMode="grid" />);
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render Clip or VOD badge on thumbnail in list mode", () => {
+    const { rerender } = render(
+      <VideoPill video={clipVideo} viewMode="list" compact />
+    );
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+
+    rerender(<VideoPill video={vodVideo} viewMode="list" compact />);
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+  });
+});

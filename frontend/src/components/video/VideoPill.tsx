@@ -5,7 +5,6 @@ import {
   formatDuration,
   generateYouTubeTitle,
   getVideoTitleSegments,
-  resolveVideoContentType,
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
@@ -123,13 +122,6 @@ function VideoPillComponent({
   const publishedAt = isYT
     ? new Date(video.publishedAt).toLocaleDateString()
     : "";
-
-  // Content Type normalization
-  const localVideo = isLocal ? (video as VideoFile) : undefined;
-  const effectiveDuration = localVideo?.durationSecs ?? localDuration;
-  const contentType = isLocal
-    ? resolveVideoContentType(effectiveDuration, localVideo?.contentType)
-    : undefined;
 
   // Duration normalization
   const parseYTDuration = (isoDuration: string) => {
@@ -392,24 +384,6 @@ function VideoPillComponent({
             className={`absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-white z-10 tabular-nums shadow-sm border border-white/10 ${isList && compact ? "scale-90" : ""}`}
           >
             {displayDuration}
-          </div>
-        )}
-
-        {/* Content Type Badge */}
-        {contentType && (
-          <div
-            className={`absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold z-10 shadow-sm border ${
-              contentType === "clip"
-                ? "bg-purple-900/80 border-purple-500/40 text-purple-200"
-                : "bg-blue-900/80 border-blue-500/40 text-blue-200"
-            } ${isList && compact ? "scale-90" : ""}`}
-            title={
-              contentType === "clip"
-                ? "Clip (< 2 min or override)"
-                : "VOD (≥ 2 min or override)"
-            }
-          >
-            {contentType === "clip" ? "Clip" : "VOD"}
           </div>
         )}
 
