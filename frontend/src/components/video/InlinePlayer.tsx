@@ -10,6 +10,7 @@ import {
   resolveVideoContentType,
   resolveVideoEpisode,
   extractEpisodeFromTitle,
+  computeDefaultClipTitle,
 } from "../../utils/videoUtils";
 import {
   UploadToYouTube,
@@ -1219,7 +1220,7 @@ export default function InlinePlayer({
             videoName={video.name}
             duration={videoDuration}
             anchorTime={clipAnchorTime}
-            defaultTitle={`${video.name.replace(/\.[^/.]+$/, "")} - Clip`}
+            defaultTitle={computeDefaultClipTitle(video.name, tagInput.trim() || video.game?.trim())}
             isSaving={clipSaving}
             onClipSave={handleClipSave}
             onCancel={exitClipMode}

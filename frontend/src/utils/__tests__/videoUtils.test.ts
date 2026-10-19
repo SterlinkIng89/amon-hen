@@ -9,6 +9,7 @@ import {
   resolveDisplayTitle,
   extractEpisodeFromTitle,
   resolveVideoEpisode,
+  computeDefaultClipTitle,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -468,6 +469,32 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(resolveVideoEpisode("", 0, "CONTROL Resonant - 12/10/26 - 14")).toBe(14);
       expect(resolveVideoEpisode(undefined, undefined, "CONTROL Resonant - 12/10/26 - 14")).toBe(14);
       expect(resolveVideoEpisode("", 0, "CONTROL Resonant - 12/10/26")).toBe(0);
+    });
+  });
+
+  describe("computeDefaultClipTitle", () => {
+    it("prefixes clip title with game tag and base file name when game tag is present", () => {
+      expect(
+        computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "Lethal Company")
+      ).toBe("Lethal Company - 2026-08-26 14-30-00 - Clip");
+    });
+
+    it("trims whitespace from game tag", () => {
+      expect(
+        computeDefaultClipTitle("recording.mkv", "  Elden Ring  ")
+      ).toBe("Elden Ring - recording - Clip");
+    });
+
+    it("omits game tag prefix when game tag is undefined or empty string", () => {
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "   ")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
     });
   });
 });

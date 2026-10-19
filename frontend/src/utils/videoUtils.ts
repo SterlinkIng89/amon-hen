@@ -64,6 +64,15 @@ export function computeInitialClipRange(
   return { inPoint: inP, outPoint: outP };
 }
 
+export function computeDefaultClipTitle(videoName: string, gameTag?: string): string {
+  const base = formatName(videoName);
+  const tag = gameTag?.trim();
+  if (tag) {
+    return `${tag} - ${base} - Clip`;
+  }
+  return `${base} - Clip`;
+}
+
 export function extractDatePart(filename: string, modTime?: number): string {
   const stem = filename.replace(/\.[^/.]+$/, "");
 
