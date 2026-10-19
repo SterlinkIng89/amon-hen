@@ -104,7 +104,7 @@ export default function Dashboard() {
   const [uploadTarget, setUploadTarget] = useState<VideoFile | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
-  const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
+  const lastSelectedPath = useRef<string | null>(null);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
@@ -284,7 +284,7 @@ export default function Dashboard() {
     if (view !== "grid" && view !== "player") {
       if (selectedPaths.length > 0) {
         setSelectedPaths([]);
-        setLastSelectedIdx(-1);
+        lastSelectedPath.current = null;
       }
     }
   }, [view]);
@@ -295,7 +295,7 @@ export default function Dashboard() {
       if (e.key === "Escape") {
         if (selectedPaths.length > 0) {
           setSelectedPaths([]);
-          setLastSelectedIdx(-1);
+          lastSelectedPath.current = null;
         } else if (searchQuery) {
           setSearchQuery("");
         }
@@ -305,12 +305,23 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPaths.length, searchQuery]);
 
-  // ── Video click handler ──────────────────────────────────────────────────────
+  // ── Video click and select handlers ──────────────────────────────────────────
+  const togglePathSelection = (path: string) => {
+    setSelectedPaths((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path],
+    );
+    lastSelectedPath.current = path;
+  };
+
+  const handleSelectToggle = (filteredIdx: number) => {
+    const video = filteredVideos[filteredIdx];
+    if (video) togglePathSelection(video.path);
+  };
+
   const handleVideoClick = (filteredIdx: number, e: React.MouseEvent) => {
     const video = filteredVideos[filteredIdx];
     if (!video) return;
 
-    // selectedIndex always tracks position in sortedVideos (the full list)
     const sortedIdx = sortedVideos.findIndex((v) => v.path === video.path);
 
     let currentPaths = [...selectedPaths];
@@ -324,43 +335,52 @@ export default function Dashboard() {
       }
     }
 
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePathSelection(video.path);
+      return;
+    }
+
     if (e.shiftKey) {
-      const anchorSortedIdx =
-        lastSelectedIdx !== -1
-          ? lastSelectedIdx
-          : selectedIndex !== -1
-            ? selectedIndex
-            : 0;
-      const anchorVideo = sortedVideos[anchorSortedIdx];
+      e.preventDefault();
+      e.stopPropagation();
+      const anchorPath =
+        lastSelectedPath.current ||
+        (selectedIndex !== -1 ? sortedVideos[selectedIndex]?.path : null) ||
+        filteredVideos[0]?.path;
 
       const visibleStartIdx = filteredVideos.findIndex(
-        (v) => v.path === anchorVideo?.path,
+        (v) => v.path === anchorPath,
       );
       const visibleEndIdx = filteredIdx;
 
       if (visibleStartIdx !== -1 && visibleEndIdx !== -1) {
         const start = Math.min(visibleStartIdx, visibleEndIdx);
         const end = Math.max(visibleStartIdx, visibleEndIdx);
+        const next = new Set(currentPaths);
         for (let i = start; i <= end; i++) {
-          const p = filteredVideos[i].path;
-          if (!currentPaths.includes(p)) currentPaths.push(p);
+          next.add(filteredVideos[i].path);
         }
+        setSelectedPaths(Array.from(next));
       }
-      setSelectedPaths(currentPaths);
-    } else if (e.ctrlKey || e.metaKey) {
-      if (currentPaths.includes(video.path)) {
-        currentPaths = currentPaths.filter((p) => p !== video.path);
-      } else {
-        currentPaths.push(video.path);
-      }
-      setSelectedPaths(currentPaths);
-      setLastSelectedIdx(sortedIdx);
-    } else {
-      setSelectedPaths([]);
-      setSelectedIndex(sortedIdx);
-      setLastSelectedIdx(sortedIdx);
-      setView("player");
+      lastSelectedPath.current = video.path;
+      return;
     }
+
+    const inSelectionMode =
+      view === "player" ? currentPaths.length > 1 : currentPaths.length > 0;
+    if (inSelectionMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePathSelection(video.path);
+      return;
+    }
+
+    lastSelectedPath.current = video.path;
+    setSelectedPaths([]);
+    setSelectedIndex(sortedIdx);
+    setView("player");
   };
 
   const goTo = (i: number) => {
@@ -591,15 +611,17 @@ export default function Dashboard() {
             .filter((v): v is VideoFile => v !== undefined)}
           onClearSelection={() => {
             setSelectedPaths([]);
-            setLastSelectedIdx(-1);
+            lastSelectedPath.current = null;
           }}
           onRescanOnly={() => handleRescan()}
           onTagsSaved={() => {
             setSelectedPaths([]);
+            lastSelectedPath.current = null;
             handleRescan();
           }}
           onFilesDeleted={() => {
             setSelectedPaths([]);
+            lastSelectedPath.current = null;
             setSelectedIndex(-1);
             handleRescan();
           }}
@@ -635,6 +657,7 @@ export default function Dashboard() {
               sortMode={sortMode as SortMode}
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
+              onSelectToggle={handleSelectToggle}
               onUploadTarget={setUploadTarget}
             />
           </ErrorBoundary>

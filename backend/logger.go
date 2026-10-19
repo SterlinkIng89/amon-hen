@@ -29,7 +29,7 @@ func initSessionLogger() {
 	if err != nil {
 		base = os.TempDir()
 	}
-	logsDir := filepath.Join(base, "AmonHen", "logs")
+	logsDir := filepath.Join(base, appDirName(), "logs")
 	if mkErr := os.MkdirAll(logsDir, 0755); mkErr != nil {
 		// Fallback: log only to stdout
 		sessionLogger = log.New(os.Stdout, "", log.LstdFlags)

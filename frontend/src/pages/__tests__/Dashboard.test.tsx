@@ -58,6 +58,13 @@ vi.mock("../../hooks/useVideoLibrary", () => ({
         modTime: 2000,
         folder: "/test",
       },
+      {
+        path: "/test/v3.mp4",
+        name: "v3.mp4",
+        size: 3072,
+        modTime: 3000,
+        folder: "/test",
+      },
     ],
     folders: ["/test"],
     activeFolders: [],
@@ -86,12 +93,32 @@ vi.mock("../../components/layout/AppHeader", () => ({
 vi.mock("../../components/video/VideoGrid", () => ({
   default: ({
     onOpenVideo,
+    onSelectToggle,
+    selectedPaths,
   }: {
     onOpenVideo: (idx: number, e: React.MouseEvent) => void;
+    onSelectToggle?: (idx: number) => void;
+    selectedPaths?: string[];
   }) => (
     <div data-testid="video-grid">
+      <div data-testid="selected-count">{selectedPaths?.length ?? 0}</div>
       <button data-testid="select-video-0" onClick={(e) => onOpenVideo(0, e)}>
         Select Video 0
+      </button>
+      <button data-testid="select-video-1" onClick={(e) => onOpenVideo(1, e)}>
+        Select Video 1
+      </button>
+      <button data-testid="select-video-2" onClick={(e) => onOpenVideo(2, e)}>
+        Select Video 2
+      </button>
+      <button data-testid="toggle-video-0" onClick={() => onSelectToggle?.(0)}>
+        Toggle Video 0
+      </button>
+      <button data-testid="toggle-video-1" onClick={() => onSelectToggle?.(1)}>
+        Toggle Video 1
+      </button>
+      <button data-testid="toggle-video-2" onClick={() => onSelectToggle?.(2)}>
+        Toggle Video 2
       </button>
     </div>
   ),
@@ -241,4 +268,95 @@ describe("Dashboard Stream Port & Player View State", () => {
     expect(useAppStore.getState().view).toBe("grid");
   });
 });
+
+describe("Dashboard Multi-Selection (#125)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useAppStore.setState({ view: "grid", selectedIndex: -1 });
+  });
+
+  it("ctrl-click toggles and shift-click selects contiguous range from the path anchor", async () => {
+    render(<Dashboard />);
+
+    // Ctrl+Click video 0 -> selected
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-0"), { ctrlKey: true });
+    });
+    expect(screen.getByText("Bulk Action Bar (1)")).toBeInTheDocument();
+
+    // Shift+Click video 2 -> range 0, 1, 2 selected (total 3)
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-2"), { shiftKey: true });
+    });
+    expect(screen.getByText("Bulk Action Bar (3)")).toBeInTheDocument();
+  });
+
+  it("plain click in selection mode toggles item, keeps selection, and does not navigate to player", async () => {
+    render(<Dashboard />);
+
+    // Ctrl+Click video 0 -> selection mode active (1 item)
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-0"), { ctrlKey: true });
+    });
+    expect(screen.getByText("Bulk Action Bar (1)")).toBeInTheDocument();
+
+    // Normal click on video 1 -> should add video 1 to selection (now 2), NOT open player
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-1"));
+    });
+    expect(useAppStore.getState().view).toBe("grid");
+    expect(screen.getByText("Bulk Action Bar (2)")).toBeInTheDocument();
+
+    // Normal click on video 1 again -> should deselect video 1 (now 1)
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-1"));
+    });
+    expect(screen.getByText("Bulk Action Bar (1)")).toBeInTheDocument();
+    expect(useAppStore.getState().view).toBe("grid");
+  });
+
+  it("plain click with no active selection opens the player", async () => {
+    render(<Dashboard />);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("select-video-0"));
+    });
+    expect(useAppStore.getState().view).toBe("player");
+    expect(useAppStore.getState().selectedIndex).toBe(0);
+  });
+
+  it("modifier clicks prevent default to avoid DOM text selection", async () => {
+    render(<Dashboard />);
+
+    const clickEvent = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      shiftKey: true,
+    });
+    const preventDefaultSpy = vi.spyOn(clickEvent, "preventDefault");
+
+    act(() => {
+      screen.getByTestId("select-video-0").dispatchEvent(clickEvent);
+    });
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
+
+  it("onSelectToggle toggles selection for a video", async () => {
+    render(<Dashboard />);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("toggle-video-0"));
+    });
+
+    expect(screen.getByText("Bulk Action Bar (1)")).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("toggle-video-0"));
+    });
+
+    expect(screen.queryByTestId("bulk-action-bar")).not.toBeInTheDocument();
+  });
+});
+
 

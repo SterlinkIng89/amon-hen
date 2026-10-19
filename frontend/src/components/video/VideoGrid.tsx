@@ -16,6 +16,7 @@ interface VideoGridProps {
   sortMode: SortMode;
   selectedPaths: string[];
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
+  onSelectToggle?: (sortedIdx: number) => void;
   onUploadTarget: (video: VideoFile) => void;
 }
 
@@ -174,6 +175,7 @@ export default function VideoGrid({
   sortMode,
   selectedPaths,
   onOpenVideo,
+  onSelectToggle,
   onUploadTarget,
 }: VideoGridProps) {
   // Only use date-grouped layout when sorting by date
@@ -228,6 +230,9 @@ export default function VideoGrid({
                       selected={isSelected}
                       multiSelected={isSelected}
                       onClick={(e) => onOpenVideo(sortedIdx, e)}
+                      onSelectToggle={
+                        onSelectToggle ? () => onSelectToggle(sortedIdx) : undefined
+                      }
                       onUpload={() => onUploadTarget(video)}
                       uploadProgress={uploadingProgressMap.get(video.path)}
                       gameProfiles={gameProfiles}
@@ -251,6 +256,9 @@ export default function VideoGrid({
                   selected={isSelected}
                   multiSelected={isSelected}
                   onClick={(e) => onOpenVideo(idx, e)}
+                  onSelectToggle={
+                    onSelectToggle ? () => onSelectToggle(idx) : undefined
+                  }
                   onUpload={() => onUploadTarget(video)}
                   uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}

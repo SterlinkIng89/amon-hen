@@ -23,7 +23,7 @@ func (a *App) initCache() {
 	if err != nil {
 		base = os.TempDir()
 	}
-	a.cacheDir = filepath.Join(base, "AmonHen", "cache")
+	a.cacheDir = filepath.Join(base, appDirName(), "cache")
 	os.MkdirAll(filepath.Join(a.cacheDir, "thumbs"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "previews"), 0755)
 	os.MkdirAll(filepath.Join(a.cacheDir, "durations"), 0755)

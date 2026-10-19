@@ -114,7 +114,7 @@ func (a *App) initConfig() {
 	if err != nil {
 		base = os.TempDir()
 	}
-	dir := filepath.Join(base, "AmonHen")
+	dir := filepath.Join(base, appDirName())
 	os.MkdirAll(dir, 0755)
 	a.configPath = filepath.Join(dir, "config.json")
 
