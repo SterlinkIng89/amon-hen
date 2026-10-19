@@ -25,11 +25,29 @@ export interface YouTubeThumbnailPickerProps {
   readonly videoPath: string;
   readonly gameTag: string;
   readonly episodeNumber: number;
-  readonly tagThumbnailConfig?: TagThumbnailConfig;
+  readonly tagThumbnailConfig?: Partial<TagThumbnailConfig>;
   readonly onThumbnailReady?: (savedPath: string | null) => void;
   readonly onOpenTagSettings?: () => void;
   readonly youtubeId?: string;
   readonly onYouTubeUpdated?: (newThumbnailUrl: string) => void;
+}
+
+function createInitialThumbnailConfig(
+  config?: Partial<TagThumbnailConfig>
+): TagThumbnailConfig {
+  return {
+    enabled: config?.enabled ?? true,
+    source_type: config?.source_type ?? "steam",
+    steam_asset_type: config?.steam_asset_type || "header",
+    custom_image_path: config?.custom_image_path,
+    episode_position: config?.episode_position ?? "bottom-left",
+    episode_format: config?.episode_format ?? "pad2",
+    font_color: config?.font_color || "#ffffff",
+    image_framing: config?.image_framing,
+    episode_layout: config?.episode_layout,
+    logo: config?.logo,
+    title: config?.title,
+  };
 }
 
 export default function YouTubeThumbnailPicker({
@@ -55,33 +73,14 @@ export default function YouTubeThumbnailPicker({
   const [pushState, setPushState] = useState<PushState>({ status: "idle" });
 
   // Local overrides if user customizes specifically for this video
-  const [localConfig, setLocalConfig] = useState<TagThumbnailConfig>(() => ({
-    enabled: tagThumbnailConfig?.enabled ?? true,
-    source_type: tagThumbnailConfig?.source_type ?? "steam",
-    steam_asset_type: tagThumbnailConfig?.steam_asset_type ?? "header",
-    custom_image_path: tagThumbnailConfig?.custom_image_path,
-    episode_position: tagThumbnailConfig?.episode_position ?? "bottom-right",
-    episode_format: tagThumbnailConfig?.episode_format ?? "pad2",
-    font_color: tagThumbnailConfig?.font_color ?? "#ffffff",
-    image_framing: tagThumbnailConfig?.image_framing,
-  }));
+  const [localConfig, setLocalConfig] = useState<TagThumbnailConfig>(() =>
+    createInitialThumbnailConfig(tagThumbnailConfig)
+  );
 
   // Sync when tagThumbnailConfig changes
   useEffect(() => {
     if (tagThumbnailConfig) {
-      setLocalConfig({
-        enabled: tagThumbnailConfig.enabled,
-        source_type: tagThumbnailConfig.source_type,
-        steam_asset_type: tagThumbnailConfig.steam_asset_type || "header",
-        custom_image_path: tagThumbnailConfig.custom_image_path,
-        episode_position: tagThumbnailConfig.episode_position,
-        episode_format: tagThumbnailConfig.episode_format || "pad2",
-        font_color: tagThumbnailConfig.font_color || "#ffffff",
-        image_framing: tagThumbnailConfig.image_framing,
-        episode_layout: tagThumbnailConfig.episode_layout,
-        logo: tagThumbnailConfig.logo,
-        title: tagThumbnailConfig.title,
-      });
+      setLocalConfig(createInitialThumbnailConfig(tagThumbnailConfig));
     }
   }, [tagThumbnailConfig]);
 
@@ -239,19 +238,7 @@ export default function YouTubeThumbnailPicker({
       notifyCustomThumbChanged(videoPath, null);
       setIsCustomizing(false);
       if (tagThumbnailConfig) {
-        setLocalConfig({
-          enabled: tagThumbnailConfig.enabled,
-          source_type: tagThumbnailConfig.source_type,
-          steam_asset_type: tagThumbnailConfig.steam_asset_type || "header",
-          custom_image_path: tagThumbnailConfig.custom_image_path,
-          episode_position: tagThumbnailConfig.episode_position,
-          episode_format: tagThumbnailConfig.episode_format || "pad2",
-          font_color: tagThumbnailConfig.font_color || "#ffffff",
-          image_framing: tagThumbnailConfig.image_framing,
-          episode_layout: tagThumbnailConfig.episode_layout,
-          logo: tagThumbnailConfig.logo,
-          title: tagThumbnailConfig.title,
-        });
+        setLocalConfig(createInitialThumbnailConfig(tagThumbnailConfig));
       }
     } catch (err) {
       console.error("Failed to reset thumbnail", err);
@@ -418,7 +405,7 @@ export default function YouTubeThumbnailPicker({
                       key={p.id}
                       type="button"
                       className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                        (localConfig.episode_position || "bottom-right") === p.id
+                        (localConfig.episode_position || "bottom-left") === p.id
                           ? "bg-accent/25 border-accent text-accent font-medium"
                           : "bg-[#141416] border-white/10 text-text-muted"
                       }`}

@@ -18,10 +18,10 @@ describe("playlistCover utility", () => {
     vi.clearAllMocks();
   });
 
-  it("exports valid DEFAULT_COVER_CONFIG with bottom-right pad2 defaults", () => {
+  it("exports valid DEFAULT_COVER_CONFIG with bottom-left pad2 defaults", () => {
     expect(DEFAULT_COVER_CONFIG.enabled).toBe(true);
     expect(DEFAULT_COVER_CONFIG.source_type).toBe("steam");
-    expect(DEFAULT_COVER_CONFIG.episode_position).toBe("bottom-right");
+    expect(DEFAULT_COVER_CONFIG.episode_position).toBe("bottom-left");
     expect(DEFAULT_COVER_CONFIG.episode_format).toBe("pad2");
   });
 

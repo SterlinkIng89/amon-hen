@@ -54,6 +54,23 @@ describe("YouTubeThumbnailPicker", () => {
     expect(screen.getByText(/using cyberpunk 2077 template/i)).toBeInTheDocument();
   });
 
+  it("defaults episode_position to bottom-left when tagThumbnailConfig has no position", () => {
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={{ enabled: true, source_type: "steam" }}
+      />
+    );
+
+    const adjustBtn = screen.getByRole("button", { name: /adjust for this video/i });
+    fireEvent.click(adjustBtn);
+
+    const bottomLeftBtn = screen.getByRole("button", { name: "Bottom Left" });
+    expect(bottomLeftBtn).toHaveClass("text-accent");
+  });
+
   it("calls onOpenTagSettings when clicking edit template button", async () => {
     const onOpenTagSettings = vi.fn();
     render(

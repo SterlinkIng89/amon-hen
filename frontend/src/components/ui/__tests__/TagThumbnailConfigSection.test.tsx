@@ -46,7 +46,30 @@ describe("TagThumbnailConfigSection", () => {
 
     fireEvent.click(toggle);
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: true })
+      expect.objectContaining({
+        enabled: true,
+        episode_position: "bottom-right",
+      })
+    );
+  });
+
+  it("defaults episode_position to bottom-left when enabling without existing position", () => {
+    const onChange = vi.fn();
+    render(
+      <TagThumbnailConfigSection
+        tag="Cyberpunk 2077"
+        value={{ enabled: false, source_type: "steam" }}
+        onChange={onChange}
+      />
+    );
+
+    const toggle = screen.getByRole("checkbox");
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        episode_position: "bottom-left",
+      })
     );
   });
 

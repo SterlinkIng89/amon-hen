@@ -13,7 +13,7 @@ import {
 } from "../../utils/thumbnailGenerator";
 
 export interface ThumbnailCanvasEditorProps {
-  readonly config: TagThumbnailConfig;
+  readonly config: Partial<TagThumbnailConfig>;
   readonly baseImage: HTMLImageElement | null;
   readonly logoImage?: HTMLImageElement | null;
   readonly gameTitle?: string;
@@ -51,7 +51,7 @@ export default function ThumbnailCanvasEditor({
       showEpisode: true,
       episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
       episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-right",
+      position: config.episode_position || "bottom-left",
       fontColor: config.font_color || "#ffffff",
       framing: config.image_framing || DEFAULT_FRAMING,
       episodeLayout: config.episode_layout,

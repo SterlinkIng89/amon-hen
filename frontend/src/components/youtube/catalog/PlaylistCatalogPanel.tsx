@@ -44,7 +44,7 @@ const ThumbnailPreviewCanvas: FC<ThumbnailPreviewCanvasProps> = ({
       showEpisode: episodeNumber > 0,
       episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
       episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-right",
+      position: config.episode_position || "bottom-left",
       fontColor: config.font_color || "#ffffff",
       framing: config.image_framing,
       episodeLayout: config.episode_layout,
@@ -113,7 +113,7 @@ export const PlaylistCatalogPanel: FC = () => {
     enabled: true,
     source_type: "steam",
     steam_asset_type: "header",
-    episode_position: "bottom-right",
+    episode_position: "bottom-left",
     episode_format: "pad2",
     font_color: "#ffffff",
   });
@@ -168,7 +168,7 @@ export const PlaylistCatalogPanel: FC = () => {
             enabled: true,
             source_type: "steam",
             steam_asset_type: "header",
-            episode_position: "bottom-right",
+            episode_position: "bottom-left",
             episode_format: "pad2",
             font_color: "#ffffff",
           });
