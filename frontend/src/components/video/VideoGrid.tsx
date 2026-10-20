@@ -5,6 +5,8 @@ import {
   GameProfile,
   SortMode,
   LibraryGroupMode,
+  CardDensity,
+  CARD_DENSITY_CLASSES,
 } from "../../types";
 import VideoPill from "./VideoPill";
 import { useAppStore } from "../../store/useAppStore";
@@ -20,6 +22,7 @@ interface VideoGridProps {
   sortedVideos: VideoFile[]; // already sorted by Dashboard
   sortMode: SortMode;
   groupMode?: LibraryGroupMode;
+  readonly cardDensity?: CardDensity;
   selectedPaths: string[];
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onSelectToggle?: (sortedIdx: number) => void;
@@ -260,6 +263,7 @@ export default function VideoGrid({
   sortedVideos,
   sortMode,
   groupMode: propGroupMode,
+  cardDensity: propCardDensity,
   selectedPaths,
   onOpenVideo,
   onSelectToggle,
@@ -268,8 +272,15 @@ export default function VideoGrid({
   onQuickQueue,
   onOpenInExplorer,
 }: VideoGridProps) {
-  const { queue, groupMode: storeGroupMode } = useAppStore();
+  const {
+    queue,
+    groupMode: storeGroupMode,
+    cardDensity: storeCardDensity,
+  } = useAppStore();
   const effectiveGroupMode = propGroupMode ?? storeGroupMode ?? "date";
+  const effectiveCardDensity = propCardDensity ?? storeCardDensity ?? "default";
+  const densityClass =
+    CARD_DENSITY_CLASSES[effectiveCardDensity] ?? CARD_DENSITY_CLASSES.default;
   const useGroups = effectiveGroupMode !== "none" && groups.length > 0;
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
@@ -356,7 +367,7 @@ export default function VideoGrid({
                   onToggleCollapse={() => handleToggleCollapse(group.dateKey)}
                 />
                 {!collapsed && (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
+                  <div className={`grid ${densityClass}`}>
                     {group.videos.map((video) => {
                       const sortedIdx = sortedIdxMap.get(video.path) ?? -1;
                       const isSelected = selectedPathsSet.has(video.path);
@@ -396,7 +407,7 @@ export default function VideoGrid({
       ) : (
         /* Flat layout for name/size sort */
         <div className="flex-1 overflow-y-auto p-5 pb-10" data-scroll-layer>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
+          <div className={`grid ${densityClass}`}>
             {sortedVideos.map((video, idx) => {
               const isSelected = selectedPathsSet.has(video.path);
               return (

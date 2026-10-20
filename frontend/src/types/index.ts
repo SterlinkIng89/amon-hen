@@ -196,4 +196,11 @@ export type ViewMode =
 export type PlaylistPrivacy = "public" | "unlisted" | "private";
 export type SortMode = "date" | "name" | "size" | "duration" | "episode";
 export type LibraryGroupMode = "date" | "game" | "status" | "folder" | "none";
+export type CardDensity = "compact" | "default" | "large";
+
+export const CARD_DENSITY_CLASSES: Record<CardDensity, string> = {
+  compact: "grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-4",
+  default: "grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5",
+  large: "grid-cols-[repeat(auto-fill,minmax(285px,1fr))] gap-6",
+};
 

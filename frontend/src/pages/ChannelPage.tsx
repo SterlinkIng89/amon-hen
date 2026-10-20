@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
+import { YTVideo, YTPlaylist, VideoGroupYT, CARD_DENSITY_CLASSES } from "../types";
+import { useAppStore } from "../store/useAppStore";
 import {
   SyncRecentVideos,
   SyncChannelData,
@@ -30,6 +31,7 @@ import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 
 export default function ChannelPage() {
+  const { cardDensity } = useAppStore();
   const [activeTab, setActiveTab] = useState<"videos" | "playlists" | "catalog">("videos");
   const [playlistSort, setPlaylistSort] = useState<
     "recent" | "title" | "videos" | "updated"
@@ -1287,7 +1289,7 @@ export default function ChannelPage() {
               <div
                 className={
                   viewMode === "grid"
-                    ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
+                    ? `grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`
                     : "flex flex-col gap-2"
                 }
               >
@@ -1386,7 +1388,7 @@ export default function ChannelPage() {
                           }}
                         />
                       </div>
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                      <div className={`grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`}>
                         {group.videos.map((v) => (
                           <div
                             key={v.id}
@@ -1409,7 +1411,7 @@ export default function ChannelPage() {
                   <div
                     className={
                       viewMode === "grid"
-                        ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
+                        ? `grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`
                         : "flex flex-col gap-2"
                     }
                   >
@@ -1460,7 +1462,7 @@ export default function ChannelPage() {
             <div
               className={
                 viewMode === "grid"
-                  ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
+                  ? `grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`
                   : "flex flex-col gap-2"
               }
             >

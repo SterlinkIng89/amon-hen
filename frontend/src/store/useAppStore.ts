@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode, PlaylistPrivacy, SortMode, LibraryGroupMode } from "../types";
+import { ViewMode, PlaylistPrivacy, SortMode, LibraryGroupMode, CardDensity } from "../types";
 
 
 interface AppState {
@@ -16,6 +16,7 @@ interface AppState {
   view: ViewMode;
   sortMode: SortMode;
   groupMode: LibraryGroupMode;
+  cardDensity: CardDensity;
   filterUploaded: boolean;
   selectedIndex: number;
   defaultPlaylistPrivacy: PlaylistPrivacy;
@@ -42,6 +43,7 @@ function savePersistedPrefs(state: AppState) {
         view: state.view,
         sortMode: state.sortMode,
         groupMode: state.groupMode,
+        cardDensity: state.cardDensity,
         filterUploaded: state.filterUploaded,
         selectedIndex: state.selectedIndex,
         defaultPlaylistPrivacy: state.defaultPlaylistPrivacy,
@@ -63,6 +65,7 @@ let state: AppState = {
   view: (saved.view as ViewMode) ?? "grid",
   sortMode: (saved.sortMode as SortMode) ?? "date",
   groupMode: (saved.groupMode as LibraryGroupMode) ?? "date",
+  cardDensity: (saved.cardDensity as CardDensity) ?? "default",
   filterUploaded: saved.filterUploaded ?? false,
   selectedIndex: saved.selectedIndex ?? -1,
   defaultPlaylistPrivacy:
@@ -86,6 +89,7 @@ function setState(
     prevState.view !== state.view ||
     prevState.sortMode !== state.sortMode ||
     prevState.groupMode !== state.groupMode ||
+    prevState.cardDensity !== state.cardDensity ||
     prevState.filterUploaded !== state.filterUploaded ||
     prevState.selectedIndex !== state.selectedIndex ||
     prevState.defaultPlaylistPrivacy !== state.defaultPlaylistPrivacy
@@ -126,6 +130,7 @@ const setYtAuthed = (ytAuthed: boolean) => setState({ ytAuthed });
 const setView = (view: ViewMode) => setState({ view });
 const setSortMode = (sortMode: SortMode) => setState({ sortMode });
 const setGroupMode = (groupMode: LibraryGroupMode) => setState({ groupMode });
+const setCardDensity = (cardDensity: CardDensity) => setState({ cardDensity });
 const setFilterUploaded = (filterUploaded: boolean) =>
   setState({ filterUploaded });
 const setSelectedIndex = (selectedIndex: number) => setState({ selectedIndex });
@@ -142,6 +147,7 @@ const storeActions = {
   setView,
   setSortMode,
   setGroupMode,
+  setCardDensity,
   setFilterUploaded,
   setSelectedIndex,
   setDefaultPlaylistPrivacy,

@@ -220,4 +220,40 @@ describe("VideoGrid - Group Selection and Collapse", () => {
     expect(screen.getByTestId("video-pill-video1.mp4")).toBeInTheDocument();
     expect(screen.getByTestId("video-pill-video2.mp4")).toBeInTheDocument();
   });
+
+  it("applies default grid density classes when no cardDensity prop is provided", async () => {
+    await act(async () => {
+      render(<VideoGrid {...baseProps} />);
+    });
+
+    const pill = screen.getByTestId("video-pill-video1.mp4");
+    expect(pill.parentElement).toHaveClass(
+      "grid-cols-[repeat(auto-fill,minmax(213px,1fr))]",
+    );
+    expect(pill.parentElement).toHaveClass("gap-5");
+  });
+
+  it("applies compact grid density classes when cardDensity is compact", async () => {
+    await act(async () => {
+      render(<VideoGrid {...baseProps} cardDensity="compact" />);
+    });
+
+    const pill = screen.getByTestId("video-pill-video1.mp4");
+    expect(pill.parentElement).toHaveClass(
+      "grid-cols-[repeat(auto-fill,minmax(175px,1fr))]",
+    );
+    expect(pill.parentElement).toHaveClass("gap-4");
+  });
+
+  it("applies large grid density classes when cardDensity is large", async () => {
+    await act(async () => {
+      render(<VideoGrid {...baseProps} cardDensity="large" />);
+    });
+
+    const pill = screen.getByTestId("video-pill-video1.mp4");
+    expect(pill.parentElement).toHaveClass(
+      "grid-cols-[repeat(auto-fill,minmax(285px,1fr))]",
+    );
+    expect(pill.parentElement).toHaveClass("gap-6");
+  });
 });
