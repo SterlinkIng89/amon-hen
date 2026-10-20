@@ -44,6 +44,7 @@ interface VideoPillProps {
   onSelectToggle?: (e: React.MouseEvent) => void;
   duplicateCount?: number;
   onDelete?: () => void;
+  readonly isQueued?: boolean;
 }
 
 function VideoPillComponent({
@@ -63,6 +64,7 @@ function VideoPillComponent({
   onSelectToggle,
   duplicateCount,
   onDelete,
+  isQueued = false,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -122,6 +124,8 @@ function VideoPillComponent({
   const publishedAt = isYT
     ? new Date(video.publishedAt).toLocaleDateString()
     : "";
+  const showQueuedBadge =
+    isLocal && !video.youtubeId && isQueued && uploadProgress === undefined;
 
   // Duration normalization
   const parseYTDuration = (isoDuration: string) => {
@@ -500,6 +504,15 @@ function VideoPillComponent({
                     </svg>
                   </div>
                 )}
+                {showQueuedBadge && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400"
+                    title="Pending in upload queue"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    Queued
+                  </span>
+                )}
                 <span className="flex items-center gap-1 font-medium">
                   {formatSize(video.size)}
                 </span>
@@ -596,7 +609,8 @@ function areVideoPillPropsEqual(
     prev.compact === next.compact &&
     prev.duplicateCount === next.duplicateCount &&
     prev.readOnlyThumbnail === next.readOnlyThumbnail &&
-    prev.gameProfiles === next.gameProfiles
+    prev.gameProfiles === next.gameProfiles &&
+    prev.isQueued === next.isQueued
   );
 }
 

@@ -192,6 +192,16 @@ export default function VideoGrid({
     return map;
   }, [queue]);
 
+  const queuedPathsSet = useMemo(
+    () =>
+      new Set(
+        queue
+          .filter((item) => item.status === "pending")
+          .map((item) => item.videoPath),
+      ),
+    [queue],
+  );
+
   const sortedIdxMap = useMemo(() => {
     const map = new Map<string, number>();
     sortedVideos.forEach((v, i) => map.set(v.path, i));
@@ -236,6 +246,7 @@ export default function VideoGrid({
                       onUpload={() => onUploadTarget(video)}
                       uploadProgress={uploadingProgressMap.get(video.path)}
                       gameProfiles={gameProfiles}
+                      isQueued={queuedPathsSet.has(video.path)}
                     />
                   );
                 })}
@@ -262,6 +273,7 @@ export default function VideoGrid({
                   onUpload={() => onUploadTarget(video)}
                   uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}
+                  isQueued={queuedPathsSet.has(video.path)}
                 />
               );
             })}

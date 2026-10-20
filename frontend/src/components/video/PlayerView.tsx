@@ -63,6 +63,16 @@ export default function PlayerView({
     return map;
   }, [queue]);
 
+  const queuedPathsSet = React.useMemo(
+    () =>
+      new Set(
+        queue
+          .filter((item) => item.status === "pending")
+          .map((item) => item.videoPath),
+      ),
+    [queue],
+  );
+
   return (
     <div className="flex-1 flex overflow-hidden">
       <aside className="w-[360px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
@@ -87,6 +97,7 @@ export default function PlayerView({
                 onUpload={() => onUploadTarget(video)}
                 uploadProgress={uploadingProgressMap.get(video.path)}
                 gameProfiles={gameProfiles}
+                isQueued={queuedPathsSet.has(video.path)}
               />
             );
           })}

@@ -473,3 +473,89 @@ describe("VideoPill Content Type Thumbnail Badge", () => {
     expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
   });
 });
+
+describe("VideoPill Upload Queue Status Indicator", () => {
+  const queueTestVideo: VideoFile = {
+    name: "queue_sample.mp4",
+    path: "/videos/queue_sample.mp4",
+    size: 104857600,
+    modTime: 1700000000,
+    folder: "videos",
+    game: "Test Game",
+  };
+
+  it("renders queued indicator in footer when isQueued is true on local video", () => {
+    const { container } = render(
+      <VideoPill video={queueTestVideo} isQueued={true} viewMode="grid" />,
+    );
+
+    const queuedBadge = screen.getByTitle("Pending in upload queue");
+    expect(queuedBadge).toBeInTheDocument();
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+
+    const thumbContainer = container.querySelector(".relative.w-full");
+    expect(thumbContainer?.textContent).not.toContain("Queued");
+  });
+
+  it("does not render queued indicator when video has youtubeId", () => {
+    const uploadedVideo: VideoFile = {
+      ...queueTestVideo,
+      youtubeId: "yt-already-uploaded",
+    };
+    render(
+      <VideoPill video={uploadedVideo} isQueued={true} viewMode="grid" />,
+    );
+
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("does not render queued indicator when uploadProgress is active", () => {
+    render(
+      <VideoPill
+        video={queueTestVideo}
+        isQueued={true}
+        uploadProgress={45}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("does not render queued indicator when isQueued is false or omitted", () => {
+    const { rerender } = render(
+      <VideoPill video={queueTestVideo} viewMode="grid" />,
+    );
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill video={queueTestVideo} isQueued={false} viewMode="grid" />,
+    );
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("re-renders VideoPill when isQueued prop changes", () => {
+    const { rerender } = render(
+      <VideoPill video={queueTestVideo} isQueued={false} viewMode="grid" />,
+    );
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill video={queueTestVideo} isQueued={true} viewMode="grid" />,
+    );
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+  });
+});
+
