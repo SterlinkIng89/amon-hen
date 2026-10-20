@@ -18,7 +18,6 @@ import {
   DeleteFiles,
   GetChannelPlaylists,
   GetOrCreatePlaylist,
-  RegenerateThumbnail,
   UpdateYouTubeVideoMetadata,
   LoadConfig,
   LogFrontendEvent,
@@ -32,11 +31,6 @@ import YouTubeThumbnailPicker from "../youtube/YouTubeThumbnailPicker";
 import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
-import {
-  setCachedThumb,
-  clearCachedPreview,
-  notifyCustomThumbChanged,
-} from "../../hooks/useThumbnailQueue";
 import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
@@ -523,22 +517,17 @@ export default function InlinePlayer({
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [regenThumb, setRegenThumb] = useState<string | null>(null);
-  const [regenLoading, setRegenLoading] = useState(false);
 
-
-  const [aspectRatio, setAspectRatio] = useState(
-    window.innerWidth / window.innerHeight,
-  );
+  const [windowWidth, setWindowWidth] = useState<number>(() => window.innerWidth);
 
   useEffect(() => {
-    const handleResize = () =>
-      setAspectRatio(window.innerWidth / window.innerHeight);
+    const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const isWide = aspectRatio >= 2.0;
+  const isWide = windowWidth >= 1280;
+  const isSidebarLayout = isWide;
 
   const { addRecentTag } = useRecentTags();
   const { getRecentValues, addRecentValue } = useRecentFieldValues();
@@ -925,41 +914,6 @@ export default function InlinePlayer({
     }
   };
 
-  const handleRegenerateThumbnail = async () => {
-    setRegenLoading(true);
-    try {
-      const fresh = await RegenerateThumbnail(video.path);
-      if (fresh) {
-        setCachedThumb(video.path, fresh);
-        clearCachedPreview(video.path);
-        setRegenThumb(fresh);
-      }
-
-      const currentTag = tagInput.trim() || video.game?.trim() || "";
-      if (currentTag) {
-        const ep = resolveVideoEpisode(episodeInput, video.episode, ytTitle);
-
-        const newCustomThumb = await generateAndSaveTagThumbnail({
-          videoPath: video.path,
-          tag: currentTag,
-          episodeNumber: ep,
-          config: tagPlaylistConfigs[currentTag]?.thumbnail_config,
-          overwrite: true,
-        });
-
-        if (newCustomThumb) {
-          setCustomThumbnailPath(newCustomThumb);
-          notifyCustomThumbChanged(video.path, newCustomThumb);
-          setRegenThumb(newCustomThumb);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to regenerate thumbnail", e);
-    } finally {
-      setRegenLoading(false);
-    }
-  };
-
   const handleDelete = async () => {
     if (!confirmDelete) {
       setConfirmDelete(true);
@@ -1125,6 +1079,422 @@ export default function InlinePlayer({
     privacy !== (video.privacy || "unlisted") ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
 
+  const renderMetadataForm = () => (
+    <>
+      <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+          <label className="text-sm font-medium text-white/90">
+            Game Profile
+          </label>
+          <select
+            className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card appearance-none cursor-pointer"
+            value={
+              Object.keys(gameProfiles).includes(tagInput)
+                ? tagInput
+                : ""
+            }
+            onChange={(e) => {
+              const tag = e.target.value;
+              if (tag) handleTagChange(tag);
+              else handleTagChange("");
+            }}
+            disabled={savingInfo}
+          >
+            <option value="">Singleplayer</option>
+            {Object.keys(gameProfiles).map((pTag) => (
+              <option key={pTag} value={pTag}>
+                {pTag}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+          <label className="text-sm font-medium text-white/90">
+            Game Tag
+          </label>
+          <div
+            className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? "opacity-50 pointer-events-none" : ""}`}
+          >
+            <TagInput
+              value={tagInput}
+              onChange={handleTagChange}
+              onEnter={handleSaveInfo}
+              disabled={Object.keys(gameProfiles).includes(tagInput)}
+            />
+          </div>
+        </div>
+        {activeProfile?.type === "multiplayer" ? (
+          <>
+            {extractOrderedInputVars(activeProfile.titleTemplate).map(
+              (cv) => {
+                if (cv === "event") {
+                  return (
+                    <div
+                      key="event"
+                      className="flex flex-col gap-2 flex-1 min-w-[140px]"
+                    >
+                      <label className="text-sm font-medium text-white/90">
+                        Title
+                      </label>
+                      <FieldInput
+                        fieldKey="event"
+                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                        value={eventInput}
+                        onChange={handleEventChange}
+                        onEnter={handleSaveInfo}
+                        placeholder="Highlight..."
+                      />
+                    </div>
+                  );
+                } else if (cv === "gamemode") {
+                  return (
+                    <div
+                      key="gamemode"
+                      className="flex flex-col gap-2 flex-1 min-w-[140px]"
+                    >
+                      <label className="text-sm font-medium text-white/90">
+                        Game Mode
+                      </label>
+                      {activeProfile.modes &&
+                      activeProfile.modes.length > 0 ? (
+                        <select
+                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card appearance-none cursor-pointer"
+                          value={gameModeInput}
+                          onChange={(e) =>
+                            handleGameModeChange(e.target.value)
+                          }
+                        >
+                          <option value="">Mode...</option>
+                          {activeProfile.modes.map((m: string) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                          value={gameModeInput}
+                          onChange={(e) =>
+                            handleGameModeChange(e.target.value)
+                          }
+                          placeholder="Mode..."
+                        />
+                      )}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div
+                      key={cv}
+                      className="flex flex-col gap-2 flex-1 min-w-[140px]"
+                    >
+                      <label className="text-sm font-medium text-white/90 capitalize">
+                        {cv}
+                      </label>
+                      <FieldInput
+                        fieldKey={cv}
+                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                        value={customVarsInput[cv] || ""}
+                        onChange={(val) =>
+                          handleCustomVarChange(cv, val)
+                        }
+                        onEnter={handleSaveInfo}
+                        placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
+                      />
+                    </div>
+                  );
+                }
+              },
+            )}
+          </>
+        ) : (
+          effectiveContentType === "clip" ? (
+            <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+              <label className="text-sm font-medium text-white/90">
+                Clip Title
+              </label>
+              <FieldInput
+                fieldKey="event"
+                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                value={eventInput}
+                onChange={handleEventChange}
+                onEnter={handleSaveInfo}
+                placeholder="Clip name..."
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-24 shrink-0">
+              <label className="text-sm font-medium text-white/90">
+                Episode #
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card text-center"
+                value={episodeInput}
+                onChange={(e) => handleEpisodeChange(e.target.value)}
+                placeholder="—"
+              />
+            </div>
+          )
+        )}
+
+        <ContentTypeToggle
+          selectedContentType={selectedContentType}
+          autoResolvedType={autoResolvedType}
+          onChange={handleContentTypeToggle}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex flex-col gap-2 flex-1">
+          <label className="text-sm font-medium text-white/90">
+            YouTube Title
+          </label>
+          <input
+            type="text"
+            className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+            value={ytTitle}
+            onChange={(e) => {
+              const val = e.target.value;
+              setYtTitle(val);
+              // Auto-sync Episode # when user types "— N" at end of title
+              const epMatch = extractEpisodeFromTitle(val);
+              if (epMatch > 0 && !(activeProfile?.type === "multiplayer"))
+                setEpisodeInput(epMatch);
+            }}
+            maxLength={100}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">
+          Description
+        </label>
+        <textarea
+          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card resize-y min-h-[140px]"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={5}
+        />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <label className="text-sm font-medium text-white/90">
+          Privacy
+        </label>
+        <div className="flex gap-2">
+          {(["public", "unlisted", "private"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
+              onClick={() => {
+                setPrivacy(p);
+                useAppStore.setState({ defaultPlaylistPrivacy: p });
+              }}
+            >
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-white/90">
+              Playlist
+            </label>
+            {video.playlistTitle && (
+              <span className="text-xs bg-[#3ea6ff]/10 text-[#3ea6ff] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
+                </svg>
+                Linked: {video.playlistTitle}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="text-sm font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
+            onClick={() => {
+              setIsCreatingPlaylist(!isCreatingPlaylist);
+              setPlaylistCreateError("");
+            }}
+          >
+            {isCreatingPlaylist ? "Cancel" : "New Playlist"}
+          </button>
+        </div>
+
+        {isCreatingPlaylist ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+                type="text"
+                value={newPlaylistTitle}
+                onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                placeholder="Playlist name..."
+                autoFocus
+                disabled={isCreatingPlaylistLoading}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && handleCreatePlaylist()
+                }
+              />
+              <button
+                type="button"
+                className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors"
+                onClick={handleCreatePlaylist}
+                disabled={
+                  !newPlaylistTitle.trim() ||
+                  isCreatingPlaylistLoading
+                }
+              >
+                {isCreatingPlaylistLoading ? (
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                ) : (
+                  "Create"
+                )}
+              </button>
+            </div>
+            <span className="text-xs text-white/50">
+              Existing playlist with same name will be reused.
+            </span>
+            {playlistCreateError && (
+              <span className="text-xs text-red-400">
+                {playlistCreateError}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="relative">
+            <input
+              className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+              type="text"
+              value={playlistSearch}
+              onChange={(e) => {
+                setPlaylistSearch(e.target.value);
+                setIsPlaylistDropdownOpen(true);
+                if (!e.target.value) setPlaylistId("");
+              }}
+              onFocus={() => setIsPlaylistDropdownOpen(true)}
+              placeholder={
+                playlistId
+                  ? playlists.find((p) => p.id === playlistId)?.title
+                  : "Select playlist..."
+              }
+            />
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            {playlistId && (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+                onClick={() => {
+                  setPlaylistId("");
+                  setPlaylistSearch("");
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+              </button>
+            )}
+
+            {isPlaylistDropdownOpen && (
+              <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+                {playlists
+                  .filter((p) =>
+                    p.title
+                      .toLowerCase()
+                      .includes(playlistSearch.toLowerCase()),
+                  )
+                  .map((p) => (
+                    <button
+                      type="button"
+                      key={p.id}
+                      className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-white/5 text-white" : "text-white/90"}`}
+                      onClick={() => {
+                        setPlaylistId(p.id);
+                        setPlaylistSearch(p.title);
+                        setIsPlaylistDropdownOpen(false);
+                      }}
+                    >
+                      <span className="text-sm font-medium truncate flex-1">
+                        {p.title}
+                      </span>
+                      {playlistId === p.id && (
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="text-[#3ea6ff]"
+                        >
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {isPlaylistDropdownOpen && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsPlaylistDropdownOpen(false)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <YouTubeThumbnailPicker
+        videoPath={video.path}
+        gameTag={tagInput}
+        episodeNumber={resolveVideoEpisode(
+          episodeInput,
+          video.episode,
+          ytTitle,
+        )}
+        tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
+        onThumbnailReady={(path) => setCustomThumbnailPath(path)}
+        youtubeId={video.youtubeId}
+        onYouTubeUpdated={() => onTagSaved?.()}
+        onOpenTagSettings={() => {
+          pendingSaveAfterTagModalRef.current = false;
+          setPendingTagForModal(tagInput);
+        }}
+      />
+    </>
+  );
+
   return (
     <div
       className={`flex h-full overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}
@@ -1164,28 +1534,6 @@ export default function InlinePlayer({
             />
           ) : (
             <div className="text-white/60">Deleting...</div>
-          )}
-          {/* Regenerated thumbnail preview overlay */}
-          {regenThumb && (
-            <div
-              className="absolute inset-0 flex items-center justify-center bg-black/90 z-20 animate-fadeIn"
-              onClick={() => setRegenThumb(null)}
-              title="Click to dismiss"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <img
-                  src={regenThumb}
-                  alt="New thumbnail"
-                  className="max-h-[200px] rounded-lg shadow-2xl"
-                />
-                <span className="text-[12px] text-green-500 font-medium">
-                  Thumbnail regenerated
-                </span>
-                <span className="text-[11px] text-white/50">
-                  Click anywhere to close
-                </span>
-              </div>
-            </div>
           )}
         </div>
 
@@ -1510,7 +1858,7 @@ export default function InlinePlayer({
       {/* Info & Edit panel */}
       {isWide ? (
         <div
-          className={`bg-[#0f0f0f] border-l border-white/10 shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded && !clipMode ? "w-[420px] 2xl:w-[480px]" : "w-14 items-center py-4"}`}
+          className={`bg-[#0f0f0f] border-l border-white/10 shrink-0 transition-all duration-300 flex flex-col ${isInfoExpanded && !clipMode ? "w-[380px] xl:w-[420px] 2xl:w-[480px]" : "w-14 items-center py-4"}`}
         >
           {isInfoExpanded && !clipMode ? (
             <div className="flex flex-col h-full w-full p-6 gap-6 animate-in fade-in duration-300 text-white">
@@ -1551,424 +1899,14 @@ export default function InlinePlayer({
 
               {/* Form Content - Scrollable Middle */}
               <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                    <label className="text-sm font-medium text-white/90">
-                      Game Profile
-                    </label>
-                    <select
-                      className="w-full bg-[#272727] border border-transparent rounded-lg px-3 py-3 text-sm text-white outline-none focus:border-[#3ea6ff] focus:bg-[#0f0f0f] transition-colors appearance-none cursor-pointer"
-                      value={
-                        Object.keys(gameProfiles).includes(tagInput)
-                          ? tagInput
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const tag = e.target.value;
-                        if (tag) handleTagChange(tag);
-                        else handleTagChange("");
-                      }}
-                      disabled={savingInfo}
-                    >
-                      <option value="">Singleplayer</option>
-                      {Object.keys(gameProfiles).map((pTag) => (
-                        <option key={pTag} value={pTag}>
-                          {pTag}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                    <label className="text-sm font-medium text-white/90">
-                      Game Tag
-                    </label>
-                    <div
-                      className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? "opacity-50 pointer-events-none" : ""}`}
-                    >
-                      <TagInput
-                        value={tagInput}
-                        onChange={handleTagChange}
-                        onEnter={handleSaveInfo}
-                        disabled={Object.keys(gameProfiles).includes(tagInput)}
-                      />
-                    </div>
-                  </div>
-                  {activeProfile?.type === "multiplayer" ? (
-                    <>
-                      {extractOrderedInputVars(activeProfile.titleTemplate).map(
-                        (cv) => {
-                          if (cv === "event") {
-                            return (
-                              <div
-                                key="event"
-                                className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                              >
-                                <label className="text-sm font-medium text-white/90">
-                                  Title
-                                </label>
-                                <FieldInput
-                                  fieldKey="event"
-                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                  value={eventInput}
-                                  onChange={handleEventChange}
-                                  onEnter={handleSaveInfo}
-                                  placeholder="Highlight..."
-                                />
-                              </div>
-                            );
-                          } else if (cv === "gamemode") {
-                            return (
-                              <div
-                                key="gamemode"
-                                className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                              >
-                                <label className="text-sm font-medium text-white/90">
-                                  Game Mode
-                                </label>
-                                {activeProfile.modes &&
-                                activeProfile.modes.length > 0 ? (
-                                  <select
-                                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: appearance-none cursor-pointer"
-                                    value={gameModeInput}
-                                    onChange={(e) =>
-                                      handleGameModeChange(e.target.value)
-                                    }
-                                  >
-                                    <option value="">Mode...</option>
-                                    {activeProfile.modes.map((m: string) => (
-                                      <option key={m} value={m}>
-                                        {m}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                    value={gameModeInput}
-                                    onChange={(e) =>
-                                      handleGameModeChange(e.target.value)
-                                    }
-                                    placeholder="Mode..."
-                                  />
-                                )}
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div
-                                key={cv}
-                                className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                              >
-                                <label className="text-sm font-medium text-white/90 capitalize">
-                                  {cv}
-                                </label>
-                                <FieldInput
-                                  fieldKey={cv}
-                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                  value={customVarsInput[cv] || ""}
-                                  onChange={(val) =>
-                                    handleCustomVarChange(cv, val)
-                                  }
-                                  onEnter={handleSaveInfo}
-                                  placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
-                                />
-                              </div>
-                            );
-                          }
-                        },
-                      )}
-                    </>
-                  ) : (
-                    effectiveContentType === "clip" ? (
-                      <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                        <label className="text-sm font-medium text-white/90">
-                          Clip Title
-                        </label>
-                        <FieldInput
-                          fieldKey="event"
-                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
-                          value={eventInput}
-                          onChange={handleEventChange}
-                          onEnter={handleSaveInfo}
-                          placeholder="Clip name..."
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2 w-24 shrink-0">
-                        <label className="text-sm font-medium text-white/90">
-                          Episode #
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
-                          value={episodeInput}
-                          onChange={(e) => handleEpisodeChange(e.target.value)}
-                          placeholder="—"
-                        />
-                      </div>
-                    )
-                  )}
-
-                  <ContentTypeToggle
-                    selectedContentType={selectedContentType}
-                    autoResolvedType={autoResolvedType}
-                    onChange={handleContentTypeToggle}
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex flex-col gap-2 flex-1">
-                    <label className="text-sm font-medium text-white/90">
-                      YouTube Title
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                      value={ytTitle}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setYtTitle(val);
-                        // Auto-sync Episode # when user types "— N" at end of title
-                        const epMatch = extractEpisodeFromTitle(val);
-                        if (epMatch > 0 && !(activeProfile?.type === "multiplayer"))
-                          setEpisodeInput(epMatch);
-                      }}
-                      maxLength={100}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-white/90">
-                    Description
-                  </label>
-                  <textarea
-                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: resize-y min-h-[140px]"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={5}
-                  />
-                </div>
-                <div className="flex flex-col gap-3">
-                  <label className="text-sm font-medium text-white/90">
-                    Privacy
-                  </label>
-                  <div className="flex gap-2">
-                    {(["public", "unlisted", "private"] as const).map((p) => (
-                      <button
-                        key={p}
-                        className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
-                        onClick={() => {
-                          setPrivacy(p);
-                          useAppStore.setState({ defaultPlaylistPrivacy: p });
-                        }}
-                      >
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 relative">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm font-medium text-white/90">
-                        Playlist
-                      </label>
-                      {video.playlistTitle && (
-                        <span className="text-xs bg-[#3ea6ff]/10 text-[#3ea6ff] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                          >
-                            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
-                          </svg>
-                          Linked: {video.playlistTitle}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      className="text-sm font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
-                      onClick={() => {
-                        setIsCreatingPlaylist(!isCreatingPlaylist);
-                        setPlaylistCreateError("");
-                      }}
-                    >
-                      {isCreatingPlaylist ? "Cancel" : "New Playlist"}
-                    </button>
-                  </div>
-
-                  {isCreatingPlaylist ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex gap-2">
-                        <input
-                          className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                          type="text"
-                          value={newPlaylistTitle}
-                          onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                          placeholder="Playlist name..."
-                          autoFocus
-                          disabled={isCreatingPlaylistLoading}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleCreatePlaylist()
-                          }
-                        />
-                        <button
-                          className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors"
-                          onClick={handleCreatePlaylist}
-                          disabled={
-                            !newPlaylistTitle.trim() ||
-                            isCreatingPlaylistLoading
-                          }
-                        >
-                          {isCreatingPlaylistLoading ? (
-                            <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                          ) : (
-                            "Create"
-                          )}
-                        </button>
-                      </div>
-                      <span className="text-xs text-white/50">
-                        Existing playlist with same name will be reused.
-                      </span>
-                      {playlistCreateError && (
-                        <span className="text-xs text-red-400">
-                          {playlistCreateError}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <input
-                        className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                        type="text"
-                        value={playlistSearch}
-                        onChange={(e) => {
-                          setPlaylistSearch(e.target.value);
-                          setIsPlaylistDropdownOpen(true);
-                          if (!e.target.value) setPlaylistId("");
-                        }}
-                        onFocus={() => setIsPlaylistDropdownOpen(true)}
-                        placeholder={
-                          playlistId
-                            ? playlists.find((p) => p.id === playlistId)?.title
-                            : "Select playlist..."
-                        }
-                      />
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <circle cx="11" cy="11" r="8" />
-                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                      </div>
-                      {playlistId && (
-                        <button
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/50 hover:bg-white/10 hover:text-white transition-colors"
-                          onClick={() => {
-                            setPlaylistId("");
-                            setPlaylistSearch("");
-                          }}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                          >
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                          </svg>
-                        </button>
-                      )}
-
-                      {isPlaylistDropdownOpen && (
-                        <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
-                          {playlists
-                            .filter((p) =>
-                              p.title
-                                .toLowerCase()
-                                .includes(playlistSearch.toLowerCase()),
-                            )
-                            .map((p) => (
-                              <button
-                                key={p.id}
-                                className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-white/5 text-white" : "text-white/90"}`}
-                                onClick={() => {
-                                  setPlaylistId(p.id);
-                                  setPlaylistSearch(p.title);
-                                  setIsPlaylistDropdownOpen(false);
-                                }}
-                              >
-                                <span className="text-sm font-medium truncate flex-1">
-                                  {p.title}
-                                </span>
-                                {playlistId === p.id && (
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    className="text-[#3ea6ff]"
-                                  >
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                                  </svg>
-                                )}
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                      {isPlaylistDropdownOpen && (
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setIsPlaylistDropdownOpen(false)}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <YouTubeThumbnailPicker
-                  videoPath={video.path}
-                  gameTag={tagInput}
-                  episodeNumber={resolveVideoEpisode(
-                    episodeInput,
-                    video.episode,
-                    ytTitle,
-                  )}
-                  tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
-                  onThumbnailReady={(path) => setCustomThumbnailPath(path)}
-                  youtubeId={video.youtubeId}
-                  onYouTubeUpdated={() => onTagSaved?.()}
-                  onOpenTagSettings={() => {
-                    pendingSaveAfterTagModalRef.current = false;
-                    setPendingTagForModal(tagInput);
-                  }}
-                />
+                {renderMetadataForm()}
               </div>
 
               {/* Upload & Save actions - Fixed Bottom */}
               <div className="flex flex-col items-stretch gap-3 shrink-0 pt-4 border-t border-white/10">
                 <div className="flex items-center gap-3">
                   <button
-                    className="flex-1 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors"
-                    onClick={handleRegenerateThumbnail}
-                    disabled={regenLoading}
-                    title="Regenerate thumbnail locally with current tag and episode"
-                  >
-                    {regenLoading ? "Regenerating..." : "Regen Thumbnail"}
-                  </button>
-                  <button
-                    className={`flex-1 py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`}
+                    className={`w-full py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`}
                     onClick={handleDelete}
                     disabled={deleting}
                   >
@@ -1976,7 +1914,7 @@ export default function InlinePlayer({
                       ? deleting
                         ? "Deleting..."
                         : "Confirm Delete"
-                      : "Delete"}
+                      : "Delete Video"}
                   </button>
                 </div>
 
@@ -2040,19 +1978,37 @@ export default function InlinePlayer({
                           : "Saving..."
                         : "Save Info"}
                   </button>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
-                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors"
+                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors min-w-[120px]"
                       onClick={handleAddToQueue}
                     >
                       Add to Queue
                     </button>
+                    {video.youtubeId && (
+                      <a
+                        href={`https://youtu.be/${video.youtubeId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-3 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z" />
+                        </svg>
+                        View on YT
+                      </a>
+                    )}
                     <button
-                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors"
+                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors min-w-[120px]"
                       onClick={handleUploadNow}
                       disabled={uploading || !ytTitle.trim()}
                     >
-                      Upload Now
+                      {video.youtubeId ? "Re-upload" : "Upload Now"}
                     </button>
                   </div>
                 </div>
@@ -2081,367 +2037,16 @@ export default function InlinePlayer({
           )}
         </div>
       ) : (
-        // Standard View Bottom Panel
+        // Standard View Bottom Panel (< 1280px)
         isInfoExpanded && !clipMode && (
-          <div className="bg-[#0f0f0f] border-t border-white/10 p-6 overflow-y-auto shrink-0 flex flex-col gap-6 min-h-[300px] animate-in slide-in-from-bottom duration-300 text-white">
+          <div className="bg-[#0f0f0f] border-t border-white/10 p-6 overflow-y-auto max-h-[42vh] shrink-0 flex flex-col gap-6 animate-in slide-in-from-bottom duration-300 text-white">
             <div className="flex flex-col gap-5">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                  <label className="text-sm font-medium text-white/90">
-                    Game Profile
-                  </label>
-                  <select
-                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: appearance-none cursor-pointer"
-                    value={
-                      Object.keys(gameProfiles).includes(tagInput)
-                        ? tagInput
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const tag = e.target.value;
-                      if (tag) handleTagChange(tag);
-                      else handleTagChange("");
-                    }}
-                    disabled={savingInfo}
-                  >
-                    <option value="">Singleplayer</option>
-                    {Object.keys(gameProfiles).map((pTag) => (
-                      <option key={pTag} value={pTag}>
-                        {pTag}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                  <label className="text-sm font-medium text-white/90">
-                    Game Tag
-                  </label>
-                  <div
-                    className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? "opacity-50 pointer-events-none" : ""}`}
-                  >
-                    <TagInput
-                      value={tagInput}
-                      onChange={handleTagChange}
-                      onEnter={handleSaveInfo}
-                      disabled={Object.keys(gameProfiles).includes(tagInput)}
-                    />
-                  </div>
-                </div>
-                {activeProfile?.type === "multiplayer" ? (
-                  <>
-                    {extractOrderedInputVars(activeProfile.titleTemplate).map(
-                      (cv) => {
-                        if (cv === "event") {
-                          return (
-                            <div
-                              key="event"
-                              className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                            >
-                              <label className="text-sm font-medium text-white/90">
-                                Title
-                              </label>
-                              <FieldInput
-                                fieldKey="event"
-                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                value={eventInput}
-                                onChange={handleEventChange}
-                                onEnter={handleSaveInfo}
-                                placeholder="Highlight..."
-                              />
-                            </div>
-                          );
-                        } else if (cv === "gamemode") {
-                          return (
-                            <div
-                              key="gamemode"
-                              className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                            >
-                              <label className="text-sm font-medium text-white/90">
-                                Game Mode
-                              </label>
-                              {activeProfile.modes &&
-                              activeProfile.modes.length > 0 ? (
-                                <select
-                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: appearance-none cursor-pointer"
-                                  value={gameModeInput}
-                                  onChange={(e) =>
-                                    handleGameModeChange(e.target.value)
-                                  }
-                                >
-                                  <option value="">Mode...</option>
-                                  {activeProfile.modes.map((m: string) => (
-                                    <option key={m} value={m}>
-                                      {m}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type="text"
-                                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                  value={gameModeInput}
-                                  onChange={(e) =>
-                                    handleGameModeChange(e.target.value)
-                                  }
-                                  placeholder="Mode..."
-                                />
-                              )}
-                            </div>
-                          );
-                        } else {
-                          return (
-                            <div
-                              key={cv}
-                              className="flex flex-col gap-2 flex-1 min-w-[140px]"
-                            >
-                              <label className="text-sm font-medium text-white/90 capitalize">
-                                {cv}
-                              </label>
-                              <FieldInput
-                                fieldKey={cv}
-                                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                                value={customVarsInput[cv] || ""}
-                                onChange={(val) =>
-                                  handleCustomVarChange(cv, val)
-                                }
-                                onEnter={handleSaveInfo}
-                                placeholder={`${cv.charAt(0).toUpperCase() + cv.slice(1)}...`}
-                              />
-                            </div>
-                          );
-                        }
-                      },
-                    )}
-                  </>
-                ) : (
-                  effectiveContentType === "clip" ? (
-                    <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
-                      <label className="text-sm font-medium text-white/90">
-                        Clip Title
-                      </label>
-                      <FieldInput
-                        fieldKey="event"
-                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
-                        value={eventInput}
-                        onChange={handleEventChange}
-                        onEnter={handleSaveInfo}
-                        placeholder="Clip name..."
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 w-24 shrink-0">
-                      <label className="text-sm font-medium text-white/90">
-                        Episode #
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: text-center"
-                        value={episodeInput}
-                        onChange={(e) => handleEpisodeChange(e.target.value)}
-                        placeholder="—"
-                      />
-                    </div>
-                  )
-                )}
-
-                <ContentTypeToggle
-                  selectedContentType={selectedContentType}
-                  autoResolvedType={autoResolvedType}
-                  onChange={handleContentTypeToggle}
-                />
-              </div>
-              <div className="flex gap-3">
-                <div className="flex flex-col gap-2 flex-1">
-                  <label className="text-sm font-medium text-white/90">
-                    YouTube Title
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                    value={ytTitle}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setYtTitle(val);
-                      // Auto-sync Episode # when user types "— N" at end of title
-                      const epMatch = extractEpisodeFromTitle(val);
-                      if (epMatch > 0 && !(activeProfile?.type === "multiplayer"))
-                        setEpisodeInput(epMatch);
-                    }}
-                    maxLength={100}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-white/90">
-                  Description
-                </label>
-                <textarea
-                  className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus: resize-y min-h-[100px]"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                />
-              </div>
-              <div className="flex flex-col gap-3">
-                <label className="text-sm font-medium text-white/90">
-                  Privacy
-                </label>
-                <div className="flex gap-2">
-                  {(["public", "unlisted", "private"] as const).map((p) => (
-                    <button
-                      key={p}
-                      className={`px-6 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent " : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
-                      onClick={() => {
-                        setPrivacy(p);
-                        useAppStore.setState({ defaultPlaylistPrivacy: p });
-                      }}
-                    >
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 relative">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-white/90">
-                    Playlist
-                  </label>
-                  <button
-                    className="text-sm font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
-                    onClick={() => {
-                      setIsCreatingPlaylist(!isCreatingPlaylist);
-                      setPlaylistCreateError("");
-                    }}
-                  >
-                    {isCreatingPlaylist ? "Cancel" : "New Playlist"}
-                  </button>
-                </div>
-                {isCreatingPlaylist ? (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                        type="text"
-                        value={newPlaylistTitle}
-                        onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                        placeholder="Playlist name..."
-                        autoFocus
-                        disabled={isCreatingPlaylistLoading}
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && handleCreatePlaylist()
-                        }
-                      />
-                      <button
-                        className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors"
-                        onClick={handleCreatePlaylist}
-                        disabled={
-                          !newPlaylistTitle.trim() || isCreatingPlaylistLoading
-                        }
-                      >
-                        {isCreatingPlaylistLoading ? (
-                          <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                        ) : (
-                          "Create"
-                        )}
-                      </button>
-                    </div>
-                    {playlistCreateError && (
-                      <span className="text-xs text-red-400">
-                        {playlistCreateError}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <input
-                      className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:"
-                      type="text"
-                      value={playlistSearch}
-                      onChange={(e) => {
-                        setPlaylistSearch(e.target.value);
-                        setIsPlaylistDropdownOpen(true);
-                        if (!e.target.value) setPlaylistId("");
-                      }}
-                      onFocus={() => setIsPlaylistDropdownOpen(true)}
-                      placeholder={
-                        playlistId
-                          ? playlists.find((p) => p.id === playlistId)?.title
-                          : "Select playlist..."
-                      }
-                    />
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                    </div>
-                    {isPlaylistDropdownOpen && (
-                      <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
-                        {playlists
-                          .filter((p) =>
-                            p.title
-                              .toLowerCase()
-                              .includes(playlistSearch.toLowerCase()),
-                          )
-                          .map((p) => (
-                            <button
-                              key={p.id}
-                              className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between ${playlistId === p.id ? "bg-white/5 text-white" : "text-white/90"}`}
-                              onClick={() => {
-                                setPlaylistId(p.id);
-                                setPlaylistSearch(p.title);
-                                setIsPlaylistDropdownOpen(false);
-                              }}
-                            >
-                              <span className="text-sm font-medium truncate flex-1">
-                                {p.title}
-                              </span>
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                    {isPlaylistDropdownOpen && (
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setIsPlaylistDropdownOpen(false)}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <YouTubeThumbnailPicker
-                videoPath={video.path}
-                gameTag={tagInput}
-                episodeNumber={resolveVideoEpisode(
-                  episodeInput,
-                  video.episode,
-                  ytTitle,
-                )}
-                tagThumbnailConfig={tagPlaylistConfigs[tagInput]?.thumbnail_config}
-                onThumbnailReady={(path) => setCustomThumbnailPath(path)}
-                youtubeId={video.youtubeId}
-                onYouTubeUpdated={() => onTagSaved?.()}
-                onOpenTagSettings={() => {
-                  pendingSaveAfterTagModalRef.current = false;
-                  setPendingTagForModal(tagInput);
-                }}
-              />
+              {renderMetadataForm()}
             </div>
 
             <div className="h-px bg-white/10 w-full my-4" />
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <button
                 className={`px-6 py-2.5 rounded-full text-sm font-medium transition-colors ${confirmDelete ? "bg-red-500 text-white" : "bg-transparent border border-white/20 text-red-400 hover:bg-red-500/10"}`}
                 onClick={handleDelete}
@@ -2450,24 +2055,7 @@ export default function InlinePlayer({
                 {confirmDelete ? "Confirm Delete" : "Delete Video"}
               </button>
 
-              <div className="flex items-center gap-3">
-                <button
-                  className="px-5 py-2.5 rounded-full bg-transparent border border-white/20 text-white/90 hover:bg-white/10 text-sm font-medium transition-colors flex items-center gap-2"
-                  onClick={handleRegenerateThumbnail}
-                  disabled={regenLoading}
-                  title="Regenerate thumbnail locally with current tag and episode"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className={regenLoading ? "animate-spin" : ""}
-                  >
-                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
-                  </svg>
-                  {regenLoading ? "Regenerating..." : "Regen Thumbnail"}
-                </button>
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   className={`px-6 py-2.5 rounded-full text-sm font-medium transition-colors ${infoSaved || isDirty ? "bg-[#3ea6ff] text-black hover:bg-[#65b8ff]" : "bg-[#272727] text-white/50 cursor-default"}`}
                   onClick={handleSaveInfo}
