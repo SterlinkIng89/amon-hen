@@ -318,6 +318,19 @@ export default function Dashboard() {
     if (video) togglePathSelection(video.path);
   };
 
+  const handleSelectGroup = (paths: string[], select: boolean) => {
+    setSelectedPaths((prev) => {
+      if (select) {
+        const next = new Set(prev);
+        paths.forEach((p) => next.add(p));
+        return Array.from(next);
+      } else {
+        const toRemove = new Set(paths);
+        return prev.filter((p) => !toRemove.has(p));
+      }
+    });
+  };
+
   const handleVideoClick = (filteredIdx: number, e: React.MouseEvent) => {
     const video = filteredVideos[filteredIdx];
     if (!video) return;
@@ -658,6 +671,7 @@ export default function Dashboard() {
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
               onSelectToggle={handleSelectToggle}
+              onSelectGroup={handleSelectGroup}
               onUploadTarget={setUploadTarget}
             />
           </ErrorBoundary>
