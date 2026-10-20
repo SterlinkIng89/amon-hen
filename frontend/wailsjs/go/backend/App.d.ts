@@ -67,6 +67,8 @@ export function GetPlaylistCatalogDraft(arg1:string):Promise<backend.PlaylistCat
 
 export function GetPlaylistVideos(arg1:string):Promise<Array<backend.YTVideo>>;
 
+export function GetQuotaStatus():Promise<backend.QuotaStatus>;
+
 export function GetQuotaUsedToday():Promise<number>;
 
 export function GetSteamAPIKey():Promise<string>;

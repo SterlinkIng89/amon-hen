@@ -693,6 +693,24 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class QuotaStatus {
+	    used: number;
+	    limit: number;
+	    remaining: number;
+	    resetsAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuotaStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.used = source["used"];
+	        this.limit = source["limit"];
+	        this.remaining = source["remaining"];
+	        this.resetsAt = source["resetsAt"];
+	    }
+	}
 	export class SteamDevPubStats {
 	    name: string;
 	    totalHours: number;

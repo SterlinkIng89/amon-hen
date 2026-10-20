@@ -126,6 +126,10 @@ export function GetPlaylistVideos(arg1) {
   return window['go']['backend']['App']['GetPlaylistVideos'](arg1);
 }
 
+export function GetQuotaStatus() {
+  return window['go']['backend']['App']['GetQuotaStatus']();
+}
+
 export function GetQuotaUsedToday() {
   return window['go']['backend']['App']['GetQuotaUsedToday']();
 }

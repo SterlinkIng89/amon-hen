@@ -12,6 +12,14 @@ import {
   GetOrCreatePlaylist,
   LoadConfig,
 } from "../../../wailsjs/go/backend/App";
+import { useQuotaStatus } from "../../hooks/useQuotaStatus";
+import {
+  estimateUploadCost,
+  uploadsRemaining,
+  formatCountdown,
+  formatResetClock,
+  canAfford,
+} from "../../utils/quotaStatus";
 
 export interface UploadOptions {
   title: string;
@@ -73,6 +81,15 @@ export default function UploadDialog({
   const [profiles, setProfiles] = useState<Record<string, GameProfile>>(
     gameProfiles || {},
   );
+
+  const { status: quotaStatus, msUntilReset } = useQuotaStatus();
+  const estimatedCost = estimateUploadCost({
+    hasPlaylist: Boolean(playlistId),
+    hasThumbnail: false,
+  });
+  const hasEnoughQuota = quotaStatus
+    ? canAfford(quotaStatus.remaining, estimatedCost)
+    : true;
 
   useEffect(() => {
     if (gameProfiles) {
@@ -489,6 +506,35 @@ export default function UploadDialog({
             </div>
           )}
 
+          {quotaStatus && (
+            <div className="px-6 pb-3">
+              {hasEnoughQuota ? (
+                <div className="flex items-center justify-between px-3 py-2 rounded-sm border border-border-subtle bg-elevated/40 text-[11px] text-text-secondary">
+                  <span>
+                    This upload costs about{" "}
+                    <span className="font-semibold text-text-primary">
+                      {estimatedCost.toLocaleString()} units
+                    </span>
+                    . You have{" "}
+                    <span className="font-semibold text-text-primary">
+                      {quotaStatus.remaining.toLocaleString()} left
+                    </span>{" "}
+                    ({uploadsRemaining(quotaStatus.remaining, estimatedCost)} uploads).
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3 py-2 rounded-sm border border-amber-500/30 bg-amber-500/10 text-[11px] text-amber-300">
+                  <span>
+                    Not enough quota: needs {estimatedCost.toLocaleString()}, you have{" "}
+                    {quotaStatus.remaining.toLocaleString()}. Resets in{" "}
+                    {formatCountdown(msUntilReset)} (at{" "}
+                    {formatResetClock(quotaStatus.resetsAt)}).
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3 p-4 border-t border-border-subtle bg-surface">
             <button
               className="btn btn-ghost"
@@ -524,7 +570,7 @@ export default function UploadDialog({
               >
                 <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
               </svg>
-              Upload Now
+              {hasEnoughQuota ? "Upload Now" : "Upload anyway"}
             </button>
           </div>
         </div>
