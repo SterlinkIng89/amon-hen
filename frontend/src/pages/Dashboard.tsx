@@ -13,7 +13,7 @@ import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 // Types & Utils
 import { VideoFile, ViewMode, GameProfile, SortMode } from "../types";
 import {
-  groupByDay,
+  groupVideos,
   resolveDisplayTitle,
   hasUnfilledPlaceholders,
 } from "../utils/videoUtils";
@@ -102,6 +102,8 @@ export default function Dashboard() {
     setView,
     sortMode,
     setSortMode,
+    groupMode,
+    setGroupMode,
     filterUploaded,
     setFilterUploaded,
     selectedIndex,
@@ -284,7 +286,20 @@ export default function Dashboard() {
     libFilters.excludeWords,
   ]);
 
-  const groups = useMemo(() => groupByDay(filteredVideos), [filteredVideos]);
+  const queuedPathsSet = useMemo(
+    () =>
+      new Set(
+        queue
+          .filter((item) => item.status === "pending")
+          .map((item) => item.videoPath),
+      ),
+    [queue],
+  );
+
+  const groups = useMemo(
+    () => groupVideos(filteredVideos, groupMode, queuedPathsSet),
+    [filteredVideos, groupMode, queuedPathsSet],
+  );
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
   // ── Init: YouTube auth ──────────────────────────────────────────────────────
@@ -681,8 +696,10 @@ export default function Dashboard() {
           filteredVideos={filteredVideos}
           searchQuery={searchQuery}
           sortMode={sortMode}
+          groupMode={groupMode}
           onSearchChange={setSearchQuery}
           onSortChange={setSortMode}
+          onGroupChange={setGroupMode}
           onToggleFolder={toggleFolder}
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
@@ -749,6 +766,7 @@ export default function Dashboard() {
               allVideos={sortedVideos}
               sortedVideos={filteredVideos}
               sortMode={sortMode}
+              groupMode={groupMode}
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
               onSelectToggle={handleSelectToggle}

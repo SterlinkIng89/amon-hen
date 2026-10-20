@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { VideoFile, VideoGroup, GameProfile, SortMode } from "../../types";
+import {
+  VideoFile,
+  VideoGroup,
+  GameProfile,
+  SortMode,
+  LibraryGroupMode,
+} from "../../types";
 import VideoPill from "./VideoPill";
 import { useAppStore } from "../../store/useAppStore";
 import { formatSize } from "../../utils/videoUtils";
@@ -13,6 +19,7 @@ interface VideoGridProps {
   allVideos: VideoFile[]; // unfiltered, for stats
   sortedVideos: VideoFile[]; // already sorted by Dashboard
   sortMode: SortMode;
+  groupMode?: LibraryGroupMode;
   selectedPaths: string[];
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
   onSelectToggle?: (sortedIdx: number) => void;
@@ -20,15 +27,6 @@ interface VideoGridProps {
   onUploadTarget: (video: VideoFile) => void;
   readonly onQuickQueue?: (video: VideoFile) => void;
   readonly onOpenInExplorer?: (video: VideoFile) => void;
-}
-
-/** Returns a human-readable label for a folder path. */
-function folderLabel(f: string): string {
-  const normalized = f.replace(/[/\\]+$/, "");
-  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
-  const parts = normalized.split(/[/\\]/);
-  const last = parts[parts.length - 1];
-  return last || normalized;
 }
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -261,6 +259,7 @@ export default function VideoGrid({
   allVideos,
   sortedVideos,
   sortMode,
+  groupMode: propGroupMode,
   selectedPaths,
   onOpenVideo,
   onSelectToggle,
@@ -269,9 +268,9 @@ export default function VideoGrid({
   onQuickQueue,
   onOpenInExplorer,
 }: VideoGridProps) {
-  // Only use date-grouped layout when sorting by date
-  const useGroups = sortMode === "date" && groups.length > 0;
-  const { queue } = useAppStore();
+  const { queue, groupMode: storeGroupMode } = useAppStore();
+  const effectiveGroupMode = propGroupMode ?? storeGroupMode ?? "date";
+  const useGroups = effectiveGroupMode !== "none" && groups.length > 0;
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
   >({});

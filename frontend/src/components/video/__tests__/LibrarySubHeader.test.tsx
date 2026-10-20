@@ -12,8 +12,10 @@ describe("LibrarySubHeader", () => {
     filteredVideos: [],
     searchQuery: "",
     sortMode: "date" as const,
+    groupMode: "date" as const,
     onSearchChange: vi.fn(),
     onSortChange: vi.fn(),
+    onGroupChange: vi.fn(),
     onToggleFolder: vi.fn(),
     onOpenFolderSettings: vi.fn(),
     filterUploaded: false,
@@ -89,6 +91,39 @@ describe("LibrarySubHeader", () => {
 
     fireEvent.click(episodeBtn);
     expect(onSortChange).toHaveBeenCalledWith("episode");
+  });
+
+  it("renders Group control buttons and triggers onGroupChange", () => {
+    const onGroupChange = vi.fn();
+    render(
+      <LibrarySubHeader
+        {...dummyProps}
+        groupMode="date"
+        onGroupChange={onGroupChange}
+      />,
+    );
+
+    const gameBtn = screen.getByRole("button", { name: "Game" });
+    const statusBtn = screen.getByRole("button", { name: "Status" });
+    const folderBtn = screen.getByRole("button", { name: "Folder" });
+    const noneBtn = screen.getByRole("button", { name: "None" });
+
+    expect(gameBtn).toBeInTheDocument();
+    expect(statusBtn).toBeInTheDocument();
+    expect(folderBtn).toBeInTheDocument();
+    expect(noneBtn).toBeInTheDocument();
+
+    fireEvent.click(gameBtn);
+    expect(onGroupChange).toHaveBeenCalledWith("game");
+
+    fireEvent.click(statusBtn);
+    expect(onGroupChange).toHaveBeenCalledWith("status");
+
+    fireEvent.click(folderBtn);
+    expect(onGroupChange).toHaveBeenCalledWith("folder");
+
+    fireEvent.click(noneBtn);
+    expect(onGroupChange).toHaveBeenCalledWith("none");
   });
 
   it("passes onToggleFilterUploaded to StatsBar and triggers toggle when clicked", () => {

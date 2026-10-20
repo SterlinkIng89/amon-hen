@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode, PlaylistPrivacy, SortMode } from "../types";
+import { ViewMode, PlaylistPrivacy, SortMode, LibraryGroupMode } from "../types";
 
 
 interface AppState {
@@ -15,6 +15,7 @@ interface AppState {
   ytAuthed: boolean;
   view: ViewMode;
   sortMode: SortMode;
+  groupMode: LibraryGroupMode;
   filterUploaded: boolean;
   selectedIndex: number;
   defaultPlaylistPrivacy: PlaylistPrivacy;
@@ -40,6 +41,7 @@ function savePersistedPrefs(state: AppState) {
       JSON.stringify({
         view: state.view,
         sortMode: state.sortMode,
+        groupMode: state.groupMode,
         filterUploaded: state.filterUploaded,
         selectedIndex: state.selectedIndex,
         defaultPlaylistPrivacy: state.defaultPlaylistPrivacy,
@@ -60,6 +62,7 @@ let state: AppState = {
   ytAuthed: false,
   view: (saved.view as ViewMode) ?? "grid",
   sortMode: (saved.sortMode as SortMode) ?? "date",
+  groupMode: (saved.groupMode as LibraryGroupMode) ?? "date",
   filterUploaded: saved.filterUploaded ?? false,
   selectedIndex: saved.selectedIndex ?? -1,
   defaultPlaylistPrivacy:
@@ -82,6 +85,7 @@ function setState(
   if (
     prevState.view !== state.view ||
     prevState.sortMode !== state.sortMode ||
+    prevState.groupMode !== state.groupMode ||
     prevState.filterUploaded !== state.filterUploaded ||
     prevState.selectedIndex !== state.selectedIndex ||
     prevState.defaultPlaylistPrivacy !== state.defaultPlaylistPrivacy
@@ -121,6 +125,7 @@ const setQueueRunning = (queueRunning: boolean) => setState({ queueRunning });
 const setYtAuthed = (ytAuthed: boolean) => setState({ ytAuthed });
 const setView = (view: ViewMode) => setState({ view });
 const setSortMode = (sortMode: SortMode) => setState({ sortMode });
+const setGroupMode = (groupMode: LibraryGroupMode) => setState({ groupMode });
 const setFilterUploaded = (filterUploaded: boolean) =>
   setState({ filterUploaded });
 const setSelectedIndex = (selectedIndex: number) => setState({ selectedIndex });
@@ -136,6 +141,7 @@ const storeActions = {
   setYtAuthed,
   setView,
   setSortMode,
+  setGroupMode,
   setFilterUploaded,
   setSelectedIndex,
   setDefaultPlaylistPrivacy,

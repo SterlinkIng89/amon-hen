@@ -1,4 +1,5 @@
-import { VideoFile, SortMode } from "../../types";
+import { VideoFile, SortMode, LibraryGroupMode } from "../../types";
+import { folderLabel } from "../../utils/videoUtils";
 import StatsBar from "./StatsBar";
 import AdvancedFilters, { ActiveFilterChips } from "../ui/AdvancedFilters";
 import type { AdvancedFiltersValue } from "../ui/AdvancedFilters";
@@ -9,8 +10,10 @@ interface LibrarySubHeaderProps {
   filteredVideos: VideoFile[];
   searchQuery: string;
   sortMode: SortMode;
+  groupMode?: LibraryGroupMode;
   onSearchChange: (q: string) => void;
   onSortChange: (m: SortMode) => void;
+  onGroupChange?: (m: LibraryGroupMode) => void;
   onToggleFolder: (path: string) => void;
   onOpenFolderSettings: (path: string) => void;
   filterUploaded: boolean;
@@ -25,13 +28,13 @@ interface LibrarySubHeaderProps {
   onTagFilterChange: (tag: string) => void;
 }
 
-function folderLabel(f: string): string {
-  const normalized = f.replace(/[/\\]+$/, "");
-  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
-  const parts = normalized.split(/[/\\]/);
-  const last = parts[parts.length - 1];
-  return last || normalized;
-}
+const GROUP_OPTIONS: { value: LibraryGroupMode; label: string }[] = [
+  { value: "date", label: "Date" },
+  { value: "game", label: "Game" },
+  { value: "status", label: "Status" },
+  { value: "folder", label: "Folder" },
+  { value: "none", label: "None" },
+];
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "date", label: "Date" },
@@ -47,8 +50,10 @@ export default function LibrarySubHeader({
   filteredVideos,
   searchQuery,
   sortMode,
+  groupMode = "date",
   onSearchChange,
   onSortChange,
+  onGroupChange,
   onToggleFolder,
   onOpenFolderSettings,
   filterUploaded,
@@ -333,25 +338,49 @@ export default function LibrarySubHeader({
           />
         </div>
 
-        {/* Segmented Sort Control */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-text-muted tracking-wide">
-            Sort
-          </span>
-          <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
-            {SORT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onSortChange(opt.value)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  sortMode === opt.value
-                    ? "bg-accent text-white shadow-sm"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Segmented Group Control */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-text-muted tracking-wide">
+              Group
+            </span>
+            <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
+              {GROUP_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onGroupChange?.(opt.value)}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    groupMode === opt.value
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Segmented Sort Control */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-text-muted tracking-wide">
+              Sort
+            </span>
+            <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onSortChange(opt.value)}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    sortMode === opt.value
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

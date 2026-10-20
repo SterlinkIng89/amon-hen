@@ -4,6 +4,7 @@ import {
   GameProfile,
   YTVideo,
   VideoGroupYT,
+  LibraryGroupMode,
 } from "../types";
 
 const STANDARD_VARS = ["game", "date", "episode", "event", "gamemode"];
@@ -231,6 +232,94 @@ export function groupByDay(videos: VideoFile[]): VideoGroup[] {
     label: formatGroupLabel(dateKey),
     videos: vs,
   }));
+}
+
+/** Returns a human-readable label for a folder path. */
+export function folderLabel(f: string): string {
+  const normalized = f.replace(/[/\\]+$/, "");
+  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
+  const parts = normalized.split(/[/\\]/);
+  const last = parts[parts.length - 1];
+  return last || normalized;
+}
+
+export function groupVideos(
+  videos: VideoFile[],
+  mode: LibraryGroupMode,
+  queuedPaths?: ReadonlySet<string>,
+): VideoGroup[] {
+  if (mode === "none") {
+    return [];
+  }
+  if (mode === "date") {
+    return groupByDay(videos);
+  }
+  if (mode === "game") {
+    const map = new Map<string, VideoFile[]>();
+    for (const v of videos) {
+      const key = v.game?.trim() || "Untagged";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    return Array.from(map.entries()).map(([key, vs]) => ({
+      dateKey: `game:${key}`,
+      label: key,
+      videos: vs,
+    }));
+  }
+  if (mode === "status") {
+    const pendingVideos: VideoFile[] = [];
+    const queuedVideos: VideoFile[] = [];
+    const uploadedVideos: VideoFile[] = [];
+
+    for (const v of videos) {
+      if (Boolean(v.youtubeId)) {
+        uploadedVideos.push(v);
+      } else if (queuedPaths?.has(v.path)) {
+        queuedVideos.push(v);
+      } else {
+        pendingVideos.push(v);
+      }
+    }
+
+    const groups: VideoGroup[] = [];
+    if (pendingVideos.length > 0) {
+      groups.push({
+        dateKey: "status:pending",
+        label: "Pending Upload",
+        videos: pendingVideos,
+      });
+    }
+    if (queuedVideos.length > 0) {
+      groups.push({
+        dateKey: "status:queued",
+        label: "Queued",
+        videos: queuedVideos,
+      });
+    }
+    if (uploadedVideos.length > 0) {
+      groups.push({
+        dateKey: "status:uploaded",
+        label: "Uploaded to YouTube",
+        videos: uploadedVideos,
+      });
+    }
+    return groups;
+  }
+  if (mode === "folder") {
+    const map = new Map<string, VideoFile[]>();
+    for (const v of videos) {
+      const key = v.folder;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    return Array.from(map.entries()).map(([key, vs]) => ({
+      dateKey: `folder:${key}`,
+      label: folderLabel(key),
+      videos: vs,
+    }));
+  }
+  return [];
 }
 
 // extractTitleDate attempts to parse a recording date from a video title.

@@ -10,6 +10,7 @@ import {
   extractEpisodeFromTitle,
   resolveVideoEpisode,
   computeDefaultClipTitle,
+  groupVideos,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -495,6 +496,117 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "   ")).toBe(
         "2026-08-26 14-30-00 - Clip"
       );
+    });
+  });
+
+  describe("groupVideos", () => {
+    const videoDate1: VideoFile = {
+      name: "vid1.mp4",
+      path: "C:\\Recordings\\EldenRing\\vid1.mp4",
+      size: 1000,
+      modTime: 1729350000000, // 2024-10-19
+      folder: "C:\\Recordings\\EldenRing",
+      game: "Elden Ring",
+    };
+
+    const videoDate2: VideoFile = {
+      name: "vid2.mp4",
+      path: "C:\\Recordings\\EldenRing\\vid2.mp4",
+      size: 2000,
+      modTime: 1729350000000,
+      folder: "C:\\Recordings\\EldenRing",
+      game: "Elden Ring",
+      youtubeId: "yt-123",
+    };
+
+    const videoUntagged: VideoFile = {
+      name: "vid3.mp4",
+      path: "C:\\Captures\\vid3.mp4",
+      size: 3000,
+      modTime: 1729263600000, // 2024-10-18
+      folder: "C:\\Captures",
+      game: "",
+    };
+
+    const videoQueued: VideoFile = {
+      name: "vid4.mp4",
+      path: "C:\\Captures\\vid4.mp4",
+      size: 4000,
+      modTime: 1729263600000,
+      folder: "C:\\Captures",
+      game: "Hades II",
+    };
+
+    it("returns an empty array when mode is none", () => {
+      const res = groupVideos([videoDate1, videoDate2], "none");
+      expect(res).toEqual([]);
+    });
+
+    it("delegates to groupByDay when mode is date", () => {
+      const res = groupVideos([videoDate1, videoUntagged], "date");
+      expect(res).toHaveLength(2);
+      expect(res[0].videos).toHaveLength(1);
+      expect(res[0].videos[0].name).toBe("vid1.mp4");
+      expect(res[1].videos).toHaveLength(1);
+      expect(res[1].videos[0].name).toBe("vid3.mp4");
+    });
+
+    it("groups by game tag and assigns Untagged for empty or missing game", () => {
+      const res = groupVideos(
+        [videoDate1, videoUntagged, videoQueued],
+        "game",
+      );
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Elden Ring");
+      expect(res[0].videos[0].name).toBe("vid1.mp4");
+      expect(res[1].label).toBe("Untagged");
+      expect(res[1].videos[0].name).toBe("vid3.mp4");
+      expect(res[2].label).toBe("Hades II");
+      expect(res[2].videos[0].name).toBe("vid4.mp4");
+    });
+
+    it("groups by status in fixed order and omits empty buckets", () => {
+      const queuedPaths = new Set([videoQueued.path]);
+      const res = groupVideos(
+        [videoDate1, videoDate2, videoQueued],
+        "status",
+        queuedPaths,
+      );
+
+      // Order must strictly be: Pending Upload -> Queued -> Uploaded to YouTube
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Pending Upload");
+      expect(res[0].videos.map((v) => v.name)).toEqual(["vid1.mp4"]);
+
+      expect(res[1].label).toBe("Queued");
+      expect(res[1].videos.map((v) => v.name)).toEqual(["vid4.mp4"]);
+
+      expect(res[2].label).toBe("Uploaded to YouTube");
+      expect(res[2].videos.map((v) => v.name)).toEqual(["vid2.mp4"]);
+    });
+
+    it("groups by folder displaying folder basename as label", () => {
+      const res = groupVideos(
+        [videoDate1, videoDate2, videoUntagged],
+        "folder",
+      );
+
+      expect(res).toHaveLength(2);
+      expect(res[0].label).toBe("EldenRing");
+      expect(res[0].dateKey).toBe("folder:C:\\Recordings\\EldenRing");
+      expect(res[0].videos).toHaveLength(2);
+
+      expect(res[1].label).toBe("Captures");
+      expect(res[1].dateKey).toBe("folder:C:\\Captures");
+      expect(res[1].videos).toHaveLength(1);
+    });
+
+    it("preserves caller sorted order within each group", () => {
+      const v1: VideoFile = { ...videoDate1, name: "alpha.mp4", size: 100 };
+      const v2: VideoFile = { ...videoDate1, name: "beta.mp4", size: 200 };
+      const res = groupVideos([v2, v1], "game");
+      expect(res[0].videos[0].name).toBe("beta.mp4");
+      expect(res[0].videos[1].name).toBe("alpha.mp4");
     });
   });
 });

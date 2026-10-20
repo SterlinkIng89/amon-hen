@@ -182,4 +182,42 @@ describe("VideoGrid - Group Selection and Collapse", () => {
     expect(screen.getByTestId("video-pill-video1.mp4")).toBeInTheDocument();
     expect(screen.getByTestId("video-pill-video2.mp4")).toBeInTheDocument();
   });
+
+  it("renders grouped layout when groupMode is game even if sortMode is name", async () => {
+    const gameGroup: VideoGroup = {
+      label: "TestGame",
+      dateKey: "game:TestGame",
+      videos: [mockVideo1, mockVideo2],
+    };
+
+    await act(async () => {
+      render(
+        <VideoGrid
+          {...baseProps}
+          sortMode="name"
+          groupMode="game"
+          groups={[gameGroup]}
+        />,
+      );
+    });
+
+    expect(screen.getByText("TestGame")).toBeInTheDocument();
+    expect(screen.getByTestId("video-pill-video1.mp4")).toBeInTheDocument();
+  });
+
+  it("renders flat layout when groupMode is none", async () => {
+    await act(async () => {
+      render(
+        <VideoGrid
+          {...baseProps}
+          groupMode="none"
+          groups={[]}
+        />,
+      );
+    });
+
+    expect(screen.queryByText(mockGroup.label)).not.toBeInTheDocument();
+    expect(screen.getByTestId("video-pill-video1.mp4")).toBeInTheDocument();
+    expect(screen.getByTestId("video-pill-video2.mp4")).toBeInTheDocument();
+  });
 });
