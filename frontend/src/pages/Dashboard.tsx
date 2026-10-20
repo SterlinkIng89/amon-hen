@@ -11,8 +11,12 @@ import {
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 // Types & Utils
-import { VideoFile, ViewMode, GameProfile } from "../types";
-import { groupByDay, resolveDisplayTitle } from "../utils/videoUtils";
+import { VideoFile, ViewMode, GameProfile, SortMode } from "../types";
+import {
+  groupByDay,
+  resolveDisplayTitle,
+  hasUnfilledPlaceholders,
+} from "../utils/videoUtils";
 
 // Global store
 import { useAppStore } from "../store/useAppStore";
@@ -44,8 +48,6 @@ import LibrarySubHeader from "../components/video/LibrarySubHeader";
 import TagManagementModal from "../components/ui/TagManagementModal";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 
-type SortMode = "date" | "name" | "size";
-
 const MAX_CONCURRENT_UPLOADS = 3;
 
 function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
@@ -55,10 +57,32 @@ function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
       return arr.sort((a, b) => a.name.localeCompare(b.name));
     case "size":
       return arr.sort((a, b) => b.size - a.size);
+    case "duration":
+      return arr.sort((a, b) => (b.durationSecs || 0) - (a.durationSecs || 0));
+    case "episode":
+      return arr.sort((a, b) => (b.episode || 0) - (a.episode || 0));
     case "date":
     default:
       return arr.sort((a, b) => b.modTime - a.modTime);
   }
+}
+
+function matchesTagFilter(
+  video: VideoFile,
+  tagFilter: string,
+  profiles: Record<string, GameProfile>,
+): boolean {
+  if (!tagFilter) return true;
+  if (tagFilter === "__untagged__") {
+    return !video.game || video.game.trim() === "";
+  }
+  if (tagFilter === "__placeholders__") {
+    return hasUnfilledPlaceholders(
+      video,
+      video.game ? profiles[video.game] : undefined,
+    );
+  }
+  return video.game === tagFilter;
 }
 
 export default function Dashboard() {
@@ -108,6 +132,7 @@ export default function Dashboard() {
   const lastSelectedPath = useRef<string | null>(null);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
   const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
@@ -181,8 +206,13 @@ export default function Dashboard() {
   }, []);
 
   // ── Derived state ────────────────────────────────────────────────────────────
+  const availableTags = useMemo(
+    () => Array.from(new Set(videos.map((v) => v.game).filter(Boolean))).sort(),
+    [videos],
+  );
+
   const sortedVideos = useMemo(
-    () => applySortMode(videos, sortMode as SortMode),
+    () => applySortMode(videos, sortMode),
     [videos, sortMode],
   );
 
@@ -192,9 +222,15 @@ export default function Dashboard() {
         ? sortedVideos
         : sortedVideos.filter((v) => activeFolders.includes(v.folder));
 
-    const filteredByUpload = filterUploaded
-      ? filteredByFolder.filter((v) => !v.youtubeId)
+    const filteredByTag = tagFilter
+      ? filteredByFolder.filter((v) =>
+          matchesTagFilter(v, tagFilter, gameProfiles),
+        )
       : filteredByFolder;
+
+    const filteredByUpload = filterUploaded
+      ? filteredByTag.filter((v) => !v.youtubeId)
+      : filteredByTag;
 
     const filteredBySearch = searchQuery
       ? filteredByUpload.filter((v) => {
@@ -239,6 +275,8 @@ export default function Dashboard() {
   }, [
     sortedVideos,
     activeFolders,
+    tagFilter,
+    gameProfiles,
     filterUploaded,
     searchQuery,
     libFilters.dateFrom,
@@ -642,7 +680,7 @@ export default function Dashboard() {
           activeFolders={activeFolders}
           filteredVideos={filteredVideos}
           searchQuery={searchQuery}
-          sortMode={sortMode as SortMode}
+          sortMode={sortMode}
           onSearchChange={setSearchQuery}
           onSortChange={setSortMode}
           onToggleFolder={toggleFolder}
@@ -652,6 +690,9 @@ export default function Dashboard() {
           advancedFilters={libFilters.value}
           onAdvancedFiltersChange={libFilters.onChange}
           onOpenTagManagement={() => setTagManagementOpen(true)}
+          availableTags={availableTags}
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
         />
       )}
 
@@ -707,7 +748,7 @@ export default function Dashboard() {
               groups={groups}
               allVideos={sortedVideos}
               sortedVideos={filteredVideos}
-              sortMode={sortMode as SortMode}
+              sortMode={sortMode}
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
               onSelectToggle={handleSelectToggle}

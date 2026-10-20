@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { VideoFile, VideoGroup, GameProfile } from "../../types";
+import { VideoFile, VideoGroup, GameProfile, SortMode } from "../../types";
 import VideoPill from "./VideoPill";
 import { useAppStore } from "../../store/useAppStore";
 import { formatSize } from "../../utils/videoUtils";
 import { LoadConfig } from "../../../wailsjs/go/backend/App";
 
-type SortMode = "date" | "name" | "size";
 
 interface VideoGridProps {
   folders: string[];
@@ -36,6 +35,8 @@ const SORT_LABELS: Record<SortMode, string> = {
   date: "Date",
   name: "Name",
   size: "Size",
+  duration: "Duration",
+  episode: "Episode",
 };
 
 /** Empty state illustration + message */

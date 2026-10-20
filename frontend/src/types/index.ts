@@ -194,3 +194,5 @@ export interface FolderConfig {
 export type ViewMode =
   "grid" | "player" | "channel" | "queue" | "stats" | "steam";
 export type PlaylistPrivacy = "public" | "unlisted" | "private";
+export type SortMode = "date" | "name" | "size" | "duration" | "episode";
+

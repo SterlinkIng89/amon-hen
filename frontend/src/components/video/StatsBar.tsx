@@ -3,9 +3,15 @@ import { formatSize } from "../../utils/videoUtils";
 
 interface StatsBarProps {
   videos: VideoFile[];
+  filterUploaded?: boolean;
+  onToggleFilterUploaded?: () => void;
 }
 
-export default function StatsBar({ videos }: StatsBarProps) {
+export default function StatsBar({
+  videos,
+  filterUploaded,
+  onToggleFilterUploaded,
+}: StatsBarProps) {
   if (videos.length === 0) return null;
 
   const totalSize = videos.reduce((acc, v) => acc + v.size, 0);
@@ -53,7 +59,23 @@ export default function StatsBar({ videos }: StatsBarProps) {
       <div className="w-px h-3 bg-border-subtle shrink-0" />
 
       {/* Uploaded progress */}
-      <div className="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        disabled={!onToggleFilterUploaded}
+        onClick={onToggleFilterUploaded}
+        className={`flex items-center gap-2 shrink-0 bg-transparent border-0 p-0 text-inherit text-xs text-left ${
+          onToggleFilterUploaded
+            ? "cursor-pointer hover:opacity-80 transition-opacity"
+            : ""
+        }`}
+        title={
+          onToggleFilterUploaded
+            ? filterUploaded
+              ? "Show all videos"
+              : "Filter to pending uploads only"
+            : undefined
+        }
+      >
         <svg
           width="12"
           height="12"
@@ -77,26 +99,38 @@ export default function StatsBar({ videos }: StatsBarProps) {
               width: `${uploadPct}%`,
               background:
                 uploadPct === 100 ? "#4ade80" : "var(--accent, #f97316)",
-              boxShadow:
-                uploadPct > 0 && uploadPct < 100
-                  ? "0 0 6px 1px rgba(249,115,22,0.6)"
-                  : "none",
             }}
           />
         </div>
         <span className="text-text-muted">{uploadPct}%</span>
-      </div>
+      </button>
 
       {pendingCount > 0 && (
         <>
           <div className="w-px h-3 bg-border-subtle shrink-0" />
-          <div className="flex items-center gap-1.5 shrink-0 text-amber-400/80">
+          <button
+            type="button"
+            disabled={!onToggleFilterUploaded}
+            onClick={onToggleFilterUploaded}
+            className={`flex items-center gap-1.5 shrink-0 text-amber-400/80 bg-transparent border-0 p-0 text-xs text-left ${
+              onToggleFilterUploaded
+                ? "cursor-pointer hover:opacity-80 transition-opacity"
+                : ""
+            }`}
+            title={
+              onToggleFilterUploaded
+                ? filterUploaded
+                  ? "Show all videos"
+                  : "Filter to pending uploads only"
+                : undefined
+            }
+          >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
             </svg>
             <span className="font-semibold">{pendingCount}</span>
             <span>pending upload</span>
-          </div>
+          </button>
         </>
       )}
     </div>

@@ -4,9 +4,8 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode, PlaylistPrivacy } from "../types";
+import { ViewMode, PlaylistPrivacy, SortMode } from "../types";
 
-type SortMode = "date" | "name" | "size";
 
 interface AppState {
   queue: QueueItem[];
