@@ -19,6 +19,8 @@ interface VideoGridProps {
   onSelectToggle?: (sortedIdx: number) => void;
   readonly onSelectGroup?: (paths: string[], select: boolean) => void;
   onUploadTarget: (video: VideoFile) => void;
+  readonly onQuickQueue?: (video: VideoFile) => void;
+  readonly onOpenInExplorer?: (video: VideoFile) => void;
 }
 
 /** Returns a human-readable label for a folder path. */
@@ -263,6 +265,8 @@ export default function VideoGrid({
   onSelectToggle,
   onSelectGroup,
   onUploadTarget,
+  onQuickQueue,
+  onOpenInExplorer,
 }: VideoGridProps) {
   // Only use date-grouped layout when sorting by date
   const useGroups = sortMode === "date" && groups.length > 0;
@@ -369,6 +373,14 @@ export default function VideoGrid({
                               : undefined
                           }
                           onUpload={() => onUploadTarget(video)}
+                          onQuickQueue={
+                            onQuickQueue ? () => onQuickQueue(video) : undefined
+                          }
+                          onOpenInExplorer={
+                            onOpenInExplorer
+                              ? () => onOpenInExplorer(video)
+                              : undefined
+                          }
                           uploadProgress={uploadingProgressMap.get(video.path)}
                           gameProfiles={gameProfiles}
                           isQueued={queuedPathsSet.has(video.path)}
@@ -398,6 +410,14 @@ export default function VideoGrid({
                     onSelectToggle ? () => onSelectToggle(idx) : undefined
                   }
                   onUpload={() => onUploadTarget(video)}
+                  onQuickQueue={
+                    onQuickQueue ? () => onQuickQueue(video) : undefined
+                  }
+                  onOpenInExplorer={
+                    onOpenInExplorer
+                      ? () => onOpenInExplorer(video)
+                      : undefined
+                  }
                   uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}
                   isQueued={queuedPathsSet.has(video.path)}

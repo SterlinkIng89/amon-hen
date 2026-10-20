@@ -559,3 +559,154 @@ describe("VideoPill Upload Queue Status Indicator", () => {
   });
 });
 
+describe("VideoPill Quick Actions (Show in Explorer, Quick Queue)", () => {
+  const localVideo: VideoFile = {
+    name: "Gameplay_01.mp4",
+    path: "C:\\Videos\\Gameplay_01.mp4",
+    size: 52428800,
+    modTime: 1787754600000,
+    folder: "C:\\Videos",
+    game: "Valorant",
+  };
+
+  it("renders Show in Explorer button and fires onOpenInExplorer on click with stopped propagation", () => {
+    const onOpenInExplorer = vi.fn();
+    const onClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={localVideo}
+        onOpenInExplorer={onOpenInExplorer}
+        onClick={onClick}
+        viewMode="grid"
+      />,
+    );
+
+    const explorerBtn = screen.getByRole("button", {
+      name: /show in explorer/i,
+    });
+    expect(explorerBtn).toBeInTheDocument();
+    expect(explorerBtn).toHaveAttribute("title", "Show in Explorer");
+
+    fireEvent.click(explorerBtn);
+
+    expect(onOpenInExplorer).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("renders Quick Queue button and fires onQuickQueue on click with stopped propagation", () => {
+    const onQuickQueue = vi.fn();
+    const onClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={onQuickQueue}
+        onClick={onClick}
+        viewMode="grid"
+      />,
+    );
+
+    const queueBtn = screen.getByRole("button", {
+      name: /add to upload queue/i,
+    });
+    expect(queueBtn).toBeInTheDocument();
+    expect(queueBtn).toHaveAttribute("title", "Add to upload queue");
+
+    fireEvent.click(queueBtn);
+
+    expect(onQuickQueue).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render Quick Queue button when video already has youtubeId", () => {
+    const uploadedVideo: VideoFile = {
+      ...localVideo,
+      youtubeId: "yt-12345",
+    };
+    render(
+      <VideoPill
+        video={uploadedVideo}
+        onQuickQueue={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render Quick Queue button when video is queued or uploading", () => {
+    const { rerender } = render(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={vi.fn()}
+        isQueued={true}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={vi.fn()}
+        uploadProgress={50}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("VideoPill Delete Tooltip & Label Discrimination", () => {
+  const localVideo: VideoFile = {
+    name: "Clip_01.mp4",
+    path: "C:\\Videos\\Clip_01.mp4",
+    size: 10485760,
+    modTime: 1787754600000,
+    folder: "C:\\Videos",
+    game: "Valorant",
+  };
+
+  it("renders 'Delete local file' tooltip and aria-label for VideoFile", () => {
+    render(
+      <VideoPill
+        video={localVideo}
+        onDelete={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete local file/i,
+    });
+    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn).toHaveAttribute("title", "Delete local file");
+  });
+
+  it("renders 'Delete video from YouTube' tooltip and aria-label for YTVideo", () => {
+    render(
+      <VideoPill
+        video={mockVideo}
+        onDelete={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete video from youtube/i,
+    });
+    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn).toHaveAttribute("title", "Delete video from YouTube");
+  });
+});
+
+

@@ -6,12 +6,13 @@ import {
   UploadToYouTube,
   LoadConfig,
   GetUploadSessions,
+  OpenFolderInExplorer,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 // Types & Utils
 import { VideoFile, ViewMode, GameProfile } from "../types";
-import { groupByDay } from "../utils/videoUtils";
+import { groupByDay, resolveDisplayTitle } from "../utils/videoUtils";
 
 // Global store
 import { useAppStore } from "../store/useAppStore";
@@ -112,11 +113,15 @@ export default function Dashboard() {
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
   );
+  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
+  const [titleSeparator, setTitleSeparator] = useState(" — ");
 
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
         setGameProfiles(cfg.game_profiles || {});
+        setTagPlaylists(cfg.tag_playlists || {});
+        if (cfg.title_separator) setTitleSeparator(cfg.title_separator);
       })
       .catch(() => {});
   }, []);
@@ -536,6 +541,41 @@ export default function Dashboard() {
     handleRescan();
   };
 
+  const handleQuickQueue = (video: VideoFile) => {
+    if (video.youtubeId) return;
+
+    const resolvedPlaylistId =
+      video.playlistId ||
+      (video.game && tagPlaylists[video.game] && tagPlaylists[video.game] !== "none"
+        ? tagPlaylists[video.game]
+        : "");
+
+    const item: QueueItem = {
+      id: crypto.randomUUID(),
+      videoPath: video.path,
+      videoName: video.name,
+      size: video.size,
+      title: resolveDisplayTitle(video, gameProfiles, titleSeparator),
+      description: video.description || "",
+      privacy: (video.privacy as "public" | "unlisted" | "private") || "unlisted",
+      status: "pending",
+      progress: 0,
+      playlistId: resolvedPlaylistId,
+      gameTag: video.game || "",
+      episode: video.episode || 0,
+    };
+
+    handleAddToQueue(item);
+  };
+
+  const handleOpenInExplorer = (video: VideoFile) => {
+    if (video.path) {
+      OpenFolderInExplorer(video.path).catch((err) => {
+        console.error("Failed to open file in explorer:", err);
+      });
+    }
+  };
+
   // ── Queue stats for header ───────────────────────────────────────────────────
   const pendingCount = queue.filter((i) => i.status === "pending").length;
   const uploadingCount = queue.filter((i) => i.status === "uploading").length;
@@ -673,6 +713,8 @@ export default function Dashboard() {
               onSelectToggle={handleSelectToggle}
               onSelectGroup={handleSelectGroup}
               onUploadTarget={setUploadTarget}
+              onQuickQueue={handleQuickQueue}
+              onOpenInExplorer={handleOpenInExplorer}
             />
           </ErrorBoundary>
         )}

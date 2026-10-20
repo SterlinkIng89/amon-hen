@@ -27,7 +27,7 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import VideoStatusBadge from "../youtube/VideoStatusBadge";
 
-interface VideoPillProps {
+export interface VideoPillProps {
   video: YTVideo | VideoFile;
   selected?: boolean;
   multiSelected?: boolean;
@@ -45,6 +45,8 @@ interface VideoPillProps {
   duplicateCount?: number;
   onDelete?: () => void;
   readonly isQueued?: boolean;
+  readonly onQuickQueue?: () => void;
+  readonly onOpenInExplorer?: () => void;
 }
 
 function VideoPillComponent({
@@ -65,6 +67,8 @@ function VideoPillComponent({
   duplicateCount,
   onDelete,
   isQueued = false,
+  onQuickQueue,
+  onOpenInExplorer,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -79,6 +83,10 @@ function VideoPillComponent({
   onDeleteRef.current = onDelete;
   const onThumbLoadedRef = useRef(onThumbLoaded);
   onThumbLoadedRef.current = onThumbLoaded;
+  const onQuickQueueRef = useRef(onQuickQueue);
+  onQuickQueueRef.current = onQuickQueue;
+  const onOpenInExplorerRef = useRef(onOpenInExplorer);
+  onOpenInExplorerRef.current = onOpenInExplorer;
 
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
@@ -228,6 +236,14 @@ function VideoPillComponent({
     : "h-full";
   const thumbHeightClass = isList ? "h-full" : "aspect-video";
 
+  const hasYouTubeId = Boolean(localFile?.youtubeId);
+  const canQuickQueue = Boolean(
+    isLocal && onQuickQueue && !hasYouTubeId && !isQueued && uploadProgress === undefined,
+  );
+  const canUpload = Boolean(isLocal && onUpload && !hasYouTubeId);
+  const showQuickActions =
+    isLocal && (Boolean(onOpenInExplorer) || canQuickQueue || canUpload);
+
   return (
     <div
       ref={ref}
@@ -306,8 +322,8 @@ function VideoPillComponent({
                   e.stopPropagation();
                   onDeleteRef.current?.();
                 }}
-                title="Delete video from YouTube"
-                aria-label="Delete video from YouTube"
+                title={isLocal ? "Delete local file" : "Delete video from YouTube"}
+                aria-label={isLocal ? "Delete local file" : "Delete video from YouTube"}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
@@ -392,30 +408,98 @@ function VideoPillComponent({
         )}
 
         {/* Action Buttons on Hover */}
-        {hovered && isLocal && !video.youtubeId && (
-          <button
-            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent z-20"
-            title="Upload to YouTube"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUploadRef.current?.();
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-          </button>
+        {showQuickActions && (
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20 pointer-events-none">
+            {onOpenInExplorer && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Show in Explorer"
+                aria-label="Show in Explorer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenInExplorerRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+            )}
+
+            {canQuickQueue && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Add to upload queue"
+                aria-label="Add to upload queue"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onQuickQueueRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            )}
+
+            {canUpload && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Upload to YouTube"
+                aria-label="Upload to YouTube"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUploadRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
