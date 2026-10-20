@@ -5,17 +5,21 @@ interface StatsBarProps {
   videos: VideoFile[];
   filterUploaded?: boolean;
   onToggleFilterUploaded?: () => void;
+  onOpenCleanup?: () => void;
 }
 
 export default function StatsBar({
   videos,
   filterUploaded,
   onToggleFilterUploaded,
+  onOpenCleanup,
 }: StatsBarProps) {
   if (videos.length === 0) return null;
 
   const totalSize = videos.reduce((acc, v) => acc + v.size, 0);
-  const uploadedCount = videos.filter((v) => v.youtubeId).length;
+  const uploadedVideos = videos.filter((v) => Boolean(v.youtubeId));
+  const uploadedCount = uploadedVideos.length;
+  const uploadedSize = uploadedVideos.reduce((acc, v) => acc + v.size, 0);
   const pendingCount = videos.length - uploadedCount;
   const uploadPct =
     videos.length > 0 ? Math.round((uploadedCount / videos.length) * 100) : 0;
@@ -104,6 +108,35 @@ export default function StatsBar({
         </div>
         <span className="text-text-muted">{uploadPct}%</span>
       </button>
+
+      {onOpenCleanup && uploadedCount > 0 && (
+        <>
+          <div className="w-px h-3 bg-border-subtle shrink-0" />
+          <button
+            type="button"
+            onClick={onOpenCleanup}
+            className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 text-xs font-medium cursor-pointer transition-colors"
+            title="Clean up already-uploaded local recordings to reclaim disk space"
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            <span>Clean up (Free {formatSize(uploadedSize)})</span>
+          </button>
+        </>
+      )}
 
       {pendingCount > 0 && (
         <>

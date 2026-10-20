@@ -46,6 +46,7 @@ import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
 import TagManagementModal from "../components/ui/TagManagementModal";
+import UploadedCleanupModal from "../components/video/UploadedCleanupModal";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
 
 const MAX_CONCURRENT_UPLOADS = 3;
@@ -142,6 +143,19 @@ export default function Dashboard() {
   );
   const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [titleSeparator, setTitleSeparator] = useState(" — ");
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
+  const cleanupPromptShownRef = useRef(false);
+
+  // Prompt cleanup modal on initial folder scan completion if uploaded videos exist
+  useEffect(() => {
+    if (!scanning && videos.length > 0 && !cleanupPromptShownRef.current) {
+      cleanupPromptShownRef.current = true;
+      const uploaded = videos.filter((v) => Boolean(v.youtubeId));
+      if (uploaded.length > 0) {
+        setCleanupModalOpen(true);
+      }
+    }
+  }, [scanning, videos]);
 
   useEffect(() => {
     LoadConfig()
@@ -704,6 +718,7 @@ export default function Dashboard() {
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
           onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
+          onOpenCleanup={() => setCleanupModalOpen(true)}
           advancedFilters={libFilters.value}
           onAdvancedFiltersChange={libFilters.onChange}
           onOpenTagManagement={() => setTagManagementOpen(true)}
@@ -893,6 +908,19 @@ export default function Dashboard() {
       />
       {tagManagementOpen && (
         <TagManagementModal onClose={() => setTagManagementOpen(false)} />
+      )}
+      {cleanupModalOpen && (
+        <UploadedCleanupModal
+          open={cleanupModalOpen}
+          uploadedVideos={videos.filter((v) => Boolean(v.youtubeId))}
+          onClose={() => setCleanupModalOpen(false)}
+          onDeleted={() => {
+            setSelectedPaths([]);
+            setSelectedIndex(-1);
+            handleRescan();
+            setCleanupModalOpen(false);
+          }}
+        />
       )}
     </div>
   );

@@ -18,6 +18,7 @@ interface LibrarySubHeaderProps {
   onOpenFolderSettings: (path: string) => void;
   filterUploaded: boolean;
   onToggleFilterUploaded: () => void;
+  onOpenCleanup?: () => void;
   // Advanced filters
   advancedFilters: AdvancedFiltersValue;
   onAdvancedFiltersChange: (v: AdvancedFiltersValue) => void;
@@ -58,6 +59,7 @@ export default function LibrarySubHeader({
   onOpenFolderSettings,
   filterUploaded,
   onToggleFilterUploaded,
+  onOpenCleanup,
   advancedFilters,
   onAdvancedFiltersChange,
   onOpenTagManagement,
@@ -390,6 +392,7 @@ export default function LibrarySubHeader({
         videos={filteredVideos}
         filterUploaded={filterUploaded}
         onToggleFilterUploaded={onToggleFilterUploaded}
+        onOpenCleanup={onOpenCleanup}
       />
     </div>
   );
