@@ -29,6 +29,7 @@ import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
+import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
 
 export default function ChannelPage() {
   const { cardDensity } = useAppStore();
@@ -47,6 +48,9 @@ export default function ChannelPage() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(
     new Set(),
   );
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(
     new Set(),
   );
@@ -399,6 +403,25 @@ export default function ChannelPage() {
     else next.add(video.id);
     setSelectedVideoIds(next);
     lastSelectedId.current = video.id;
+  };
+
+  const handleToggleCollapseGroup = (dateKey: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
+
+  const handleSelectGroup = (videoIds: string[], select: boolean) => {
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev);
+      if (select) {
+        videoIds.forEach((id) => next.add(id));
+      } else {
+        videoIds.forEach((id) => next.delete(id));
+      }
+      return next;
+    });
   };
 
   const handleAddToPlaylist = async (playlistId: string) => {
@@ -1345,68 +1368,59 @@ export default function ChannelPage() {
             ) : (
               <div className="flex flex-col">
                 {viewMode === "grid" && ytGroups.length > 0 ? (
-                  ytGroups.map((group) => (
-                    <section key={group.dateKey} className="mb-8 last:mb-0">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="flex items-center gap-2 bg-elevated border border-border-subtle rounded-full px-3 py-0.5 shrink-0">
-                          <svg
-                            width="11"
-                            height="11"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-accent shrink-0"
-                          >
-                            <rect
-                              x="3"
-                              y="4"
-                              width="18"
-                              height="18"
-                              rx="2"
-                              ry="2"
-                            />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                          </svg>
-                          <span className="font-bold text-text-primary text-[13px]">
-                            {group.label}
-                          </span>
-                        </div>
-                        <span className="text-xs text-text-muted font-semibold bg-elevated/80 border border-border-subtle px-2 py-0.5 rounded-full shrink-0">
-                          {group.videos.length} video
-                          {group.videos.length !== 1 ? "s" : ""}
-                        </span>
-                        <div
-                          className="flex-1 h-px shrink-0"
-                          style={{
-                            background:
-                              "linear-gradient(to right, rgba(255,255,255,0.07) 0%, transparent 100%)",
-                          }}
+                  ytGroups.map((group) => {
+                    const groupVideoIds = group.videos.map((v) => v.id);
+                    const selectedCount = group.videos.reduce(
+                      (count, v) =>
+                        selectedVideoIds.has(v.id) ? count + 1 : count,
+                      0,
+                    );
+                    const allSelected =
+                      group.videos.length > 0 &&
+                      selectedCount === group.videos.length;
+                    const partiallySelected =
+                      selectedCount > 0 &&
+                      selectedCount < group.videos.length;
+                    const collapsed = Boolean(collapsedGroups[group.dateKey]);
+
+                    return (
+                      <section key={group.dateKey} className="mb-8 last:mb-0">
+                        <ChannelGroupHeader
+                          group={group}
+                          allSelected={allSelected}
+                          partiallySelected={partiallySelected}
+                          collapsed={collapsed}
+                          onToggleSelectGroup={() =>
+                            handleSelectGroup(groupVideoIds, !allSelected)
+                          }
+                          onToggleCollapse={() =>
+                            handleToggleCollapseGroup(group.dateKey)
+                          }
                         />
-                      </div>
-                      <div className={`grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`}>
-                        {group.videos.map((v) => (
+                        {!collapsed && (
                           <div
-                            key={v.id}
-                            onClick={(e) => handleVideoClick(v, e)}
+                            className={`grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`}
                           >
-                            <VideoPill
-                              video={v}
-                              multiSelected={selectedVideoIds.has(v.id)}
-                              onUpdate={() => loadData(true)}
-                              viewMode={viewMode}
-                              onSelectToggle={(e) => handleSelectToggle(v)}
-                              onDelete={() => setDeleteTargets([v])}
-                            />
+                            {group.videos.map((v) => (
+                              <div
+                                key={v.id}
+                                onClick={(e) => handleVideoClick(v, e)}
+                              >
+                                <VideoPill
+                                  video={v}
+                                  multiSelected={selectedVideoIds.has(v.id)}
+                                  onUpdate={() => loadData(true)}
+                                  viewMode={viewMode}
+                                  onSelectToggle={(e) => handleSelectToggle(v)}
+                                  onDelete={() => setDeleteTargets([v])}
+                                />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))
+                        )}
+                      </section>
+                    );
+                  })
                 ) : (
                   <div
                     className={

@@ -533,4 +533,138 @@ describe("ChannelPage YouTube Sync State", () => {
 
     expect(await screen.findByText("Control Playthrough")).toBeInTheDocument();
   });
+
+  describe("ChannelPage video groups selection and collapse", () => {
+    const mockVideos = [
+      {
+        id: "vid-group-1",
+        title: "Elden Ring Ep 1",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "https://example.com/thumb1.jpg",
+        viewCount: 1500,
+        likeCount: 50,
+        duration: "PT10M",
+        privacy: "public",
+      },
+      {
+        id: "vid-group-2",
+        title: "Elden Ring Ep 2",
+        description: "",
+        publishedAt: "2026-10-19T11:00:00Z",
+        thumbnailUrl: "https://example.com/thumb2.jpg",
+        viewCount: 2500,
+        likeCount: 80,
+        duration: "PT15M",
+        privacy: "public",
+      },
+    ];
+
+    it("renders group total views badge and handles select/deselect all in group", async () => {
+      vi.mocked(AppBackend.GetChannelVideosPaginated).mockResolvedValue({
+        videos: mockVideos as any,
+        total: 2,
+      });
+
+      render(<ChannelPage />);
+
+      await screen.findByText("Elden Ring Ep 1");
+      expect(screen.getByText("Elden Ring Ep 2")).toBeInTheDocument();
+
+      // Check group total views badge (1500 + 2500 = 4,000)
+      expect(screen.getByText("4,000 views")).toBeInTheDocument();
+      expect(screen.getByText("2 videos")).toBeInTheDocument();
+
+      // Checkbox button for selecting all videos in group
+      const selectGroupButton = screen.getByRole("button", {
+        name: /Select all videos in/i,
+      });
+      expect(selectGroupButton).toBeInTheDocument();
+      expect(selectGroupButton).toHaveAttribute("title", "Select group");
+
+      // Select group
+      fireEvent.click(selectGroupButton);
+
+      // Verify bulk action bar is displayed with count 2
+      expect(await screen.findByText("videos selected")).toBeInTheDocument();
+      expect(screen.getByText("2")).toBeInTheDocument();
+      expect(selectGroupButton).toHaveAttribute("title", "Deselect group");
+
+      // Deselect group
+      fireEvent.click(selectGroupButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText("videos selected")).not.toBeInTheDocument();
+      });
+      expect(selectGroupButton).toHaveAttribute("title", "Select group");
+    });
+
+    it("displays indeterminate dash icon when partially selected", async () => {
+      vi.mocked(AppBackend.GetChannelVideosPaginated).mockResolvedValue({
+        videos: mockVideos as any,
+        total: 2,
+      });
+
+      render(<ChannelPage />);
+
+      await screen.findByText("Elden Ring Ep 1");
+
+      const selectGroupButton = screen.getByRole("button", {
+        name: /Select all videos in/i,
+      });
+
+      // Initially no SVG line (dash)
+      expect(selectGroupButton.querySelector("line")).toBeNull();
+
+      // Select individual video 1 using its selection checkbox
+      const videoCheckboxes = screen.getAllByRole("button", {
+        name: "Select video",
+      });
+      fireEvent.click(videoCheckboxes[0]);
+
+      // Bulk action bar shows 1 video selected
+      expect(await screen.findByText("video selected")).toBeInTheDocument();
+
+      // Group checkbox shows indeterminate line
+      await waitFor(() => {
+        expect(selectGroupButton.querySelector("line")).toBeInTheDocument();
+      });
+    });
+
+    it("collapses and expands video group cards", async () => {
+      vi.mocked(AppBackend.GetChannelVideosPaginated).mockResolvedValue({
+        videos: mockVideos as any,
+        total: 2,
+      });
+
+      render(<ChannelPage />);
+
+      await screen.findByText("Elden Ring Ep 1");
+      expect(screen.getByText("Elden Ring Ep 2")).toBeInTheDocument();
+
+      const collapseButton = screen.getByRole("button", {
+        name: /Collapse/i,
+      });
+      expect(collapseButton).toBeInTheDocument();
+
+      // Collapse group
+      fireEvent.click(collapseButton);
+
+      // Videos are hidden, header remains
+      expect(screen.queryByText("Elden Ring Ep 1")).not.toBeInTheDocument();
+      expect(screen.queryByText("Elden Ring Ep 2")).not.toBeInTheDocument();
+      expect(screen.getByText("4,000 views")).toBeInTheDocument();
+
+      // Expand group
+      const expandButton = screen.getByRole("button", {
+        name: /Expand/i,
+      });
+      fireEvent.click(expandButton);
+
+      // Videos are visible again
+      expect(await screen.findByText("Elden Ring Ep 1")).toBeInTheDocument();
+      expect(screen.getByText("Elden Ring Ep 2")).toBeInTheDocument();
+    });
+  });
 });
+
