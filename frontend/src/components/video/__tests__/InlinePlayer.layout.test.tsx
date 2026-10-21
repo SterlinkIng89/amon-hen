@@ -1,11 +1,13 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import InlinePlayer from "../InlinePlayer";
 import { VideoFile } from "../../../types";
+import { OpenFolderInExplorer } from "../../../../wailsjs/go/backend/App";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   UploadToYouTube: vi.fn().mockResolvedValue(undefined),
+  OpenFolderInExplorer: vi.fn().mockResolvedValue(undefined),
   SaveVideoMetadata: vi.fn().mockResolvedValue(undefined),
   DeleteFiles: vi.fn().mockResolvedValue(undefined),
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
@@ -128,5 +130,28 @@ describe("InlinePlayer layout & feature parity", () => {
     renderPlayer();
 
     expect(screen.queryByRole("button", { name: /regen thumbnail/i })).not.toBeInTheDocument();
+  });
+
+  it("renders Open File Location button in desktop mode and opens video folder when clicked", () => {
+    setViewport(1920, 1080);
+    renderPlayer();
+
+    const openFolderBtn = screen.getByRole("button", { name: "Open file folder" });
+    expect(openFolderBtn).toBeInTheDocument();
+    expect(openFolderBtn).toHaveAttribute("title", "Open file folder");
+
+    fireEvent.click(openFolderBtn);
+    expect(OpenFolderInExplorer).toHaveBeenCalledWith(baseMockVideo.folder);
+  });
+
+  it("renders Open File Location button in narrow mode and calls OpenFolderInExplorer", () => {
+    setViewport(1024, 768);
+    renderPlayer();
+
+    const openFolderBtn = screen.getByRole("button", { name: "Open file folder" });
+    expect(openFolderBtn).toBeInTheDocument();
+
+    fireEvent.click(openFolderBtn);
+    expect(OpenFolderInExplorer).toHaveBeenCalledWith(baseMockVideo.folder);
   });
 });

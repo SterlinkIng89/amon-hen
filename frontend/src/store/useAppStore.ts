@@ -164,6 +164,6 @@ export function useAppStore() {
   };
 }
 
-useAppStore.getState = getSnapshot;
+useAppStore.getState = () => ({ ...getSnapshot(), ...storeActions });
 useAppStore.setState = setState;
 

@@ -24,6 +24,7 @@ import {
   SetVideoContentType,
   CreateVideoClip,
   GetVideosFromFolders,
+  OpenFolderInExplorer,
 } from "../../../wailsjs/go/backend/App";
 import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
@@ -117,6 +118,13 @@ export default function InlinePlayer({
     if (prevInfoExpanded !== null) {
       setIsInfoExpanded(prevInfoExpanded);
       setPrevInfoExpanded(null);
+    }
+  };
+
+  const handleOpenFolder = () => {
+    const target = video.folder || video.path;
+    if (target) {
+      OpenFolderInExplorer(target).catch(console.error);
     }
   };
 
@@ -1621,6 +1629,26 @@ export default function InlinePlayer({
               <span className="text-white/60 text-sm shrink-0">
                 {formatSize(video.size)}
               </span>
+              <button
+                type="button"
+                className="p-1 rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                onClick={handleOpenFolder}
+                title="Open file folder"
+                aria-label="Open file folder"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
             </div>
           )}
 
@@ -1894,6 +1922,26 @@ export default function InlinePlayer({
                   <span className="text-white/60 text-xs shrink-0">
                     {formatSize(video.size)}
                   </span>
+                  <button
+                    type="button"
+                    className="p-1 rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                    onClick={handleOpenFolder}
+                    title="Open file folder"
+                    aria-label="Open file folder"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 

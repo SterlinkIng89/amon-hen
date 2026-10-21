@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import PlayerView from "../PlayerView";
 import { VideoFile } from "../../../types";
+import { useAppStore } from "../../../store/useAppStore";
 
 // Mock Wails backend
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
@@ -206,5 +207,48 @@ describe("PlayerView Component", () => {
     fireEvent.click(pill4);
 
     expect(onVideoClick).toHaveBeenCalledWith(2, expect.anything());
+  });
+
+  it("calls setView('grid') when Back to Grid button is clicked", () => {
+    useAppStore.getState().setView("player");
+    render(<PlayerView {...defaultProps} />);
+
+    const backBtn = screen.getByRole("button", { name: /back to grid/i });
+    fireEvent.click(backBtn);
+
+    expect(useAppStore.getState().view).toBe("grid");
+  });
+
+  it("toggles sidebar collapsed state and persists in localStorage", () => {
+    localStorage.clear();
+    render(<PlayerView {...defaultProps} />);
+
+    expect(screen.getByTestId("video-pill-outplayed_1.mp4")).toBeInTheDocument();
+
+    const collapseBtn = screen.getByTitle("Collapse video list");
+    fireEvent.click(collapseBtn);
+
+    expect(localStorage.getItem("player_list_collapsed")).toBe("true");
+    expect(screen.queryByTestId("video-pill-outplayed_1.mp4")).not.toBeInTheDocument();
+
+    const expandBtn = screen.getByTitle("Expand video list");
+    fireEvent.click(expandBtn);
+
+    expect(localStorage.getItem("player_list_collapsed")).toBe("false");
+    expect(screen.getByTestId("video-pill-outplayed_1.mp4")).toBeInTheDocument();
+  });
+
+  it("respects initial collapsed state from localStorage and allows Back to Grid when collapsed", () => {
+    localStorage.setItem("player_list_collapsed", "true");
+    useAppStore.getState().setView("player");
+
+    render(<PlayerView {...defaultProps} />);
+
+    expect(screen.queryByTestId("video-pill-outplayed_1.mp4")).not.toBeInTheDocument();
+    expect(screen.getByTitle("Expand video list")).toBeInTheDocument();
+
+    const backBtn = screen.getByRole("button", { name: /back to grid/i });
+    fireEvent.click(backBtn);
+    expect(useAppStore.getState().view).toBe("grid");
   });
 });
