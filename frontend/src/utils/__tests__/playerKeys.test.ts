@@ -3,6 +3,9 @@ import {
   resolvePlayerKeyAction,
   clampSeek,
   isTypingTarget,
+  PLAYBACK_SPEEDS,
+  stepPlaybackSpeed,
+  cyclePlaybackSpeed,
 } from "../playerKeys";
 
 describe("playerKeys - resolvePlayerKeyAction", () => {
@@ -180,6 +183,70 @@ describe("playerKeys - resolvePlayerKeyAction", () => {
     ).toEqual({ type: "toggle-mute" });
   });
 
+  it("resolves < or Shift+, to speed down", () => {
+    expect(
+      resolvePlayerKeyAction({
+        key: "<",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "down" });
+
+    expect(
+      resolvePlayerKeyAction({
+        key: "<",
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "down" });
+
+    expect(
+      resolvePlayerKeyAction({
+        key: ",",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "down" });
+  });
+
+  it("resolves > or Shift+. to speed up", () => {
+    expect(
+      resolvePlayerKeyAction({
+        key: ">",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "up" });
+
+    expect(
+      resolvePlayerKeyAction({
+        key: ">",
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "up" });
+
+    expect(
+      resolvePlayerKeyAction({
+        key: ".",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      })
+    ).toEqual({ type: "speed", dir: "up" });
+  });
+
   it("ignores any combination with ctrlKey or metaKey", () => {
     expect(
       resolvePlayerKeyAction({
@@ -268,3 +335,45 @@ describe("playerKeys - isTypingTarget", () => {
     expect(isTypingTarget(div)).toBe(true);
   });
 });
+
+describe("playerKeys - stepPlaybackSpeed", () => {
+  it("steps through PLAYBACK_SPEEDS correctly", () => {
+    expect(PLAYBACK_SPEEDS).toEqual([0.5, 1, 1.25, 1.5, 2, 4]);
+
+    expect(stepPlaybackSpeed(1, "up")).toBe(1.25);
+    expect(stepPlaybackSpeed(1.25, "up")).toBe(1.5);
+    expect(stepPlaybackSpeed(1.5, "up")).toBe(2);
+    expect(stepPlaybackSpeed(2, "up")).toBe(4);
+    expect(stepPlaybackSpeed(4, "up")).toBe(4); // Clamped at upper bound
+
+    expect(stepPlaybackSpeed(4, "down")).toBe(2);
+    expect(stepPlaybackSpeed(2, "down")).toBe(1.5);
+    expect(stepPlaybackSpeed(1.5, "down")).toBe(1.25);
+    expect(stepPlaybackSpeed(1.25, "down")).toBe(1);
+    expect(stepPlaybackSpeed(1, "down")).toBe(0.5);
+    expect(stepPlaybackSpeed(0.5, "down")).toBe(0.5); // Clamped at lower bound
+  });
+
+  it("handles arbitrary current numbers gracefully", () => {
+    expect(stepPlaybackSpeed(0.8, "up")).toBe(1);
+    expect(stepPlaybackSpeed(0.8, "down")).toBe(0.5);
+    expect(stepPlaybackSpeed(0.1, "down")).toBe(0.5);
+    expect(stepPlaybackSpeed(10, "up")).toBe(4);
+  });
+});
+
+describe("playerKeys - cyclePlaybackSpeed", () => {
+  it("cycles through speeds wrapping from 4 back to 0.5", () => {
+    expect(cyclePlaybackSpeed(1)).toBe(1.25);
+    expect(cyclePlaybackSpeed(1.25)).toBe(1.5);
+    expect(cyclePlaybackSpeed(1.5)).toBe(2);
+    expect(cyclePlaybackSpeed(2)).toBe(4);
+    expect(cyclePlaybackSpeed(4)).toBe(0.5);
+    expect(cyclePlaybackSpeed(0.5)).toBe(1);
+  });
+
+  it("defaults to 1.25 if current value is unrecognized", () => {
+    expect(cyclePlaybackSpeed(999)).toBe(1.25);
+  });
+});
+

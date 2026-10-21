@@ -1,8 +1,12 @@
+export const PLAYBACK_SPEEDS = [0.5, 1, 1.25, 1.5, 2, 4] as const;
+export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
 export type PlayerKeyAction =
   | { readonly type: "seek"; readonly delta: number }
   | { readonly type: "nav"; readonly dir: "prev" | "next" }
   | { readonly type: "toggle-play" }
-  | { readonly type: "toggle-mute" };
+  | { readonly type: "toggle-mute" }
+  | { readonly type: "speed"; readonly dir: "down" | "up" };
 
 export type PlayerKeyEvent = Pick<
   KeyboardEvent,
@@ -27,10 +31,35 @@ export function clampSeek(current: number, delta: number, duration: number): num
   return Math.min(duration, lower);
 }
 
+export function stepPlaybackSpeed(current: number, dir: "down" | "up"): PlaybackSpeed {
+  if (dir === "up") {
+    const next = PLAYBACK_SPEEDS.find((s) => s > current);
+    return next !== undefined ? next : PLAYBACK_SPEEDS[PLAYBACK_SPEEDS.length - 1];
+  }
+  const prev = [...PLAYBACK_SPEEDS].reverse().find((s) => s < current);
+  return prev !== undefined ? prev : PLAYBACK_SPEEDS[0];
+}
+
+export function cyclePlaybackSpeed(current: number): PlaybackSpeed {
+  const index = PLAYBACK_SPEEDS.indexOf(current as PlaybackSpeed);
+  if (index === -1) {
+    return 1.25;
+  }
+  return PLAYBACK_SPEEDS[(index + 1) % PLAYBACK_SPEEDS.length];
+}
+
 export function resolvePlayerKeyAction(e: PlayerKeyEvent): PlayerKeyAction | null {
   // Never interfere with OS / browser accelerator keys
   if (e.ctrlKey || e.metaKey) {
     return null;
+  }
+
+  // Playback speed: < to slow down, > to speed up (YouTube standard shortcuts)
+  if (e.key === "<" || (e.shiftKey && e.key === ",")) {
+    return { type: "speed", dir: "down" };
+  }
+  if (e.key === ">" || (e.shiftKey && e.key === ".")) {
+    return { type: "speed", dir: "up" };
   }
 
   // Arrow Left: navigation with Shift, 1s fine seek with Alt, 5s seek by default

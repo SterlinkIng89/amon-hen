@@ -46,6 +46,7 @@ describe("InlinePlayer keyboard shortcuts", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   const setupPlayer = (props?: Partial<React.ComponentProps<typeof InlinePlayer>>) => {
@@ -67,6 +68,7 @@ describe("InlinePlayer keyboard shortcuts", () => {
     const videoEl = utils.container.querySelector("video") as HTMLVideoElement;
     if (videoEl) {
       let currentTime = 10;
+      let playbackRate = 1;
       Object.defineProperty(videoEl, "currentTime", {
         get: () => currentTime,
         set: (v) => {
@@ -76,6 +78,13 @@ describe("InlinePlayer keyboard shortcuts", () => {
       });
       Object.defineProperty(videoEl, "duration", {
         get: () => 120,
+        configurable: true,
+      });
+      Object.defineProperty(videoEl, "playbackRate", {
+        get: () => playbackRate,
+        set: (v) => {
+          playbackRate = v;
+        },
         configurable: true,
       });
     }
@@ -184,8 +193,43 @@ describe("InlinePlayer keyboard shortcuts", () => {
     expect(queryByRole("tooltip")).toBeInTheDocument();
     expect(queryByRole("tooltip")?.textContent).toContain("Seek");
     expect(queryByRole("tooltip")?.textContent).toContain("Fine seek");
+    expect(queryByRole("tooltip")?.textContent).toContain("Playback speed");
 
     fireEvent.mouseLeave(helpBtn.parentElement!);
     expect(queryByRole("tooltip")).toBeNull();
+  });
+
+  it("increases playback speed on > shortcut and persists to localStorage", () => {
+    const { videoEl } = setupPlayer();
+    expect(videoEl.playbackRate).toBe(1);
+
+    fireEvent.keyDown(document, { key: ">" });
+
+    expect(videoEl.playbackRate).toBe(1.25);
+    expect(localStorage.getItem("player_playback_rate")).toBe("1.25");
+  });
+
+  it("decreases playback speed on < shortcut and persists to localStorage", () => {
+    const { videoEl } = setupPlayer();
+    expect(videoEl.playbackRate).toBe(1);
+
+    fireEvent.keyDown(document, { key: "<" });
+
+    expect(videoEl.playbackRate).toBe(0.5);
+    expect(localStorage.getItem("player_playback_rate")).toBe("0.5");
+  });
+
+  it("cycles playback speed and updates video when speed button is clicked", () => {
+    const { getByLabelText, videoEl } = setupPlayer();
+
+    const speedBtn = getByLabelText("Playback speed");
+    expect(speedBtn).toBeInTheDocument();
+    expect(speedBtn.textContent).toContain("1x");
+
+    fireEvent.click(speedBtn);
+
+    expect(videoEl.playbackRate).toBe(1.25);
+    expect(speedBtn.textContent).toContain("1.25x");
+    expect(localStorage.getItem("player_playback_rate")).toBe("1.25");
   });
 });

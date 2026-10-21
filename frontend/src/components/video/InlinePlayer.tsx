@@ -42,6 +42,10 @@ import {
   resolvePlayerKeyAction,
   clampSeek,
   isTypingTarget,
+  PLAYBACK_SPEEDS,
+  PlaybackSpeed,
+  stepPlaybackSpeed,
+  cyclePlaybackSpeed,
 } from "../../utils/playerKeys";
 
 interface InlinePlayerProps {
@@ -72,6 +76,25 @@ export default function InlinePlayer({
   const STORAGE_MUTED_KEY = "player_muted";
   const STORAGE_AUTOPLAY_KEY = "player_autoplay";
   const STORAGE_AUTOREPEAT_KEY = "player_autorepeat";
+  const STORAGE_PLAYBACK_RATE_KEY = "player_playback_rate";
+
+  const [playbackRate, setPlaybackRate] = useState<PlaybackSpeed>(() => {
+    const saved = parseFloat(localStorage.getItem(STORAGE_PLAYBACK_RATE_KEY) || "1");
+    return (PLAYBACK_SPEEDS as readonly number[]).includes(saved)
+      ? (saved as PlaybackSpeed)
+      : 1;
+  });
+  const playbackRateRef = useRef(playbackRate);
+  playbackRateRef.current = playbackRate;
+
+  const applyPlaybackRate = (newRate: PlaybackSpeed) => {
+    setPlaybackRate(newRate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = newRate;
+      videoRef.current.defaultPlaybackRate = newRate;
+    }
+    localStorage.setItem(STORAGE_PLAYBACK_RATE_KEY, String(newRate));
+  };
 
   const [autoPlayEnabled, setAutoPlayEnabled] = useState(
     () => localStorage.getItem(STORAGE_AUTOPLAY_KEY) === "true",
@@ -132,7 +155,7 @@ export default function InlinePlayer({
     localStorage.setItem("player_info_expanded", String(isInfoExpanded));
   }, [isInfoExpanded]);
 
-  // Restore saved volume + mute when loading a new video
+  // Restore saved volume + mute + playback rate when loading a new video
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -140,6 +163,8 @@ export default function InlinePlayer({
     const savedMuted = localStorage.getItem(STORAGE_MUTED_KEY);
     if (savedVolume !== null) el.volume = parseFloat(savedVolume);
     if (savedMuted !== null) el.muted = savedMuted === "true";
+    el.playbackRate = playbackRateRef.current;
+    el.defaultPlaybackRate = playbackRateRef.current;
     el.load();
     el.play().catch(() => {});
   }, [video.path]);
@@ -271,6 +296,12 @@ export default function InlinePlayer({
         e.preventDefault();
         if (!el) return;
         el.muted = !el.muted;
+        return;
+      }
+
+      if (action.type === "speed") {
+        e.preventDefault();
+        applyPlaybackRate(stepPlaybackSpeed(playbackRateRef.current, action.dir));
         return;
       }
     };
@@ -1567,6 +1598,8 @@ export default function InlinePlayer({
               }}
               onLoadedMetadata={() => {
                 if (videoRef.current) {
+                  videoRef.current.playbackRate = playbackRate;
+                  videoRef.current.defaultPlaybackRate = playbackRate;
                   setVideoDuration(videoRef.current.duration);
                 }
               }}
@@ -1781,10 +1814,32 @@ export default function InlinePlayer({
                       <span className="text-white/70">Mute / Unmute</span>
                       <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">M</kbd>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Playback speed</span>
+                      <div className="flex items-center gap-1">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">&lt;</kbd>
+                        <span className="text-white/40">/</span>
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-mono text-[10px] border border-white/10">&gt;</kbd>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              aria-label="Playback speed"
+              className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors flex items-center justify-center shrink-0 ${
+                playbackRate !== 1
+                  ? "bg-[#3ea6ff]/20 text-[#3ea6ff]"
+                  : "text-white/60 hover:bg-white/10 hover:text-white/90"
+              }`}
+              onClick={() => applyPlaybackRate(cyclePlaybackSpeed(playbackRate))}
+              title="Playback speed (< / >)"
+            >
+              {playbackRate}x
+            </button>
 
             <button
               className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${autoRepeatEnabled ? "bg-[#3ea6ff]/20 text-[#3ea6ff]" : "text-white/60 hover:bg-white/10 hover:text-white/90"}`}
