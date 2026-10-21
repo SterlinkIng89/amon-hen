@@ -698,6 +698,12 @@ export default function InlinePlayer({
     }
   };
 
+  const currentEpisodeNum = episodeInput !== "" ? Number(episodeInput) : 0;
+  const handleStepEpisode = (delta: -1 | 1) => {
+    const next = Math.max(1, currentEpisodeNum + delta);
+    handleEpisodeChange(String(next));
+  };
+
   const handleEventChange = (val: string) => {
     setEventInput(val);
     const currentEp =
@@ -1233,18 +1239,37 @@ export default function InlinePlayer({
               />
             </div>
           ) : (
-            <div className="flex flex-col gap-2 w-24 shrink-0">
+            <div className="flex flex-col gap-2 w-32 shrink-0">
               <label className="text-sm font-medium text-white/90">
                 Episode #
               </label>
-              <input
-                type="number"
-                min={0}
-                className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card text-center"
-                value={episodeInput}
-                onChange={(e) => handleEpisodeChange(e.target.value)}
-                placeholder="—"
-              />
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  aria-label="Decrease episode"
+                  disabled={currentEpisodeNum <= 1}
+                  onClick={() => handleStepEpisode(-1)}
+                  className="h-9 px-2.5 bg-elevated border border-r-0 border-border-subtle rounded-l-sm text-text-primary hover:bg-card hover:border-border-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-elevated transition-colors flex items-center justify-center font-medium select-none"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full min-w-0 h-9 bg-elevated border border-border-subtle rounded-none px-1 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card focus:z-10 text-center"
+                  value={episodeInput}
+                  onChange={(e) => handleEpisodeChange(e.target.value)}
+                  placeholder="—"
+                />
+                <button
+                  type="button"
+                  aria-label="Increase episode"
+                  onClick={() => handleStepEpisode(1)}
+                  className="h-9 px-2.5 bg-elevated border border-l-0 border-border-subtle rounded-r-sm text-text-primary hover:bg-card hover:border-border-medium transition-colors flex items-center justify-center font-medium select-none"
+                >
+                  +
+                </button>
+              </div>
             </div>
           )
         )}
@@ -1258,9 +1283,20 @@ export default function InlinePlayer({
 
       <div className="flex gap-3">
         <div className="flex flex-col gap-2 flex-1">
-          <label className="text-sm font-medium text-white/90">
-            YouTube Title
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-white/90">
+              YouTube Title
+            </label>
+            <span
+              className={`text-xs tabular-nums transition-colors ${
+                (ytTitle || "").length >= 100
+                  ? "text-accent font-medium"
+                  : "text-text-muted"
+              }`}
+            >
+              {(ytTitle || "").length}/100
+            </span>
+          </div>
           <input
             type="text"
             className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
@@ -1283,10 +1319,10 @@ export default function InlinePlayer({
           Description
         </label>
         <textarea
-          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card resize-y min-h-[140px]"
+          className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card resize-y min-h-[68px]"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={5}
+          rows={2}
         />
       </div>
 
