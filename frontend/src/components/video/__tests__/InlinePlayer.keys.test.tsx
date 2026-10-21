@@ -22,9 +22,17 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetSteamAppID: vi.fn().mockResolvedValue(""),
   GetSteamGameAssets: vi.fn().mockResolvedValue({}),
   GetCustomThumbnail: vi.fn().mockResolvedValue(""),
-  SaveCustomThumbnail: vi.fn().mockResolvedValue(""),
+  SaveCustomThumbnail: vi
+    .fn()
+    .mockResolvedValue("C:/cache/yt_thumbs/test.jpg"),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
   UpdateYouTubeThumbnail: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../../../utils/captureVideoFrame", () => ({
+  captureVideoFrameDataUrl: vi
+    .fn()
+    .mockReturnValue("data:image/jpeg;base64,mockframe"),
 }));
 
 describe("InlinePlayer keyboard shortcuts", () => {
@@ -232,4 +240,26 @@ describe("InlinePlayer keyboard shortcuts", () => {
     expect(speedBtn.textContent).toContain("1.25x");
     expect(localStorage.getItem("player_playback_rate")).toBe("1.25");
   });
+
+  it("captures current video frame as thumbnail when clicking capture frame button", async () => {
+    const { getByRole, findByText } = setupPlayer();
+
+    const captureBtn = getByRole("button", {
+      name: "Capture frame as thumbnail",
+    });
+    expect(captureBtn).toBeInTheDocument();
+
+    const { SaveCustomThumbnail } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+    fireEvent.click(captureBtn);
+
+    expect(SaveCustomThumbnail).toHaveBeenCalledWith(
+      "C:/videos/test-clip.mp4",
+      "data:image/jpeg;base64,mockframe",
+    );
+
+    expect(await findByText("Frame captured as thumbnail")).toBeInTheDocument();
+  });
 });
+

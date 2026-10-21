@@ -25,11 +25,14 @@ import {
   CreateVideoClip,
   GetVideosFromFolders,
   OpenFolderInExplorer,
+  SaveCustomThumbnail,
 } from "../../../wailsjs/go/backend/App";
 import { ClipTimelineSelector } from "./ClipTimelineSelector";
 import { QueueItem } from "../youtube/UploadQueue";
 import YouTubeThumbnailPicker from "../youtube/YouTubeThumbnailPicker";
 import { generateAndSaveTagThumbnail } from "../../utils/generateTagThumbnail";
+import { notifyCustomThumbChanged } from "../../hooks/useThumbnailQueue";
+import { captureVideoFrameDataUrl } from "../../utils/captureVideoFrame";
 import { useRecentTags } from "../../hooks/useRecentTags";
 import { useRecentFieldValues } from "../../hooks/useRecentFieldValues";
 import TagInput from "../ui/TagInput";
@@ -123,6 +126,8 @@ export default function InlinePlayer({
     return localStorage.getItem("player_info_expanded") !== "false";
   });
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [capturedFramePreview, setCapturedFramePreview] = useState<string | null>(null);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
 
   const enterClipMode = () => {
     const current = videoRef.current?.currentTime ?? 0;
@@ -493,6 +498,8 @@ export default function InlinePlayer({
     setClipSaveError(null);
     setClipSaveSuccess(null);
     setCustomThumbnailPath(null);
+    setCapturedFramePreview(null);
+    setIsCapturingFrame(false);
   }, [
     video.path,
     video.youtubeTitle,
@@ -1103,6 +1110,29 @@ export default function InlinePlayer({
     }
   };
 
+  const handleCaptureFrame = async () => {
+    if (!videoRef.current || isCapturingFrame) return;
+    const dataUrl = captureVideoFrameDataUrl(videoRef.current);
+    if (!dataUrl) return;
+
+    setIsCapturingFrame(true);
+    try {
+      const savedPath = await SaveCustomThumbnail(video.path, dataUrl);
+      setCustomThumbnailPath(savedPath);
+      notifyCustomThumbChanged(video.path, savedPath);
+      setCapturedFramePreview(dataUrl);
+      setTimeout(() => {
+        setCapturedFramePreview((current) =>
+          current === dataUrl ? null : current,
+        );
+      }, 3000);
+    } catch (err: unknown) {
+      console.error("Failed to capture frame as thumbnail:", err);
+    } finally {
+      setIsCapturingFrame(false);
+    }
+  };
+
   const isDirty =
     selectedContentType !== (video.contentType || "") ||
     tagInput !== (video.game || "") ||
@@ -1612,6 +1642,34 @@ export default function InlinePlayer({
           ) : (
             <div className="text-white/60">Deleting...</div>
           )}
+          {capturedFramePreview && (
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-xs z-30 animate-fadeIn"
+              onClick={() => setCapturedFramePreview(null)}
+              title="Click anywhere to dismiss"
+            >
+              <div
+                className="flex flex-col items-center gap-2 p-3 bg-[#1f1f1f] border border-white/10 rounded-xl max-w-xs text-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src={capturedFramePreview}
+                  alt="Captured frame thumbnail"
+                  className="max-h-[160px] w-auto rounded border border-white/20"
+                />
+                <span className="text-xs text-emerald-400 font-medium">
+                  Frame captured as thumbnail
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCapturedFramePreview(null)}
+                  className="text-[11px] text-white/50 hover:text-white transition-colors"
+                >
+                  Click to dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Clip notification / error banners */}
@@ -1943,6 +2001,32 @@ export default function InlinePlayer({
                 <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
               </svg>
               Clip
+            </button>
+            <button
+              className="px-4 py-2 rounded-full transition-colors flex items-center gap-1.5 text-sm font-medium ml-1 text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:pointer-events-none"
+              onClick={handleCaptureFrame}
+              disabled={isCapturingFrame}
+              aria-label="Capture frame as thumbnail"
+              title="Capture current frame as thumbnail"
+            >
+              {isCapturingFrame ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              )}
+              Capture Frame
             </button>
           </div>
 

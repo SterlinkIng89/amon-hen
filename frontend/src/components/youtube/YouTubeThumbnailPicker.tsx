@@ -19,6 +19,7 @@ import { renderTagThumbnailDataUrl } from "../../utils/thumbnailRender";
 import {
   notifyCustomThumbChanged,
   setCachedCustomThumb,
+  subscribeCustomThumb,
 } from "../../hooks/useThumbnailQueue";
 
 export interface YouTubeThumbnailPickerProps {
@@ -118,6 +119,15 @@ export default function YouTubeThumbnailPicker({
       .finally(() => {
         setCheckedDisk(true);
       });
+
+    const unsubscribe = subscribeCustomThumb(videoPath, (newUrl) => {
+      setCustomThumbUrl(newUrl);
+      onThumbnailReady?.(newUrl);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [videoPath, onThumbnailReady]);
 
   // When gameTag changes, reset userResetRef so the new tag can auto-generate
