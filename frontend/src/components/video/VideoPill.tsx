@@ -92,6 +92,7 @@ function VideoPillComponent({
   const isYT = "id" in video && !("path" in video);
   const isLocal = "path" in video;
   const localFile = isLocal ? (video as VideoFile) : null;
+  const ytVideo = isYT ? (video as YTVideo) : null;
   const localPath = localFile ? localFile.path : "";
   const fallbackKey =
     localFile && localFile.youtubeId
@@ -556,14 +557,30 @@ function VideoPillComponent({
             {isYT ? (
               <span className="flex items-center gap-1.5 text-text-muted font-medium truncate">
                 <VideoStatusBadge
-                  monetizationStatus={(video as YTVideo).monetizationStatus}
-                  rejectionReason={(video as YTVideo).rejectionReason}
-                  statusIssues={(video as YTVideo).statusIssues}
+                  monetizationStatus={ytVideo?.monetizationStatus}
+                  rejectionReason={ytVideo?.rejectionReason}
+                  statusIssues={ytVideo?.statusIssues}
                   compact={isList && compact}
                 />
+                {ytVideo?.privacy === "private" && (
+                  <span
+                    className="text-amber-400 font-semibold"
+                    title="Private video"
+                  >
+                    Private
+                  </span>
+                )}
+                {ytVideo?.privacy === "unlisted" && (
+                  <span
+                    className="text-sky-400 font-semibold"
+                    title="Unlisted video"
+                  >
+                    Unlisted
+                  </span>
+                )}
                 <span>
-                  {formatNumber(video.viewCount)} views •{" "}
-                  {formatNumber(video.likeCount)} likes
+                  {formatNumber(ytVideo?.viewCount ?? 0)} views •{" "}
+                  {formatNumber(ytVideo?.likeCount ?? 0)} likes
                   {publishedAt && ` • ${publishedAt}`}
                 </span>
               </span>

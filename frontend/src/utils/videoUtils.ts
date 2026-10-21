@@ -472,9 +472,38 @@ export function getVideoTitleSegments(
   video: YTVideo | VideoFile,
   profile?: GameProfile,
 ): TitleSegmentsResult {
-  // If YouTube video, return plain title
+  // If YouTube video, check for game tag prefix
   if (!("path" in video)) {
-    const fullTitle = video.title || "";
+    const ytVideo = video as YTVideo;
+    const fullTitle = ytVideo.title || "";
+
+    if (ytVideo.gameTag && fullTitle.startsWith(ytVideo.gameTag)) {
+      const rest = fullTitle.slice(ytVideo.gameTag.length);
+      const segments: TitleSegment[] = [
+        { text: ytVideo.gameTag, isGameTag: true, isPlaceholder: false },
+      ];
+      if (rest.length > 0) {
+        segments.push({ text: rest, isPlaceholder: false });
+      }
+      return {
+        fullTitle,
+        segments,
+        hasPlaceholders: false,
+      };
+    }
+
+    const match = fullTitle.match(/^(.+?)(\s+[—\-]\s+.*)$/);
+    if (match && extractTitleDate(match[1]) === "") {
+      return {
+        fullTitle,
+        segments: [
+          { text: match[1], isGameTag: true, isPlaceholder: false },
+          { text: match[2], isPlaceholder: false },
+        ],
+        hasPlaceholders: false,
+      };
+    }
+
     return {
       fullTitle,
       segments: [{ text: fullTitle, isPlaceholder: false }],

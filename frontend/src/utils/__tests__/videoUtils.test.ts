@@ -298,6 +298,112 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         { text: " — 26/08/26 — 3", isPlaceholder: false },
       ]);
     });
+
+    it("highlights game tag when YTVideo has matching gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-1",
+        title: "CONTROL Resonant - Ep 1",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+        gameTag: "CONTROL Resonant",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("CONTROL Resonant - Ep 1");
+      expect(result.hasPlaceholders).toBe(false);
+      expect(result.segments).toEqual([
+        { text: "CONTROL Resonant", isGameTag: true, isPlaceholder: false },
+        { text: " - Ep 1", isPlaceholder: false },
+      ]);
+    });
+
+    it("extracts and highlights game tag prefix before separator when YTVideo has no gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-2",
+        title: "CONTROL Resonant - 19/10/26 - 31",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("CONTROL Resonant - 19/10/26 - 31");
+      expect(result.hasPlaceholders).toBe(false);
+      expect(result.segments).toEqual([
+        { text: "CONTROL Resonant", isGameTag: true, isPlaceholder: false },
+        { text: " - 19/10/26 - 31", isPlaceholder: false },
+      ]);
+    });
+
+    it("supports em-dash separator when extracting game tag prefix for YTVideo", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-3",
+        title: "Hollow Knight — 20/10/26 — 5",
+        description: "",
+        publishedAt: "2026-10-20T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 5,
+        likeCount: 1,
+        duration: "PT15M",
+        privacy: "unlisted",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("Hollow Knight — 20/10/26 — 5");
+      expect(result.segments).toEqual([
+        { text: "Hollow Knight", isGameTag: true, isPlaceholder: false },
+        { text: " — 20/10/26 — 5", isPlaceholder: false },
+      ]);
+    });
+
+    it("does not treat pure date prefix as game tag for YTVideo", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-4",
+        title: "19/10/26 - Stream Highlights",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("19/10/26 - Stream Highlights");
+      expect(result.segments).toEqual([
+        { text: "19/10/26 - Stream Highlights", isPlaceholder: false },
+      ]);
+    });
+
+    it("returns single plain segment when YTVideo has no separator and no gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-5",
+        title: "Just a Random Video Title",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("Just a Random Video Title");
+      expect(result.segments).toEqual([
+        { text: "Just a Random Video Title", isPlaceholder: false },
+      ]);
+    });
   });
 
   describe("hasUnfilledPlaceholders", () => {

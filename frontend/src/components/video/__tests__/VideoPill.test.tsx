@@ -709,4 +709,60 @@ describe("VideoPill Delete Tooltip & Label Discrimination", () => {
   });
 });
 
+describe("VideoPill Privacy Indicator", () => {
+  it("renders 'Private' indicator for private YTVideo", () => {
+    const privateVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "private",
+    };
 
+    render(<VideoPill video={privateVideo} viewMode="grid" />);
+
+    const indicator = screen.getByTitle("Private video");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("Private");
+    expect(indicator).toHaveClass("text-amber-400", "font-semibold");
+  });
+
+  it("renders 'Unlisted' indicator for unlisted YTVideo", () => {
+    const unlistedVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "unlisted",
+    };
+
+    render(<VideoPill video={unlistedVideo} viewMode="grid" />);
+
+    const indicator = screen.getByTitle("Unlisted video");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("Unlisted");
+    expect(indicator).toHaveClass("text-sky-400", "font-semibold");
+  });
+
+  it("does not render privacy indicator for public YTVideo", () => {
+    const publicVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "public",
+    };
+
+    render(<VideoPill video={publicVideo} viewMode="grid" />);
+
+    expect(screen.queryByTitle("Private video")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Unlisted video")).not.toBeInTheDocument();
+  });
+
+  it("does not render privacy indicator for local VideoFile", () => {
+    const localVideo: VideoFile = {
+      name: "Clip_01.mp4",
+      path: "C:\\Videos\\Clip_01.mp4",
+      size: 10485760,
+      modTime: 1787754600000,
+      folder: "C:\\Videos",
+      game: "Valorant",
+    };
+
+    render(<VideoPill video={localVideo} viewMode="grid" />);
+
+    expect(screen.queryByTitle("Private video")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Unlisted video")).not.toBeInTheDocument();
+  });
+});
