@@ -145,8 +145,6 @@ export function OpenFolderInExplorer(arg1:string):Promise<void>;
 
 export function PurgePlaylistDuplicates(arg1:string):Promise<number>;
 
-export function RemoveVideosFromPlaylist(arg1:string,arg2:Array<string>):Promise<number>;
-
 export function RegenerateThumbnail(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
@@ -154,6 +152,8 @@ export function RemoveFolder(arg1:string):Promise<void>;
 export function RemoveSteamBacklogItem(arg1:number):Promise<void>;
 
 export function RemoveSteamGameRating(arg1:number):Promise<void>;
+
+export function RemoveVideosFromPlaylist(arg1:string,arg2:Array<string>):Promise<number>;
 
 export function ReorderSteamBacklog(arg1:Array<number>):Promise<void>;
 

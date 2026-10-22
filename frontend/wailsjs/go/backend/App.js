@@ -282,10 +282,6 @@ export function PurgePlaylistDuplicates(arg1) {
   return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
 }
 
-export function RemoveVideosFromPlaylist(arg1, arg2) {
-  return window['go']['backend']['App']['RemoveVideosFromPlaylist'](arg1, arg2);
-}
-
 export function RegenerateThumbnail(arg1) {
   return window['go']['backend']['App']['RegenerateThumbnail'](arg1);
 }
@@ -300,6 +296,10 @@ export function RemoveSteamBacklogItem(arg1) {
 
 export function RemoveSteamGameRating(arg1) {
   return window['go']['backend']['App']['RemoveSteamGameRating'](arg1);
+}
+
+export function RemoveVideosFromPlaylist(arg1, arg2) {
+  return window['go']['backend']['App']['RemoveVideosFromPlaylist'](arg1, arg2);
 }
 
 export function ReorderSteamBacklog(arg1) {
