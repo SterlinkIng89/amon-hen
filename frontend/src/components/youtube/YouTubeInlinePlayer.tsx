@@ -468,35 +468,32 @@ export default function YouTubeInlinePlayer({
         />
       </div>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-white/60">Visibility:</label>
-          <select
-            className="bg-[#272727] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-[#3ea6ff] cursor-pointer"
-            value={editablePrivacy}
-            onChange={(e) => setEditablePrivacy(e.target.value)}
-          >
-            <option value="public">Public</option>
-            <option value="unlisted">Unlisted</option>
-            <option value="private">Private</option>
-          </select>
+      <div className="flex flex-col gap-3">
+        <label className="text-xs font-medium text-white/60">Privacy</label>
+        <div className="flex gap-2">
+          {(["public", "unlisted", "private"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${
+                editablePrivacy === p
+                  ? "bg-card border-accent text-accent font-medium"
+                  : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"
+              }`}
+              onClick={() => setEditablePrivacy(p)}
+            >
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
         </div>
-
-        <YouTubePlaylistPicker
-          videoId={video.id}
-          defaultPrivacy={editablePrivacy}
-          onPlaylistAdded={() => onUpdate?.()}
-        />
       </div>
 
-      {video.playlistTitle && (
-        <div className="flex items-center gap-1.5 bg-[#3ea6ff]/10 text-[#3ea6ff] text-xs font-medium py-1 px-3 rounded-full self-start">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
-          </svg>
-          <span className="truncate max-w-[200px]">{video.playlistTitle}</span>
-        </div>
-      )}
+      <YouTubePlaylistPicker
+        videoId={video.id}
+        playlistTitle={video.playlistTitle}
+        defaultPrivacy={editablePrivacy}
+        onPlaylistAdded={() => onUpdate?.()}
+      />
 
       {/* Thumbnail Management */}
       <div className="flex flex-col gap-3 p-3 rounded-lg bg-[#141416] border border-white/10">
@@ -803,7 +800,7 @@ export default function YouTubeInlinePlayer({
           </div>
         </div>
       )}
-      {pendingTagForModal && (
+      {pendingTagForModal !== null && (
         <TagPlaylistModal
           tag={pendingTagForModal}
           onClose={() => setPendingTagForModal(null)}

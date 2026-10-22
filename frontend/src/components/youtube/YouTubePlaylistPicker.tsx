@@ -8,22 +8,24 @@ import {
 
 interface YouTubePlaylistPickerProps {
   readonly videoId: string;
+  readonly playlistTitle?: string;
   readonly defaultPrivacy?: string;
   readonly onPlaylistAdded?: () => void;
 }
 
 export default function YouTubePlaylistPicker({
   videoId,
+  playlistTitle,
   defaultPrivacy,
   onPlaylistAdded,
 }: YouTubePlaylistPickerProps) {
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
-  const [showPicker, setShowPicker] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [playlistSearch, setPlaylistSearch] = useState("");
+  const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
+  const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] = useState(false);
+  const [playlistCreateError, setPlaylistCreateError] = useState("");
 
   const refreshPlaylists = () => {
     GetChannelPlaylists("recent")
@@ -38,178 +40,194 @@ export default function YouTubePlaylistPicker({
   const handleAddToPlaylist = async (playlistId: string) => {
     try {
       await AddVideoToPlaylist(playlistId, videoId);
-      setShowPicker(false);
+      setIsPlaylistDropdownOpen(false);
+      setPlaylistSearch("");
       onPlaylistAdded?.();
       refreshPlaylists();
     } catch (e: unknown) {
       console.error("Failed to add video to playlist:", e);
-      alert(e instanceof Error ? e.message : "Failed to add to playlist");
     }
   };
 
-  const handleCreateAndAdd = async () => {
-    if (!newTitle.trim()) return;
-    setIsLoading(true);
-    setCreateError("");
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistTitle.trim()) return;
+    setIsCreatingPlaylistLoading(true);
+    setPlaylistCreateError("");
     try {
       const id = await GetOrCreatePlaylist(
-        newTitle.trim(),
+        newPlaylistTitle.trim(),
         "",
         defaultPrivacy || "unlisted",
       );
       await AddVideoToPlaylist(id, videoId);
-      setNewTitle("");
-      setIsCreating(false);
-      setShowPicker(false);
+      setNewPlaylistTitle("");
+      setIsCreatingPlaylist(false);
       onPlaylistAdded?.();
       refreshPlaylists();
     } catch (e: unknown) {
-      setCreateError(e instanceof Error ? e.message : String(e ?? "Failed"));
+      setPlaylistCreateError(
+        e instanceof Error ? e.message : String(e ?? "Failed to create playlist"),
+      );
     } finally {
-      setIsLoading(false);
+      setIsCreatingPlaylistLoading(false);
     }
   };
 
   const filteredPlaylists = playlists.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase()),
+    p.title.toLowerCase().includes(playlistSearch.toLowerCase()),
   );
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setShowPicker(!showPicker)}
-        className="px-3 py-1.5 rounded-lg bg-[#272727] hover:bg-white/10 border border-white/10 text-white/90 transition-colors flex items-center gap-1.5 text-xs font-medium"
-        title="Add to playlist"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M11 5L6 9H2V15H6L11 19V5Z" />
-          <line x1="23" y1="9" x2="17" y2="15" />
-          <line x1="17" y1="9" x2="23" y2="15" />
-        </svg>
-        <span>Add to Playlist</span>
-      </button>
-
-      {showPicker && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
-          <div className="p-3 border-b border-white/10 bg-[#0f0f0f]/50 flex items-center justify-between">
-            <span className="text-xs font-medium text-white/90">
-              {isCreating ? "Create playlist" : "Select playlist"}
+    <div className="flex flex-col gap-2 relative">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-white/60">
+            Playlist
+          </label>
+          {playlistTitle && (
+            <span className="text-xs bg-[#3ea6ff]/10 text-[#3ea6ff] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
+              </svg>
+              Linked: {playlistTitle}
             </span>
+          )}
+        </div>
+        <button
+          type="button"
+          className="text-xs font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
+          onClick={() => {
+            setIsCreatingPlaylist(!isCreatingPlaylist);
+            setPlaylistCreateError("");
+          }}
+        >
+          {isCreatingPlaylist ? "Cancel" : "New Playlist"}
+        </button>
+      </div>
+
+      {isCreatingPlaylist ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+              type="text"
+              value={newPlaylistTitle}
+              onChange={(e) => setNewPlaylistTitle(e.target.value)}
+              placeholder="Playlist name..."
+              autoFocus
+              disabled={isCreatingPlaylistLoading}
+              onKeyDown={(e) =>
+                e.key === "Enter" && handleCreatePlaylist()
+              }
+            />
             <button
               type="button"
-              className="text-xs font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
-              onClick={() => setIsCreating(!isCreating)}
+              className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 text-sm font-medium transition-colors"
+              onClick={handleCreatePlaylist}
+              disabled={
+                !newPlaylistTitle.trim() ||
+                isCreatingPlaylistLoading
+              }
             >
-              {isCreating ? "Cancel" : "+ New"}
+              {isCreatingPlaylistLoading ? (
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              ) : (
+                "Create"
+              )}
             </button>
           </div>
-
-          {isCreating ? (
-            <div className="p-4 flex flex-col gap-3">
-              <input
-                className="w-full bg-[#0f0f0f] border border-transparent rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff]"
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Playlist name..."
-                autoFocus
-                disabled={isLoading}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateAndAdd()}
-              />
-              <span className="text-[10px] text-white/50">
-                Existing playlist with same name will be reused.
-              </span>
-              {createError && (
-                <span className="text-[10px] text-red-400">{createError}</span>
-              )}
-              <button
-                type="button"
-                className="w-full py-2 rounded-full bg-white text-black hover:bg-gray-200 text-xs font-medium transition-colors"
-                onClick={handleCreateAndAdd}
-                disabled={!newTitle.trim() || isLoading}
+          <span className="text-xs text-white/50">
+            Existing playlist with same name will be reused.
+          </span>
+          {playlistCreateError && (
+            <span className="text-xs text-red-400">
+              {playlistCreateError}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            className="w-full bg-elevated border border-border-subtle rounded-sm pl-10 pr-10 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card"
+            type="text"
+            value={playlistSearch}
+            onChange={(e) => {
+              setPlaylistSearch(e.target.value);
+              setIsPlaylistDropdownOpen(true);
+            }}
+            onFocus={() => setIsPlaylistDropdownOpen(true)}
+            placeholder="Select playlist..."
+          />
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          {playlistSearch && (
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+              onClick={() => {
+                setPlaylistSearch("");
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
               >
-                {isLoading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin mx-auto" />
-                ) : (
-                  "Create & Add"
-                )}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              <div className="p-2 border-b border-white/10">
-                <div className="relative">
-                  <input
-                    className="w-full bg-[#0f0f0f] border border-transparent rounded-lg pl-8 pr-3 py-1.5 text-xs text-white outline-none focus:border-[#3ea6ff]"
-                    type="text"
-                    placeholder="Search playlists..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    autoFocus
-                  />
-                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+            </button>
+          )}
 
-              <div className="max-h-56 overflow-y-auto custom-scrollbar">
-                {filteredPlaylists.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-white/50">
-                    No playlists found
+          {isPlaylistDropdownOpen && (
+            <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+              {filteredPlaylists.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className="w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center justify-between text-white/90"
+                  onClick={() => handleAddToPlaylist(p.id)}
+                >
+                  <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                    <span className="text-sm font-medium truncate flex-1">
+                      {p.title}
+                    </span>
+                    <span className="text-xs text-white/50 whitespace-nowrap">
+                      {p.videoCount} videos
+                    </span>
                   </div>
-                ) : (
-                  filteredPlaylists.map((p) => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      onClick={() => handleAddToPlaylist(p.id)}
-                      className="w-full text-left p-2.5 hover:bg-white/10 transition-colors flex items-center justify-between group"
-                    >
-                      <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                        <span className="text-xs font-medium text-white/90 truncate flex-1">
-                          {p.title}
-                        </span>
-                        <span className="text-[10px] text-white/50 whitespace-nowrap">
-                          {p.videoCount} videos
-                        </span>
-                      </div>
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="text-[#3ea6ff] opacity-0 group-hover:opacity-100 transition-opacity ml-1.5"
-                      >
-                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                      </svg>
-                    </button>
-                  ))
-                )}
-              </div>
+                </button>
+              ))}
+              {filteredPlaylists.length === 0 && (
+                <div className="p-4 text-center text-xs text-white/50">
+                  No playlists found
+                </div>
+              )}
             </div>
+          )}
+          {isPlaylistDropdownOpen && (
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setIsPlaylistDropdownOpen(false)}
+            />
           )}
         </div>
       )}

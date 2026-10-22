@@ -6,6 +6,9 @@ import { YTVideo } from "../../../types";
 import {
   UpdateYouTubeVideoMetadata,
   UpdateYouTubeVideoGameMeta,
+  GetChannelPlaylists,
+  AddVideoToPlaylist,
+  GetOrCreatePlaylist,
   LoadConfig,
 } from "../../../../wailsjs/go/backend/App";
 
@@ -35,6 +38,22 @@ vi.mock("../YouTubeThumbnailPicker", () => ({
   default: (props: any) => (
     <div data-testid="yt-thumbnail-picker" data-gametag={props.gameTag} data-episode={props.episodeNumber}>
       ThumbnailPickerMock
+      {props.onOpenTagSettings && (
+        <button type="button" onClick={props.onOpenTagSettings}>
+          Edit tag template
+        </button>
+      )}
+    </div>
+  ),
+}));
+
+vi.mock("../../ui/TagPlaylistModal", () => ({
+  default: (props: any) => (
+    <div data-testid="tag-playlist-modal" data-tag={props.tag}>
+      TagPlaylistModalMock
+      <button type="button" onClick={props.onClose}>
+        Close
+      </button>
     </div>
   ),
 }));
@@ -226,5 +245,139 @@ describe("YouTubeInlinePlayer Game Profile, TagInput, Episode Stepper and Title 
     fireEvent.click(incBtn);
 
     expect(picker.getAttribute("data-episode")).toBe("31");
+  });
+
+  it("renders segmented privacy pills and clicking Private updates selection and marks form dirty", async () => {
+    render(
+      <YouTubeInlinePlayer
+        video={baseVideo}
+        onPrev={null}
+        onNext={null}
+      />
+    );
+
+    // Segmented pills for Privacy
+    const publicBtn = screen.getByRole("button", { name: "Public" });
+    const unlistedBtn = screen.getByRole("button", { name: "Unlisted" });
+    const privateBtn = screen.getByRole("button", { name: "Private" });
+
+    expect(publicBtn).toBeInTheDocument();
+    expect(unlistedBtn).toBeInTheDocument();
+    expect(privateBtn).toBeInTheDocument();
+
+    // Clicking Private pill marks form dirty
+    fireEvent.click(privateBtn);
+
+    const saveBtn = screen.getByRole("button", { name: /save info/i });
+    expect(saveBtn).not.toBeDisabled();
+
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(UpdateYouTubeVideoMetadata).toHaveBeenCalledWith(
+        "vid-yt-123",
+        baseVideo.title,
+        baseVideo.description,
+        "private"
+      );
+    });
+  });
+
+  it("renders inline searchable playlist combobox and selecting an option calls AddVideoToPlaylist", async () => {
+    vi.mocked(GetChannelPlaylists).mockResolvedValue([
+      {
+        id: "pl-1",
+        title: "Control Walkthrough",
+        description: "",
+        videoCount: 15,
+        thumbnailUrl: "",
+        publishedAt: "2026-01-01T00:00:00Z",
+        privacy: "public",
+        duplicateCount: 0,
+      },
+      {
+        id: "pl-2",
+        title: "Valorant Highlights",
+        description: "",
+        videoCount: 3,
+        thumbnailUrl: "",
+        publishedAt: "2026-01-01T00:00:00Z",
+        privacy: "unlisted",
+        duplicateCount: 0,
+      },
+    ]);
+
+    const onUpdate = vi.fn();
+    render(
+      <YouTubeInlinePlayer
+        video={baseVideo}
+        onPrev={null}
+        onNext={null}
+        onUpdate={onUpdate}
+      />
+    );
+
+    const comboboxInput = await screen.findByPlaceholderText(/select playlist/i);
+    expect(comboboxInput).toBeInTheDocument();
+
+    fireEvent.focus(comboboxInput);
+
+    const playlistOption = await screen.findByRole("button", { name: /control walkthrough/i });
+    expect(playlistOption).toBeInTheDocument();
+
+    fireEvent.click(playlistOption);
+
+    await waitFor(() => {
+      expect(AddVideoToPlaylist).toHaveBeenCalledWith("pl-1", "vid-yt-123");
+      expect(onUpdate).toHaveBeenCalled();
+    });
+  });
+
+  it("allows inline playlist creation calling GetOrCreatePlaylist and AddVideoToPlaylist", async () => {
+    vi.mocked(GetOrCreatePlaylist).mockResolvedValue("pl-new-99");
+
+    const onUpdate = vi.fn();
+    render(
+      <YouTubeInlinePlayer
+        video={baseVideo}
+        onPrev={null}
+        onNext={null}
+        onUpdate={onUpdate}
+      />
+    );
+
+    const newPlaylistBtn = screen.getByRole("button", { name: /new playlist/i });
+    fireEvent.click(newPlaylistBtn);
+
+    const titleInput = screen.getByPlaceholderText(/playlist name/i);
+    fireEvent.change(titleInput, { target: { value: "Remedy Universe" } });
+
+    const createBtn = screen.getByRole("button", { name: "Create" });
+    fireEvent.click(createBtn);
+
+    await waitFor(() => {
+      expect(GetOrCreatePlaylist).toHaveBeenCalledWith("Remedy Universe", "", "public");
+      expect(AddVideoToPlaylist).toHaveBeenCalledWith("pl-new-99", "vid-yt-123");
+      expect(onUpdate).toHaveBeenCalled();
+    });
+  });
+
+  it("renders TagPlaylistModal when Edit tag template is clicked", async () => {
+    render(
+      <YouTubeInlinePlayer
+        video={baseVideo}
+        onPrev={null}
+        onNext={null}
+      />
+    );
+
+    const editTemplateBtn = screen.getByRole("button", { name: /edit tag template/i });
+    fireEvent.click(editTemplateBtn);
+
+    await waitFor(() => {
+      const modal = screen.getByTestId("tag-playlist-modal");
+      expect(modal).toBeInTheDocument();
+      expect(modal.getAttribute("data-tag")).toBe("Control");
+    });
   });
 });
