@@ -43,8 +43,20 @@ import ChannelBulkEditModal from "../components/youtube/ChannelBulkEditModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
 
+const STORAGE_CHANNEL_LIST_COLLAPSED_KEY = "channel_player_list_collapsed";
+
 export default function ChannelPage() {
   const { cardDensity } = useAppStore();
+  const [isPlayerListCollapsed, setIsPlayerListCollapsed] = useState<boolean>(
+    () => localStorage.getItem(STORAGE_CHANNEL_LIST_COLLAPSED_KEY) === "true",
+  );
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_CHANNEL_LIST_COLLAPSED_KEY,
+      String(isPlayerListCollapsed),
+    );
+  }, [isPlayerListCollapsed]);
   const [activeTab, setActiveTab] = useState<"videos" | "playlists" | "catalog">("videos");
   const [playlistSort, setPlaylistSort] = useState<
     "recent" | "title" | "videos" | "updated"
@@ -1356,38 +1368,107 @@ export default function ChannelPage() {
       {/* ── Content area ────────────────────────────────────────────────────────── */}
       {viewType === "player" && selectedVideo ? (
         <div className="flex-1 flex overflow-hidden">
-          <aside className="w-[360px] min-w-[280px] max-w-[460px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
-            <div className="px-2 pt-2 pb-1 shrink-0">
-              <div className="relative group">
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          <aside
+            className={`${
+              isPlayerListCollapsed
+                ? "w-12 items-center py-3"
+                : "w-[300px] xl:w-[340px] 2xl:w-[360px]"
+            } flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10 transition-all duration-200`}
+          >
+            {isPlayerListCollapsed ? (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewType("grid")}
+                  className="p-2 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                  title="Back to Grid"
+                  aria-label="Back to Grid"
                 >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search videos…"
-                  className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-7 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                />
-                {sidebarSearch && (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPlayerListCollapsed(false)}
+                  className="p-2 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                  title="Expand video list"
+                  aria-label="Expand video list"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
                   <button
-                    onClick={() => setSidebarSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                    type="button"
+                    onClick={() => setViewType("grid")}
+                    className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-main transition-colors px-2 py-1 rounded hover:bg-surface-elevated"
+                    title="Back to Grid"
+                    aria-label="Back to Grid"
                   >
                     <svg
-                      width="11"
-                      height="11"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    <span>Back to Grid</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPlayerListCollapsed(true)}
+                    className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                    title="Collapse video list"
+                    aria-label="Collapse video list"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="px-2 pt-2 pb-1 shrink-0">
+                  <div className="relative group">
+                    <svg
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
+                      width="13"
+                      height="13"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -1395,74 +1476,101 @@ export default function ChannelPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            <div
-              ref={sidebarRef}
-              className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2 custom-scrollbar"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : playerVideos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-text-muted">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-2 opacity-40"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <p className="text-xs font-medium">No videos match</p>
-                </div>
-              ) : (
-                <>
-                  {playerVideos.map((v, idx) => (
-                    <div
-                      key={`${v.id}-${idx}`}
-                      data-selected={selectedVideo?.id === v.id}
-                    >
-                      <VideoPill
-                        video={v}
-                        selected={selectedVideo?.id === v.id}
-                        onUpdate={() => loadData(true)}
-                        viewMode="list"
-                        compact={true}
-                        onClick={() => setSelectedVideo(v)}
-                        duplicateCount={
-                          selectedPlaylist
-                            ? playlistVideoCounts.get(v.id)
-                            : undefined
-                        }
-                        onDelete={() => setDeleteTargets([v])}
-                        onEdit={() => setEditingVideo(v)}
-                      />
-                    </div>
-                  ))}
-                  <div
-                    ref={loadMoreRef}
-                    className="h-8 flex items-center justify-center shrink-0"
-                  >
-                    {loadingMore && (
-                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <input
+                      type="text"
+                      placeholder="Search videos…"
+                      className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-7 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
+                      value={sidebarSearch}
+                      onChange={(e) => setSidebarSearch(e.target.value)}
+                    />
+                    {sidebarSearch && (
+                      <button
+                        onClick={() => setSidebarSearch("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+                <div
+                  ref={sidebarRef}
+                  className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2 custom-scrollbar"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : playerVideos.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-text-muted">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mb-2 opacity-40"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <p className="text-xs font-medium">No videos match</p>
+                    </div>
+                  ) : (
+                    <>
+                      {playerVideos.map((v, idx) => (
+                        <div
+                          key={`${v.id}-${idx}`}
+                          data-selected={selectedVideo?.id === v.id}
+                        >
+                          <VideoPill
+                            video={v}
+                            selected={selectedVideo?.id === v.id}
+                            onUpdate={() => loadData(true)}
+                            viewMode="list"
+                            compact={true}
+                            onClick={() => setSelectedVideo(v)}
+                            duplicateCount={
+                              selectedPlaylist
+                                ? playlistVideoCounts.get(v.id)
+                                : undefined
+                            }
+                            onDelete={() => setDeleteTargets([v])}
+                            onEdit={() => setEditingVideo(v)}
+                          />
+                        </div>
+                      ))}
+                      <div
+                        ref={loadMoreRef}
+                        className="h-8 flex items-center justify-center shrink-0"
+                      >
+                        {loadingMore && (
+                          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </aside>
           <main className="flex-1 flex flex-col bg-base overflow-hidden relative">
             <ErrorBoundary area="YouTube Player">

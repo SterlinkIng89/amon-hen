@@ -47,6 +47,10 @@ vi.mock("../../../wailsjs/runtime/runtime", () => ({
   EventsOff: vi.fn(),
 }));
 
+vi.mock("../../components/youtube/YouTubeInlinePlayer", () => ({
+  default: () => <div data-testid="mock-yt-player" />,
+}));
+
 describe("ChannelPage YouTube Sync State", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -907,6 +911,88 @@ describe("ChannelPage YouTube Sync State", () => {
         expect(screen.getByText(/Zelda/)).toBeInTheDocument();
         expect(screen.getByText(/Metroid/)).toBeInTheDocument();
         expect(screen.getByText(/Untagged/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("Player View collapsible video list sidebar", () => {
+    const mockVideos = [
+      {
+        id: "vid-pl-1",
+        title: "Player Test Ep 1",
+        description: "Test description",
+        publishedAt: "2026-10-20T10:00:00Z",
+        thumbnailUrl: "https://example.com/thumb1.jpg",
+        viewCount: 100,
+        likeCount: 10,
+        duration: "PT10M",
+        privacy: "public",
+      },
+    ];
+
+    beforeEach(() => {
+      window.HTMLElement.prototype.scrollIntoView = vi.fn();
+      localStorage.clear();
+      vi.mocked(AppBackend.GetChannelVideosPaginated).mockResolvedValue({
+        videos: mockVideos as any,
+        total: 1,
+      });
+    });
+
+    it("collapses and expands video list sidebar and persists state to localStorage", async () => {
+      render(<ChannelPage />);
+
+      const videoCard = await screen.findByText("Player Test Ep 1");
+      fireEvent.click(videoCard);
+
+      // Verify player view rendered
+      const collapseBtn = await screen.findByRole("button", {
+        name: "Collapse video list",
+      });
+      const backBtn = screen.getByRole("button", {
+        name: "Back to Grid",
+      });
+      expect(collapseBtn).toBeInTheDocument();
+      expect(backBtn).toBeInTheDocument();
+      expect(screen.getAllByPlaceholderText("Search videos…")).toHaveLength(2);
+
+      // Click collapse
+      fireEvent.click(collapseBtn);
+
+      expect(localStorage.getItem("channel_player_list_collapsed")).toBe("true");
+      expect(
+        screen.getByRole("button", { name: "Expand video list" }),
+      ).toBeInTheDocument();
+      expect(screen.getAllByPlaceholderText("Search videos…")).toHaveLength(1);
+
+      // Click expand
+      const expandBtn = screen.getByRole("button", {
+        name: "Expand video list",
+      });
+      fireEvent.click(expandBtn);
+
+      expect(localStorage.getItem("channel_player_list_collapsed")).toBe("false");
+      expect(
+        screen.getByRole("button", { name: "Collapse video list" }),
+      ).toBeInTheDocument();
+      expect(screen.getAllByPlaceholderText("Search videos…")).toHaveLength(2);
+    });
+
+    it("navigates back to grid when Back to Grid is clicked", async () => {
+      render(<ChannelPage />);
+
+      const videoCard = await screen.findByText("Player Test Ep 1");
+      fireEvent.click(videoCard);
+
+      const backBtn = await screen.findByRole("button", {
+        name: "Back to Grid",
+      });
+      fireEvent.click(backBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("button", { name: "Collapse video list" }),
+        ).toBeNull();
       });
     });
   });
