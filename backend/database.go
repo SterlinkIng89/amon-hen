@@ -20,7 +20,7 @@ func (a *App) initDB() error {
 	if err != nil {
 		base = os.TempDir()
 	}
-	dir := filepath.Join(base, "AmonHen")
+	dir := filepath.Join(base, appDirName())
 	os.MkdirAll(dir, 0755)
 
 	dbPath := filepath.Join(dir, "amonhen.db")

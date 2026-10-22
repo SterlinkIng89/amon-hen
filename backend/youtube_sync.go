@@ -384,7 +384,7 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 		UPDATE yt_videos 
 		SET title = ?, description = ?, privacy = ? 
 		WHERE id = ?`,
-		title, description, privacy, videoID)
+		finalTitle, finalDesc, privacy, videoID)
 
 	return err
 }
@@ -730,7 +730,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		query := fmt.Sprintf(`
 			SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 			       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
-			       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
+			       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, ''),
+			       v.episode
 			FROM yt_videos v
 			WHERE %s`, where)
 
@@ -746,7 +747,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			var localFile sql.NullString
 			var playlistTitle sql.NullString
 			var issuesStr string
-			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag); err != nil {
+			var ep sql.NullInt64
+			if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag, &ep); err != nil {
 				continue
 			}
 			if localFile.Valid {
@@ -754,6 +756,10 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			}
 			if playlistTitle.Valid {
 				v.PlaylistTitle = playlistTitle.String
+			}
+			if ep.Valid {
+				epVal := int(ep.Int64)
+				v.Episode = &epVal
 			}
 			v.StatusIssues = parseStatusIssues(issuesStr)
 
@@ -841,7 +847,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 	query := fmt.Sprintf(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
 		       (SELECT p.title FROM yt_playlists p JOIN yt_playlist_items pi ON p.id = pi.playlist_id WHERE pi.video_id = v.id LIMIT 1) as playlist_title,
-		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, ''),
+		       v.episode
 		FROM yt_videos v
 		WHERE %s
 		ORDER BY %s
@@ -861,7 +868,8 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		var localFile sql.NullString
 		var playlistTitle sql.NullString
 		var issuesStr string
-		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag); err != nil {
+		var ep sql.NullInt64
+		if err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl, &v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile, &playlistTitle, &v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag, &ep); err != nil {
 			fmt.Println("Error scanning video row:", err)
 			continue
 		}
@@ -870,6 +878,10 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 		}
 		if playlistTitle.Valid {
 			v.PlaylistTitle = playlistTitle.String
+		}
+		if ep.Valid {
+			epVal := int(ep.Int64)
+			v.Episode = &epVal
 		}
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
@@ -950,7 +962,8 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''), 
 		       COALESCE(v.view_count, 0), COALESCE(v.like_count, 0), COALESCE(v.duration, ''), COALESCE(v.privacy, ''), v.local_file,
-		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, '')
+		       COALESCE(v.monetization_status, 'monetized'), COALESCE(v.rejection_reason, ''), COALESCE(v.status_issues, ''), COALESCE(v.game_tag, ''),
+		       v.episode
 		FROM yt_videos v
 		JOIN yt_playlist_items pi ON v.id = pi.video_id
 		WHERE pi.playlist_id = ?
@@ -965,14 +978,19 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 		var v YTVideo
 		var localFile sql.NullString
 		var issuesStr string
+		var ep sql.NullInt64
 		err := rows.Scan(&v.ID, &v.Title, &v.Description, &v.PublishedAt, &v.ThumbnailUrl,
 			&v.ViewCount, &v.LikeCount, &v.Duration, &v.Privacy, &localFile,
-			&v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag)
+			&v.MonetizationStatus, &v.RejectionReason, &issuesStr, &v.GameTag, &ep)
 		if err != nil {
 			continue
 		}
 		if localFile.Valid {
 			v.LocalFile = localFile.String
+		}
+		if ep.Valid {
+			epVal := int(ep.Int64)
+			v.Episode = &epVal
 		}
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
@@ -1052,4 +1070,47 @@ func (a *App) GetSyncStatus() (map[string]interface{}, error) {
 		"count":    count,
 		"lastSync": lastSyncVal,
 	}, nil
+}
+
+// UpdateYouTubeVideoGameMeta updates game_tag and episode on a YouTube video in SQLite and syncs linked local file config
+func (a *App) UpdateYouTubeVideoGameMeta(videoID string, gameTag string, episode int) error {
+	a.db.mu.Lock()
+	var epVal interface{}
+	if episode > 0 {
+		epVal = episode
+	} else {
+		epVal = nil
+	}
+	_, err := a.db.conn.Exec("UPDATE yt_videos SET game_tag = ?, episode = ? WHERE id = ?", gameTag, epVal, videoID)
+	if err != nil {
+		a.db.mu.Unlock()
+		return err
+	}
+
+	var localFile sql.NullString
+	_ = a.db.conn.QueryRow("SELECT local_file FROM yt_videos WHERE id = ?", videoID).Scan(&localFile)
+	a.db.mu.Unlock()
+
+	if localFile.Valid && localFile.String != "" {
+		lf := localFile.String
+		a.configMu.Lock()
+		if a.config.VideoGames == nil {
+			a.config.VideoGames = make(map[string]string)
+		}
+		if a.config.VideoMetadata == nil {
+			a.config.VideoMetadata = make(map[string]VideoMeta)
+		}
+		if gameTag != "" {
+			a.config.VideoGames[lf] = gameTag
+		} else {
+			delete(a.config.VideoGames, lf)
+		}
+		meta := a.config.VideoMetadata[lf]
+		meta.Game = gameTag
+		meta.Episode = episode
+		a.config.VideoMetadata[lf] = meta
+		a.configMu.Unlock()
+		return a.saveConfig()
+	}
+	return nil
 }

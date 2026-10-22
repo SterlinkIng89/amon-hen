@@ -31,6 +31,21 @@ describe("tagConfigParser", () => {
     });
   });
 
+  it("defaults episode_position to bottom-left when omitted", () => {
+    const parsed = parseTagThumbnailConfig({
+      source_type: "steam",
+    });
+    expect(parsed?.episode_position).toBe("bottom-left");
+  });
+
+  it("preserves explicit bottom-right episode_position without regression", () => {
+    const parsed = parseTagThumbnailConfig({
+      source_type: "steam",
+      episode_position: "bottom-right",
+    });
+    expect(parsed?.episode_position).toBe("bottom-right");
+  });
+
   it("parses single tag playlist config falling back to legacy vod", () => {
     const parsed = parseTagPlaylistConfig(
       { clip_playlist_id: "pl-clip" },

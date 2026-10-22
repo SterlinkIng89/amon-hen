@@ -9,7 +9,7 @@ export const DEFAULT_COVER_CONFIG: TagThumbnailConfig = {
   enabled: true,
   source_type: "steam",
   steam_asset_type: "header",
-  episode_position: "bottom-right",
+  episode_position: "bottom-left",
   episode_format: "pad2",
 };
 

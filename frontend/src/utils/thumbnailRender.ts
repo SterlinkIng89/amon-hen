@@ -9,7 +9,7 @@ export interface RenderTagThumbnailParams {
   readonly logoImage: HTMLImageElement | null;
   readonly gameTitle: string;
   readonly episodeNumber: number;
-  readonly config: TagThumbnailConfig;
+  readonly config: Partial<TagThumbnailConfig>;
 }
 
 export interface RenderPlaylistCoverParams {
@@ -38,7 +38,7 @@ export function renderTagThumbnailDataUrl({
     showEpisode: episodeNumber > 0,
     episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
     episodeFormat: config.episode_format || "pad2",
-    position: config.episode_position || "bottom-right",
+    position: config.episode_position || "bottom-left",
     fontColor: config.font_color || "#ffffff",
     framing: config.image_framing,
     episodeLayout: config.episode_layout,

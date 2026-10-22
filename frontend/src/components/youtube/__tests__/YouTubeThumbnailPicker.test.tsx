@@ -21,6 +21,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
 vi.mock("../../../hooks/useThumbnailQueue", () => ({
   notifyCustomThumbChanged: vi.fn(),
   setCachedCustomThumb: vi.fn(),
+  subscribeCustomThumb: vi.fn().mockReturnValue(() => {}),
 }));
 
 describe("YouTubeThumbnailPicker", () => {
@@ -52,6 +53,23 @@ describe("YouTubeThumbnailPicker", () => {
 
     expect(screen.getByText("YouTube Thumbnail")).toBeInTheDocument();
     expect(screen.getByText(/using cyberpunk 2077 template/i)).toBeInTheDocument();
+  });
+
+  it("defaults episode_position to bottom-left when tagThumbnailConfig has no position", () => {
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/ep1.mp4"
+        gameTag="Cyberpunk 2077"
+        episodeNumber={1}
+        tagThumbnailConfig={{ enabled: true, source_type: "steam" }}
+      />
+    );
+
+    const adjustBtn = screen.getByRole("button", { name: /adjust for this video/i });
+    fireEvent.click(adjustBtn);
+
+    const bottomLeftBtn = screen.getByRole("button", { name: "Bottom Left" });
+    expect(bottomLeftBtn).toHaveClass("text-accent");
   });
 
   it("calls onOpenTagSettings when clicking edit template button", async () => {
@@ -192,4 +210,35 @@ describe("YouTubeThumbnailPicker", () => {
       expect(SaveCustomThumbnail).toHaveBeenCalled();
     });
   });
+
+  it("updates thumbnail and calls onThumbnailReady when subscribeCustomThumb fires", async () => {
+    let subscriberCallback: ((url: string | null) => void) | null = null;
+    const { subscribeCustomThumb } = await import(
+      "../../../hooks/useThumbnailQueue"
+    );
+    vi.mocked(subscribeCustomThumb).mockImplementation((_path, cb) => {
+      subscriberCallback = cb;
+      return () => {};
+    });
+
+    const onReady = vi.fn();
+    render(
+      <YouTubeThumbnailPicker
+        videoPath="C:/videos/test_sub.mp4"
+        gameTag=""
+        episodeNumber={0}
+        onThumbnailReady={onReady}
+      />,
+    );
+
+    expect(subscriberCallback).toBeDefined();
+    if (subscriberCallback) {
+      (subscriberCallback as (url: string | null) => void)(
+        "C:/cache/yt_thumbs/new_frame.jpg",
+      );
+    }
+
+    expect(onReady).toHaveBeenCalledWith("C:/cache/yt_thumbs/new_frame.jpg");
+  });
 });
+

@@ -21,7 +21,7 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
     thumbnail_config: {
       enabled: true,
       source_type: "steam",
-      episode_position: "bottom-right",
+      episode_position: "bottom-left",
       episode_format: "pad2",
     },
   }),
@@ -119,6 +119,9 @@ describe("generateAndSaveTagThumbnail", () => {
     expect(thumbRender.renderTagThumbnailDataUrl).toHaveBeenCalledWith(
       expect.objectContaining({
         episodeNumber: 0,
+        config: expect.objectContaining({
+          episode_position: "bottom-left",
+        }),
       })
     );
   });

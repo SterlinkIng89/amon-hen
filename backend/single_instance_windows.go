@@ -20,7 +20,7 @@ var (
 // entire process lifetime and is cleaned up automatically by Windows
 // when the process exits.
 func AcquireSingleInstanceLock() bool {
-	name, _ := syscall.UTF16PtrFromString("Local\\AmonHenSingleInstance")
+	name, _ := syscall.UTF16PtrFromString(singleMutexName())
 	_, _, err := _createMutex.Call(
 		0,                             // lpMutexAttributes (nil)
 		1,                             // bInitialOwner = TRUE

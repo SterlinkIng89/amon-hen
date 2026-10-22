@@ -5,7 +5,6 @@ import {
   formatDuration,
   generateYouTubeTitle,
   getVideoTitleSegments,
-  resolveVideoContentType,
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
@@ -26,9 +25,10 @@ import {
   GetVideoPreview,
   GetVideoDuration,
 } from "../../../wailsjs/go/backend/App";
+import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import VideoStatusBadge from "../youtube/VideoStatusBadge";
 
-interface VideoPillProps {
+export interface VideoPillProps {
   video: YTVideo | VideoFile;
   selected?: boolean;
   multiSelected?: boolean;
@@ -45,6 +45,10 @@ interface VideoPillProps {
   onSelectToggle?: (e: React.MouseEvent) => void;
   duplicateCount?: number;
   onDelete?: () => void;
+  readonly isQueued?: boolean;
+  readonly onQuickQueue?: () => void;
+  readonly onOpenInExplorer?: () => void;
+  readonly onEdit?: () => void;
 }
 
 function VideoPillComponent({
@@ -64,6 +68,10 @@ function VideoPillComponent({
   onSelectToggle,
   duplicateCount,
   onDelete,
+  isQueued = false,
+  onQuickQueue,
+  onOpenInExplorer,
+  onEdit,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -78,11 +86,18 @@ function VideoPillComponent({
   onDeleteRef.current = onDelete;
   const onThumbLoadedRef = useRef(onThumbLoaded);
   onThumbLoadedRef.current = onThumbLoaded;
+  const onQuickQueueRef = useRef(onQuickQueue);
+  onQuickQueueRef.current = onQuickQueue;
+  const onOpenInExplorerRef = useRef(onOpenInExplorer);
+  onOpenInExplorerRef.current = onOpenInExplorer;
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
 
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
   const isLocal = "path" in video;
   const localFile = isLocal ? (video as VideoFile) : null;
+  const ytVideo = isYT ? (video as YTVideo) : null;
   const localPath = localFile ? localFile.path : "";
   const fallbackKey =
     localFile && localFile.youtubeId
@@ -123,13 +138,8 @@ function VideoPillComponent({
   const publishedAt = isYT
     ? new Date(video.publishedAt).toLocaleDateString()
     : "";
-
-  // Content Type normalization
-  const localVideo = isLocal ? (video as VideoFile) : undefined;
-  const effectiveDuration = localVideo?.durationSecs ?? localDuration;
-  const contentType = isLocal
-    ? resolveVideoContentType(effectiveDuration, localVideo?.contentType)
-    : undefined;
+  const showQueuedBadge =
+    isLocal && !video.youtubeId && isQueued && uploadProgress === undefined;
 
   // Duration normalization
   const parseYTDuration = (isoDuration: string) => {
@@ -232,6 +242,15 @@ function VideoPillComponent({
     : "h-full";
   const thumbHeightClass = isList ? "h-full" : "aspect-video";
 
+  const hasYouTubeId = Boolean(localFile?.youtubeId);
+  const canQuickQueue = Boolean(
+    isLocal && onQuickQueue && !hasYouTubeId && !isQueued && uploadProgress === undefined,
+  );
+  const canUpload = Boolean(isLocal && onUpload && !hasYouTubeId);
+  const showQuickActions =
+    (isLocal && (Boolean(onOpenInExplorer) || canQuickQueue || canUpload)) ||
+    isYT;
+
   return (
     <div
       ref={ref}
@@ -310,8 +329,8 @@ function VideoPillComponent({
                   e.stopPropagation();
                   onDeleteRef.current?.();
                 }}
-                title="Delete video from YouTube"
-                aria-label="Delete video from YouTube"
+                title={isLocal ? "Delete local file" : "Delete video from YouTube"}
+                aria-label={isLocal ? "Delete local file" : "Delete video from YouTube"}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
@@ -395,49 +414,160 @@ function VideoPillComponent({
           </div>
         )}
 
-        {/* Content Type Badge */}
-        {contentType && (
-          <div
-            className={`absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold z-10 shadow-sm border ${
-              contentType === "clip"
-                ? "bg-purple-900/80 border-purple-500/40 text-purple-200"
-                : "bg-blue-900/80 border-blue-500/40 text-blue-200"
-            } ${isList && compact ? "scale-90" : ""}`}
-            title={
-              contentType === "clip"
-                ? "Clip (< 2 min or override)"
-                : "VOD (≥ 2 min or override)"
-            }
-          >
-            {contentType === "clip" ? "Clip" : "VOD"}
-          </div>
-        )}
-
         {/* Action Buttons on Hover */}
-        {hovered && isLocal && !video.youtubeId && (
-          <button
-            className="absolute top-2 right-2 bg-black/60 text-white border border-white/20 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:border-accent z-20"
-            title="Upload to YouTube"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUploadRef.current?.();
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-          </button>
+        {showQuickActions && (
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20 pointer-events-none">
+            {onOpenInExplorer && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Show in Explorer"
+                aria-label="Show in Explorer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenInExplorerRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+            )}
+
+            {canQuickQueue && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Add to upload queue"
+                aria-label="Add to upload queue"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onQuickQueueRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            )}
+
+            {canUpload && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Upload to YouTube"
+                aria-label="Upload to YouTube"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUploadRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </button>
+            )}
+
+            {ytVideo && onEdit && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Edit video metadata"
+                aria-label="Edit video metadata"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEditRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            )}
+
+            {ytVideo && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Open on YouTube"
+                aria-label="Open on YouTube"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  BrowserOpenURL(`https://www.youtube.com/watch?v=${ytVideo.id}`);
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -494,14 +624,30 @@ function VideoPillComponent({
             {isYT ? (
               <span className="flex items-center gap-1.5 text-text-muted font-medium truncate">
                 <VideoStatusBadge
-                  monetizationStatus={(video as YTVideo).monetizationStatus}
-                  rejectionReason={(video as YTVideo).rejectionReason}
-                  statusIssues={(video as YTVideo).statusIssues}
+                  monetizationStatus={ytVideo?.monetizationStatus}
+                  rejectionReason={ytVideo?.rejectionReason}
+                  statusIssues={ytVideo?.statusIssues}
                   compact={isList && compact}
                 />
+                {ytVideo?.privacy === "private" && (
+                  <span
+                    className="text-amber-400 font-semibold"
+                    title="Private video"
+                  >
+                    Private
+                  </span>
+                )}
+                {ytVideo?.privacy === "unlisted" && (
+                  <span
+                    className="text-sky-400 font-semibold"
+                    title="Unlisted video"
+                  >
+                    Unlisted
+                  </span>
+                )}
                 <span>
-                  {formatNumber(video.viewCount)} views •{" "}
-                  {formatNumber(video.likeCount)} likes
+                  {formatNumber(ytVideo?.viewCount ?? 0)} views •{" "}
+                  {formatNumber(ytVideo?.likeCount ?? 0)} likes
                   {publishedAt && ` • ${publishedAt}`}
                 </span>
               </span>
@@ -525,6 +671,15 @@ function VideoPillComponent({
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                   </div>
+                )}
+                {showQueuedBadge && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400"
+                    title="Pending in upload queue"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    Queued
+                  </span>
                 )}
                 <span className="flex items-center gap-1 font-medium">
                   {formatSize(video.size)}
@@ -622,7 +777,9 @@ function areVideoPillPropsEqual(
     prev.compact === next.compact &&
     prev.duplicateCount === next.duplicateCount &&
     prev.readOnlyThumbnail === next.readOnlyThumbnail &&
-    prev.gameProfiles === next.gameProfiles
+    prev.gameProfiles === next.gameProfiles &&
+    prev.isQueued === next.isQueued &&
+    Boolean(prev.onEdit) === Boolean(next.onEdit)
   );
 }
 

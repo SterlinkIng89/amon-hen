@@ -69,4 +69,19 @@ describe("SettingsPanel", () => {
     expect(input).toBeInTheDocument();
     expect(input.value).toBe("/default/videos/amonhen");
   });
+
+  it("renders Grid Card Density options and allows toggling density", async () => {
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    expect(await screen.findByText("Grid Card Density")).toBeInTheDocument();
+    const compactBtn = screen.getByRole("button", { name: "Compact" });
+    const defaultBtn = screen.getByRole("button", { name: "Default" });
+    const largeBtn = screen.getByRole("button", { name: "Large" });
+
+    expect(compactBtn).toBeInTheDocument();
+    expect(defaultBtn).toBeInTheDocument();
+    expect(largeBtn).toBeInTheDocument();
+
+    fireEvent.click(compactBtn);
+  });
 });

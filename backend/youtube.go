@@ -624,9 +624,46 @@ func ValidatePrivacyStatus(privacy string) (string, error) {
 	}
 }
 
-// UpdatePlaylistVisibility updates a playlist's privacy status on YouTube and SQLite.
-func (a *App) UpdatePlaylistVisibility(playlistID, privacy string) error {
-	normPrivacy, err := ValidatePrivacyStatus(privacy)
+// updatePlaylistMetadataLocal updates title, description, and privacy in SQLite yt_playlists.
+func (a *App) updatePlaylistMetadataLocal(playlistID, title, description, privacy string) error {
+	if a.db != nil {
+		a.db.mu.Lock()
+		defer a.db.mu.Unlock()
+		_, err := a.db.conn.Exec("UPDATE yt_playlists SET title = ?, description = ?, privacy = ? WHERE id = ?", title, description, privacy, playlistID)
+		return err
+	}
+	return nil
+}
+
+// UpdatePlaylistMetadata updates a playlist's title, description, and privacy status on YouTube and SQLite.
+func (a *App) UpdatePlaylistMetadata(playlistID, title, description, privacy string) error {
+	playlistID = strings.TrimSpace(playlistID)
+	if playlistID == "" {
+		return fmt.Errorf("playlist ID cannot be empty")
+	}
+
+	cleanTitle := strings.TrimSpace(title)
+	if cleanTitle == "" {
+		return fmt.Errorf("playlist title cannot be empty")
+	}
+
+	normPrivacy := strings.TrimSpace(privacy)
+	if normPrivacy == "" {
+		if a.db != nil {
+			a.db.mu.Lock()
+			var p sql.NullString
+			a.db.conn.QueryRow("SELECT privacy FROM yt_playlists WHERE id = ?", playlistID).Scan(&p)
+			a.db.mu.Unlock()
+			if p.Valid && p.String != "" {
+				normPrivacy = p.String
+			}
+		}
+		if normPrivacy == "" {
+			normPrivacy = "unlisted"
+		}
+	}
+
+	validatedPrivacy, err := ValidatePrivacyStatus(normPrivacy)
 	if err != nil {
 		return err
 	}
@@ -641,7 +678,30 @@ func (a *App) UpdatePlaylistVisibility(playlistID, privacy string) error {
 		return err
 	}
 
-	// Fetch title and description from local DB to populate required snippet fields
+	playlist := &youtube.Playlist{
+		Id: playlistID,
+		Snippet: &youtube.PlaylistSnippet{
+			Title:       cleanTitle,
+			Description: description,
+		},
+		Status: &youtube.PlaylistStatus{
+			PrivacyStatus: validatedPrivacy,
+		},
+	}
+
+	start := time.Now()
+	_, err = svc.Playlists.Update([]string{"snippet", "status"}, playlist).Do()
+	a.logAPICall("playlists.update", playlistID, cleanTitle, 50, start, err)
+	if err != nil {
+		appLog("[UpdatePlaylistMetadata] Error updating playlist %s: %v", playlistID, err)
+		return err
+	}
+
+	return a.updatePlaylistMetadataLocal(playlistID, cleanTitle, description, validatedPrivacy)
+}
+
+// UpdatePlaylistVisibility updates a playlist's privacy status on YouTube and SQLite.
+func (a *App) UpdatePlaylistVisibility(playlistID, privacy string) error {
 	var title, desc string
 	if a.db != nil {
 		a.db.mu.Lock()
@@ -655,33 +715,10 @@ func (a *App) UpdatePlaylistVisibility(playlistID, privacy string) error {
 			desc = d.String
 		}
 	}
-
-	playlist := &youtube.Playlist{
-		Id: playlistID,
-		Snippet: &youtube.PlaylistSnippet{
-			Title:       title,
-			Description: desc,
-		},
-		Status: &youtube.PlaylistStatus{
-			PrivacyStatus: normPrivacy,
-		},
+	if strings.TrimSpace(title) == "" {
+		title = "Playlist"
 	}
-
-	start := time.Now()
-	_, err = svc.Playlists.Update([]string{"snippet", "status"}, playlist).Do()
-	a.logAPICall("playlists.update", playlistID, title, 50, start, err)
-	if err != nil {
-		appLog("[UpdatePlaylistVisibility] Error updating playlist %s (%s): %v", playlistID, normPrivacy, err)
-		return err
-	}
-
-	if a.db != nil {
-		a.db.mu.Lock()
-		a.db.conn.Exec("UPDATE yt_playlists SET privacy = ? WHERE id = ?", normPrivacy, playlistID)
-		a.db.mu.Unlock()
-	}
-
-	return nil
+	return a.UpdatePlaylistMetadata(playlistID, title, desc, privacy)
 }
 
 // UpdatePlaylistsVisibility updates privacy status for multiple playlists in bulk.
@@ -833,3 +870,106 @@ func (a *App) SetYouTubeThumbnail(videoID string, imagePath string) error {
 	_, err := a.setYouTubeThumbnailInternal(videoID, imagePath)
 	return err
 }
+
+// removeVideosFromPlaylistLocal removes specified videos from a playlist in local SQLite and updates the playlist video_count.
+func (a *App) removeVideosFromPlaylistLocal(playlistID string, videoIDs []string) (int, error) {
+	if a.db == nil || len(videoIDs) == 0 {
+		return 0, nil
+	}
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	tx, err := a.db.conn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	totalRemoved := 0
+	for _, vid := range videoIDs {
+		res, execErr := tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid)
+		if execErr == nil {
+			affected, _ := res.RowsAffected()
+			totalRemoved += int(affected)
+		}
+	}
+
+	_, _ = tx.Exec(
+		"UPDATE yt_playlists SET video_count = (SELECT COUNT(*) FROM yt_playlist_items WHERE playlist_id = ?) WHERE id = ?",
+		playlistID, playlistID,
+	)
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return totalRemoved, nil
+}
+
+// RemoveVideosFromPlaylist removes target video entries from a YouTube playlist and updates the local database.
+func (a *App) RemoveVideosFromPlaylist(playlistID string, videoIDs []string) (int, error) {
+	if len(videoIDs) == 0 {
+		return 0, nil
+	}
+
+	if !a.IsYouTubeAuthed() {
+		return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+	}
+
+	targetSet := make(map[string]bool, len(videoIDs))
+	for _, vid := range videoIDs {
+		targetSet[vid] = true
+	}
+
+	type itemToDelete struct {
+		itemID  string
+		videoID string
+	}
+	var toDelete []itemToDelete
+
+	pageToken := ""
+	for {
+		call := svc.PlaylistItems.List([]string{"snippet"}).
+			PlaylistId(playlistID).
+			MaxResults(50)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		start := time.Now()
+		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", playlistID, playlistID, QuotaPlaylistItemsList, start, err)
+		if err != nil {
+			appLog("[RemoveVideosFromPlaylist] Failed to list playlist items: %v", err)
+			break
+		}
+		for _, it := range resp.Items {
+			if it.Snippet != nil && it.Snippet.ResourceId != nil && targetSet[it.Snippet.ResourceId.VideoId] {
+				toDelete = append(toDelete, itemToDelete{
+					itemID:  it.Id,
+					videoID: it.Snippet.ResourceId.VideoId,
+				})
+			}
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	for _, it := range toDelete {
+		start := time.Now()
+		delErr := svc.PlaylistItems.Delete(it.itemID).Do()
+		a.logAPICall("playlistItems.delete", it.itemID, it.videoID, QuotaPlaylistItemsDelete, start, delErr)
+		if delErr != nil {
+			appLog("[RemoveVideosFromPlaylist] Failed to delete playlistItem %s (video %s): %v", it.itemID, it.videoID, delErr)
+		}
+	}
+
+	return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+}
+

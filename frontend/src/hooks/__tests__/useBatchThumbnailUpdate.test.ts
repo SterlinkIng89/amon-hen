@@ -53,6 +53,27 @@ describe("useBatchThumbnailUpdate", () => {
     expect(result.current.items[0].status).toBe("pending");
   });
 
+  it("defaults episode_position to bottom-left when config is omitted", async () => {
+    const { result } = renderHook(() =>
+      useBatchThumbnailUpdate({
+        tag: "Hades",
+        items: mockItems,
+      })
+    );
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(thumbRender.renderTagThumbnailDataUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          episode_position: "bottom-left",
+        }),
+      })
+    );
+  });
+
   it("runs sequential updates through all items successfully", async () => {
     const { result } = renderHook(() =>
       useBatchThumbnailUpdate({

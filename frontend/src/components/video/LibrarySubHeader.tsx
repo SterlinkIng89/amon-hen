@@ -1,9 +1,8 @@
-import { VideoFile } from "../../types";
+import { VideoFile, SortMode, LibraryGroupMode } from "../../types";
+import { folderLabel } from "../../utils/videoUtils";
 import StatsBar from "./StatsBar";
 import AdvancedFilters, { ActiveFilterChips } from "../ui/AdvancedFilters";
 import type { AdvancedFiltersValue } from "../ui/AdvancedFilters";
-
-type SortMode = "date" | "name" | "size";
 
 interface LibrarySubHeaderProps {
   folders: string[];
@@ -11,31 +10,39 @@ interface LibrarySubHeaderProps {
   filteredVideos: VideoFile[];
   searchQuery: string;
   sortMode: SortMode;
+  groupMode?: LibraryGroupMode;
   onSearchChange: (q: string) => void;
   onSortChange: (m: SortMode) => void;
+  onGroupChange?: (m: LibraryGroupMode) => void;
   onToggleFolder: (path: string) => void;
   onOpenFolderSettings: (path: string) => void;
   filterUploaded: boolean;
   onToggleFilterUploaded: () => void;
+  onOpenCleanup?: () => void;
   // Advanced filters
   advancedFilters: AdvancedFiltersValue;
   onAdvancedFiltersChange: (v: AdvancedFiltersValue) => void;
-  // Tag management
+  // Tag management & filtering
   onOpenTagManagement: () => void;
+  availableTags: string[];
+  tagFilter: string;
+  onTagFilterChange: (tag: string) => void;
 }
 
-function folderLabel(f: string): string {
-  const normalized = f.replace(/[/\\]+$/, "");
-  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
-  const parts = normalized.split(/[/\\]/);
-  const last = parts[parts.length - 1];
-  return last || normalized;
-}
+const GROUP_OPTIONS: { value: LibraryGroupMode; label: string }[] = [
+  { value: "date", label: "Date" },
+  { value: "game", label: "Game" },
+  { value: "status", label: "Status" },
+  { value: "folder", label: "Folder" },
+  { value: "none", label: "None" },
+];
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "date", label: "Date" },
   { value: "name", label: "A–Z" },
   { value: "size", label: "Size" },
+  { value: "duration", label: "Duration" },
+  { value: "episode", label: "Episode" },
 ];
 
 export default function LibrarySubHeader({
@@ -44,15 +51,21 @@ export default function LibrarySubHeader({
   filteredVideos,
   searchQuery,
   sortMode,
+  groupMode = "date",
   onSearchChange,
   onSortChange,
+  onGroupChange,
   onToggleFolder,
   onOpenFolderSettings,
   filterUploaded,
   onToggleFilterUploaded,
+  onOpenCleanup,
   advancedFilters,
   onAdvancedFiltersChange,
   onOpenTagManagement,
+  availableTags = [],
+  tagFilter = "",
+  onTagFilterChange,
 }: LibrarySubHeaderProps) {
   if (folders.length === 0) return null;
 
@@ -254,28 +267,51 @@ export default function LibrarySubHeader({
 
           <div className="h-4 w-px bg-border-subtle" />
 
-          {/* Tags Configuration button */}
-          <button
-            onClick={onOpenTagManagement}
-            className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"
-            title="Configure YouTube playlists and thumbnail templates for library tags"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
+          {/* Tags Configuration & Filter */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onOpenTagManagement}
+              className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer bg-elevated/50 border-border-subtle text-text-secondary hover:text-text-primary hover:bg-elevated"
+              title="Configure YouTube playlists and thumbnail templates for library tags"
             >
-              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-              <line x1="7" y1="7" x2="7.01" y2="7" />
-            </svg>
-            Tags
-          </button>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+              >
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              Tags
+            </button>
+
+            <select
+              aria-label="Filter by tag"
+              value={tagFilter}
+              onChange={(e) => onTagFilterChange(e.target.value)}
+              className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent transition-all cursor-pointer"
+            >
+              <option value="">All Tags</option>
+              <option value="__untagged__">Untagged</option>
+              <option value="__placeholders__">Needs Variables</option>
+              {availableTags.length > 0 && (
+                <>
+                  <option disabled>──────────</option>
+                  {availableTags.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+          </div>
 
           <div className="h-4 w-px bg-border-subtle" />
 
@@ -304,31 +340,60 @@ export default function LibrarySubHeader({
           />
         </div>
 
-        {/* Segmented Sort Control */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-text-muted tracking-wide">
-            Sort
-          </span>
-          <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
-            {SORT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onSortChange(opt.value)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  sortMode === opt.value
-                    ? "bg-accent text-white shadow-sm"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Segmented Group Control */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-text-muted tracking-wide">
+              Group
+            </span>
+            <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
+              {GROUP_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onGroupChange?.(opt.value)}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    groupMode === opt.value
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Segmented Sort Control */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-text-muted tracking-wide">
+              Sort
+            </span>
+            <div className="flex items-center bg-elevated/60 border border-border-subtle rounded-lg p-0.5 gap-0.5">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onSortChange(opt.value)}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    sortMode === opt.value
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Bottom Row: StatsBar */}
-      <StatsBar videos={filteredVideos} />
+      <StatsBar
+        videos={filteredVideos}
+        filterUploaded={filterUploaded}
+        onToggleFilterUploaded={onToggleFilterUploaded}
+        onOpenCleanup={onOpenCleanup}
+      />
     </div>
   );
 }

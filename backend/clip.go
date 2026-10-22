@@ -93,13 +93,27 @@ func (a *App) CreateVideoClip(sourcePath string, startSec float64, endSec float6
 
 	appLog("[Clip] Created clip %s (%.2fs - %.2fs) in %v", outPath, startSec, endSec, time.Since(start))
 
+	a.applyClipMetadata(sourcePath, outPath, safeTitle)
+	_ = a.saveConfig()
+
+	return outPath, nil
+}
+
+// applyClipMetadata initializes metadata for a newly created clip.
+// Clips retain descriptions, custom vars, and episode, but remain untagged
+// by default to prevent cluttering game-filtered VOD collections.
+func (a *App) applyClipMetadata(sourcePath string, outPath string, safeTitle string) {
 	a.configMu.Lock()
+	defer a.configMu.Unlock()
+
 	if a.config.VideoMetadata == nil {
 		a.config.VideoMetadata = make(map[string]VideoMeta)
 	}
 	if a.config.VideoGames == nil {
 		a.config.VideoGames = make(map[string]string)
 	}
+
+	delete(a.config.VideoGames, outPath)
 
 	parentMeta, exists := a.config.VideoMetadata[sourcePath]
 	if exists {
@@ -112,7 +126,7 @@ func (a *App) CreateVideoClip(sourcePath string, startSec float64, endSec float6
 		}
 
 		clipMeta := VideoMeta{
-			Game:         parentMeta.Game,
+			Game:         "",
 			YouTubeTitle: safeTitle,
 			Description:  parentMeta.Description,
 			Privacy:      parentMeta.Privacy,
@@ -124,18 +138,10 @@ func (a *App) CreateVideoClip(sourcePath string, startSec float64, endSec float6
 		}
 
 		a.config.VideoMetadata[outPath] = clipMeta
-		if parentMeta.Game != "" {
-			a.config.VideoGames[outPath] = parentMeta.Game
-		}
 	} else {
 		a.config.VideoMetadata[outPath] = VideoMeta{
 			YouTubeTitle: safeTitle,
 			Event:        safeTitle,
 		}
 	}
-	a.configMu.Unlock()
-
-	_ = a.saveConfig()
-
-	return outPath, nil
 }

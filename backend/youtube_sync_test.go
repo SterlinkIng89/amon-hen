@@ -169,3 +169,102 @@ func TestSyncPlaylists_PreservesCustomThumbnail(t *testing.T) {
 	}
 }
 
+func TestUpdateYouTubeVideoGameMeta(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	// Setup config maps
+	app.config.VideoGames = make(map[string]string)
+	app.config.VideoMetadata = make(map[string]VideoMeta)
+
+	// 1. Insert test video linked to a local file
+	localPath := "/videos/gameplay.mp4"
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, description, published_at, view_count, like_count, duration, privacy, local_file, game_tag, episode)
+		VALUES ('vid-meta-1', 'Control Episode 1', 'Desc', '2026-01-01T00:00:00Z', 100, 10, 'PT10M', 'unlisted', ?, '', NULL)
+	`, localPath)
+	if err != nil {
+		t.Fatalf("failed to insert test video: %v", err)
+	}
+
+	// 2. Also insert playlist and playlist item to verify GetPlaylistVideos
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, description, video_count, thumbnail_url, published_at, privacy)
+		VALUES ('pl-meta-1', 'Control Series', 'Desc', 1, '', '2026-01-01T00:00:00Z', 'public');
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position)
+		VALUES ('pl-meta-1', 'vid-meta-1', 0);
+	`)
+	if err != nil {
+		t.Fatalf("failed to setup playlist: %v", err)
+	}
+
+	// 3. Update game tag and episode
+	err = app.UpdateYouTubeVideoGameMeta("vid-meta-1", "Control", 12)
+	if err != nil {
+		t.Fatalf("UpdateYouTubeVideoGameMeta failed: %v", err)
+	}
+
+	// Check DB row
+	var dbTag string
+	var dbEp sql.NullInt64
+	err = app.db.conn.QueryRow("SELECT game_tag, episode FROM yt_videos WHERE id = 'vid-meta-1'").Scan(&dbTag, &dbEp)
+	if err != nil {
+		t.Fatalf("failed to query yt_videos: %v", err)
+	}
+	if dbTag != "Control" {
+		t.Errorf("expected game_tag 'Control', got %q", dbTag)
+	}
+	if !dbEp.Valid || dbEp.Int64 != 12 {
+		t.Errorf("expected episode 12, got %v", dbEp)
+	}
+
+	// Check synced config for linked local file
+	if app.config.VideoGames[localPath] != "Control" {
+		t.Errorf("expected config VideoGames[%q] == 'Control', got %q", localPath, app.config.VideoGames[localPath])
+	}
+	if app.config.VideoMetadata[localPath].Episode != 12 {
+		t.Errorf("expected config VideoMetadata[%q].Episode == 12, got %d", localPath, app.config.VideoMetadata[localPath].Episode)
+	}
+
+	// 4. Verify GetChannelVideosPaginated returns episode
+	res, err := app.GetChannelVideosPaginated(1, 10, "", "", "", "")
+	if err != nil {
+		t.Fatalf("GetChannelVideosPaginated failed: %v", err)
+	}
+	videos, ok := res["videos"].([]YTVideo)
+	if !ok || len(videos) == 0 {
+		t.Fatalf("expected at least 1 video, got %v", res)
+	}
+	if videos[0].GameTag != "Control" {
+		t.Errorf("expected GameTag 'Control', got %q", videos[0].GameTag)
+	}
+	if videos[0].Episode == nil || *videos[0].Episode != 12 {
+		t.Errorf("expected Episode 12, got %v", videos[0].Episode)
+	}
+
+	// 5. Verify GetPlaylistVideos returns episode
+	plVideos, err := app.GetPlaylistVideos("pl-meta-1")
+	if err != nil {
+		t.Fatalf("GetPlaylistVideos failed: %v", err)
+	}
+	if len(plVideos) == 0 {
+		t.Fatalf("expected at least 1 playlist video")
+	}
+	if plVideos[0].Episode == nil || *plVideos[0].Episode != 12 {
+		t.Errorf("expected playlist video Episode 12, got %v", plVideos[0].Episode)
+	}
+
+	// 6. Test setting episode <= 0 clears it to NULL
+	err = app.UpdateYouTubeVideoGameMeta("vid-meta-1", "Control", 0)
+	if err != nil {
+		t.Fatalf("UpdateYouTubeVideoGameMeta with episode 0 failed: %v", err)
+	}
+	err = app.db.conn.QueryRow("SELECT episode FROM yt_videos WHERE id = 'vid-meta-1'").Scan(&dbEp)
+	if err != nil {
+		t.Fatalf("failed to query yt_videos after clear: %v", err)
+	}
+	if dbEp.Valid {
+		t.Errorf("expected episode to be NULL, got %d", dbEp.Int64)
+	}
+}
+

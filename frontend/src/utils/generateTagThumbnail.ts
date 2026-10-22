@@ -75,7 +75,7 @@ export async function getTagThumbnailAssets(
     enabled: true,
     source_type: "steam",
     steam_asset_type: "header",
-    episode_position: "bottom-right",
+    episode_position: "bottom-left",
     episode_format: "pad2",
   };
 
@@ -158,7 +158,7 @@ export async function generateAndSaveTagThumbnail({
       enabled: true,
       source_type: "steam",
       steam_asset_type: "header",
-      episode_position: "bottom-right",
+      episode_position: "bottom-left",
       episode_format: "pad2",
     };
   }

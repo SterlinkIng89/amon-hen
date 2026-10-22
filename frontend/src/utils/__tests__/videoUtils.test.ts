@@ -9,6 +9,10 @@ import {
   resolveDisplayTitle,
   extractEpisodeFromTitle,
   resolveVideoEpisode,
+  computeDefaultClipTitle,
+  groupVideos,
+  extractGamePrefixFromTitle,
+  groupVideosYT,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -296,6 +300,112 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         { text: " — 26/08/26 — 3", isPlaceholder: false },
       ]);
     });
+
+    it("highlights game tag when YTVideo has matching gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-1",
+        title: "CONTROL Resonant - Ep 1",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+        gameTag: "CONTROL Resonant",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("CONTROL Resonant - Ep 1");
+      expect(result.hasPlaceholders).toBe(false);
+      expect(result.segments).toEqual([
+        { text: "CONTROL Resonant", isGameTag: true, isPlaceholder: false },
+        { text: " - Ep 1", isPlaceholder: false },
+      ]);
+    });
+
+    it("extracts and highlights game tag prefix before separator when YTVideo has no gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-2",
+        title: "CONTROL Resonant - 19/10/26 - 31",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("CONTROL Resonant - 19/10/26 - 31");
+      expect(result.hasPlaceholders).toBe(false);
+      expect(result.segments).toEqual([
+        { text: "CONTROL Resonant", isGameTag: true, isPlaceholder: false },
+        { text: " - 19/10/26 - 31", isPlaceholder: false },
+      ]);
+    });
+
+    it("supports em-dash separator when extracting game tag prefix for YTVideo", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-3",
+        title: "Hollow Knight — 20/10/26 — 5",
+        description: "",
+        publishedAt: "2026-10-20T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 5,
+        likeCount: 1,
+        duration: "PT15M",
+        privacy: "unlisted",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("Hollow Knight — 20/10/26 — 5");
+      expect(result.segments).toEqual([
+        { text: "Hollow Knight", isGameTag: true, isPlaceholder: false },
+        { text: " — 20/10/26 — 5", isPlaceholder: false },
+      ]);
+    });
+
+    it("does not treat pure date prefix as game tag for YTVideo", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-4",
+        title: "19/10/26 - Stream Highlights",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("19/10/26 - Stream Highlights");
+      expect(result.segments).toEqual([
+        { text: "19/10/26 - Stream Highlights", isPlaceholder: false },
+      ]);
+    });
+
+    it("returns single plain segment when YTVideo has no separator and no gameTag", () => {
+      const ytVideo: YTVideo = {
+        id: "yt-5",
+        title: "Just a Random Video Title",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "",
+        viewCount: 10,
+        likeCount: 2,
+        duration: "PT10M",
+        privacy: "public",
+      };
+
+      const result = getVideoTitleSegments(ytVideo);
+      expect(result.fullTitle).toBe("Just a Random Video Title");
+      expect(result.segments).toEqual([
+        { text: "Just a Random Video Title", isPlaceholder: false },
+      ]);
+    });
   });
 
   describe("hasUnfilledPlaceholders", () => {
@@ -470,5 +580,267 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(resolveVideoEpisode("", 0, "CONTROL Resonant - 12/10/26")).toBe(0);
     });
   });
+
+  describe("computeDefaultClipTitle", () => {
+    it("prefixes clip title with game tag and base file name when game tag is present", () => {
+      expect(
+        computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "Lethal Company")
+      ).toBe("Lethal Company - 2026-08-26 14-30-00 - Clip");
+    });
+
+    it("trims whitespace from game tag", () => {
+      expect(
+        computeDefaultClipTitle("recording.mkv", "  Elden Ring  ")
+      ).toBe("Elden Ring - recording - Clip");
+    });
+
+    it("omits game tag prefix when game tag is undefined or empty string", () => {
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
+      expect(computeDefaultClipTitle("2026-08-26 14-30-00.mp4", "   ")).toBe(
+        "2026-08-26 14-30-00 - Clip"
+      );
+    });
+  });
+
+  describe("groupVideos", () => {
+    const videoDate1: VideoFile = {
+      name: "vid1.mp4",
+      path: "C:\\Recordings\\EldenRing\\vid1.mp4",
+      size: 1000,
+      modTime: 1729350000000, // 2024-10-19
+      folder: "C:\\Recordings\\EldenRing",
+      game: "Elden Ring",
+    };
+
+    const videoDate2: VideoFile = {
+      name: "vid2.mp4",
+      path: "C:\\Recordings\\EldenRing\\vid2.mp4",
+      size: 2000,
+      modTime: 1729350000000,
+      folder: "C:\\Recordings\\EldenRing",
+      game: "Elden Ring",
+      youtubeId: "yt-123",
+    };
+
+    const videoUntagged: VideoFile = {
+      name: "vid3.mp4",
+      path: "C:\\Captures\\vid3.mp4",
+      size: 3000,
+      modTime: 1729263600000, // 2024-10-18
+      folder: "C:\\Captures",
+      game: "",
+    };
+
+    const videoQueued: VideoFile = {
+      name: "vid4.mp4",
+      path: "C:\\Captures\\vid4.mp4",
+      size: 4000,
+      modTime: 1729263600000,
+      folder: "C:\\Captures",
+      game: "Hades II",
+    };
+
+    it("returns an empty array when mode is none", () => {
+      const res = groupVideos([videoDate1, videoDate2], "none");
+      expect(res).toEqual([]);
+    });
+
+    it("delegates to groupByDay when mode is date", () => {
+      const res = groupVideos([videoDate1, videoUntagged], "date");
+      expect(res).toHaveLength(2);
+      expect(res[0].videos).toHaveLength(1);
+      expect(res[0].videos[0].name).toBe("vid1.mp4");
+      expect(res[1].videos).toHaveLength(1);
+      expect(res[1].videos[0].name).toBe("vid3.mp4");
+    });
+
+    it("groups by game tag and assigns Untagged for empty or missing game", () => {
+      const res = groupVideos(
+        [videoDate1, videoUntagged, videoQueued],
+        "game",
+      );
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Elden Ring");
+      expect(res[0].videos[0].name).toBe("vid1.mp4");
+      expect(res[1].label).toBe("Untagged");
+      expect(res[1].videos[0].name).toBe("vid3.mp4");
+      expect(res[2].label).toBe("Hades II");
+      expect(res[2].videos[0].name).toBe("vid4.mp4");
+    });
+
+    it("groups by status in fixed order and omits empty buckets", () => {
+      const queuedPaths = new Set([videoQueued.path]);
+      const res = groupVideos(
+        [videoDate1, videoDate2, videoQueued],
+        "status",
+        queuedPaths,
+      );
+
+      // Order must strictly be: Pending Upload -> Queued -> Uploaded to YouTube
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Pending Upload");
+      expect(res[0].videos.map((v) => v.name)).toEqual(["vid1.mp4"]);
+
+      expect(res[1].label).toBe("Queued");
+      expect(res[1].videos.map((v) => v.name)).toEqual(["vid4.mp4"]);
+
+      expect(res[2].label).toBe("Uploaded to YouTube");
+      expect(res[2].videos.map((v) => v.name)).toEqual(["vid2.mp4"]);
+    });
+
+    it("groups by folder displaying folder basename as label", () => {
+      const res = groupVideos(
+        [videoDate1, videoDate2, videoUntagged],
+        "folder",
+      );
+
+      expect(res).toHaveLength(2);
+      expect(res[0].label).toBe("EldenRing");
+      expect(res[0].dateKey).toBe("folder:C:\\Recordings\\EldenRing");
+      expect(res[0].videos).toHaveLength(2);
+
+      expect(res[1].label).toBe("Captures");
+      expect(res[1].dateKey).toBe("folder:C:\\Captures");
+      expect(res[1].videos).toHaveLength(1);
+    });
+
+    it("preserves caller sorted order within each group", () => {
+      const v1: VideoFile = { ...videoDate1, name: "alpha.mp4", size: 100 };
+      const v2: VideoFile = { ...videoDate1, name: "beta.mp4", size: 200 };
+      const res = groupVideos([v2, v1], "game");
+      expect(res[0].videos[0].name).toBe("beta.mp4");
+      expect(res[0].videos[1].name).toBe("alpha.mp4");
+    });
+  });
+
+  describe("extractGamePrefixFromTitle", () => {
+    it("extracts game prefix when separated by dash or em-dash", () => {
+      expect(extractGamePrefixFromTitle("Elden Ring — 2026-10-21 — Ep 1")).toBe("Elden Ring");
+      expect(extractGamePrefixFromTitle("Hollow Knight - 12/10/26 - Episode 4")).toBe("Hollow Knight");
+    });
+
+    it("returns empty string if prefix looks like a date or has no separator", () => {
+      expect(extractGamePrefixFromTitle("2026-10-21 — Episode 1")).toBe("");
+      expect(extractGamePrefixFromTitle("No Separator In This Title")).toBe("");
+      expect(extractGamePrefixFromTitle("")).toBe("");
+      expect(extractGamePrefixFromTitle(undefined)).toBe("");
+    });
+  });
+
+  describe("groupVideosYT", () => {
+    const mockYTVideo = (overrides: Partial<YTVideo>): YTVideo => ({
+      id: "vid-1",
+      title: "Sample Video",
+      description: "",
+      publishedAt: "2026-10-21T12:00:00Z",
+      thumbnailUrl: "",
+      viewCount: 100,
+      likeCount: 10,
+      duration: "10:00",
+      privacy: "public",
+      monetizationStatus: "monetized",
+      ...overrides,
+    });
+
+    it("returns empty array when mode is 'none'", () => {
+      const v1 = mockYTVideo({ id: "1" });
+      expect(groupVideosYT([v1], "none", "recent")).toEqual([]);
+    });
+
+    it("delegates to groupByDayYT when mode is 'date'", () => {
+      const v1 = mockYTVideo({ id: "1", publishedAt: "2026-10-21T12:00:00Z" });
+      const v2 = mockYTVideo({ id: "2", publishedAt: "2026-10-20T12:00:00Z" });
+      const res = groupVideosYT([v1, v2], "date", "recent");
+      expect(res.length).toBeGreaterThan(0);
+      expect(res[0].videos).toBeDefined();
+    });
+
+    it("groups by playlist title with fallback to 'No Playlist'", () => {
+      const v1 = mockYTVideo({ id: "1", playlistTitle: "RPG Let's Plays" });
+      const v2 = mockYTVideo({ id: "2", playlistTitle: "" });
+      const v3 = mockYTVideo({ id: "3", playlistTitle: "RPG Let's Plays" });
+
+      const res = groupVideosYT([v1, v2, v3], "playlist", "recent");
+      expect(res).toHaveLength(2);
+      expect(res[0].label).toBe("RPG Let's Plays");
+      expect(res[0].dateKey).toBe("playlist:RPG Let's Plays");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "3"]);
+
+      expect(res[1].label).toBe("No Playlist");
+      expect(res[1].dateKey).toBe("playlist:No Playlist");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+    });
+
+    it("groups by game tag with fallback to title prefix and Untagged", () => {
+      const v1 = mockYTVideo({ id: "1", gameTag: "Zelda" });
+      const v2 = mockYTVideo({ id: "2", title: "Metroid Prime — 2026-10-21 — Part 1" });
+      const v3 = mockYTVideo({ id: "3", title: "Untitled Recording" });
+
+      const res = groupVideosYT([v1, v2, v3], "game", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Zelda");
+      expect(res[0].dateKey).toBe("game:Zelda");
+      expect(res[1].label).toBe("Metroid Prime");
+      expect(res[1].dateKey).toBe("game:Metroid Prime");
+      expect(res[2].label).toBe("Untagged");
+      expect(res[2].dateKey).toBe("game:Untagged");
+    });
+
+    it("groups by privacy status into Public, Unlisted, and Private", () => {
+      const v1 = mockYTVideo({ id: "1", privacy: "public" });
+      const v2 = mockYTVideo({ id: "2", privacy: "UNLISTED" });
+      const v3 = mockYTVideo({ id: "3", privacy: "private" });
+      const v4 = mockYTVideo({ id: "4", privacy: "" });
+
+      const res = groupVideosYT([v1, v2, v3, v4], "privacy", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Public");
+      expect(res[0].dateKey).toBe("privacy:public");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "4"]);
+
+      expect(res[1].label).toBe("Unlisted");
+      expect(res[1].dateKey).toBe("privacy:unlisted");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+
+      expect(res[2].label).toBe("Private");
+      expect(res[2].dateKey).toBe("privacy:private");
+      expect(res[2].videos.map((v) => v.id)).toEqual(["3"]);
+    });
+
+    it("groups by monetization status into Monetized, Limited, and Demonetized", () => {
+      const v1 = mockYTVideo({ id: "1", monetizationStatus: "monetized" });
+      const v2 = mockYTVideo({ id: "2", monetizationStatus: "LIMITED" });
+      const v3 = mockYTVideo({ id: "3", monetizationStatus: "demonetized" });
+      const v4 = mockYTVideo({ id: "4", monetizationStatus: undefined });
+
+      const res = groupVideosYT([v1, v2, v3, v4], "status", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Monetized");
+      expect(res[0].dateKey).toBe("status:monetized");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "4"]);
+
+      expect(res[1].label).toBe("Limited");
+      expect(res[1].dateKey).toBe("status:limited");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+
+      expect(res[2].label).toBe("Demonetized");
+      expect(res[2].dateKey).toBe("status:demonetized");
+      expect(res[2].videos.map((v) => v.id)).toEqual(["3"]);
+    });
+
+    it("preserves caller order within each group", () => {
+      const v1 = mockYTVideo({ id: "first", playlistTitle: "Series A" });
+      const v2 = mockYTVideo({ id: "second", playlistTitle: "Series A" });
+      const res = groupVideosYT([v2, v1], "playlist", "recent");
+      expect(res[0].videos[0].id).toBe("second");
+      expect(res[0].videos[1].id).toBe("first");
+    });
+  });
 });
+
 

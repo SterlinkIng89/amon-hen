@@ -46,8 +46,8 @@ func SetupTray(ctxCh <-chan context.Context) {
 
 	onReady := func() {
 		systray.SetIcon(trayIcon)
-		systray.SetTitle("Amon-Hen")
-		systray.SetTooltip("Amon-Hen — video manager")
+		systray.SetTitle(WindowTitle())
+		systray.SetTooltip(resolveTrayTooltip(isDevBuild))
 
 		// Also show the window when the tray icon itself is left-clicked.
 		systray.SetOnClick(func(menu systray.IMenu) {
@@ -96,8 +96,8 @@ func (a *App) ShowUploadNotification(title string, videoTitle string) {
 // Pass -1 to clear it back to the default title.
 func (a *App) SetTrayUploadProgress(percent int) {
 	if percent < 0 {
-		systray.SetTitle("Amon-Hen")
-		systray.SetTooltip("Amon-Hen — video manager")
+		systray.SetTitle(WindowTitle())
+		systray.SetTooltip(resolveTrayTooltip(isDevBuild))
 		uploadProgressPct.Store(0)
 	} else {
 		uploadProgressPct.Store(int32(percent))

@@ -451,7 +451,7 @@ export function renderPlaylistCoverToCanvas(
     showEpisode: false,
     episodeNumber: 0,
     episodeFormat: "pad2",
-    position: "bottom-right",
+    position: "bottom-left",
     framing: options.framing,
     logo: options.logo,
     title: options.title,
