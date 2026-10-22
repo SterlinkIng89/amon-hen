@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { YTVideo, YTPlaylist, TagPlaylistConfig } from "../../types";
+import {
+  YTVideo,
+  TagPlaylistConfig,
+  GameProfile,
+} from "../../types";
 import {
   UpdateYouTubeVideoMetadata,
-  GetChannelPlaylists,
-  AddVideoToPlaylist,
-  GetOrCreatePlaylist,
+  UpdateYouTubeVideoGameMeta,
   SelectCustomThumbnailImage,
   UpdateYouTubeThumbnail,
   LoadConfig,
 } from "../../../wailsjs/go/backend/App";
 import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
+import { extractEpisodeFromTitle } from "../../utils/videoUtils";
+import TagInput from "../ui/TagInput";
+import TagPlaylistModal from "../ui/TagPlaylistModal";
 import YouTubeThumbnailPicker from "./YouTubeThumbnailPicker";
+import YouTubePlaylistPicker from "./YouTubePlaylistPicker";
 import VideoStatusBadge from "./VideoStatusBadge";
 import {
   resolvePlayerKeyAction,
@@ -92,6 +98,15 @@ export default function YouTubeInlinePlayer({
     video.description,
   );
   const [editablePrivacy, setEditablePrivacy] = useState(video.privacy);
+  const [tagInput, setTagInput] = useState(video.gameTag || "");
+  const [episodeInput, setEpisodeInput] = useState<number | string>(
+    typeof video.episode === "number" && video.episode > 0
+      ? video.episode
+      : extractEpisodeFromTitle(video.title) || "",
+  );
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+  const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
 
@@ -99,21 +114,53 @@ export default function YouTubeInlinePlayer({
     setEditableTitle(video.title);
     setEditableDescription(video.description);
     setEditablePrivacy(video.privacy);
-  }, [video.id, video.title, video.description, video.privacy]);
+    setTagInput(video.gameTag || "");
+    setEpisodeInput(
+      typeof video.episode === "number" && video.episode > 0
+        ? video.episode
+        : extractEpisodeFromTitle(video.title) || "",
+    );
+  }, [video.id, video.title, video.description, video.privacy, video.gameTag, video.episode]);
 
+  const currentEpisodeNum = episodeInput !== "" ? Number(episodeInput) : 0;
+  const initialEpNum = typeof video.episode === "number" && video.episode > 0 ? video.episode : 0;
   const isDirty =
     editableTitle !== video.title ||
     editableDescription !== video.description ||
-    editablePrivacy !== video.privacy;
+    editablePrivacy !== video.privacy ||
+    tagInput !== (video.gameTag || "") ||
+    currentEpisodeNum !== initialEpNum;
 
-  const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
-  const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
-  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
-  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
-  const [playlistSearch, setPlaylistSearch] = useState("");
-  const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] =
-    useState(false);
-  const [playlistCreateError, setPlaylistCreateError] = useState("");
+  const handleEpisodeChange = (val: string) => {
+    const num = val === "" ? "" : parseInt(val, 10);
+    if (val !== "" && isNaN(num as number)) return;
+    setEpisodeInput(num);
+    const currentEp = num !== "" ? Number(num) : 0;
+
+    const epRe = /( [—\-] )(\d+)(?![\d/])(.*)?$/;
+    if (editableTitle) {
+      const m = editableTitle.match(epRe);
+      if (m) {
+        const customSuffix = m[3] ?? "";
+        const separator = m[1];
+        setEditableTitle(
+          editableTitle.slice(0, m.index!) +
+            (currentEp > 0
+              ? `${separator}${currentEp}${customSuffix}`
+              : customSuffix),
+        );
+        return;
+      }
+      if (currentEp > 0 && editableTitle.trim().length > 0) {
+        setEditableTitle(`${editableTitle.trim()} — ${currentEp}`);
+      }
+    }
+  };
+
+  const handleStepEpisode = (delta: -1 | 1) => {
+    const next = Math.max(1, currentEpisodeNum + delta);
+    handleEpisodeChange(String(next));
+  };
 
   const [tagPlaylistConfigs, setTagPlaylistConfigs] = useState<
     Record<string, TagPlaylistConfig>
@@ -121,20 +168,16 @@ export default function YouTubeInlinePlayer({
   const [isUploadingCustom, setIsUploadingCustom] = useState(false);
   const [uploadCustomError, setUploadCustomError] = useState("");
 
-  const refreshPlaylists = () => {
-    GetChannelPlaylists("recent")
-      .then(setPlaylists)
-      .catch(() => {});
-  };
-
   useEffect(() => {
-    refreshPlaylists();
     LoadConfig()
       .then((cfg) => {
         if (cfg) {
           const raw = cfg.tag_playlist_configs || {};
           const legacy = cfg.tag_playlists || {};
           setTagPlaylistConfigs(parseTagPlaylistConfigs(raw, legacy));
+          if (cfg.game_profiles) {
+            setGameProfiles(cfg.game_profiles);
+          }
         }
       })
       .catch(() => {});
@@ -270,6 +313,11 @@ export default function YouTubeInlinePlayer({
         editableDescription,
         editablePrivacy,
       );
+      await UpdateYouTubeVideoGameMeta(
+        video.id,
+        tagInput,
+        currentEpisodeNum,
+      );
       setInfoSaved(true);
       setTimeout(() => setInfoSaved(false), 3000);
       if (onUpdate) onUpdate();
@@ -298,46 +346,113 @@ export default function YouTubeInlinePlayer({
     }
   };
 
-  const handleAddToPlaylist = async (playlistId: string) => {
-    try {
-      await AddVideoToPlaylist(playlistId, video.id);
-      setShowPlaylistPicker(false);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleCreateAndAdd = async () => {
-    if (!newPlaylistTitle.trim()) return;
-    setIsCreatingPlaylistLoading(true);
-    setPlaylistCreateError("");
-    try {
-      const id = await GetOrCreatePlaylist(
-        newPlaylistTitle.trim(),
-        "",
-        editablePrivacy,
-      );
-      await AddVideoToPlaylist(id, video.id);
-      setNewPlaylistTitle("");
-      setIsCreatingPlaylist(false);
-      setShowPlaylistPicker(false);
-      refreshPlaylists();
-    } catch (e: unknown) {
-      setPlaylistCreateError(e instanceof Error ? e.message : String(e ?? "Failed"));
-    } finally {
-      setIsCreatingPlaylistLoading(false);
-    }
-  };
-
   const renderMetadataForm = () => (
     <>
+      <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+          <label htmlFor="yt-game-profile-select" className="text-sm font-medium text-white/90">
+            Game Profile
+          </label>
+          <select
+            id="yt-game-profile-select"
+            aria-label="Game Profile"
+            className="w-full bg-[#272727] border border-white/10 rounded-sm px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff] appearance-none cursor-pointer"
+            value={
+              Object.keys(gameProfiles).includes(tagInput)
+                ? tagInput
+                : ""
+            }
+            onChange={(e) => {
+              const tag = e.target.value;
+              setTagInput(tag);
+            }}
+            disabled={isSaving}
+          >
+            <option value="">Singleplayer</option>
+            {Object.keys(gameProfiles).map((pTag) => (
+              <option key={pTag} value={pTag}>
+                {pTag}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+          <label className="text-sm font-medium text-white/90">
+            Game Tag
+          </label>
+          <div
+            className={`flex-1 ${Object.keys(gameProfiles).includes(tagInput) ? "opacity-50 pointer-events-none" : ""}`}
+          >
+            <TagInput
+              value={tagInput}
+              onChange={(val) => setTagInput(val)}
+              onEnter={handleSave}
+              disabled={Object.keys(gameProfiles).includes(tagInput)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 w-32 shrink-0">
+          <label className="text-sm font-medium text-white/90">
+            Episode #
+          </label>
+          <div className="flex items-center">
+            <button
+              type="button"
+              aria-label="Decrease episode"
+              disabled={currentEpisodeNum <= 1}
+              onClick={() => handleStepEpisode(-1)}
+              className="h-9 px-2.5 bg-[#272727] border border-r-0 border-white/10 rounded-l-sm text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center font-medium select-none"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min={1}
+              className="w-full min-w-0 h-9 bg-[#272727] border border-white/10 rounded-none px-1 text-sm text-white outline-none focus:border-[#3ea6ff] focus:z-10 text-center"
+              value={episodeInput}
+              onChange={(e) => handleEpisodeChange(e.target.value)}
+              placeholder="—"
+            />
+            <button
+              type="button"
+              aria-label="Increase episode"
+              onClick={() => handleStepEpisode(1)}
+              className="h-9 px-2.5 bg-[#272727] border border-l-0 border-white/10 rounded-r-sm text-white hover:bg-white/10 transition-colors flex items-center justify-center font-medium select-none"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-white/60">Title</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-white/60">YouTube Title</label>
+          <span
+            className={`text-xs tabular-nums transition-colors ${
+              editableTitle.length >= 100
+                ? "text-[#3ea6ff] font-medium"
+                : "text-white/40"
+            }`}
+          >
+            {editableTitle.length}/100
+          </span>
+        </div>
         <input
           type="text"
           className="w-full bg-[#272727] border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-white outline-none focus:border-[#3ea6ff] transition-colors"
           value={editableTitle}
-          onChange={(e) => setEditableTitle(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            setEditableTitle(val);
+            const epMatch = extractEpisodeFromTitle(val);
+            if (epMatch > 0) {
+              setEpisodeInput(epMatch);
+            }
+          }}
+          maxLength={100}
           placeholder="Video title..."
         />
       </div>
@@ -345,7 +460,8 @@ export default function YouTubeInlinePlayer({
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-white/60">Description</label>
         <textarea
-          className="w-full h-36 bg-[#272727] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff] custom-scrollbar transition-colors resize-y"
+          rows={2}
+          className="w-full min-h-[68px] bg-[#272727] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff] custom-scrollbar transition-colors resize-y"
           value={editableDescription}
           onChange={(e) => setEditableDescription(e.target.value)}
           placeholder="Enter video description..."
@@ -366,163 +482,11 @@ export default function YouTubeInlinePlayer({
           </select>
         </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowPlaylistPicker(!showPlaylistPicker)}
-            className="px-3 py-1.5 rounded-lg bg-[#272727] hover:bg-white/10 border border-white/10 text-white/90 transition-colors flex items-center gap-1.5 text-xs font-medium"
-            title="Add to playlist"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M11 5L6 9H2V15H6L11 19V5Z" />
-              <line x1="23" y1="9" x2="17" y2="15" />
-              <line x1="17" y1="9" x2="23" y2="15" />
-            </svg>
-            <span>Add to Playlist</span>
-          </button>
-
-          {showPlaylistPicker && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-[#272727] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
-              <div className="p-3 border-b border-white/10 bg-[#0f0f0f]/50 flex items-center justify-between">
-                <span className="text-xs font-medium text-white/90">
-                  {isCreatingPlaylist
-                    ? "Create playlist"
-                    : "Select playlist"}
-                </span>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-[#3ea6ff] hover:text-[#65b8ff] transition-colors bg-transparent border-none cursor-pointer"
-                  onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}
-                >
-                  {isCreatingPlaylist ? "Cancel" : "+ New"}
-                </button>
-              </div>
-
-              {isCreatingPlaylist ? (
-                <div className="p-4 flex flex-col gap-3">
-                  <input
-                    className="w-full bg-[#0f0f0f] border border-transparent rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3ea6ff]"
-                    type="text"
-                    value={newPlaylistTitle}
-                    onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                    placeholder="Playlist name..."
-                    autoFocus
-                    disabled={isCreatingPlaylistLoading}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleCreateAndAdd()
-                    }
-                  />
-                  <span className="text-[10px] text-white/50">
-                    Existing playlist with same name will be reused.
-                  </span>
-                  {playlistCreateError && (
-                    <span className="text-[10px] text-red-400">
-                      {playlistCreateError}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="w-full py-2 rounded-full bg-white text-black hover:bg-gray-200 text-xs font-medium transition-colors"
-                    onClick={handleCreateAndAdd}
-                    disabled={
-                      !newPlaylistTitle.trim() || isCreatingPlaylistLoading
-                    }
-                  >
-                    {isCreatingPlaylistLoading ? (
-                      <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin mx-auto" />
-                    ) : (
-                      "Create & Add"
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col">
-                  <div className="p-2 border-b border-white/10">
-                    <div className="relative">
-                      <input
-                        className="w-full bg-[#0f0f0f] border border-transparent rounded-lg pl-8 pr-3 py-1.5 text-xs text-white outline-none focus:border-[#3ea6ff]"
-                        type="text"
-                        placeholder="Search playlists..."
-                        value={playlistSearch}
-                        onChange={(e) => setPlaylistSearch(e.target.value)}
-                        autoFocus
-                      />
-                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <circle cx="11" cy="11" r="8" />
-                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="max-h-56 overflow-y-auto custom-scrollbar">
-                    {playlists.filter((p) =>
-                      p.title
-                        .toLowerCase()
-                        .includes(playlistSearch.toLowerCase()),
-                    ).length === 0 ? (
-                      <div className="p-4 text-center text-xs text-white/50">
-                        No playlists found
-                      </div>
-                    ) : (
-                      playlists
-                        .filter((p) =>
-                          p.title
-                            .toLowerCase()
-                            .includes(playlistSearch.toLowerCase()),
-                        )
-                        .map((p) => (
-                          <button
-                            type="button"
-                            key={p.id}
-                            onClick={() => handleAddToPlaylist(p.id)}
-                            className="w-full text-left p-2.5 hover:bg-white/10 transition-colors flex items-center justify-between group"
-                          >
-                            <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                              <span className="text-xs font-medium text-white/90 truncate flex-1">
-                                {p.title}
-                              </span>
-                              <span className="text-[10px] text-white/50 whitespace-nowrap">
-                                {p.videoCount} videos
-                              </span>
-                            </div>
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              className="text-[#3ea6ff] opacity-0 group-hover:opacity-100 transition-opacity ml-1.5"
-                            >
-                              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                            </svg>
-                          </button>
-                        ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <YouTubePlaylistPicker
+          videoId={video.id}
+          defaultPrivacy={editablePrivacy}
+          onPlaylistAdded={() => onUpdate?.()}
+        />
       </div>
 
       {video.playlistTitle && (
@@ -560,12 +524,15 @@ export default function YouTubeInlinePlayer({
 
         <YouTubeThumbnailPicker
           videoPath={video.localFile || `yt:${video.id}`}
-          gameTag={video.gameTag || ""}
-          episodeNumber={video.episode || 1}
+          gameTag={tagInput}
+          episodeNumber={currentEpisodeNum > 0 ? currentEpisodeNum : 1}
           tagThumbnailConfig={
-            video.gameTag
-              ? tagPlaylistConfigs[video.gameTag]?.thumbnail_config
+            tagInput
+              ? tagPlaylistConfigs[tagInput]?.thumbnail_config
               : undefined
+          }
+          onOpenTagSettings={() =>
+            setPendingTagForModal(tagInput || video.gameTag || "")
           }
           youtubeId={video.id}
           onYouTubeUpdated={() => onUpdate?.()}
@@ -835,6 +802,27 @@ export default function YouTubeInlinePlayer({
             </div>
           </div>
         </div>
+      )}
+      {pendingTagForModal && (
+        <TagPlaylistModal
+          tag={pendingTagForModal}
+          onClose={() => setPendingTagForModal(null)}
+          onSaved={() => {
+            setPendingTagForModal(null);
+            LoadConfig()
+              .then((cfg) => {
+                if (cfg) {
+                  const raw = cfg.tag_playlist_configs || {};
+                  const legacy = cfg.tag_playlists || {};
+                  setTagPlaylistConfigs(parseTagPlaylistConfigs(raw, legacy));
+                  if (cfg.game_profiles) {
+                    setGameProfiles(cfg.game_profiles);
+                  }
+                }
+              })
+              .catch(() => {});
+          }}
+        />
       )}
     </div>
   );

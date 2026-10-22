@@ -454,6 +454,10 @@ export function UpdateYouTubeThumbnail(arg1, arg2) {
   return window['go']['backend']['App']['UpdateYouTubeThumbnail'](arg1, arg2);
 }
 
+export function UpdateYouTubeVideoGameMeta(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['UpdateYouTubeVideoGameMeta'](arg1, arg2, arg3);
+}
+
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
 }
