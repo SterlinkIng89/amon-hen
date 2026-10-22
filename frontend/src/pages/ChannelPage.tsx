@@ -16,6 +16,9 @@ import {
   AddVideoToPlaylist,
   PurgePlaylistDuplicates,
   UpdatePlaylistsVisibility,
+  GetOrCreatePlaylist,
+  UpdateYouTubeVideoMetadata,
+  RemoveVideosFromPlaylist,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { groupByDayYT, groupVideosYT } from "../utils/videoUtils";
@@ -35,6 +38,7 @@ import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 import EditYouTubeVideoModal from "../components/youtube/EditYouTubeVideoModal";
+import ChannelBulkEditModal from "../components/youtube/ChannelBulkEditModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
 
@@ -81,6 +85,8 @@ export default function ChannelPage() {
   const [editingVideo, setEditingVideo] = useState<YTVideo | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
+  const [bulkUpdatingVideos, setBulkUpdatingVideos] = useState(false);
+  const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [purgingDuplicates, setPurgingDuplicates] = useState(false);
   const lastSelectedId = useRef<string | null>(null);
   const lastSelectedPlaylistId = useRef<string | null>(null);
@@ -497,6 +503,63 @@ export default function ChannelPage() {
     } catch (e) {
       console.error("Error checking playlist:", e);
       setBulkAdding(false);
+    }
+  };
+
+  const handleCreateAndAddToPlaylist = async (title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      const privacy = useAppStore.getState().defaultPlaylistPrivacy || "unlisted";
+      const newPlaylistId = await GetOrCreatePlaylist(trimmed, "", privacy);
+      if (newPlaylistId) {
+        await loadData(true);
+        await handleAddToPlaylist(newPlaylistId);
+      }
+    } catch (err) {
+      console.error("Failed to create and add to playlist:", err);
+    }
+  };
+
+  const handleBulkUpdatePrivacy = async (
+    privacy: "public" | "unlisted" | "private",
+  ) => {
+    if (selectedVideoIds.size === 0) return;
+    const targetVideos = (selectedPlaylist ? playlistVideos : videos).filter((v) =>
+      selectedVideoIds.has(v.id),
+    );
+    setBulkUpdatingVideos(true);
+    try {
+      for (const v of targetVideos) {
+        await UpdateYouTubeVideoMetadata(v.id, v.title, v.description, privacy);
+      }
+      await loadData(true);
+    } catch (err) {
+      console.error("Bulk privacy update failed:", err);
+    } finally {
+      setBulkUpdatingVideos(false);
+    }
+  };
+
+  const handleRemoveFromPlaylist = async () => {
+    if (!selectedPlaylist || selectedVideoIds.size === 0) return;
+    const count = selectedVideoIds.size;
+    const confirmed = window.confirm(
+      `Remove ${count} video${count === 1 ? "" : "s"} from playlist "${selectedPlaylist.title}"?\n\nThe videos will remain on your YouTube channel.`,
+    );
+    if (!confirmed) return;
+
+    setBulkUpdatingVideos(true);
+    try {
+      const targetIds = Array.from(selectedVideoIds);
+      await RemoveVideosFromPlaylist(selectedPlaylist.id, targetIds);
+      setSelectedVideoIds(new Set());
+      lastSelectedId.current = null;
+      await loadData(true);
+    } catch (err) {
+      console.error("Failed to remove videos from playlist:", err);
+    } finally {
+      setBulkUpdatingVideos(false);
     }
   };
 
@@ -1615,11 +1678,17 @@ export default function ChannelPage() {
         <ChannelBulkActionBar
           selectedCount={selectedVideoIds.size}
           playlists={playlists}
+          isInsidePlaylist={selectedPlaylist !== null}
+          isUpdating={bulkUpdatingVideos}
           onClearSelection={() => {
             setSelectedVideoIds(new Set());
             lastSelectedId.current = null;
           }}
           onAddToPlaylist={handleAddToPlaylist}
+          onCreateAndAddToPlaylist={handleCreateAndAddToPlaylist}
+          onBulkUpdatePrivacy={handleBulkUpdatePrivacy}
+          onOpenBulkEditModal={() => setBulkEditModalOpen(true)}
+          onRemoveFromPlaylist={handleRemoveFromPlaylist}
           onDeleteFromYouTube={handleTriggerBulkDelete}
         />
       )}
@@ -1681,6 +1750,23 @@ export default function ChannelPage() {
           playlists={playlists}
           onClose={() => setEditingVideo(null)}
           onSaved={() => loadData(true)}
+        />
+      )}
+
+      {/* Bulk Edit YouTube Videos Modal */}
+      {bulkEditModalOpen && (
+        <ChannelBulkEditModal
+          open={bulkEditModalOpen}
+          selectedVideos={(selectedPlaylist ? playlistVideos : videos).filter((v) =>
+            selectedVideoIds.has(v.id),
+          )}
+          onClose={() => setBulkEditModalOpen(false)}
+          onCompleted={async () => {
+            setBulkEditModalOpen(false);
+            setSelectedVideoIds(new Set());
+            lastSelectedId.current = null;
+            await loadData(true);
+          }}
         />
       )}
     </div>

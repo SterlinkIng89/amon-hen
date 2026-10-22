@@ -384,7 +384,7 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 		UPDATE yt_videos 
 		SET title = ?, description = ?, privacy = ? 
 		WHERE id = ?`,
-		title, description, privacy, videoID)
+		finalTitle, finalDesc, privacy, videoID)
 
 	return err
 }

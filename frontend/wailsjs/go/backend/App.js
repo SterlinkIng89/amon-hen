@@ -282,6 +282,10 @@ export function PurgePlaylistDuplicates(arg1) {
   return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
 }
 
+export function RemoveVideosFromPlaylist(arg1, arg2) {
+  return window['go']['backend']['App']['RemoveVideosFromPlaylist'](arg1, arg2);
+}
+
 export function RegenerateThumbnail(arg1) {
   return window['go']['backend']['App']['RegenerateThumbnail'](arg1);
 }

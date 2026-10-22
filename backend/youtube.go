@@ -833,3 +833,106 @@ func (a *App) SetYouTubeThumbnail(videoID string, imagePath string) error {
 	_, err := a.setYouTubeThumbnailInternal(videoID, imagePath)
 	return err
 }
+
+// removeVideosFromPlaylistLocal removes specified videos from a playlist in local SQLite and updates the playlist video_count.
+func (a *App) removeVideosFromPlaylistLocal(playlistID string, videoIDs []string) (int, error) {
+	if a.db == nil || len(videoIDs) == 0 {
+		return 0, nil
+	}
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	tx, err := a.db.conn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	totalRemoved := 0
+	for _, vid := range videoIDs {
+		res, execErr := tx.Exec("DELETE FROM yt_playlist_items WHERE playlist_id = ? AND video_id = ?", playlistID, vid)
+		if execErr == nil {
+			affected, _ := res.RowsAffected()
+			totalRemoved += int(affected)
+		}
+	}
+
+	_, _ = tx.Exec(
+		"UPDATE yt_playlists SET video_count = (SELECT COUNT(*) FROM yt_playlist_items WHERE playlist_id = ?) WHERE id = ?",
+		playlistID, playlistID,
+	)
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return totalRemoved, nil
+}
+
+// RemoveVideosFromPlaylist removes target video entries from a YouTube playlist and updates the local database.
+func (a *App) RemoveVideosFromPlaylist(playlistID string, videoIDs []string) (int, error) {
+	if len(videoIDs) == 0 {
+		return 0, nil
+	}
+
+	if !a.IsYouTubeAuthed() {
+		return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+	}
+
+	ctx := context.Background()
+	svc, err := a.youtubeClient(ctx)
+	if err != nil {
+		return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+	}
+
+	targetSet := make(map[string]bool, len(videoIDs))
+	for _, vid := range videoIDs {
+		targetSet[vid] = true
+	}
+
+	type itemToDelete struct {
+		itemID  string
+		videoID string
+	}
+	var toDelete []itemToDelete
+
+	pageToken := ""
+	for {
+		call := svc.PlaylistItems.List([]string{"snippet"}).
+			PlaylistId(playlistID).
+			MaxResults(50)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		start := time.Now()
+		resp, err := call.Do()
+		a.logAPICall("playlistItems.list", playlistID, playlistID, QuotaPlaylistItemsList, start, err)
+		if err != nil {
+			appLog("[RemoveVideosFromPlaylist] Failed to list playlist items: %v", err)
+			break
+		}
+		for _, it := range resp.Items {
+			if it.Snippet != nil && it.Snippet.ResourceId != nil && targetSet[it.Snippet.ResourceId.VideoId] {
+				toDelete = append(toDelete, itemToDelete{
+					itemID:  it.Id,
+					videoID: it.Snippet.ResourceId.VideoId,
+				})
+			}
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	for _, it := range toDelete {
+		start := time.Now()
+		delErr := svc.PlaylistItems.Delete(it.itemID).Do()
+		a.logAPICall("playlistItems.delete", it.itemID, it.videoID, QuotaPlaylistItemsDelete, start, delErr)
+		if delErr != nil {
+			appLog("[RemoveVideosFromPlaylist] Failed to delete playlistItem %s (video %s): %v", it.itemID, it.videoID, delErr)
+		}
+	}
+
+	return a.removeVideosFromPlaylistLocal(playlistID, videoIDs)
+}
+

@@ -17,6 +17,7 @@ const (
 	QuotaPlaylistsInsert   = 50
 	QuotaPlaylistItemsList = 1
 	QuotaPlaylistItemsInsert = 50
+	QuotaPlaylistItemsDelete = 50
 	QuotaThumbnailsSet       = 50
 	QuotaPlaylistImagesInsert = 50
 )
