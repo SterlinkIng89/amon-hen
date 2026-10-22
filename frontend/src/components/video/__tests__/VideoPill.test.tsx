@@ -13,6 +13,12 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetCustomThumbnail: vi.fn().mockResolvedValue(""),
 }));
 
+vi.mock("../../../../wailsjs/runtime/runtime", () => ({
+  BrowserOpenURL: vi.fn(),
+  EventsOn: vi.fn(),
+  EventsOff: vi.fn(),
+}));
+
 vi.mock("../../../hooks/useInView", () => ({
   useInView: vi.fn().mockReturnValue(true),
 }));
@@ -766,3 +772,82 @@ describe("VideoPill Privacy Indicator", () => {
     expect(screen.queryByTitle("Unlisted video")).not.toBeInTheDocument();
   });
 });
+
+describe("VideoPill YouTube Quick Actions (Edit Metadata, Open in Browser)", () => {
+  it("renders 'Edit video metadata' button when onEdit is provided for YTVideo and clicking it triggers onEdit without clicking card", async () => {
+    const handleEdit = vi.fn();
+    const handleCardClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={mockVideo}
+        viewMode="grid"
+        onEdit={handleEdit}
+        onClick={handleCardClick}
+      />,
+    );
+
+    const editBtn = screen.getByTitle("Edit video metadata");
+    expect(editBtn).toBeInTheDocument();
+    expect(editBtn).toHaveAttribute("aria-label", "Edit video metadata");
+
+    fireEvent.click(editBtn);
+
+    expect(handleEdit).toHaveBeenCalledTimes(1);
+    expect(handleCardClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render 'Edit video metadata' button when onEdit is not provided for YTVideo", () => {
+    render(<VideoPill video={mockVideo} viewMode="grid" />);
+    expect(screen.queryByTitle("Edit video metadata")).not.toBeInTheDocument();
+  });
+
+  it("renders 'Open on YouTube' button for YTVideo and clicking it calls BrowserOpenURL without clicking card", async () => {
+    const { BrowserOpenURL } = await import(
+      "../../../../wailsjs/runtime/runtime"
+    );
+    const handleCardClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={mockVideo}
+        viewMode="grid"
+        onClick={handleCardClick}
+      />,
+    );
+
+    const openBtn = screen.getByTitle("Open on YouTube");
+    expect(openBtn).toBeInTheDocument();
+    expect(openBtn).toHaveAttribute("aria-label", "Open on YouTube");
+
+    fireEvent.click(openBtn);
+
+    expect(BrowserOpenURL).toHaveBeenCalledWith(
+      `https://www.youtube.com/watch?v=${mockVideo.id}`,
+    );
+    expect(handleCardClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render YouTube edit or open-on-youtube buttons for local VideoFile", () => {
+    const localVideo: VideoFile = {
+      name: "Clip_01.mp4",
+      path: "C:\\Videos\\Clip_01.mp4",
+      size: 10485760,
+      modTime: 1787754600000,
+      folder: "C:\\Videos",
+      game: "Valorant",
+    };
+
+    render(
+      <VideoPill
+        video={localVideo}
+        viewMode="grid"
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTitle("Edit video metadata")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Open on YouTube")).not.toBeInTheDocument();
+  });
+});
+

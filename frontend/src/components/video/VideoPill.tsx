@@ -25,6 +25,7 @@ import {
   GetVideoPreview,
   GetVideoDuration,
 } from "../../../wailsjs/go/backend/App";
+import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import VideoStatusBadge from "../youtube/VideoStatusBadge";
 
 export interface VideoPillProps {
@@ -47,6 +48,7 @@ export interface VideoPillProps {
   readonly isQueued?: boolean;
   readonly onQuickQueue?: () => void;
   readonly onOpenInExplorer?: () => void;
+  readonly onEdit?: () => void;
 }
 
 function VideoPillComponent({
@@ -69,6 +71,7 @@ function VideoPillComponent({
   isQueued = false,
   onQuickQueue,
   onOpenInExplorer,
+  onEdit,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -87,6 +90,8 @@ function VideoPillComponent({
   onQuickQueueRef.current = onQuickQueue;
   const onOpenInExplorerRef = useRef(onOpenInExplorer);
   onOpenInExplorerRef.current = onOpenInExplorer;
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
 
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
@@ -243,7 +248,8 @@ function VideoPillComponent({
   );
   const canUpload = Boolean(isLocal && onUpload && !hasYouTubeId);
   const showQuickActions =
-    isLocal && (Boolean(onOpenInExplorer) || canQuickQueue || canUpload);
+    (isLocal && (Boolean(onOpenInExplorer) || canQuickQueue || canUpload)) ||
+    isYT;
 
   return (
     <div
@@ -500,6 +506,67 @@ function VideoPillComponent({
                 </svg>
               </button>
             )}
+
+            {ytVideo && onEdit && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Edit video metadata"
+                aria-label="Edit video metadata"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEditRef.current?.();
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            )}
+
+            {ytVideo && (
+              <button
+                type="button"
+                className={`bg-black/60 text-white border border-white/20 rounded-lg p-1.5 transition-all hover:bg-accent hover:border-accent pointer-events-auto cursor-pointer ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Open on YouTube"
+                aria-label="Open on YouTube"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  BrowserOpenURL(`https://www.youtube.com/watch?v=${ytVideo.id}`);
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -711,7 +778,8 @@ function areVideoPillPropsEqual(
     prev.duplicateCount === next.duplicateCount &&
     prev.readOnlyThumbnail === next.readOnlyThumbnail &&
     prev.gameProfiles === next.gameProfiles &&
-    prev.isQueued === next.isQueued
+    prev.isQueued === next.isQueued &&
+    Boolean(prev.onEdit) === Boolean(next.onEdit)
   );
 }
 

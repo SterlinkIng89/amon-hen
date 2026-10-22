@@ -34,6 +34,7 @@ import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
 import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
+import EditYouTubeVideoModal from "../components/youtube/EditYouTubeVideoModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
 
@@ -77,6 +78,7 @@ export default function ChannelPage() {
     targetVideoIds: string[];
   } | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<YTVideo[] | null>(null);
+  const [editingVideo, setEditingVideo] = useState<YTVideo | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
   const [purgingDuplicates, setPurgingDuplicates] = useState(false);
@@ -1359,6 +1361,7 @@ export default function ChannelPage() {
                             : undefined
                         }
                         onDelete={() => setDeleteTargets([v])}
+                        onEdit={() => setEditingVideo(v)}
                       />
                     </div>
                   ))}
@@ -1508,6 +1511,7 @@ export default function ChannelPage() {
                                       : undefined
                                   }
                                   onDelete={() => setDeleteTargets([v])}
+                                  onEdit={() => setEditingVideo(v)}
                                 />
                               </div>
                             ))}
@@ -1541,6 +1545,7 @@ export default function ChannelPage() {
                               : undefined
                           }
                           onDelete={() => setDeleteTargets([v])}
+                          onEdit={() => setEditingVideo(v)}
                         />
                       </div>
                     ))}
@@ -1666,6 +1671,16 @@ export default function ChannelPage() {
           videos={deleteTargets}
           onClose={() => setDeleteTargets(null)}
           onDeleted={handleDeletedVideos}
+        />
+      )}
+
+      {/* Edit YouTube Video Modal */}
+      {editingVideo && (
+        <EditYouTubeVideoModal
+          video={editingVideo}
+          playlists={playlists}
+          onClose={() => setEditingVideo(null)}
+          onSaved={() => loadData(true)}
         />
       )}
     </div>
