@@ -5,6 +5,7 @@ import {
   YTVideo,
   VideoGroupYT,
   LibraryGroupMode,
+  ChannelGroupMode,
 } from "../types";
 
 const STANDARD_VARS = ["game", "date", "episode", "event", "gamemode"];
@@ -436,6 +437,99 @@ export function groupByDayYT(
     label: formatGroupLabel(dateKey),
     videos: vs,
   }));
+}
+
+export function extractGamePrefixFromTitle(title?: string): string {
+  if (!title) return "";
+  const match = title.match(/^(.+?)(\s+[—\-]\s+.*)$/);
+  if (match && extractTitleDate(match[1]) === "") {
+    return match[1].trim();
+  }
+  return "";
+}
+
+interface GroupTarget {
+  key: string;
+  label: string;
+}
+
+function groupEntriesBy<T>(
+  items: T[],
+  prefix: string,
+  resolveGroup: (item: T) => GroupTarget,
+): { dateKey: string; label: string; videos: T[] }[] {
+  const map = new Map<string, { label: string; videos: T[] }>();
+  for (const item of items) {
+    const { key, label } = resolveGroup(item);
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { label, videos: [] };
+      map.set(key, entry);
+    }
+    entry.videos.push(item);
+  }
+  return Array.from(map.entries()).map(([key, { label, videos }]) => ({
+    dateKey: `${prefix}:${key}`,
+    label,
+    videos,
+  }));
+}
+
+const PRIVACY_DISPLAY_NAMES: Record<string, string> = {
+  public: "Public",
+  unlisted: "Unlisted",
+  private: "Private",
+};
+
+const MONETIZATION_DISPLAY_NAMES: Record<string, string> = {
+  monetized: "Monetized",
+  limited: "Limited",
+  demonetized: "Demonetized",
+};
+
+export function groupVideosYT(
+  videos: YTVideo[],
+  groupMode: ChannelGroupMode,
+  sortMode: string,
+): VideoGroupYT[] {
+  if (groupMode === "none") {
+    return [];
+  }
+  if (groupMode === "date") {
+    return groupByDayYT(videos, sortMode);
+  }
+  if (groupMode === "playlist") {
+    return groupEntriesBy(videos, "playlist", (v) => {
+      const label = v.playlistTitle?.trim() || "No Playlist";
+      return { key: label, label };
+    });
+  }
+  if (groupMode === "game") {
+    return groupEntriesBy(videos, "game", (v) => {
+      const label =
+        v.gameTag?.trim() || extractGamePrefixFromTitle(v.title) || "Untagged";
+      return { key: label, label };
+    });
+  }
+  if (groupMode === "privacy") {
+    return groupEntriesBy(videos, "privacy", (v) => {
+      const raw = (v.privacy || "public").toLowerCase();
+      const label =
+        PRIVACY_DISPLAY_NAMES[raw] ||
+        raw.charAt(0).toUpperCase() + raw.slice(1);
+      return { key: raw, label };
+    });
+  }
+  if (groupMode === "status") {
+    return groupEntriesBy(videos, "status", (v) => {
+      const raw = (v.monetizationStatus || "monetized").toLowerCase();
+      const label =
+        MONETIZATION_DISPLAY_NAMES[raw] ||
+        raw.charAt(0).toUpperCase() + raw.slice(1);
+      return { key: raw, label };
+    });
+  }
+  return [];
 }
 
 export function extractCustomVars(template: string): string[] {

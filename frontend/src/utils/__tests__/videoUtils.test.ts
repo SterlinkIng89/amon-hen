@@ -11,6 +11,8 @@ import {
   resolveVideoEpisode,
   computeDefaultClipTitle,
   groupVideos,
+  extractGamePrefixFromTitle,
+  groupVideosYT,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -715,5 +717,130 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(res[0].videos[1].name).toBe("alpha.mp4");
     });
   });
+
+  describe("extractGamePrefixFromTitle", () => {
+    it("extracts game prefix when separated by dash or em-dash", () => {
+      expect(extractGamePrefixFromTitle("Elden Ring — 2026-10-21 — Ep 1")).toBe("Elden Ring");
+      expect(extractGamePrefixFromTitle("Hollow Knight - 12/10/26 - Episode 4")).toBe("Hollow Knight");
+    });
+
+    it("returns empty string if prefix looks like a date or has no separator", () => {
+      expect(extractGamePrefixFromTitle("2026-10-21 — Episode 1")).toBe("");
+      expect(extractGamePrefixFromTitle("No Separator In This Title")).toBe("");
+      expect(extractGamePrefixFromTitle("")).toBe("");
+      expect(extractGamePrefixFromTitle(undefined)).toBe("");
+    });
+  });
+
+  describe("groupVideosYT", () => {
+    const mockYTVideo = (overrides: Partial<YTVideo>): YTVideo => ({
+      id: "vid-1",
+      title: "Sample Video",
+      description: "",
+      publishedAt: "2026-10-21T12:00:00Z",
+      thumbnailUrl: "",
+      viewCount: 100,
+      likeCount: 10,
+      duration: "10:00",
+      privacy: "public",
+      monetizationStatus: "monetized",
+      ...overrides,
+    });
+
+    it("returns empty array when mode is 'none'", () => {
+      const v1 = mockYTVideo({ id: "1" });
+      expect(groupVideosYT([v1], "none", "recent")).toEqual([]);
+    });
+
+    it("delegates to groupByDayYT when mode is 'date'", () => {
+      const v1 = mockYTVideo({ id: "1", publishedAt: "2026-10-21T12:00:00Z" });
+      const v2 = mockYTVideo({ id: "2", publishedAt: "2026-10-20T12:00:00Z" });
+      const res = groupVideosYT([v1, v2], "date", "recent");
+      expect(res.length).toBeGreaterThan(0);
+      expect(res[0].videos).toBeDefined();
+    });
+
+    it("groups by playlist title with fallback to 'No Playlist'", () => {
+      const v1 = mockYTVideo({ id: "1", playlistTitle: "RPG Let's Plays" });
+      const v2 = mockYTVideo({ id: "2", playlistTitle: "" });
+      const v3 = mockYTVideo({ id: "3", playlistTitle: "RPG Let's Plays" });
+
+      const res = groupVideosYT([v1, v2, v3], "playlist", "recent");
+      expect(res).toHaveLength(2);
+      expect(res[0].label).toBe("RPG Let's Plays");
+      expect(res[0].dateKey).toBe("playlist:RPG Let's Plays");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "3"]);
+
+      expect(res[1].label).toBe("No Playlist");
+      expect(res[1].dateKey).toBe("playlist:No Playlist");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+    });
+
+    it("groups by game tag with fallback to title prefix and Untagged", () => {
+      const v1 = mockYTVideo({ id: "1", gameTag: "Zelda" });
+      const v2 = mockYTVideo({ id: "2", title: "Metroid Prime — 2026-10-21 — Part 1" });
+      const v3 = mockYTVideo({ id: "3", title: "Untitled Recording" });
+
+      const res = groupVideosYT([v1, v2, v3], "game", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Zelda");
+      expect(res[0].dateKey).toBe("game:Zelda");
+      expect(res[1].label).toBe("Metroid Prime");
+      expect(res[1].dateKey).toBe("game:Metroid Prime");
+      expect(res[2].label).toBe("Untagged");
+      expect(res[2].dateKey).toBe("game:Untagged");
+    });
+
+    it("groups by privacy status into Public, Unlisted, and Private", () => {
+      const v1 = mockYTVideo({ id: "1", privacy: "public" });
+      const v2 = mockYTVideo({ id: "2", privacy: "UNLISTED" });
+      const v3 = mockYTVideo({ id: "3", privacy: "private" });
+      const v4 = mockYTVideo({ id: "4", privacy: "" });
+
+      const res = groupVideosYT([v1, v2, v3, v4], "privacy", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Public");
+      expect(res[0].dateKey).toBe("privacy:public");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "4"]);
+
+      expect(res[1].label).toBe("Unlisted");
+      expect(res[1].dateKey).toBe("privacy:unlisted");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+
+      expect(res[2].label).toBe("Private");
+      expect(res[2].dateKey).toBe("privacy:private");
+      expect(res[2].videos.map((v) => v.id)).toEqual(["3"]);
+    });
+
+    it("groups by monetization status into Monetized, Limited, and Demonetized", () => {
+      const v1 = mockYTVideo({ id: "1", monetizationStatus: "monetized" });
+      const v2 = mockYTVideo({ id: "2", monetizationStatus: "LIMITED" });
+      const v3 = mockYTVideo({ id: "3", monetizationStatus: "demonetized" });
+      const v4 = mockYTVideo({ id: "4", monetizationStatus: undefined });
+
+      const res = groupVideosYT([v1, v2, v3, v4], "status", "recent");
+      expect(res).toHaveLength(3);
+      expect(res[0].label).toBe("Monetized");
+      expect(res[0].dateKey).toBe("status:monetized");
+      expect(res[0].videos.map((v) => v.id)).toEqual(["1", "4"]);
+
+      expect(res[1].label).toBe("Limited");
+      expect(res[1].dateKey).toBe("status:limited");
+      expect(res[1].videos.map((v) => v.id)).toEqual(["2"]);
+
+      expect(res[2].label).toBe("Demonetized");
+      expect(res[2].dateKey).toBe("status:demonetized");
+      expect(res[2].videos.map((v) => v.id)).toEqual(["3"]);
+    });
+
+    it("preserves caller order within each group", () => {
+      const v1 = mockYTVideo({ id: "first", playlistTitle: "Series A" });
+      const v2 = mockYTVideo({ id: "second", playlistTitle: "Series A" });
+      const res = groupVideosYT([v2, v1], "playlist", "recent");
+      expect(res[0].videos[0].id).toBe("second");
+      expect(res[0].videos[1].id).toBe("first");
+    });
+  });
 });
+
 

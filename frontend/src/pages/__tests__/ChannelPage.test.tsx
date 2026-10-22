@@ -666,5 +666,183 @@ describe("ChannelPage YouTube Sync State", () => {
       expect(screen.getByText("Elden Ring Ep 2")).toBeInTheDocument();
     });
   });
+
+  describe("ChannelPage dynamic Group By selector & Privacy/Status filters", () => {
+    const mockVideos = [
+      {
+        id: "vid-1",
+        title: "Zelda - Part 1",
+        description: "",
+        publishedAt: "2026-10-21T10:00:00Z",
+        thumbnailUrl: "https://example.com/thumb1.jpg",
+        viewCount: 100,
+        likeCount: 10,
+        duration: "PT10M",
+        privacy: "public",
+        monetizationStatus: "monetized",
+        gameTag: "Zelda",
+        playlistTitle: "Zelda Series",
+      },
+      {
+        id: "vid-2",
+        title: "Metroid - Part 1",
+        description: "",
+        publishedAt: "2026-10-20T10:00:00Z",
+        thumbnailUrl: "https://example.com/thumb2.jpg",
+        viewCount: 200,
+        likeCount: 20,
+        duration: "PT15M",
+        privacy: "unlisted",
+        monetizationStatus: "limited",
+        gameTag: "Metroid",
+        playlistTitle: "Metroid Series",
+      },
+      {
+        id: "vid-3",
+        title: "Untagged - 2026-10-19",
+        description: "",
+        publishedAt: "2026-10-19T10:00:00Z",
+        thumbnailUrl: "https://example.com/thumb3.jpg",
+        viewCount: 300,
+        likeCount: 30,
+        duration: "PT20M",
+        privacy: "private",
+        monetizationStatus: "demonetized",
+        gameTag: "",
+        playlistTitle: "",
+      },
+    ];
+
+    beforeEach(() => {
+      localStorage.clear();
+      vi.mocked(AppBackend.GetChannelVideosPaginated).mockResolvedValue({
+        videos: mockVideos as any,
+        total: 3,
+      });
+    });
+
+    it("filters videos by privacy when Filter by privacy select changes", async () => {
+      render(<ChannelPage />);
+
+      await screen.findByText(/Zelda/);
+      expect(screen.getByText(/Metroid/)).toBeInTheDocument();
+      expect(screen.getByText(/Untagged/)).toBeInTheDocument();
+
+      const privacySelect = screen.getByLabelText("Filter by privacy");
+      fireEvent.change(privacySelect, { target: { value: "unlisted" } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Metroid/)).toBeInTheDocument();
+        expect(screen.queryByText(/Zelda/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Untagged/)).not.toBeInTheDocument();
+      });
+
+      fireEvent.change(privacySelect, { target: { value: "private" } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Untagged/)).toBeInTheDocument();
+        expect(screen.queryByText(/Zelda/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Metroid/)).not.toBeInTheDocument();
+      });
+    });
+
+    it("filters videos by monetization status when Filter by status select changes", async () => {
+      render(<ChannelPage />);
+
+      await screen.findByText(/Zelda/);
+
+      const statusSelect = screen.getByLabelText("Filter by status");
+      fireEvent.change(statusSelect, { target: { value: "limited" } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Metroid/)).toBeInTheDocument();
+        expect(screen.queryByText(/Zelda/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Untagged/)).not.toBeInTheDocument();
+      });
+
+      fireEvent.change(statusSelect, { target: { value: "demonetized" } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Untagged/)).toBeInTheDocument();
+        expect(screen.queryByText(/Zelda/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Metroid/)).not.toBeInTheDocument();
+      });
+    });
+
+    it("switches grouping modes and renders corresponding group headers", async () => {
+      render(<ChannelPage />);
+
+      await screen.findByText(/Zelda/);
+
+      const groupSelect = screen.getByLabelText("Group videos by");
+
+      // Group by playlist
+      fireEvent.change(groupSelect, { target: { value: "playlist" } });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Zelda Series" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Metroid Series" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in No Playlist" }),
+        ).toBeInTheDocument();
+      });
+
+      // Group by game
+      fireEvent.change(groupSelect, { target: { value: "game" } });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Zelda" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Metroid" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Untagged" }),
+        ).toBeInTheDocument();
+      });
+
+      // Group by privacy
+      fireEvent.change(groupSelect, { target: { value: "privacy" } });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Public" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Unlisted" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Private" }),
+        ).toBeInTheDocument();
+      });
+
+      // Group by status
+      fireEvent.change(groupSelect, { target: { value: "status" } });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Monetized" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Limited" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: "Select all videos in Demonetized" }),
+        ).toBeInTheDocument();
+      });
+
+      // Group by none
+      fireEvent.change(groupSelect, { target: { value: "none" } });
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("button", { name: /Select all videos in/i }),
+        ).toBeNull();
+        expect(screen.getByText(/Zelda/)).toBeInTheDocument();
+        expect(screen.getByText(/Metroid/)).toBeInTheDocument();
+        expect(screen.getByText(/Untagged/)).toBeInTheDocument();
+      });
+    });
+  });
 });
 

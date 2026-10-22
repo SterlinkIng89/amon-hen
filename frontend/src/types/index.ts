@@ -196,6 +196,7 @@ export type ViewMode =
 export type PlaylistPrivacy = "public" | "unlisted" | "private";
 export type SortMode = "date" | "name" | "size" | "duration" | "episode";
 export type LibraryGroupMode = "date" | "game" | "status" | "folder" | "none";
+export type ChannelGroupMode = "date" | "playlist" | "game" | "privacy" | "status" | "none";
 export type CardDensity = "compact" | "default" | "large";
 
 export const CARD_DENSITY_CLASSES: Record<CardDensity, string> = {
