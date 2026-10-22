@@ -3,6 +3,7 @@ import { render, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import YouTubeInlinePlayer from "../YouTubeInlinePlayer";
 import { YTVideo } from "../../../types";
+import { OpenFolderInExplorer } from "../../../../wailsjs/go/backend/App";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   UpdateYouTubeVideoMetadata: vi.fn().mockResolvedValue(undefined),
@@ -18,6 +19,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   SaveCustomThumbnail: vi.fn().mockResolvedValue(""),
   GetSteamAppID: vi.fn().mockResolvedValue(""),
   GetSteamGameAssets: vi.fn().mockResolvedValue({}),
+  OpenFolderInExplorer: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("YouTubeInlinePlayer keyboard shortcuts and navigation", () => {
@@ -37,6 +39,7 @@ describe("YouTubeInlinePlayer keyboard shortcuts and navigation", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem("yt_player_playback_rate");
 
     mockPlayerInstance = {
       getCurrentTime: vi.fn().mockReturnValue(20),
@@ -48,6 +51,8 @@ describe("YouTubeInlinePlayer keyboard shortcuts and navigation", () => {
       mute: vi.fn(),
       unMute: vi.fn(),
       isMuted: vi.fn().mockReturnValue(false),
+      getPlaybackRate: vi.fn().mockReturnValue(1),
+      setPlaybackRate: vi.fn(),
       destroy: vi.fn(),
     };
 
@@ -193,5 +198,98 @@ describe("YouTubeInlinePlayer keyboard shortcuts and navigation", () => {
 
     expect(getByTitle("Previous (Shift+←)")).toBeInTheDocument();
     expect(getByTitle("Next (Shift+→)")).toBeInTheDocument();
+  });
+
+  it("increases playback speed on > key and calls mockPlayerInstance.setPlaybackRate", () => {
+    setupPlayer();
+
+    fireEvent.keyDown(document, { key: ">" });
+
+    expect(mockPlayerInstance.setPlaybackRate).toHaveBeenCalledWith(1.25);
+  });
+
+  it("decreases playback speed on < key and calls mockPlayerInstance.setPlaybackRate", () => {
+    setupPlayer();
+
+    fireEvent.keyDown(document, { key: "<" });
+
+    expect(mockPlayerInstance.setPlaybackRate).toHaveBeenCalledWith(0.5);
+  });
+
+  it("cycles playback speed when clicking the Playback speed transport button", () => {
+    const { getByRole } = setupPlayer();
+
+    const speedBtn = getByRole("button", { name: "Playback speed" });
+    expect(speedBtn).toHaveTextContent("1x");
+
+    fireEvent.click(speedBtn);
+
+    expect(mockPlayerInstance.setPlaybackRate).toHaveBeenCalledWith(1.25);
+    expect(speedBtn).toHaveTextContent("1.25x");
+  });
+
+  it("displays shortcuts tooltip when hovering the Keyboard shortcuts button", () => {
+    const { getByTitle, queryByRole } = setupPlayer();
+
+    const shortcutsBtn = getByTitle("Keyboard shortcuts");
+    expect(queryByRole("tooltip")).toBeNull();
+
+    fireEvent.mouseEnter(shortcutsBtn.parentElement || shortcutsBtn);
+    expect(queryByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.mouseLeave(shortcutsBtn.parentElement || shortcutsBtn);
+    expect(queryByRole("tooltip")).toBeNull();
+  });
+
+  it("copies YouTube link when clicking Copy YouTube link button", async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: writeTextMock },
+    });
+
+    const { getByRole } = setupPlayer();
+    const copyBtn = getByRole("button", { name: "Copy YouTube link" });
+
+    fireEvent.click(copyBtn);
+
+    expect(writeTextMock).toHaveBeenCalledWith("https://youtu.be/vid-yt-123");
+  });
+
+  it("calls OpenFolderInExplorer with parent directory when video has localFile", () => {
+    const { getByRole } = setupPlayer({
+      video: {
+        ...mockVideo,
+        localFile: "C:/videos/outplayed/clip.mp4",
+      },
+    });
+
+    const openFolderBtn = getByRole("button", { name: "Open file folder" });
+    fireEvent.click(openFolderBtn);
+
+    expect(OpenFolderInExplorer).toHaveBeenCalledWith("C:/videos/outplayed");
+  });
+
+  it("does not render Open file folder button when video does not have localFile", () => {
+    const { queryByRole } = setupPlayer({
+      video: {
+        ...mockVideo,
+        localFile: undefined,
+      },
+    });
+
+    expect(queryByRole("button", { name: "Open file folder" })).toBeNull();
+  });
+
+  it("navigates via transport Previous and Next buttons", () => {
+    const { getByRole, onPrev, onNext } = setupPlayer();
+
+    const prevBtn = getByRole("button", { name: "Previous" });
+    const nextBtn = getByRole("button", { name: "Next" });
+
+    fireEvent.click(prevBtn);
+    expect(onPrev).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(nextBtn);
+    expect(onNext).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,10 +18,12 @@ import TagPlaylistModal from "../ui/TagPlaylistModal";
 import YouTubeThumbnailPicker from "./YouTubeThumbnailPicker";
 import YouTubePlaylistPicker from "./YouTubePlaylistPicker";
 import VideoStatusBadge from "./VideoStatusBadge";
+import YouTubeTransportBar from "./YouTubeTransportBar";
 import {
   resolvePlayerKeyAction,
   clampSeek,
   isTypingTarget,
+  stepPlaybackSpeed,
 } from "../../utils/playerKeys";
 
 interface YTPlayerLike {
@@ -34,6 +36,8 @@ interface YTPlayerLike {
   mute(): void;
   unMute(): void;
   isMuted(): boolean;
+  getPlaybackRate?(): number;
+  setPlaybackRate?(suggestedRate: number): void;
   destroy(): void;
 }
 
@@ -47,6 +51,7 @@ interface YouTubeInlinePlayerProps {
 }
 
 const STORAGE_YT_INFO_EXPANDED_KEY = "yt_player_info_expanded";
+const STORAGE_YT_PLAYBACK_RATE_KEY = "yt_player_playback_rate";
 
 export default function YouTubeInlinePlayer({
   video,
@@ -92,6 +97,29 @@ export default function YouTubeInlinePlayer({
   useEffect(() => {
     localStorage.setItem(STORAGE_YT_INFO_EXPANDED_KEY, String(isInfoExpanded));
   }, [isInfoExpanded]);
+
+  const [playbackRate, setPlaybackRate] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_YT_PLAYBACK_RATE_KEY);
+    if (saved) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed >= 0.5 && parsed <= 2) return parsed;
+    }
+    return 1;
+  });
+  const playbackRateRef = useRef(playbackRate);
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
+
+  const applyPlaybackRate = (rate: number) => {
+    setPlaybackRate(rate);
+    localStorage.setItem(STORAGE_YT_PLAYBACK_RATE_KEY, String(rate));
+    try {
+      playerRef.current?.setPlaybackRate?.(rate);
+    } catch {
+      // Player iframe may not be ready
+    }
+  };
 
   const [editableTitle, setEditableTitle] = useState(video.title);
   const [editableDescription, setEditableDescription] = useState(
@@ -202,6 +230,15 @@ export default function YouTubeInlinePlayer({
           origin: window.location.origin,
         },
         events: {
+          onReady: () => {
+            try {
+              if (playbackRateRef.current !== 1) {
+                player?.setPlaybackRate?.(playbackRateRef.current);
+              }
+            } catch {
+              // Ignore if not supported
+            }
+          },
           onStateChange: (event: { data: number }) => {
             if (event.data === (window as any).YT.PlayerState.ENDED) {
               if (onEnded) onEnded();
@@ -246,6 +283,14 @@ export default function YouTubeInlinePlayer({
       if (!action) return;
 
       const p = playerRef.current;
+
+      if (action.type === "speed") {
+        e.preventDefault();
+        const next = stepPlaybackSpeed(playbackRateRef.current, action.dir);
+        const clamped = Math.min(2, Math.max(0.5, next));
+        applyPlaybackRate(clamped);
+        return;
+      }
 
       if (action.type === "seek") {
         if (!p) return;
@@ -542,55 +587,70 @@ export default function YouTubeInlinePlayer({
     <div
       className={`flex-1 flex overflow-hidden bg-[#0f0f0f] ${isWide ? "flex-row" : "flex-col"}`}
     >
-      {/* Player Area */}
-      <div className="relative flex-1 bg-black flex items-center justify-center group min-w-0">
-        <div id="yt-player-container" className="w-full h-full" />
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Player Area */}
+        <div className="relative flex-1 bg-black flex items-center justify-center group min-w-0">
+          <div id="yt-player-container" className="w-full h-full" />
 
-        {/* Navigation Overlays */}
-        {onPrev && (
-          <button
-            type="button"
-            onClick={onPrev}
-            title="Previous (Shift+←)"
-            aria-label="Previous (Shift+←)"
-            className="absolute left-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {/* Navigation Overlays */}
+          {onPrev && (
+            <button
+              type="button"
+              onClick={onPrev}
+              title="Previous (Shift+←)"
+              aria-label="Previous (Shift+←)"
+              className="absolute left-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
             >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        )}
-        {onNext && (
-          <button
-            type="button"
-            onClick={onNext}
-            title="Next (Shift+→)"
-            aria-label="Next (Shift+→)"
-            className="absolute right-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+          )}
+          {onNext && (
+            <button
+              type="button"
+              onClick={onNext}
+              title="Next (Shift+→)"
+              aria-label="Next (Shift+→)"
+              className="absolute right-6 top-1/2 -translate-y-1/2 p-4 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/90 hover:scale-110"
             >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
-        )}
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        <YouTubeTransportBar
+          videoId={video.id}
+          videoTitle={video.title}
+          localFile={video.localFile}
+          isWide={isWide}
+          isInfoExpanded={isInfoExpanded}
+          playbackRate={playbackRate}
+          onPlaybackRateChange={applyPlaybackRate}
+          onPrev={onPrev}
+          onNext={onNext}
+          onToggleInfoExpanded={() => setIsInfoExpanded(!isInfoExpanded)}
+        />
       </div>
 
       {/* Info & Inspector Panel */}
