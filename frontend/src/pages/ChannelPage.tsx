@@ -38,6 +38,7 @@ import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 import EditYouTubeVideoModal from "../components/youtube/EditYouTubeVideoModal";
+import EditPlaylistModal from "../components/youtube/EditPlaylistModal";
 import ChannelBulkEditModal from "../components/youtube/ChannelBulkEditModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
@@ -83,6 +84,7 @@ export default function ChannelPage() {
   } | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<YTVideo[] | null>(null);
   const [editingVideo, setEditingVideo] = useState<YTVideo | null>(null);
+  const [editingPlaylist, setEditingPlaylist] = useState<YTPlaylist | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
   const [bulkUpdatingVideos, setBulkUpdatingVideos] = useState(false);
@@ -803,6 +805,28 @@ export default function ChannelPage() {
                   {selectedPlaylist.title}
                 </h1>
               </div>
+
+              <button
+                type="button"
+                className="p-1.5 rounded-lg text-text-muted hover:text-accent hover:bg-surface border border-transparent hover:border-border-subtle transition-colors cursor-pointer"
+                onClick={() => setEditingPlaylist(selectedPlaylist)}
+                title="Edit playlist"
+                aria-label="Edit playlist"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+              </button>
 
               {/* Duplicate warning banner */}
               {duplicateEntriesCount > 0 && (
@@ -1666,6 +1690,7 @@ export default function ChannelPage() {
                     onClick={(e) => handlePlaylistClick(p, e)}
                     onSelectToggle={() => handlePlaylistSelectToggle(p)}
                     onDeleted={() => loadData(true)}
+                    onEdit={() => setEditingPlaylist(p)}
                   />
                 ))}
             </div>
@@ -1750,6 +1775,20 @@ export default function ChannelPage() {
           playlists={playlists}
           onClose={() => setEditingVideo(null)}
           onSaved={() => loadData(true)}
+        />
+      )}
+
+      {/* Edit YouTube Playlist Modal */}
+      {editingPlaylist && (
+        <EditPlaylistModal
+          playlist={editingPlaylist}
+          onClose={() => setEditingPlaylist(null)}
+          onSaved={(updated) => {
+            if (selectedPlaylist?.id === updated.id) {
+              setSelectedPlaylist(updated);
+            }
+            loadData(true);
+          }}
         />
       )}
 

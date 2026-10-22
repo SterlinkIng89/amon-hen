@@ -519,6 +519,72 @@ describe("ChannelPage YouTube Sync State", () => {
     expect(dupBadge).toHaveTextContent("2 duplicates");
   });
 
+  it("opens EditPlaylistModal when clicking edit playlist button on card and in sub-header", async () => {
+    const testPlaylists = [
+      {
+        id: "pl-1",
+        title: "Boss Battles",
+        description: "Epic fights",
+        videoCount: 5,
+        thumbnailUrl: "",
+        publishedAt: "",
+        privacy: "public",
+        duplicateCount: 2,
+      },
+      {
+        id: "pl-2",
+        title: "Clean List",
+        description: "",
+        videoCount: 3,
+        thumbnailUrl: "",
+        publishedAt: "",
+        privacy: "public",
+        duplicateCount: 0,
+      },
+    ];
+
+    vi.mocked(AppBackend.GetChannelPlaylists).mockResolvedValue(
+      testPlaylists as any,
+    );
+    vi.mocked(AppBackend.GetPlaylistVideos).mockResolvedValue([]);
+
+    render(<ChannelPage />);
+
+    // Switch to playlists tab
+    const playlistsTab = await screen.findByRole("button", {
+      name: "Playlists",
+    });
+    fireEvent.click(playlistsTab);
+
+    await screen.findByText("Boss Battles");
+
+    // Click edit on the first playlist card
+    const editBtns = screen.getAllByTitle("Edit playlist");
+    expect(editBtns.length).toBeGreaterThan(0);
+    fireEvent.click(editBtns[0]);
+
+    // Modal opens
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Edit Playlist" })).toBeInTheDocument();
+
+    // Close modal
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    // Click into playlist to view its items
+    const playlistCard = screen.getByText("Boss Battles");
+    fireEvent.click(playlistCard);
+
+    // Edit button appears next to active playlist title in sub-header
+    const subheaderEditBtn = await screen.findByTitle("Edit playlist");
+    fireEvent.click(subheaderEditBtn);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Boss Battles")).toBeInTheDocument();
+  });
+
   it("switches to catalog tab when clicking the Catalog tab button", async () => {
     vi.mocked(AppBackend.ListCatalogPlaylists).mockResolvedValue([
       { playlistId: "pl-cat-1", title: "Control Playthrough", videoCount: 5, linked: false, tag: "" },

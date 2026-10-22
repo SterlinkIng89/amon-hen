@@ -434,6 +434,10 @@ export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
 }
 
+export function UpdatePlaylistMetadata(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpdatePlaylistMetadata'](arg1, arg2, arg3, arg4);
+}
+
 export function UpdatePlaylistVisibility(arg1, arg2) {
   return window['go']['backend']['App']['UpdatePlaylistVisibility'](arg1, arg2);
 }
