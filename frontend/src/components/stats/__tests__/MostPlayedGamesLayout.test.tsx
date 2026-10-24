@@ -71,7 +71,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     });
 
     // Click on Silksong in the list
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     expect(silksongRow).not.toBeNull();
     if (silksongRow) {
       fireEvent.click(silksongRow);
@@ -211,7 +211,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     });
 
     // Select Silksong (#2)
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     expect(silksongRow).not.toBeNull();
     if (silksongRow) {
       fireEvent.click(silksongRow);
@@ -319,7 +319,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     expect(metricsRow.textContent).toContain("2 days played");
 
     // Click on Silksong (#2)
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     expect(silksongRow).not.toBeNull();
     if (silksongRow) {
       fireEvent.click(silksongRow);
@@ -350,7 +350,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     expect(rankDot.getAttribute("style")).toMatch(/background-color/i);
 
     // Click Silksong and verify badge updates to Silksong's color
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     if (silksongRow) {
       fireEvent.click(silksongRow);
     }
@@ -392,7 +392,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     expect(silksongStint.className).toContain("opacity-100");
 
     // Click on Silksong in TopGamesList
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     if (silksongRow) {
       fireEvent.click(silksongRow);
     }
@@ -495,7 +495,7 @@ describe("MostPlayedGames Monthly Layout", () => {
     });
 
     // Clicking Silksong in the list deselects it and restores #1 Game of the year
-    const silksongRow = screen.getByTitle("Hollow Knight: Silksong").closest('[role="button"]');
+    const silksongRow = (await screen.findByTitle("Hollow Knight: Silksong")).closest('[role="button"]');
     if (silksongRow) {
       fireEvent.click(silksongRow);
     }

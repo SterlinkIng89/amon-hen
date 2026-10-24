@@ -107,6 +107,28 @@ describe("PlaylistCard", () => {
     }
   });
 
+  it("calls onEdit when edit button is clicked without triggering card onClick", () => {
+    const onClick = vi.fn();
+    const onEdit = vi.fn();
+
+    render(
+      <PlaylistCard
+        playlist={mockPlaylist}
+        onClick={onClick}
+        onEdit={onEdit}
+      />,
+    );
+
+    const editBtn = screen.getByTitle("Edit playlist");
+    expect(editBtn).toBeInTheDocument();
+    expect(screen.getByLabelText("Edit playlist")).toBeInTheDocument();
+
+    fireEvent.click(editBtn);
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it("handles deletion confirmation and calling DeletePlaylist", async () => {
     const onDeleted = vi.fn();
     render(<PlaylistCard playlist={mockPlaylist} onDeleted={onDeleted} />);

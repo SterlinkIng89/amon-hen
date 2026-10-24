@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { YTVideo, YTPlaylist, VideoGroupYT } from "../types";
+import {
+  YTVideo,
+  YTPlaylist,
+  VideoGroupYT,
+  CARD_DENSITY_CLASSES,
+  ChannelGroupMode,
+} from "../types";
+import { useAppStore } from "../store/useAppStore";
 import {
   SyncRecentVideos,
   SyncChannelData,
@@ -9,9 +16,12 @@ import {
   AddVideoToPlaylist,
   PurgePlaylistDuplicates,
   UpdatePlaylistsVisibility,
+  GetOrCreatePlaylist,
+  UpdateYouTubeVideoMetadata,
+  RemoveVideosFromPlaylist,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import { groupByDayYT } from "../utils/videoUtils";
+import { groupByDayYT, groupVideosYT } from "../utils/videoUtils";
 
 import VideoPill from "../components/video/VideoPill";
 import PlaylistCard from "../components/youtube/PlaylistCard";
@@ -27,9 +37,26 @@ import ChannelBulkActionBar from "../components/youtube/ChannelBulkActionBar";
 import PlaylistBulkActionBar from "../components/youtube/PlaylistBulkActionBar";
 import DuplicateWarningDialog from "../components/ui/DuplicateWarningDialog";
 import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
+import EditYouTubeVideoModal from "../components/youtube/EditYouTubeVideoModal";
+import EditPlaylistModal from "../components/youtube/EditPlaylistModal";
+import ChannelBulkEditModal from "../components/youtube/ChannelBulkEditModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
+import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
+
+const STORAGE_CHANNEL_LIST_COLLAPSED_KEY = "channel_player_list_collapsed";
 
 export default function ChannelPage() {
+  const { cardDensity } = useAppStore();
+  const [isPlayerListCollapsed, setIsPlayerListCollapsed] = useState<boolean>(
+    () => localStorage.getItem(STORAGE_CHANNEL_LIST_COLLAPSED_KEY) === "true",
+  );
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_CHANNEL_LIST_COLLAPSED_KEY,
+      String(isPlayerListCollapsed),
+    );
+  }, [isPlayerListCollapsed]);
   const [activeTab, setActiveTab] = useState<"videos" | "playlists" | "catalog">("videos");
   const [playlistSort, setPlaylistSort] = useState<
     "recent" | "title" | "videos" | "updated"
@@ -37,6 +64,15 @@ export default function ChannelPage() {
   const [videoSort, setVideoSort] = useState<
     "recent" | "title" | "views" | "title_date"
   >(() => (localStorage.getItem("ch:videoSort") as any) || "recent");
+  const [channelGroupMode, setChannelGroupMode] = useState<ChannelGroupMode>(
+    () => (localStorage.getItem("ch:groupMode") as ChannelGroupMode) || "date",
+  );
+  const [privacyFilter, setPrivacyFilter] = useState<
+    "" | "public" | "unlisted" | "private"
+  >("");
+  const [statusFilter, setStatusFilter] = useState<
+    "" | "monetized" | "limited" | "demonetized"
+  >("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(
     null,
@@ -45,6 +81,9 @@ export default function ChannelPage() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(
     new Set(),
   );
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(
     new Set(),
   );
@@ -56,8 +95,12 @@ export default function ChannelPage() {
     targetVideoIds: string[];
   } | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<YTVideo[] | null>(null);
+  const [editingVideo, setEditingVideo] = useState<YTVideo | null>(null);
+  const [editingPlaylist, setEditingPlaylist] = useState<YTPlaylist | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
+  const [bulkUpdatingVideos, setBulkUpdatingVideos] = useState(false);
+  const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [purgingDuplicates, setPurgingDuplicates] = useState(false);
   const lastSelectedId = useRef<string | null>(null);
   const lastSelectedPlaylistId = useRef<string | null>(null);
@@ -81,7 +124,11 @@ export default function ChannelPage() {
   const filters = useAdvancedFilters();
   const [analyticsDate, setAnalyticsDate] = useState("");
 
-  const allActiveCount = filters.activeCount + (analyticsDate ? 1 : 0);
+  const allActiveCount =
+    filters.activeCount +
+    (analyticsDate ? 1 : 0) +
+    (privacyFilter ? 1 : 0) +
+    (statusFilter ? 1 : 0);
 
   // Debounce search
   useEffect(() => {
@@ -95,6 +142,9 @@ export default function ChannelPage() {
   useEffect(() => {
     localStorage.setItem("ch:videoSort", videoSort);
   }, [videoSort]);
+  useEffect(() => {
+    localStorage.setItem("ch:groupMode", channelGroupMode);
+  }, [channelGroupMode]);
 
   // Reset state when tab changes
   useEffect(() => {
@@ -107,6 +157,8 @@ export default function ChannelPage() {
     setViewType("grid");
     filters.clearAll();
     setAnalyticsDate("");
+    setPrivacyFilter("");
+    setStatusFilter("");
     setSearchQuery("");
   }, [activeTab]);
 
@@ -118,6 +170,8 @@ export default function ChannelPage() {
     lastSelectedPlaylistId.current = null;
     filters.clearAll();
     setAnalyticsDate("");
+    setPrivacyFilter("");
+    setStatusFilter("");
     setSearchQuery("");
   }, [selectedPlaylist]);
 
@@ -160,6 +214,25 @@ export default function ChannelPage() {
     dateTo: analyticsDate ? undefined : filters.dateTo,
     excludeWords: filters.excludeWords,
   });
+
+  const displayedVideos = useMemo(() => {
+    return filteredVideos.filter((v) => {
+      if (
+        privacyFilter &&
+        (v.privacy || "public").toLowerCase() !== privacyFilter.toLowerCase()
+      ) {
+        return false;
+      }
+      if (
+        statusFilter &&
+        (v.monetizationStatus || "monetized").toLowerCase() !==
+          statusFilter.toLowerCase()
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [filteredVideos, privacyFilter, statusFilter]);
 
   const playlistVideoCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -324,10 +397,10 @@ export default function ChannelPage() {
   }, [selectedVideo, viewType]);
 
   const playerVideos = sidebarSearch
-    ? filteredVideos.filter((v) =>
+    ? displayedVideos.filter((v) =>
         v.title.toLowerCase().includes(sidebarSearch.toLowerCase()),
       )
-    : filteredVideos;
+    : displayedVideos;
 
   const handleNext = () => {
     if (!selectedVideo) return;
@@ -357,16 +430,16 @@ export default function ChannelPage() {
     if (e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
-      const anchorId = lastSelectedId.current || filteredVideos[0]?.id;
-      const currentIndex = filteredVideos.findIndex((v) => v.id === video.id);
-      const lastIndex = filteredVideos.findIndex((v) => v.id === anchorId);
+      const anchorId = lastSelectedId.current || displayedVideos[0]?.id;
+      const currentIndex = displayedVideos.findIndex((v) => v.id === video.id);
+      const lastIndex = displayedVideos.findIndex((v) => v.id === anchorId);
 
       if (currentIndex !== -1 && lastIndex !== -1) {
         const start = Math.min(currentIndex, lastIndex);
         const end = Math.max(currentIndex, lastIndex);
         const next = new Set(selectedVideoIds);
         for (let i = start; i <= end; i++) {
-          next.add(filteredVideos[i].id);
+          next.add(displayedVideos[i].id);
         }
         setSelectedVideoIds(next);
       }
@@ -399,6 +472,25 @@ export default function ChannelPage() {
     lastSelectedId.current = video.id;
   };
 
+  const handleToggleCollapseGroup = (dateKey: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
+
+  const handleSelectGroup = (videoIds: string[], select: boolean) => {
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev);
+      if (select) {
+        videoIds.forEach((id) => next.add(id));
+      } else {
+        videoIds.forEach((id) => next.delete(id));
+      }
+      return next;
+    });
+  };
+
   const handleAddToPlaylist = async (playlistId: string) => {
     if (selectedVideoIds.size === 0) return;
     const targetVideoIds = Array.from(selectedVideoIds);
@@ -425,6 +517,63 @@ export default function ChannelPage() {
     } catch (e) {
       console.error("Error checking playlist:", e);
       setBulkAdding(false);
+    }
+  };
+
+  const handleCreateAndAddToPlaylist = async (title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      const privacy = useAppStore.getState().defaultPlaylistPrivacy || "unlisted";
+      const newPlaylistId = await GetOrCreatePlaylist(trimmed, "", privacy);
+      if (newPlaylistId) {
+        await loadData(true);
+        await handleAddToPlaylist(newPlaylistId);
+      }
+    } catch (err) {
+      console.error("Failed to create and add to playlist:", err);
+    }
+  };
+
+  const handleBulkUpdatePrivacy = async (
+    privacy: "public" | "unlisted" | "private",
+  ) => {
+    if (selectedVideoIds.size === 0) return;
+    const targetVideos = (selectedPlaylist ? playlistVideos : videos).filter((v) =>
+      selectedVideoIds.has(v.id),
+    );
+    setBulkUpdatingVideos(true);
+    try {
+      for (const v of targetVideos) {
+        await UpdateYouTubeVideoMetadata(v.id, v.title, v.description, privacy);
+      }
+      await loadData(true);
+    } catch (err) {
+      console.error("Bulk privacy update failed:", err);
+    } finally {
+      setBulkUpdatingVideos(false);
+    }
+  };
+
+  const handleRemoveFromPlaylist = async () => {
+    if (!selectedPlaylist || selectedVideoIds.size === 0) return;
+    const count = selectedVideoIds.size;
+    const confirmed = window.confirm(
+      `Remove ${count} video${count === 1 ? "" : "s"} from playlist "${selectedPlaylist.title}"?\n\nThe videos will remain on your YouTube channel.`,
+    );
+    if (!confirmed) return;
+
+    setBulkUpdatingVideos(true);
+    try {
+      const targetIds = Array.from(selectedVideoIds);
+      await RemoveVideosFromPlaylist(selectedPlaylist.id, targetIds);
+      setSelectedVideoIds(new Set());
+      lastSelectedId.current = null;
+      await loadData(true);
+    } catch (err) {
+      console.error("Failed to remove videos from playlist:", err);
+    } finally {
+      setBulkUpdatingVideos(false);
     }
   };
 
@@ -616,12 +765,16 @@ export default function ChannelPage() {
     }
   };
 
-  const ytGroups =
-    activeTab === "videos" &&
-    !selectedPlaylist &&
-    (videoSort === "recent" || videoSort === "title_date")
-      ? groupByDayYT(filteredVideos, videoSort)
-      : [];
+  const ytGroups = useMemo(() => {
+    if (activeTab !== "videos" && !selectedPlaylist) return [];
+    return groupVideosYT(displayedVideos, channelGroupMode, videoSort);
+  }, [
+    activeTab,
+    selectedPlaylist,
+    displayedVideos,
+    channelGroupMode,
+    videoSort,
+  ]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-base">
@@ -664,6 +817,28 @@ export default function ChannelPage() {
                   {selectedPlaylist.title}
                 </h1>
               </div>
+
+              <button
+                type="button"
+                className="p-1.5 rounded-lg text-text-muted hover:text-accent hover:bg-surface border border-transparent hover:border-border-subtle transition-colors cursor-pointer"
+                onClick={() => setEditingPlaylist(selectedPlaylist)}
+                title="Edit playlist"
+                aria-label="Edit playlist"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+              </button>
 
               {/* Duplicate warning banner */}
               {duplicateEntriesCount > 0 && (
@@ -922,6 +1097,69 @@ export default function ChannelPage() {
 
                 <div className="w-px h-4 bg-border-subtle" />
 
+                {/* Privacy, Status, and Group filters */}
+                {(activeTab === "videos" || selectedPlaylist !== null) && (
+                  <>
+                    <select
+                      aria-label="Filter by privacy"
+                      className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
+                      value={privacyFilter}
+                      onChange={(e) =>
+                        setPrivacyFilter(
+                          e.target.value as
+                            | ""
+                            | "public"
+                            | "unlisted"
+                            | "private",
+                        )
+                      }
+                    >
+                      <option value="">All Privacy</option>
+                      <option value="public">Public</option>
+                      <option value="unlisted">Unlisted</option>
+                      <option value="private">Private</option>
+                    </select>
+
+                    <select
+                      aria-label="Filter by status"
+                      className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
+                      value={statusFilter}
+                      onChange={(e) =>
+                        setStatusFilter(
+                          e.target.value as
+                            | ""
+                            | "monetized"
+                            | "limited"
+                            | "demonetized",
+                        )
+                      }
+                    >
+                      <option value="">All Status</option>
+                      <option value="monetized">Monetized</option>
+                      <option value="limited">Limited</option>
+                      <option value="demonetized">Demonetized</option>
+                    </select>
+
+                    <select
+                      aria-label="Group videos by"
+                      className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
+                      value={channelGroupMode}
+                      onChange={(e) =>
+                        setChannelGroupMode(e.target.value as ChannelGroupMode)
+                      }
+                    >
+                      <option value="date">Group: Date</option>
+                      <option value="playlist">Group: Playlist</option>
+                      <option value="game">Group: Game</option>
+                      <option value="privacy">Group: Privacy</option>
+                      <option value="status">Group: Status</option>
+                      <option value="none">Group: None</option>
+                    </select>
+
+                    <div className="w-px h-4 bg-border-subtle" />
+                  </>
+                )}
+
                 {/* Sort */}
                 <select
                   className="bg-elevated/50 border border-border-subtle rounded-lg px-2.5 py-1.5 text-xs font-bold text-text-primary outline-none focus:border-accent transition-colors cursor-pointer"
@@ -1130,38 +1368,107 @@ export default function ChannelPage() {
       {/* ── Content area ────────────────────────────────────────────────────────── */}
       {viewType === "player" && selectedVideo ? (
         <div className="flex-1 flex overflow-hidden">
-          <aside className="w-[360px] min-w-[280px] max-w-[460px] flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10">
-            <div className="px-2 pt-2 pb-1 shrink-0">
-              <div className="relative group">
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          <aside
+            className={`${
+              isPlayerListCollapsed
+                ? "w-12 items-center py-3"
+                : "w-[300px] xl:w-[340px] 2xl:w-[360px]"
+            } flex flex-col border-r border-border-subtle bg-surface shrink-0 z-10 transition-all duration-200`}
+          >
+            {isPlayerListCollapsed ? (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewType("grid")}
+                  className="p-2 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                  title="Back to Grid"
+                  aria-label="Back to Grid"
                 >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search videos…"
-                  className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-7 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                />
-                {sidebarSearch && (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPlayerListCollapsed(false)}
+                  className="p-2 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                  title="Expand video list"
+                  aria-label="Expand video list"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
                   <button
-                    onClick={() => setSidebarSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                    type="button"
+                    onClick={() => setViewType("grid")}
+                    className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-main transition-colors px-2 py-1 rounded hover:bg-surface-elevated"
+                    title="Back to Grid"
+                    aria-label="Back to Grid"
                   >
                     <svg
-                      width="11"
-                      height="11"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    <span>Back to Grid</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPlayerListCollapsed(true)}
+                    className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-elevated rounded transition-colors"
+                    title="Collapse video list"
+                    aria-label="Collapse video list"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="px-2 pt-2 pb-1 shrink-0">
+                  <div className="relative group">
+                    <svg
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-accent transition-colors pointer-events-none"
+                      width="13"
+                      height="13"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -1169,73 +1476,101 @@ export default function ChannelPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            <div
-              ref={sidebarRef}
-              className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2 custom-scrollbar"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : playerVideos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-text-muted">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mb-2 opacity-40"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <p className="text-xs font-medium">No videos match</p>
-                </div>
-              ) : (
-                <>
-                  {playerVideos.map((v, idx) => (
-                    <div
-                      key={`${v.id}-${idx}`}
-                      data-selected={selectedVideo?.id === v.id}
-                    >
-                      <VideoPill
-                        video={v}
-                        selected={selectedVideo?.id === v.id}
-                        onUpdate={() => loadData(true)}
-                        viewMode="list"
-                        compact={true}
-                        onClick={() => setSelectedVideo(v)}
-                        duplicateCount={
-                          selectedPlaylist
-                            ? playlistVideoCounts.get(v.id)
-                            : undefined
-                        }
-                        onDelete={() => setDeleteTargets([v])}
-                      />
-                    </div>
-                  ))}
-                  <div
-                    ref={loadMoreRef}
-                    className="h-8 flex items-center justify-center shrink-0"
-                  >
-                    {loadingMore && (
-                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <input
+                      type="text"
+                      placeholder="Search videos…"
+                      className="w-full bg-elevated/30 border border-border-subtle rounded-xl pl-8 pr-7 py-1.5 text-xs font-medium text-text-primary outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all placeholder:text-text-muted"
+                      value={sidebarSearch}
+                      onChange={(e) => setSidebarSearch(e.target.value)}
+                    />
+                    {sidebarSearch && (
+                      <button
+                        onClick={() => setSidebarSearch("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+                <div
+                  ref={sidebarRef}
+                  className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2 custom-scrollbar"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : playerVideos.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-text-muted">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mb-2 opacity-40"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <p className="text-xs font-medium">No videos match</p>
+                    </div>
+                  ) : (
+                    <>
+                      {playerVideos.map((v, idx) => (
+                        <div
+                          key={`${v.id}-${idx}`}
+                          data-selected={selectedVideo?.id === v.id}
+                        >
+                          <VideoPill
+                            video={v}
+                            selected={selectedVideo?.id === v.id}
+                            onUpdate={() => loadData(true)}
+                            viewMode="list"
+                            compact={true}
+                            onClick={() => setSelectedVideo(v)}
+                            duplicateCount={
+                              selectedPlaylist
+                                ? playlistVideoCounts.get(v.id)
+                                : undefined
+                            }
+                            onDelete={() => setDeleteTargets([v])}
+                            onEdit={() => setEditingVideo(v)}
+                          />
+                        </div>
+                      ))}
+                      <div
+                        ref={loadMoreRef}
+                        className="h-8 flex items-center justify-center shrink-0"
+                      >
+                        {loadingMore && (
+                          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </aside>
           <main className="flex-1 flex flex-col bg-base overflow-hidden relative">
             <ErrorBoundary area="YouTube Player">
@@ -1262,77 +1597,55 @@ export default function ChannelPage() {
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : selectedPlaylist ? (
-            filteredVideos.length === 0 ? (
+          ) : selectedPlaylist || activeTab === "videos" ? (
+            displayedVideos.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-text-muted mt-20">
-                <div className="w-12 h-12 rounded-full bg-elevated/50 flex items-center justify-center mb-4">
+                {selectedPlaylist ? (
+                  <div className="w-12 h-12 rounded-full bg-elevated/50 flex items-center justify-center mb-4">
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="opacity-50"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </div>
+                ) : (
                   <svg
-                    width="24"
-                    height="24"
+                    width="48"
+                    height="48"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="1"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="opacity-50"
+                    className="mb-4 opacity-50"
                   >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                </div>
-                <p className="font-medium">No videos match your search.</p>
-              </div>
-            ) : (
-              <div
-                className={
-                  viewMode === "grid"
-                    ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
-                    : "flex flex-col gap-2"
-                }
-              >
-                {filteredVideos.map((v, idx) => (
-                  <div
-                    key={`${v.id}-${idx}`}
-                    onClick={(e) => handleVideoClick(v, e)}
-                  >
-                    <VideoPill
-                      video={v}
-                      multiSelected={selectedVideoIds.has(v.id)}
-                      onUpdate={() => loadData(true)}
-                      viewMode={viewMode}
-                      onSelectToggle={() => handleSelectToggle(v)}
-                      duplicateCount={playlistVideoCounts.get(v.id)}
-                      onDelete={() => setDeleteTargets([v])}
-                    />
-                  </div>
-                ))}
-              </div>
-            )
-          ) : activeTab === "videos" ? (
-            filteredVideos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-text-muted mt-20">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mb-4 opacity-50"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-                <p>No videos match your filter.</p>
+                )}
+                <p className="font-medium">
+                  {selectedPlaylist
+                    ? "No videos match your search."
+                    : "No videos match your filter."}
+                </p>
                 {allActiveCount > 0 && (
                   <button
                     onClick={() => {
                       filters.clearAll();
                       setAnalyticsDate("");
+                      setPrivacyFilter("");
+                      setStatusFilter("");
                     }}
                     className="mt-3 text-xs font-bold text-accent hover:underline"
                   >
@@ -1343,98 +1656,106 @@ export default function ChannelPage() {
             ) : (
               <div className="flex flex-col">
                 {viewMode === "grid" && ytGroups.length > 0 ? (
-                  ytGroups.map((group) => (
-                    <section key={group.dateKey} className="mb-8 last:mb-0">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="flex items-center gap-2 bg-elevated border border-border-subtle rounded-full px-3 py-0.5 shrink-0">
-                          <svg
-                            width="11"
-                            height="11"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-accent shrink-0"
-                          >
-                            <rect
-                              x="3"
-                              y="4"
-                              width="18"
-                              height="18"
-                              rx="2"
-                              ry="2"
-                            />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                          </svg>
-                          <span className="font-bold text-text-primary text-[13px]">
-                            {group.label}
-                          </span>
-                        </div>
-                        <span className="text-xs text-text-muted font-semibold bg-elevated/80 border border-border-subtle px-2 py-0.5 rounded-full shrink-0">
-                          {group.videos.length} video
-                          {group.videos.length !== 1 ? "s" : ""}
-                        </span>
-                        <div
-                          className="flex-1 h-px shrink-0"
-                          style={{
-                            background:
-                              "linear-gradient(to right, rgba(255,255,255,0.07) 0%, transparent 100%)",
-                          }}
+                  ytGroups.map((group) => {
+                    const groupVideoIds = group.videos.map((v) => v.id);
+                    const selectedCount = group.videos.reduce(
+                      (count, v) =>
+                        selectedVideoIds.has(v.id) ? count + 1 : count,
+                      0,
+                    );
+                    const allSelected =
+                      group.videos.length > 0 &&
+                      selectedCount === group.videos.length;
+                    const partiallySelected =
+                      selectedCount > 0 &&
+                      selectedCount < group.videos.length;
+                    const collapsed = Boolean(collapsedGroups[group.dateKey]);
+
+                    return (
+                      <section key={group.dateKey} className="mb-8 last:mb-0">
+                        <ChannelGroupHeader
+                          group={group}
+                          allSelected={allSelected}
+                          partiallySelected={partiallySelected}
+                          collapsed={collapsed}
+                          onToggleSelectGroup={() =>
+                            handleSelectGroup(groupVideoIds, !allSelected)
+                          }
+                          onToggleCollapse={() =>
+                            handleToggleCollapseGroup(group.dateKey)
+                          }
                         />
-                      </div>
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                        {group.videos.map((v) => (
+                        {!collapsed && (
                           <div
-                            key={v.id}
-                            onClick={(e) => handleVideoClick(v, e)}
+                            className={`grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`}
                           >
-                            <VideoPill
-                              video={v}
-                              multiSelected={selectedVideoIds.has(v.id)}
-                              onUpdate={() => loadData(true)}
-                              viewMode={viewMode}
-                              onSelectToggle={(e) => handleSelectToggle(v)}
-                              onDelete={() => setDeleteTargets([v])}
-                            />
+                            {group.videos.map((v, idx) => (
+                              <div
+                                key={`${v.id}-${idx}`}
+                                onClick={(e) => handleVideoClick(v, e)}
+                              >
+                                <VideoPill
+                                  video={v}
+                                  multiSelected={selectedVideoIds.has(v.id)}
+                                  onUpdate={() => loadData(true)}
+                                  viewMode={viewMode}
+                                  onSelectToggle={() => handleSelectToggle(v)}
+                                  duplicateCount={
+                                    selectedPlaylist
+                                      ? playlistVideoCounts.get(v.id)
+                                      : undefined
+                                  }
+                                  onDelete={() => setDeleteTargets([v])}
+                                  onEdit={() => setEditingVideo(v)}
+                                />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))
+                        )}
+                      </section>
+                    );
+                  })
                 ) : (
                   <div
                     className={
                       viewMode === "grid"
-                        ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
+                        ? `grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`
                         : "flex flex-col gap-2"
                     }
                   >
-                    {filteredVideos.map((v) => (
-                      <div key={v.id} onClick={(e) => handleVideoClick(v, e)}>
+                    {displayedVideos.map((v, idx) => (
+                      <div
+                        key={`${v.id}-${idx}`}
+                        onClick={(e) => handleVideoClick(v, e)}
+                      >
                         <VideoPill
                           video={v}
                           multiSelected={selectedVideoIds.has(v.id)}
                           onUpdate={() => loadData(true)}
                           viewMode={viewMode}
-                          onSelectToggle={(e) => handleSelectToggle(v)}
+                          onSelectToggle={() => handleSelectToggle(v)}
+                          duplicateCount={
+                            selectedPlaylist
+                              ? playlistVideoCounts.get(v.id)
+                              : undefined
+                          }
                           onDelete={() => setDeleteTargets([v])}
+                          onEdit={() => setEditingVideo(v)}
                         />
                       </div>
                     ))}
                   </div>
                 )}
-                <div
-                  ref={loadMoreRef}
-                  className="col-span-full h-12 flex items-center justify-center shrink-0 mt-4"
-                >
-                  {loadingMore && (
-                    <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
+                {!selectedPlaylist && (
+                  <div
+                    ref={loadMoreRef}
+                    className="col-span-full h-12 flex items-center justify-center shrink-0 mt-4"
+                  >
+                    {loadingMore && (
+                      <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                )}
               </div>
             )
           ) : playlists.length === 0 ? (
@@ -1460,7 +1781,7 @@ export default function ChannelPage() {
             <div
               className={
                 viewMode === "grid"
-                  ? "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
+                  ? `grid ${CARD_DENSITY_CLASSES[cardDensity] ?? CARD_DENSITY_CLASSES.default}`
                   : "flex flex-col gap-2"
               }
             >
@@ -1477,6 +1798,7 @@ export default function ChannelPage() {
                     onClick={(e) => handlePlaylistClick(p, e)}
                     onSelectToggle={() => handlePlaylistSelectToggle(p)}
                     onDeleted={() => loadData(true)}
+                    onEdit={() => setEditingPlaylist(p)}
                   />
                 ))}
             </div>
@@ -1489,11 +1811,17 @@ export default function ChannelPage() {
         <ChannelBulkActionBar
           selectedCount={selectedVideoIds.size}
           playlists={playlists}
+          isInsidePlaylist={selectedPlaylist !== null}
+          isUpdating={bulkUpdatingVideos}
           onClearSelection={() => {
             setSelectedVideoIds(new Set());
             lastSelectedId.current = null;
           }}
           onAddToPlaylist={handleAddToPlaylist}
+          onCreateAndAddToPlaylist={handleCreateAndAddToPlaylist}
+          onBulkUpdatePrivacy={handleBulkUpdatePrivacy}
+          onOpenBulkEditModal={() => setBulkEditModalOpen(true)}
+          onRemoveFromPlaylist={handleRemoveFromPlaylist}
           onDeleteFromYouTube={handleTriggerBulkDelete}
         />
       )}
@@ -1545,6 +1873,47 @@ export default function ChannelPage() {
           videos={deleteTargets}
           onClose={() => setDeleteTargets(null)}
           onDeleted={handleDeletedVideos}
+        />
+      )}
+
+      {/* Edit YouTube Video Modal */}
+      {editingVideo && (
+        <EditYouTubeVideoModal
+          video={editingVideo}
+          playlists={playlists}
+          onClose={() => setEditingVideo(null)}
+          onSaved={() => loadData(true)}
+        />
+      )}
+
+      {/* Edit YouTube Playlist Modal */}
+      {editingPlaylist && (
+        <EditPlaylistModal
+          playlist={editingPlaylist}
+          onClose={() => setEditingPlaylist(null)}
+          onSaved={(updated) => {
+            if (selectedPlaylist?.id === updated.id) {
+              setSelectedPlaylist(updated);
+            }
+            loadData(true);
+          }}
+        />
+      )}
+
+      {/* Bulk Edit YouTube Videos Modal */}
+      {bulkEditModalOpen && (
+        <ChannelBulkEditModal
+          open={bulkEditModalOpen}
+          selectedVideos={(selectedPlaylist ? playlistVideos : videos).filter((v) =>
+            selectedVideoIds.has(v.id),
+          )}
+          onClose={() => setBulkEditModalOpen(false)}
+          onCompleted={async () => {
+            setBulkEditModalOpen(false);
+            setSelectedVideoIds(new Set());
+            lastSelectedId.current = null;
+            await loadData(true);
+          }}
         />
       )}
     </div>

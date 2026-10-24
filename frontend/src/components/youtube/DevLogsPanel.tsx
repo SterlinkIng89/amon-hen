@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { GetAPILogs, GetQuotaUsedToday } from "../../../wailsjs/go/backend/App";
 import { useToast } from "../ui/ToastContainer";
+import { useQuotaStatus } from "../../hooks/useQuotaStatus";
+import { formatCountdown, formatResetClock } from "../../utils/quotaStatus";
 
 interface APILog {
   id: number;
@@ -49,51 +51,42 @@ function fmtDate(ts: number): string {
 }
 
 export function QuotaBadge() {
-  const [used, setUsed] = useState<number | null>(null);
+  const { status, msUntilReset } = useQuotaStatus();
   const warnedRef = useRef<Set<number>>(new Set());
   const { addToast } = useToast();
 
-  const refresh = useCallback(() => {
-    GetQuotaUsedToday()
-      .then((val) => {
-        setUsed(val);
-
-        const pct = (val / DAILY_LIMIT) * 100;
-
-        // Fire warning toasts once per session per threshold
-        if (pct >= 90 && !warnedRef.current.has(90)) {
-          warnedRef.current.add(90);
-          addToast(
-            `Critical: ${val.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} YouTube API quota units used today (${pct.toFixed(0)}%). Uploads may start failing.`,
-            "error",
-          );
-        } else if (pct >= 70 && !warnedRef.current.has(70)) {
-          warnedRef.current.add(70);
-          addToast(
-            `Heads up: ${pct.toFixed(0)}% of your daily YouTube API quota has been used (${val.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} units).`,
-            "warning",
-          );
-        }
-      })
-      .catch(() => {});
-  }, [addToast]);
-
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    if (!status) return;
+    const pct = (status.used / status.limit) * 100;
+    if (pct >= 90 && !warnedRef.current.has(90)) {
+      warnedRef.current.add(90);
+      addToast(
+        `Critical: ${status.used.toLocaleString()} / ${status.limit.toLocaleString()} YouTube API quota units used today (${pct.toFixed(0)}%). Uploads may start failing.`,
+        "error",
+      );
+    } else if (pct >= 70 && !warnedRef.current.has(70)) {
+      warnedRef.current.add(70);
+      addToast(
+        `Heads up: ${pct.toFixed(0)}% of your daily YouTube API quota has been used (${status.used.toLocaleString()} / ${status.limit.toLocaleString()} units).`,
+        "warning",
+      );
+    }
+  }, [status, addToast]);
 
-  if (used === null) return null;
+  if (!status) return null;
 
-  const pct = Math.min((used / DAILY_LIMIT) * 100, 100);
+  const pct = Math.min((status.used / status.limit) * 100, 100);
   const danger = pct > 80;
   const warn = pct > 50;
   const color = danger ? "#ef4444" : warn ? "#f59e0b" : "#22d3ee";
 
+  const countdownText = formatCountdown(msUntilReset);
+  const resetClockText = formatResetClock(status.resetsAt);
+  const tooltipText = `Estimated YouTube API quota used today: ${status.used.toLocaleString()} / ${status.limit.toLocaleString()} units\nRemaining: ${status.remaining.toLocaleString()} units left\nResets in ${countdownText} (at ${resetClockText} local)`;
+
   return (
     <div
-      title={`Estimated YouTube API quota used today: ${used.toLocaleString()} / ${DAILY_LIMIT.toLocaleString()} units`}
+      title={tooltipText}
       style={{
         display: "flex",
         alignItems: "center",
@@ -117,10 +110,13 @@ export function QuotaBadge() {
           fontFamily: "monospace",
         }}
       >
-        {used.toLocaleString()}
+        {status.used.toLocaleString()}
       </span>
       <span style={{ color: "#64748b", fontSize: "10px", fontWeight: 500 }}>
-        / {DAILY_LIMIT.toLocaleString()}
+        / {status.limit.toLocaleString()}
+      </span>
+      <span style={{ color: "#64748b", fontSize: "10px", fontWeight: 500 }}>
+        · {countdownText}
       </span>
     </div>
   );

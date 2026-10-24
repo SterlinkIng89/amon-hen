@@ -6,12 +6,17 @@ import {
   UploadToYouTube,
   LoadConfig,
   GetUploadSessions,
+  OpenFolderInExplorer,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 // Types & Utils
-import { VideoFile, ViewMode, GameProfile } from "../types";
-import { groupByDay } from "../utils/videoUtils";
+import { VideoFile, ViewMode, GameProfile, SortMode } from "../types";
+import {
+  groupVideos,
+  resolveDisplayTitle,
+  hasUnfilledPlaceholders,
+} from "../utils/videoUtils";
 
 // Global store
 import { useAppStore } from "../store/useAppStore";
@@ -41,9 +46,8 @@ import DevLogsPanel from "../components/youtube/DevLogsPanel";
 import FolderSettingsDialog from "../components/layout/FolderSettingsDialog";
 import LibrarySubHeader from "../components/video/LibrarySubHeader";
 import TagManagementModal from "../components/ui/TagManagementModal";
+import UploadedCleanupModal from "../components/video/UploadedCleanupModal";
 import ErrorBoundary from "../components/ui/ErrorBoundary";
-
-type SortMode = "date" | "name" | "size";
 
 const MAX_CONCURRENT_UPLOADS = 3;
 
@@ -54,10 +58,32 @@ function applySortMode(videos: VideoFile[], mode: SortMode): VideoFile[] {
       return arr.sort((a, b) => a.name.localeCompare(b.name));
     case "size":
       return arr.sort((a, b) => b.size - a.size);
+    case "duration":
+      return arr.sort((a, b) => (b.durationSecs || 0) - (a.durationSecs || 0));
+    case "episode":
+      return arr.sort((a, b) => (b.episode || 0) - (a.episode || 0));
     case "date":
     default:
       return arr.sort((a, b) => b.modTime - a.modTime);
   }
+}
+
+function matchesTagFilter(
+  video: VideoFile,
+  tagFilter: string,
+  profiles: Record<string, GameProfile>,
+): boolean {
+  if (!tagFilter) return true;
+  if (tagFilter === "__untagged__") {
+    return !video.game || video.game.trim() === "";
+  }
+  if (tagFilter === "__placeholders__") {
+    return hasUnfilledPlaceholders(
+      video,
+      video.game ? profiles[video.game] : undefined,
+    );
+  }
+  return video.game === tagFilter;
 }
 
 export default function Dashboard() {
@@ -77,6 +103,8 @@ export default function Dashboard() {
     setView,
     sortMode,
     setSortMode,
+    groupMode,
+    setGroupMode,
     filterUploaded,
     setFilterUploaded,
     selectedIndex,
@@ -104,19 +132,37 @@ export default function Dashboard() {
   const [uploadTarget, setUploadTarget] = useState<VideoFile | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
-  const [lastSelectedIdx, setLastSelectedIdx] = useState(-1);
+  const lastSelectedPath = useRef<string | null>(null);
   const [devLogsOpen, setDevLogsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
   const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
   );
+  const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
+  const [titleSeparator, setTitleSeparator] = useState(" — ");
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
+  const cleanupPromptShownRef = useRef(false);
+
+  // Prompt cleanup modal on initial folder scan completion if uploaded videos exist
+  useEffect(() => {
+    if (!scanning && videos.length > 0 && !cleanupPromptShownRef.current) {
+      cleanupPromptShownRef.current = true;
+      const uploaded = videos.filter((v) => Boolean(v.youtubeId));
+      if (uploaded.length > 0) {
+        setCleanupModalOpen(true);
+      }
+    }
+  }, [scanning, videos]);
 
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
         setGameProfiles(cfg.game_profiles || {});
+        setTagPlaylists(cfg.tag_playlists || {});
+        if (cfg.title_separator) setTitleSeparator(cfg.title_separator);
       })
       .catch(() => {});
   }, []);
@@ -176,8 +222,13 @@ export default function Dashboard() {
   }, []);
 
   // ── Derived state ────────────────────────────────────────────────────────────
+  const availableTags = useMemo(
+    () => Array.from(new Set(videos.map((v) => v.game).filter(Boolean))).sort(),
+    [videos],
+  );
+
   const sortedVideos = useMemo(
-    () => applySortMode(videos, sortMode as SortMode),
+    () => applySortMode(videos, sortMode),
     [videos, sortMode],
   );
 
@@ -187,9 +238,15 @@ export default function Dashboard() {
         ? sortedVideos
         : sortedVideos.filter((v) => activeFolders.includes(v.folder));
 
-    const filteredByUpload = filterUploaded
-      ? filteredByFolder.filter((v) => !v.youtubeId)
+    const filteredByTag = tagFilter
+      ? filteredByFolder.filter((v) =>
+          matchesTagFilter(v, tagFilter, gameProfiles),
+        )
       : filteredByFolder;
+
+    const filteredByUpload = filterUploaded
+      ? filteredByTag.filter((v) => !v.youtubeId)
+      : filteredByTag;
 
     const filteredBySearch = searchQuery
       ? filteredByUpload.filter((v) => {
@@ -234,6 +291,8 @@ export default function Dashboard() {
   }, [
     sortedVideos,
     activeFolders,
+    tagFilter,
+    gameProfiles,
     filterUploaded,
     searchQuery,
     libFilters.dateFrom,
@@ -241,7 +300,20 @@ export default function Dashboard() {
     libFilters.excludeWords,
   ]);
 
-  const groups = useMemo(() => groupByDay(filteredVideos), [filteredVideos]);
+  const queuedPathsSet = useMemo(
+    () =>
+      new Set(
+        queue
+          .filter((item) => item.status === "pending")
+          .map((item) => item.videoPath),
+      ),
+    [queue],
+  );
+
+  const groups = useMemo(
+    () => groupVideos(filteredVideos, groupMode, queuedPathsSet),
+    [filteredVideos, groupMode, queuedPathsSet],
+  );
   const selectedVideo = selectedIndex >= 0 ? sortedVideos[selectedIndex] : null;
 
   // ── Init: YouTube auth ──────────────────────────────────────────────────────
@@ -284,7 +356,7 @@ export default function Dashboard() {
     if (view !== "grid" && view !== "player") {
       if (selectedPaths.length > 0) {
         setSelectedPaths([]);
-        setLastSelectedIdx(-1);
+        lastSelectedPath.current = null;
       }
     }
   }, [view]);
@@ -295,7 +367,7 @@ export default function Dashboard() {
       if (e.key === "Escape") {
         if (selectedPaths.length > 0) {
           setSelectedPaths([]);
-          setLastSelectedIdx(-1);
+          lastSelectedPath.current = null;
         } else if (searchQuery) {
           setSearchQuery("");
         }
@@ -305,12 +377,36 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [selectedPaths.length, searchQuery]);
 
-  // ── Video click handler ──────────────────────────────────────────────────────
+  // ── Video click and select handlers ──────────────────────────────────────────
+  const togglePathSelection = (path: string) => {
+    setSelectedPaths((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path],
+    );
+    lastSelectedPath.current = path;
+  };
+
+  const handleSelectToggle = (filteredIdx: number) => {
+    const video = filteredVideos[filteredIdx];
+    if (video) togglePathSelection(video.path);
+  };
+
+  const handleSelectGroup = (paths: string[], select: boolean) => {
+    setSelectedPaths((prev) => {
+      if (select) {
+        const next = new Set(prev);
+        paths.forEach((p) => next.add(p));
+        return Array.from(next);
+      } else {
+        const toRemove = new Set(paths);
+        return prev.filter((p) => !toRemove.has(p));
+      }
+    });
+  };
+
   const handleVideoClick = (filteredIdx: number, e: React.MouseEvent) => {
     const video = filteredVideos[filteredIdx];
     if (!video) return;
 
-    // selectedIndex always tracks position in sortedVideos (the full list)
     const sortedIdx = sortedVideos.findIndex((v) => v.path === video.path);
 
     let currentPaths = [...selectedPaths];
@@ -324,43 +420,52 @@ export default function Dashboard() {
       }
     }
 
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePathSelection(video.path);
+      return;
+    }
+
     if (e.shiftKey) {
-      const anchorSortedIdx =
-        lastSelectedIdx !== -1
-          ? lastSelectedIdx
-          : selectedIndex !== -1
-            ? selectedIndex
-            : 0;
-      const anchorVideo = sortedVideos[anchorSortedIdx];
+      e.preventDefault();
+      e.stopPropagation();
+      const anchorPath =
+        lastSelectedPath.current ||
+        (selectedIndex !== -1 ? sortedVideos[selectedIndex]?.path : null) ||
+        filteredVideos[0]?.path;
 
       const visibleStartIdx = filteredVideos.findIndex(
-        (v) => v.path === anchorVideo?.path,
+        (v) => v.path === anchorPath,
       );
       const visibleEndIdx = filteredIdx;
 
       if (visibleStartIdx !== -1 && visibleEndIdx !== -1) {
         const start = Math.min(visibleStartIdx, visibleEndIdx);
         const end = Math.max(visibleStartIdx, visibleEndIdx);
+        const next = new Set(currentPaths);
         for (let i = start; i <= end; i++) {
-          const p = filteredVideos[i].path;
-          if (!currentPaths.includes(p)) currentPaths.push(p);
+          next.add(filteredVideos[i].path);
         }
+        setSelectedPaths(Array.from(next));
       }
-      setSelectedPaths(currentPaths);
-    } else if (e.ctrlKey || e.metaKey) {
-      if (currentPaths.includes(video.path)) {
-        currentPaths = currentPaths.filter((p) => p !== video.path);
-      } else {
-        currentPaths.push(video.path);
-      }
-      setSelectedPaths(currentPaths);
-      setLastSelectedIdx(sortedIdx);
-    } else {
-      setSelectedPaths([]);
-      setSelectedIndex(sortedIdx);
-      setLastSelectedIdx(sortedIdx);
-      setView("player");
+      lastSelectedPath.current = video.path;
+      return;
     }
+
+    const inSelectionMode =
+      view === "player" ? currentPaths.length > 1 : currentPaths.length > 0;
+    if (inSelectionMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePathSelection(video.path);
+      return;
+    }
+
+    lastSelectedPath.current = video.path;
+    setSelectedPaths([]);
+    setSelectedIndex(sortedIdx);
+    setView("player");
   };
 
   const goTo = (i: number) => {
@@ -503,6 +608,41 @@ export default function Dashboard() {
     handleRescan();
   };
 
+  const handleQuickQueue = (video: VideoFile) => {
+    if (video.youtubeId) return;
+
+    const resolvedPlaylistId =
+      video.playlistId ||
+      (video.game && tagPlaylists[video.game] && tagPlaylists[video.game] !== "none"
+        ? tagPlaylists[video.game]
+        : "");
+
+    const item: QueueItem = {
+      id: crypto.randomUUID(),
+      videoPath: video.path,
+      videoName: video.name,
+      size: video.size,
+      title: resolveDisplayTitle(video, gameProfiles, titleSeparator),
+      description: video.description || "",
+      privacy: (video.privacy as "public" | "unlisted" | "private") || "unlisted",
+      status: "pending",
+      progress: 0,
+      playlistId: resolvedPlaylistId,
+      gameTag: video.game || "",
+      episode: video.episode || 0,
+    };
+
+    handleAddToQueue(item);
+  };
+
+  const handleOpenInExplorer = (video: VideoFile) => {
+    if (video.path) {
+      OpenFolderInExplorer(video.path).catch((err) => {
+        console.error("Failed to open file in explorer:", err);
+      });
+    }
+  };
+
   // ── Queue stats for header ───────────────────────────────────────────────────
   const pendingCount = queue.filter((i) => i.status === "pending").length;
   const uploadingCount = queue.filter((i) => i.status === "uploading").length;
@@ -569,16 +709,22 @@ export default function Dashboard() {
           activeFolders={activeFolders}
           filteredVideos={filteredVideos}
           searchQuery={searchQuery}
-          sortMode={sortMode as SortMode}
+          sortMode={sortMode}
+          groupMode={groupMode}
           onSearchChange={setSearchQuery}
           onSortChange={setSortMode}
+          onGroupChange={setGroupMode}
           onToggleFolder={toggleFolder}
           onOpenFolderSettings={setSettingsFolder}
           filterUploaded={filterUploaded}
           onToggleFilterUploaded={() => setFilterUploaded(!filterUploaded)}
+          onOpenCleanup={() => setCleanupModalOpen(true)}
           advancedFilters={libFilters.value}
           onAdvancedFiltersChange={libFilters.onChange}
           onOpenTagManagement={() => setTagManagementOpen(true)}
+          availableTags={availableTags}
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
         />
       )}
 
@@ -591,15 +737,17 @@ export default function Dashboard() {
             .filter((v): v is VideoFile => v !== undefined)}
           onClearSelection={() => {
             setSelectedPaths([]);
-            setLastSelectedIdx(-1);
+            lastSelectedPath.current = null;
           }}
           onRescanOnly={() => handleRescan()}
           onTagsSaved={() => {
             setSelectedPaths([]);
+            lastSelectedPath.current = null;
             handleRescan();
           }}
           onFilesDeleted={() => {
             setSelectedPaths([]);
+            lastSelectedPath.current = null;
             setSelectedIndex(-1);
             handleRescan();
           }}
@@ -632,10 +780,15 @@ export default function Dashboard() {
               groups={groups}
               allVideos={sortedVideos}
               sortedVideos={filteredVideos}
-              sortMode={sortMode as SortMode}
+              sortMode={sortMode}
+              groupMode={groupMode}
               selectedPaths={selectedPaths}
               onOpenVideo={handleVideoClick}
+              onSelectToggle={handleSelectToggle}
+              onSelectGroup={handleSelectGroup}
               onUploadTarget={setUploadTarget}
+              onQuickQueue={handleQuickQueue}
+              onOpenInExplorer={handleOpenInExplorer}
             />
           </ErrorBoundary>
         )}
@@ -755,6 +908,19 @@ export default function Dashboard() {
       />
       {tagManagementOpen && (
         <TagManagementModal onClose={() => setTagManagementOpen(false)} />
+      )}
+      {cleanupModalOpen && (
+        <UploadedCleanupModal
+          open={cleanupModalOpen}
+          uploadedVideos={videos.filter((v) => Boolean(v.youtubeId))}
+          onClose={() => setCleanupModalOpen(false)}
+          onDeleted={() => {
+            setSelectedPaths([]);
+            setSelectedIndex(-1);
+            handleRescan();
+            setCleanupModalOpen(false);
+          }}
+        />
       )}
     </div>
   );

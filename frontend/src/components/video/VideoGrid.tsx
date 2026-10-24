@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { VideoFile, VideoGroup, GameProfile } from "../../types";
+import {
+  VideoFile,
+  VideoGroup,
+  GameProfile,
+  SortMode,
+  LibraryGroupMode,
+  CardDensity,
+  CARD_DENSITY_CLASSES,
+} from "../../types";
 import VideoPill from "./VideoPill";
 import { useAppStore } from "../../store/useAppStore";
 import { formatSize } from "../../utils/videoUtils";
 import { LoadConfig } from "../../../wailsjs/go/backend/App";
 
-type SortMode = "date" | "name" | "size";
 
 interface VideoGridProps {
   folders: string[];
@@ -14,24 +21,23 @@ interface VideoGridProps {
   allVideos: VideoFile[]; // unfiltered, for stats
   sortedVideos: VideoFile[]; // already sorted by Dashboard
   sortMode: SortMode;
+  groupMode?: LibraryGroupMode;
+  readonly cardDensity?: CardDensity;
   selectedPaths: string[];
   onOpenVideo: (sortedIdx: number, e: React.MouseEvent) => void;
+  onSelectToggle?: (sortedIdx: number) => void;
+  readonly onSelectGroup?: (paths: string[], select: boolean) => void;
   onUploadTarget: (video: VideoFile) => void;
-}
-
-/** Returns a human-readable label for a folder path. */
-function folderLabel(f: string): string {
-  const normalized = f.replace(/[/\\]+$/, "");
-  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
-  const parts = normalized.split(/[/\\]/);
-  const last = parts[parts.length - 1];
-  return last || normalized;
+  readonly onQuickQueue?: (video: VideoFile) => void;
+  readonly onOpenInExplorer?: (video: VideoFile) => void;
 }
 
 const SORT_LABELS: Record<SortMode, string> = {
   date: "Date",
   name: "Name",
   size: "Size",
+  duration: "Duration",
+  episode: "Episode",
 };
 
 /** Empty state illustration + message */
@@ -114,12 +120,69 @@ function EmptyState({ hasFolders }: { hasFolders: boolean }) {
   );
 }
 
-/** Date group section header — pill label + video count + group size */
-function GroupHeader({ group }: { group: VideoGroup }) {
+interface GroupHeaderProps {
+  readonly group: VideoGroup;
+  readonly allSelected: boolean;
+  readonly partiallySelected: boolean;
+  readonly collapsed: boolean;
+  readonly onToggleSelectGroup: () => void;
+  readonly onToggleCollapse: () => void;
+}
+
+/** Date group section header — checkbox + pill label + video count + group size + collapse toggle */
+function GroupHeader({
+  group,
+  allSelected,
+  partiallySelected,
+  collapsed,
+  onToggleSelectGroup,
+  onToggleCollapse,
+}: GroupHeaderProps) {
   const groupSize = group.videos.reduce((acc, v) => acc + v.size, 0);
 
   return (
     <div className="flex items-center gap-3 mb-4">
+      {/* Group selection checkbox */}
+      <button
+        type="button"
+        onClick={onToggleSelectGroup}
+        aria-label={`Select all videos in ${group.label}`}
+        title={allSelected ? "Deselect group" : "Select group"}
+        className={`w-5 h-5 rounded border shadow-xs flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+          allSelected || partiallySelected
+            ? "bg-accent border-accent text-white"
+            : "bg-elevated border-border-subtle text-transparent hover:border-border-medium"
+        }`}
+      >
+        {allSelected ? (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : partiallySelected ? (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        ) : null}
+      </button>
+
       {/* Date pill */}
       <div className="flex items-center gap-2 bg-elevated border border-border-subtle rounded-full px-3 py-0.5 shrink-0">
         <svg
@@ -153,6 +216,33 @@ function GroupHeader({ group }: { group: VideoGroup }) {
         {formatSize(groupSize)}
       </span>
 
+      {/* Collapse / Expand toggle button */}
+      <button
+        type="button"
+        onClick={onToggleCollapse}
+        aria-label={
+          collapsed ? `Expand ${group.label}` : `Collapse ${group.label}`
+        }
+        title={collapsed ? "Expand group" : "Collapse group"}
+        className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted hover:text-text-primary hover:bg-elevated/80 transition-colors cursor-pointer shrink-0"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`transition-transform duration-200 ${
+            collapsed ? "-rotate-90" : "rotate-0"
+          }`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
       {/* Gradient divider */}
       <div
         className="flex-1 h-px shrink-0"
@@ -172,13 +262,36 @@ export default function VideoGrid({
   allVideos,
   sortedVideos,
   sortMode,
+  groupMode: propGroupMode,
+  cardDensity: propCardDensity,
   selectedPaths,
   onOpenVideo,
+  onSelectToggle,
+  onSelectGroup,
   onUploadTarget,
+  onQuickQueue,
+  onOpenInExplorer,
 }: VideoGridProps) {
-  // Only use date-grouped layout when sorting by date
-  const useGroups = sortMode === "date" && groups.length > 0;
-  const { queue } = useAppStore();
+  const {
+    queue,
+    groupMode: storeGroupMode,
+    cardDensity: storeCardDensity,
+  } = useAppStore();
+  const effectiveGroupMode = propGroupMode ?? storeGroupMode ?? "date";
+  const effectiveCardDensity = propCardDensity ?? storeCardDensity ?? "default";
+  const densityClass =
+    CARD_DENSITY_CLASSES[effectiveCardDensity] ?? CARD_DENSITY_CLASSES.default;
+  const useGroups = effectiveGroupMode !== "none" && groups.length > 0;
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
+
+  const handleToggleCollapse = (dateKey: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
 
   const uploadingProgressMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -190,11 +303,26 @@ export default function VideoGrid({
     return map;
   }, [queue]);
 
+  const queuedPathsSet = useMemo(
+    () =>
+      new Set(
+        queue
+          .filter((item) => item.status === "pending")
+          .map((item) => item.videoPath),
+      ),
+    [queue],
+  );
+
   const sortedIdxMap = useMemo(() => {
     const map = new Map<string, number>();
     sortedVideos.forEach((v, i) => map.set(v.path, i));
     return map;
   }, [sortedVideos]);
+
+  const selectedPathsSet = useMemo(
+    () => new Set(selectedPaths),
+    [selectedPaths],
+  );
 
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
@@ -214,36 +342,74 @@ export default function VideoGrid({
       ) : useGroups ? (
         /* Date-grouped layout */
         <div className="flex-1 overflow-y-auto p-5 pb-10" data-scroll-layer>
-          {groups.map((group) => (
-            <section key={group.dateKey} className="mb-8 last:mb-0">
-              <GroupHeader group={group} />
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
-                {group.videos.map((video) => {
-                  const sortedIdx = sortedIdxMap.get(video.path) ?? -1;
-                  const isSelected = selectedPaths.includes(video.path);
-                  return (
-                    <VideoPill
-                      key={video.path}
-                      video={video}
-                      selected={isSelected}
-                      multiSelected={isSelected}
-                      onClick={(e) => onOpenVideo(sortedIdx, e)}
-                      onUpload={() => onUploadTarget(video)}
-                      uploadProgress={uploadingProgressMap.get(video.path)}
-                      gameProfiles={gameProfiles}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+          {groups.map((group) => {
+            const groupPaths = group.videos.map((v) => v.path);
+            const selectedCount = group.videos.reduce(
+              (count, v) => (selectedPathsSet.has(v.path) ? count + 1 : count),
+              0,
+            );
+            const allSelected =
+              group.videos.length > 0 && selectedCount === group.videos.length;
+            const partiallySelected =
+              selectedCount > 0 && selectedCount < group.videos.length;
+            const collapsed = Boolean(collapsedGroups[group.dateKey]);
+
+            return (
+              <section key={group.dateKey} className="mb-8 last:mb-0">
+                <GroupHeader
+                  group={group}
+                  allSelected={allSelected}
+                  partiallySelected={partiallySelected}
+                  collapsed={collapsed}
+                  onToggleSelectGroup={() =>
+                    onSelectGroup?.(groupPaths, !allSelected)
+                  }
+                  onToggleCollapse={() => handleToggleCollapse(group.dateKey)}
+                />
+                {!collapsed && (
+                  <div className={`grid ${densityClass}`}>
+                    {group.videos.map((video) => {
+                      const sortedIdx = sortedIdxMap.get(video.path) ?? -1;
+                      const isSelected = selectedPathsSet.has(video.path);
+                      return (
+                        <VideoPill
+                          key={video.path}
+                          video={video}
+                          selected={isSelected}
+                          multiSelected={isSelected}
+                          onClick={(e) => onOpenVideo(sortedIdx, e)}
+                          onSelectToggle={
+                            onSelectToggle
+                              ? () => onSelectToggle(sortedIdx)
+                              : undefined
+                          }
+                          onUpload={() => onUploadTarget(video)}
+                          onQuickQueue={
+                            onQuickQueue ? () => onQuickQueue(video) : undefined
+                          }
+                          onOpenInExplorer={
+                            onOpenInExplorer
+                              ? () => onOpenInExplorer(video)
+                              : undefined
+                          }
+                          uploadProgress={uploadingProgressMap.get(video.path)}
+                          gameProfiles={gameProfiles}
+                          isQueued={queuedPathsSet.has(video.path)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       ) : (
         /* Flat layout for name/size sort */
         <div className="flex-1 overflow-y-auto p-5 pb-10" data-scroll-layer>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5">
+          <div className={`grid ${densityClass}`}>
             {sortedVideos.map((video, idx) => {
-              const isSelected = selectedPaths.includes(video.path);
+              const isSelected = selectedPathsSet.has(video.path);
               return (
                 <VideoPill
                   key={video.path}
@@ -251,9 +417,21 @@ export default function VideoGrid({
                   selected={isSelected}
                   multiSelected={isSelected}
                   onClick={(e) => onOpenVideo(idx, e)}
+                  onSelectToggle={
+                    onSelectToggle ? () => onSelectToggle(idx) : undefined
+                  }
                   onUpload={() => onUploadTarget(video)}
+                  onQuickQueue={
+                    onQuickQueue ? () => onQuickQueue(video) : undefined
+                  }
+                  onOpenInExplorer={
+                    onOpenInExplorer
+                      ? () => onOpenInExplorer(video)
+                      : undefined
+                  }
                   uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}
+                  isQueued={queuedPathsSet.has(video.path)}
                 />
               );
             })}

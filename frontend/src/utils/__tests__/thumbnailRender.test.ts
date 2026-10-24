@@ -33,6 +33,28 @@ describe("renderTagThumbnailDataUrl", () => {
         showEpisode: true,
         episodeNumber: 4,
         episodeFormat: "pad2",
+        position: "bottom-right",
+      })
+    );
+  });
+
+  it("falls back to position 'bottom-left' when episode_position is not specified", () => {
+    renderTagThumbnailDataUrl({
+      baseImage: null,
+      logoImage: null,
+      gameTitle: "Hades",
+      episodeNumber: 1,
+      config: {
+        enabled: true,
+        source_type: "steam",
+      },
+    });
+
+    expect(generator.renderThumbnailToCanvas).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      null,
+      expect.objectContaining({
+        position: "bottom-left",
       })
     );
   });

@@ -3,10 +3,12 @@ package backend
 import (
 	"fmt"
 	"time"
+	_ "time/tzdata"
 )
 
 // YouTube Data API v3 quota costs per operation
 const (
+	DailyQuotaLimit        = 10000
 	QuotaChannelsList      = 1
 	QuotaVideosList        = 1
 	QuotaVideosInsert      = 1600
@@ -15,6 +17,7 @@ const (
 	QuotaPlaylistsInsert   = 50
 	QuotaPlaylistItemsList = 1
 	QuotaPlaylistItemsInsert = 50
+	QuotaPlaylistItemsDelete = 50
 	QuotaThumbnailsSet       = 50
 	QuotaPlaylistImagesInsert = 50
 )
@@ -94,19 +97,69 @@ func (a *App) GetAPILogs(limit int) ([]APILog, error) {
 	return logs, nil
 }
 
-// GetQuotaUsedToday returns the total estimated quota units consumed today (UTC).
+// QuotaStatus represents the current daily quota usage and next reset time.
+type QuotaStatus struct {
+	Used      int   `json:"used"`
+	Limit     int   `json:"limit"`
+	Remaining int   `json:"remaining"`
+	ResetsAt  int64 `json:"resetsAt"` // unix seconds, next midnight America/Los_Angeles
+}
+
+var pacificLocation = func() *time.Location {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		return time.FixedZone("PST", -8*3600)
+	}
+	return loc
+}()
+
+// quotaWindow returns the start of the current Pacific Time day and the next Pacific midnight.
+// Google resets daily YouTube Data API v3 quotas at midnight America/Los_Angeles (Pacific Time).
+func quotaWindow(now time.Time) (time.Time, time.Time) {
+	nowPT := now.In(pacificLocation)
+	y, m, d := nowPT.Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, pacificLocation)
+	next := time.Date(y, m, d+1, 0, 0, 0, 0, pacificLocation)
+	return start, next
+}
+
+// GetQuotaStatus returns the current estimated quota status and countdown timestamp.
 // Exposed to the frontend.
-func (a *App) GetQuotaUsedToday() (int, error) {
-	// Start of today in UTC as Unix timestamp
-	now := time.Now().UTC()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+func (a *App) GetQuotaStatus() (QuotaStatus, error) {
+	start, next := quotaWindow(time.Now())
 
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
-	var total int
+	var used int
 	err := a.db.conn.QueryRow(
-		`SELECT COALESCE(SUM(quota_cost), 0) FROM api_logs WHERE ts >= ? AND success = 1`, startOfDay,
-	).Scan(&total)
-	return total, err
+		`SELECT COALESCE(SUM(quota_cost), 0) FROM api_logs WHERE ts >= ? AND ts < ? AND success = 1`,
+		start.Unix(), next.Unix(),
+	).Scan(&used)
+	if err != nil {
+		return QuotaStatus{
+			Limit:     DailyQuotaLimit,
+			Remaining: DailyQuotaLimit,
+			ResetsAt:  next.Unix(),
+		}, err
+	}
+
+	remaining := DailyQuotaLimit - used
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	return QuotaStatus{
+		Used:      used,
+		Limit:     DailyQuotaLimit,
+		Remaining: remaining,
+		ResetsAt:  next.Unix(),
+	}, nil
+}
+
+// GetQuotaUsedToday returns the total estimated quota units consumed today (Pacific Time).
+// Exposed to the frontend.
+func (a *App) GetQuotaUsedToday() (int, error) {
+	status, err := a.GetQuotaStatus()
+	return status.Used, err
 }

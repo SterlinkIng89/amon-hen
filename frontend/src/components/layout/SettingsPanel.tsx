@@ -26,8 +26,9 @@ import {
   DisconnectSteam,
 } from "../../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
-import { GameProfile, YTPlaylist } from "../../types";
+import { GameProfile, YTPlaylist, CardDensity } from "../../types";
 import { useRecentTags } from "../../hooks/useRecentTags";
+import { useAppStore } from "../../store/useAppStore";
 import TagPlaylistsSection from "./TagPlaylistsSection";
 
 interface YouTubeChannel {
@@ -41,7 +42,14 @@ interface Props {
   onClose: () => void;
 }
 
+const DENSITY_OPTIONS: { value: CardDensity; label: string }[] = [
+  { value: "compact", label: "Compact" },
+  { value: "default", label: "Default" },
+  { value: "large", label: "Large" },
+];
+
 export default function SettingsPanel({ open, onClose }: Props) {
+  const { cardDensity, setCardDensity } = useAppStore();
   const [authed, setAuthed] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [credsLoaded, setCredsLoaded] = useState(true);
@@ -449,6 +457,54 @@ export default function SettingsPanel({ open, onClose }: Props) {
                   }`}
                 />
               </button>
+            </div>
+          </section>
+
+          {/* Display & Card Density section */}
+          <section className="flex flex-col gap-4">
+            <div className="text-xs font-semibold text-text-primary flex items-center gap-2 border-b border-border-subtle pb-2 mb-2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-text-muted"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              Display
+            </div>
+            <div className="flex items-center justify-between gap-3 p-3 bg-elevated border border-border-subtle rounded-md">
+              <div>
+                <p className="text-xs font-medium text-text-primary">
+                  Grid Card Density
+                </p>
+                <p className="text-[10px] text-text-secondary mt-0.5">
+                  Adjust thumbnail and card size across Library and Channel views
+                </p>
+              </div>
+              <div className="flex items-center bg-base border border-border-subtle rounded-lg p-0.5 gap-0.5">
+                {DENSITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setCardDensity(opt.value)}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      cardDensity === opt.value
+                        ? "bg-accent text-white shadow-xs"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
 

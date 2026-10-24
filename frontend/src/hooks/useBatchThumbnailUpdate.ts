@@ -32,6 +32,14 @@ export interface UseBatchThumbnailUpdateResult {
   readonly cancel: () => void;
 }
 
+const DEFAULT_BATCH_CONFIG: TagThumbnailConfig = {
+  enabled: true,
+  source_type: "steam",
+  steam_asset_type: "header",
+  episode_position: "bottom-left",
+  episode_format: "pad2",
+};
+
 export function useBatchThumbnailUpdate({
   tag,
   config,
@@ -39,13 +47,7 @@ export function useBatchThumbnailUpdate({
   onVideoUpdated,
   onCompleted,
 }: UseBatchThumbnailUpdateArgs): UseBatchThumbnailUpdateResult {
-  const effectiveConfig: TagThumbnailConfig = config ?? {
-    enabled: true,
-    source_type: "steam",
-    steam_asset_type: "header",
-    episode_position: "bottom-right",
-    episode_format: "pad2",
-  };
+  const effectiveConfig: TagThumbnailConfig = config ?? DEFAULT_BATCH_CONFIG;
 
   const [batchItems, setBatchItems] = useState<BatchItem[]>(() =>
     inputItems.map((item) => ({

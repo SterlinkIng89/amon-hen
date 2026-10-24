@@ -13,6 +13,12 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetCustomThumbnail: vi.fn().mockResolvedValue(""),
 }));
 
+vi.mock("../../../../wailsjs/runtime/runtime", () => ({
+  BrowserOpenURL: vi.fn(),
+  EventsOn: vi.fn(),
+  EventsOff: vi.fn(),
+}));
+
 vi.mock("../../../hooks/useInView", () => ({
   useInView: vi.fn().mockReturnValue(true),
 }));
@@ -423,6 +429,425 @@ describe("VideoPill Custom Thumbnail Integration", () => {
       const img = screen.getByRole("img");
       expect(img).toHaveAttribute("src", "/cache/yt_thumbs/bulk_rendered.jpg");
     });
+  });
+});
+
+describe("VideoPill Content Type Thumbnail Badge", () => {
+  const clipVideo: VideoFile = {
+    name: "clip-sample.mp4",
+    path: "/videos/clip-sample.mp4",
+    size: 5242880,
+    modTime: 1787754600000,
+    folder: "/videos",
+    game: "Test Game",
+    durationSecs: 45,
+    contentType: "clip",
+  };
+
+  const vodVideo: VideoFile = {
+    name: "vod-sample.mp4",
+    path: "/videos/vod-sample.mp4",
+    size: 524288000,
+    modTime: 1787754600000,
+    folder: "/videos",
+    game: "Test Game",
+    durationSecs: 3600,
+    contentType: "vod",
+  };
+
+  it("does not render Clip or VOD badge on thumbnail in grid mode", () => {
+    const { rerender } = render(
+      <VideoPill video={clipVideo} viewMode="grid" />
+    );
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+
+    rerender(<VideoPill video={vodVideo} viewMode="grid" />);
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render Clip or VOD badge on thumbnail in list mode", () => {
+    const { rerender } = render(
+      <VideoPill video={clipVideo} viewMode="list" compact />
+    );
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+
+    rerender(<VideoPill video={vodVideo} viewMode="list" compact />);
+    expect(screen.queryByText(/^Clip$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^VOD$/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("VideoPill Upload Queue Status Indicator", () => {
+  const queueTestVideo: VideoFile = {
+    name: "queue_sample.mp4",
+    path: "/videos/queue_sample.mp4",
+    size: 104857600,
+    modTime: 1700000000,
+    folder: "videos",
+    game: "Test Game",
+  };
+
+  it("renders queued indicator in footer when isQueued is true on local video", () => {
+    const { container } = render(
+      <VideoPill video={queueTestVideo} isQueued={true} viewMode="grid" />,
+    );
+
+    const queuedBadge = screen.getByTitle("Pending in upload queue");
+    expect(queuedBadge).toBeInTheDocument();
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+
+    const thumbContainer = container.querySelector(".relative.w-full");
+    expect(thumbContainer?.textContent).not.toContain("Queued");
+  });
+
+  it("does not render queued indicator when video has youtubeId", () => {
+    const uploadedVideo: VideoFile = {
+      ...queueTestVideo,
+      youtubeId: "yt-already-uploaded",
+    };
+    render(
+      <VideoPill video={uploadedVideo} isQueued={true} viewMode="grid" />,
+    );
+
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("does not render queued indicator when uploadProgress is active", () => {
+    render(
+      <VideoPill
+        video={queueTestVideo}
+        isQueued={true}
+        uploadProgress={45}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("does not render queued indicator when isQueued is false or omitted", () => {
+    const { rerender } = render(
+      <VideoPill video={queueTestVideo} viewMode="grid" />,
+    );
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill video={queueTestVideo} isQueued={false} viewMode="grid" />,
+    );
+    expect(
+      screen.queryByTitle("Pending in upload queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+  });
+
+  it("re-renders VideoPill when isQueued prop changes", () => {
+    const { rerender } = render(
+      <VideoPill video={queueTestVideo} isQueued={false} viewMode="grid" />,
+    );
+    expect(screen.queryByText("Queued")).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill video={queueTestVideo} isQueued={true} viewMode="grid" />,
+    );
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+  });
+});
+
+describe("VideoPill Quick Actions (Show in Explorer, Quick Queue)", () => {
+  const localVideo: VideoFile = {
+    name: "Gameplay_01.mp4",
+    path: "C:\\Videos\\Gameplay_01.mp4",
+    size: 52428800,
+    modTime: 1787754600000,
+    folder: "C:\\Videos",
+    game: "Valorant",
+  };
+
+  it("renders Show in Explorer button and fires onOpenInExplorer on click with stopped propagation", () => {
+    const onOpenInExplorer = vi.fn();
+    const onClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={localVideo}
+        onOpenInExplorer={onOpenInExplorer}
+        onClick={onClick}
+        viewMode="grid"
+      />,
+    );
+
+    const explorerBtn = screen.getByRole("button", {
+      name: /show in explorer/i,
+    });
+    expect(explorerBtn).toBeInTheDocument();
+    expect(explorerBtn).toHaveAttribute("title", "Show in Explorer");
+
+    fireEvent.click(explorerBtn);
+
+    expect(onOpenInExplorer).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("renders Quick Queue button and fires onQuickQueue on click with stopped propagation", () => {
+    const onQuickQueue = vi.fn();
+    const onClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={onQuickQueue}
+        onClick={onClick}
+        viewMode="grid"
+      />,
+    );
+
+    const queueBtn = screen.getByRole("button", {
+      name: /add to upload queue/i,
+    });
+    expect(queueBtn).toBeInTheDocument();
+    expect(queueBtn).toHaveAttribute("title", "Add to upload queue");
+
+    fireEvent.click(queueBtn);
+
+    expect(onQuickQueue).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render Quick Queue button when video already has youtubeId", () => {
+    const uploadedVideo: VideoFile = {
+      ...localVideo,
+      youtubeId: "yt-12345",
+    };
+    render(
+      <VideoPill
+        video={uploadedVideo}
+        onQuickQueue={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render Quick Queue button when video is queued or uploading", () => {
+    const { rerender } = render(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={vi.fn()}
+        isQueued={true}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <VideoPill
+        video={localVideo}
+        onQuickQueue={vi.fn()}
+        uploadProgress={50}
+        viewMode="grid"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /add to upload queue/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("VideoPill Delete Tooltip & Label Discrimination", () => {
+  const localVideo: VideoFile = {
+    name: "Clip_01.mp4",
+    path: "C:\\Videos\\Clip_01.mp4",
+    size: 10485760,
+    modTime: 1787754600000,
+    folder: "C:\\Videos",
+    game: "Valorant",
+  };
+
+  it("renders 'Delete local file' tooltip and aria-label for VideoFile", () => {
+    render(
+      <VideoPill
+        video={localVideo}
+        onDelete={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete local file/i,
+    });
+    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn).toHaveAttribute("title", "Delete local file");
+  });
+
+  it("renders 'Delete video from YouTube' tooltip and aria-label for YTVideo", () => {
+    render(
+      <VideoPill
+        video={mockVideo}
+        onDelete={vi.fn()}
+        viewMode="grid"
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", {
+      name: /delete video from youtube/i,
+    });
+    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn).toHaveAttribute("title", "Delete video from YouTube");
+  });
+});
+
+describe("VideoPill Privacy Indicator", () => {
+  it("renders 'Private' indicator for private YTVideo", () => {
+    const privateVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "private",
+    };
+
+    render(<VideoPill video={privateVideo} viewMode="grid" />);
+
+    const indicator = screen.getByTitle("Private video");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("Private");
+    expect(indicator).toHaveClass("text-amber-400", "font-semibold");
+  });
+
+  it("renders 'Unlisted' indicator for unlisted YTVideo", () => {
+    const unlistedVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "unlisted",
+    };
+
+    render(<VideoPill video={unlistedVideo} viewMode="grid" />);
+
+    const indicator = screen.getByTitle("Unlisted video");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("Unlisted");
+    expect(indicator).toHaveClass("text-sky-400", "font-semibold");
+  });
+
+  it("does not render privacy indicator for public YTVideo", () => {
+    const publicVideo: YTVideo = {
+      ...mockVideo,
+      privacy: "public",
+    };
+
+    render(<VideoPill video={publicVideo} viewMode="grid" />);
+
+    expect(screen.queryByTitle("Private video")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Unlisted video")).not.toBeInTheDocument();
+  });
+
+  it("does not render privacy indicator for local VideoFile", () => {
+    const localVideo: VideoFile = {
+      name: "Clip_01.mp4",
+      path: "C:\\Videos\\Clip_01.mp4",
+      size: 10485760,
+      modTime: 1787754600000,
+      folder: "C:\\Videos",
+      game: "Valorant",
+    };
+
+    render(<VideoPill video={localVideo} viewMode="grid" />);
+
+    expect(screen.queryByTitle("Private video")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Unlisted video")).not.toBeInTheDocument();
+  });
+});
+
+describe("VideoPill YouTube Quick Actions (Edit Metadata, Open in Browser)", () => {
+  it("renders 'Edit video metadata' button when onEdit is provided for YTVideo and clicking it triggers onEdit without clicking card", async () => {
+    const handleEdit = vi.fn();
+    const handleCardClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={mockVideo}
+        viewMode="grid"
+        onEdit={handleEdit}
+        onClick={handleCardClick}
+      />,
+    );
+
+    const editBtn = screen.getByTitle("Edit video metadata");
+    expect(editBtn).toBeInTheDocument();
+    expect(editBtn).toHaveAttribute("aria-label", "Edit video metadata");
+
+    fireEvent.click(editBtn);
+
+    expect(handleEdit).toHaveBeenCalledTimes(1);
+    expect(handleCardClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render 'Edit video metadata' button when onEdit is not provided for YTVideo", () => {
+    render(<VideoPill video={mockVideo} viewMode="grid" />);
+    expect(screen.queryByTitle("Edit video metadata")).not.toBeInTheDocument();
+  });
+
+  it("renders 'Open on YouTube' button for YTVideo and clicking it calls BrowserOpenURL without clicking card", async () => {
+    const { BrowserOpenURL } = await import(
+      "../../../../wailsjs/runtime/runtime"
+    );
+    const handleCardClick = vi.fn();
+
+    render(
+      <VideoPill
+        video={mockVideo}
+        viewMode="grid"
+        onClick={handleCardClick}
+      />,
+    );
+
+    const openBtn = screen.getByTitle("Open on YouTube");
+    expect(openBtn).toBeInTheDocument();
+    expect(openBtn).toHaveAttribute("aria-label", "Open on YouTube");
+
+    fireEvent.click(openBtn);
+
+    expect(BrowserOpenURL).toHaveBeenCalledWith(
+      `https://www.youtube.com/watch?v=${mockVideo.id}`,
+    );
+    expect(handleCardClick).not.toHaveBeenCalled();
+  });
+
+  it("does not render YouTube edit or open-on-youtube buttons for local VideoFile", () => {
+    const localVideo: VideoFile = {
+      name: "Clip_01.mp4",
+      path: "C:\\Videos\\Clip_01.mp4",
+      size: 10485760,
+      modTime: 1787754600000,
+      folder: "C:\\Videos",
+      game: "Valorant",
+    };
+
+    render(
+      <VideoPill
+        video={localVideo}
+        viewMode="grid"
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTitle("Edit video metadata")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Open on YouTube")).not.toBeInTheDocument();
   });
 });
 

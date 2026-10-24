@@ -4,6 +4,8 @@ import {
   GameProfile,
   YTVideo,
   VideoGroupYT,
+  LibraryGroupMode,
+  ChannelGroupMode,
 } from "../types";
 
 const STANDARD_VARS = ["game", "date", "episode", "event", "gamemode"];
@@ -62,6 +64,15 @@ export function computeInitialClipRange(
   }
 
   return { inPoint: inP, outPoint: outP };
+}
+
+export function computeDefaultClipTitle(videoName: string, gameTag?: string): string {
+  const base = formatName(videoName);
+  const tag = gameTag?.trim();
+  if (tag) {
+    return `${tag} - ${base} - Clip`;
+  }
+  return `${base} - Clip`;
 }
 
 export function extractDatePart(filename: string, modTime?: number): string {
@@ -224,6 +235,94 @@ export function groupByDay(videos: VideoFile[]): VideoGroup[] {
   }));
 }
 
+/** Returns a human-readable label for a folder path. */
+export function folderLabel(f: string): string {
+  const normalized = f.replace(/[/\\]+$/, "");
+  if (/^[a-zA-Z]:$/.test(normalized)) return normalized + "\\";
+  const parts = normalized.split(/[/\\]/);
+  const last = parts[parts.length - 1];
+  return last || normalized;
+}
+
+export function groupVideos(
+  videos: VideoFile[],
+  mode: LibraryGroupMode,
+  queuedPaths?: ReadonlySet<string>,
+): VideoGroup[] {
+  if (mode === "none") {
+    return [];
+  }
+  if (mode === "date") {
+    return groupByDay(videos);
+  }
+  if (mode === "game") {
+    const map = new Map<string, VideoFile[]>();
+    for (const v of videos) {
+      const key = v.game?.trim() || "Untagged";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    return Array.from(map.entries()).map(([key, vs]) => ({
+      dateKey: `game:${key}`,
+      label: key,
+      videos: vs,
+    }));
+  }
+  if (mode === "status") {
+    const pendingVideos: VideoFile[] = [];
+    const queuedVideos: VideoFile[] = [];
+    const uploadedVideos: VideoFile[] = [];
+
+    for (const v of videos) {
+      if (Boolean(v.youtubeId)) {
+        uploadedVideos.push(v);
+      } else if (queuedPaths?.has(v.path)) {
+        queuedVideos.push(v);
+      } else {
+        pendingVideos.push(v);
+      }
+    }
+
+    const groups: VideoGroup[] = [];
+    if (pendingVideos.length > 0) {
+      groups.push({
+        dateKey: "status:pending",
+        label: "Pending Upload",
+        videos: pendingVideos,
+      });
+    }
+    if (queuedVideos.length > 0) {
+      groups.push({
+        dateKey: "status:queued",
+        label: "Queued",
+        videos: queuedVideos,
+      });
+    }
+    if (uploadedVideos.length > 0) {
+      groups.push({
+        dateKey: "status:uploaded",
+        label: "Uploaded to YouTube",
+        videos: uploadedVideos,
+      });
+    }
+    return groups;
+  }
+  if (mode === "folder") {
+    const map = new Map<string, VideoFile[]>();
+    for (const v of videos) {
+      const key = v.folder;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    return Array.from(map.entries()).map(([key, vs]) => ({
+      dateKey: `folder:${key}`,
+      label: folderLabel(key),
+      videos: vs,
+    }));
+  }
+  return [];
+}
+
 // extractTitleDate attempts to parse a recording date from a video title.
 // Returns a zero-padded "YYYY-MM-DD" string, or "" if no date is found.
 // Priority: ISO (YYYY-MM-DD) → compact (YYYYMMDD) → space (YYYY MM DD) → DD/MM/YY
@@ -340,6 +439,99 @@ export function groupByDayYT(
   }));
 }
 
+export function extractGamePrefixFromTitle(title?: string): string {
+  if (!title) return "";
+  const match = title.match(/^(.+?)(\s+[—\-]\s+.*)$/);
+  if (match && extractTitleDate(match[1]) === "") {
+    return match[1].trim();
+  }
+  return "";
+}
+
+interface GroupTarget {
+  key: string;
+  label: string;
+}
+
+function groupEntriesBy<T>(
+  items: T[],
+  prefix: string,
+  resolveGroup: (item: T) => GroupTarget,
+): { dateKey: string; label: string; videos: T[] }[] {
+  const map = new Map<string, { label: string; videos: T[] }>();
+  for (const item of items) {
+    const { key, label } = resolveGroup(item);
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { label, videos: [] };
+      map.set(key, entry);
+    }
+    entry.videos.push(item);
+  }
+  return Array.from(map.entries()).map(([key, { label, videos }]) => ({
+    dateKey: `${prefix}:${key}`,
+    label,
+    videos,
+  }));
+}
+
+const PRIVACY_DISPLAY_NAMES: Record<string, string> = {
+  public: "Public",
+  unlisted: "Unlisted",
+  private: "Private",
+};
+
+const MONETIZATION_DISPLAY_NAMES: Record<string, string> = {
+  monetized: "Monetized",
+  limited: "Limited",
+  demonetized: "Demonetized",
+};
+
+export function groupVideosYT(
+  videos: YTVideo[],
+  groupMode: ChannelGroupMode,
+  sortMode: string,
+): VideoGroupYT[] {
+  if (groupMode === "none") {
+    return [];
+  }
+  if (groupMode === "date") {
+    return groupByDayYT(videos, sortMode);
+  }
+  if (groupMode === "playlist") {
+    return groupEntriesBy(videos, "playlist", (v) => {
+      const label = v.playlistTitle?.trim() || "No Playlist";
+      return { key: label, label };
+    });
+  }
+  if (groupMode === "game") {
+    return groupEntriesBy(videos, "game", (v) => {
+      const label =
+        v.gameTag?.trim() || extractGamePrefixFromTitle(v.title) || "Untagged";
+      return { key: label, label };
+    });
+  }
+  if (groupMode === "privacy") {
+    return groupEntriesBy(videos, "privacy", (v) => {
+      const raw = (v.privacy || "public").toLowerCase();
+      const label =
+        PRIVACY_DISPLAY_NAMES[raw] ||
+        raw.charAt(0).toUpperCase() + raw.slice(1);
+      return { key: raw, label };
+    });
+  }
+  if (groupMode === "status") {
+    return groupEntriesBy(videos, "status", (v) => {
+      const raw = (v.monetizationStatus || "monetized").toLowerCase();
+      const label =
+        MONETIZATION_DISPLAY_NAMES[raw] ||
+        raw.charAt(0).toUpperCase() + raw.slice(1);
+      return { key: raw, label };
+    });
+  }
+  return [];
+}
+
 export function extractCustomVars(template: string): string[] {
   if (!template) return [];
   const matches = [...template.matchAll(/\{([^}]+)\}/g)];
@@ -374,9 +566,38 @@ export function getVideoTitleSegments(
   video: YTVideo | VideoFile,
   profile?: GameProfile,
 ): TitleSegmentsResult {
-  // If YouTube video, return plain title
+  // If YouTube video, check for game tag prefix
   if (!("path" in video)) {
-    const fullTitle = video.title || "";
+    const ytVideo = video as YTVideo;
+    const fullTitle = ytVideo.title || "";
+
+    if (ytVideo.gameTag && fullTitle.startsWith(ytVideo.gameTag)) {
+      const rest = fullTitle.slice(ytVideo.gameTag.length);
+      const segments: TitleSegment[] = [
+        { text: ytVideo.gameTag, isGameTag: true, isPlaceholder: false },
+      ];
+      if (rest.length > 0) {
+        segments.push({ text: rest, isPlaceholder: false });
+      }
+      return {
+        fullTitle,
+        segments,
+        hasPlaceholders: false,
+      };
+    }
+
+    const match = fullTitle.match(/^(.+?)(\s+[—\-]\s+.*)$/);
+    if (match && extractTitleDate(match[1]) === "") {
+      return {
+        fullTitle,
+        segments: [
+          { text: match[1], isGameTag: true, isPlaceholder: false },
+          { text: match[2], isPlaceholder: false },
+        ],
+        hasPlaceholders: false,
+      };
+    }
+
     return {
       fullTitle,
       segments: [{ text: fullTitle, isPlaceholder: false }],

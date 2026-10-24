@@ -3,6 +3,7 @@ import { render, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ThumbnailCanvasEditor from "../ThumbnailCanvasEditor";
 import { TagThumbnailConfig } from "../../../types";
+import * as thumbnailGenerator from "../../../utils/thumbnailGenerator";
 
 // Mock HTMLCanvasElement.getContext
 HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
@@ -95,5 +96,25 @@ describe("ThumbnailCanvasEditor", () => {
     fireEvent.pointerUp(canvas, { clientX: 70, clientY: 60 });
 
     expect(onConfigChange).not.toHaveBeenCalled();
+  });
+
+  it("passes position 'bottom-left' to renderThumbnailToCanvas when episode_position is omitted", () => {
+    const renderSpy = vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas");
+    render(
+      <ThumbnailCanvasEditor
+        config={{ enabled: true, source_type: "steam" }}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    expect(renderSpy).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      fakeImage,
+      expect.objectContaining({
+        position: "bottom-left",
+      })
+    );
   });
 });

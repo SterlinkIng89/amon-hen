@@ -67,6 +67,8 @@ export function GetPlaylistCatalogDraft(arg1:string):Promise<backend.PlaylistCat
 
 export function GetPlaylistVideos(arg1:string):Promise<Array<backend.YTVideo>>;
 
+export function GetQuotaStatus():Promise<backend.QuotaStatus>;
+
 export function GetQuotaUsedToday():Promise<number>;
 
 export function GetSteamAPIKey():Promise<string>;
@@ -151,6 +153,8 @@ export function RemoveSteamBacklogItem(arg1:number):Promise<void>;
 
 export function RemoveSteamGameRating(arg1:number):Promise<void>;
 
+export function RemoveVideosFromPlaylist(arg1:string,arg2:Array<string>):Promise<number>;
+
 export function ReorderSteamBacklog(arg1:Array<number>):Promise<void>;
 
 export function ResumeUpload(arg1:string):Promise<void>;
@@ -217,6 +221,8 @@ export function SyncSteamData():Promise<void>;
 
 export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
+export function UpdatePlaylistMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function UpdatePlaylistVisibility(arg1:string,arg2:string):Promise<void>;
 
 export function UpdatePlaylistsVisibility(arg1:Array<string>,arg2:string):Promise<number>;
@@ -224,6 +230,8 @@ export function UpdatePlaylistsVisibility(arg1:Array<string>,arg2:string):Promis
 export function UpdateVideoMonetizationStatus(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<void>;
 
 export function UpdateYouTubeThumbnail(arg1:string,arg2:string):Promise<string>;
+
+export function UpdateYouTubeVideoGameMeta(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

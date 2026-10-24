@@ -14,7 +14,7 @@ import ThumbnailElementControls from "./ThumbnailElementControls";
 
 export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
-  readonly value?: TagThumbnailConfig;
+  readonly value?: Partial<TagThumbnailConfig>;
   readonly onChange: (config: TagThumbnailConfig) => void;
   readonly vodPlaylistId?: string;
   readonly clipPlaylistId?: string;
@@ -25,7 +25,7 @@ const DEFAULT_CONFIG: TagThumbnailConfig = {
   enabled: false,
   source_type: "steam",
   steam_asset_type: "header",
-  episode_position: "bottom-right",
+  episode_position: "bottom-left",
   episode_format: "pad2",
   font_color: "#ffffff",
 };
@@ -135,7 +135,7 @@ export default function TagThumbnailConfigSection({
                   enabled: true,
                   source_type: config.source_type || "steam",
                   steam_asset_type: config.steam_asset_type || "header",
-                  episode_position: config.episode_position || "bottom-right",
+                  episode_position: config.episode_position || "bottom-left",
                   episode_format: config.episode_format || "pad2",
                   font_color: config.font_color || "#ffffff",
                 });
@@ -289,7 +289,7 @@ export default function TagThumbnailConfigSection({
                     key={pos.id}
                     type="button"
                     className={`h-8 flex items-center justify-center text-center px-2 text-xs font-medium rounded border transition-colors ${
-                      (config.episode_position || "bottom-right") === pos.id
+                      (config.episode_position || "bottom-left") === pos.id
                         ? "bg-accent/25 border-accent text-accent"
                         : "bg-surface border-border-subtle text-text-muted hover:text-white"
                     }`}

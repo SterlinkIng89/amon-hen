@@ -52,7 +52,7 @@ describe("YouTubeInlinePlayer thumbnail section", () => {
     vi.clearAllMocks();
   });
 
-  it("shows thumbnail picker and custom file upload in edit mode", async () => {
+  it("shows thumbnail picker and custom file upload directly in inspector", async () => {
     render(
       <YouTubeInlinePlayer
         video={mockVideo}
@@ -60,10 +60,6 @@ describe("YouTubeInlinePlayer thumbnail section", () => {
         onNext={null}
       />
     );
-
-    // Click Edit button to enter edit mode
-    const editBtn = screen.getByRole("button", { name: /edit/i });
-    fireEvent.click(editBtn);
 
     // Verify thumbnail section elements are present
     expect(screen.getByText("YouTube Thumbnail")).toBeInTheDocument();
@@ -80,9 +76,6 @@ describe("YouTubeInlinePlayer thumbnail section", () => {
         onUpdate={onUpdate}
       />
     );
-
-    const editBtn = screen.getByRole("button", { name: /edit/i });
-    fireEvent.click(editBtn);
 
     const uploadFileBtn = screen.getByRole("button", { name: /upload image file/i });
     fireEvent.click(uploadFileBtn);
@@ -103,9 +96,6 @@ describe("YouTubeInlinePlayer thumbnail section", () => {
         onNext={null}
       />
     );
-
-    const editBtn = screen.getByRole("button", { name: /edit/i });
-    fireEvent.click(editBtn);
 
     const uploadFileBtn = screen.getByRole("button", { name: /upload image file/i });
     fireEvent.click(uploadFileBtn);

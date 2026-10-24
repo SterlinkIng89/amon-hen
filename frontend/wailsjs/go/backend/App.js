@@ -126,6 +126,10 @@ export function GetPlaylistVideos(arg1) {
   return window['go']['backend']['App']['GetPlaylistVideos'](arg1);
 }
 
+export function GetQuotaStatus() {
+  return window['go']['backend']['App']['GetQuotaStatus']();
+}
+
 export function GetQuotaUsedToday() {
   return window['go']['backend']['App']['GetQuotaUsedToday']();
 }
@@ -294,6 +298,10 @@ export function RemoveSteamGameRating(arg1) {
   return window['go']['backend']['App']['RemoveSteamGameRating'](arg1);
 }
 
+export function RemoveVideosFromPlaylist(arg1, arg2) {
+  return window['go']['backend']['App']['RemoveVideosFromPlaylist'](arg1, arg2);
+}
+
 export function ReorderSteamBacklog(arg1) {
   return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
 }
@@ -426,6 +434,10 @@ export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
 }
 
+export function UpdatePlaylistMetadata(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['UpdatePlaylistMetadata'](arg1, arg2, arg3, arg4);
+}
+
 export function UpdatePlaylistVisibility(arg1, arg2) {
   return window['go']['backend']['App']['UpdatePlaylistVisibility'](arg1, arg2);
 }
@@ -440,6 +452,10 @@ export function UpdateVideoMonetizationStatus(arg1, arg2, arg3, arg4) {
 
 export function UpdateYouTubeThumbnail(arg1, arg2) {
   return window['go']['backend']['App']['UpdateYouTubeThumbnail'](arg1, arg2);
+}
+
+export function UpdateYouTubeVideoGameMeta(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['UpdateYouTubeVideoGameMeta'](arg1, arg2, arg3);
 }
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {

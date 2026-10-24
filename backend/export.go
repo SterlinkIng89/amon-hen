@@ -209,7 +209,7 @@ func (a *App) ExportVideos(items []ExportItem, destinationFolder string, writeMe
 	return result, nil
 }
 
-// OpenFolderInExplorer opens the specified folder path in the OS file manager.
+// OpenFolderInExplorer opens the specified folder path or selects the file in the OS file manager.
 func (a *App) OpenFolderInExplorer(folderPath string) error {
 	if folderPath == "" {
 		return fmt.Errorf("folder path cannot be empty")
@@ -219,17 +219,25 @@ func (a *App) OpenFolderInExplorer(folderPath string) error {
 	if err != nil {
 		return fmt.Errorf("path does not exist: %w", err)
 	}
-	if !info.IsDir() {
-		cleanPath = filepath.Dir(cleanPath)
-	}
 
 	var cmd *exec.Cmd
 	switch goRuntime.GOOS {
 	case "windows":
-		cmd = exec.Command("explorer", cleanPath)
+		if !info.IsDir() {
+			cmd = exec.Command("explorer", "/select,"+cleanPath)
+		} else {
+			cmd = exec.Command("explorer", cleanPath)
+		}
 	case "darwin":
-		cmd = exec.Command("open", cleanPath)
+		if !info.IsDir() {
+			cmd = exec.Command("open", "-R", cleanPath)
+		} else {
+			cmd = exec.Command("open", cleanPath)
+		}
 	default:
+		if !info.IsDir() {
+			cleanPath = filepath.Dir(cleanPath)
+		}
 		cmd = exec.Command("xdg-open", cleanPath)
 	}
 	return cmd.Start()

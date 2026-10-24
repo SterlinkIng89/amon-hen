@@ -75,7 +75,7 @@ export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefin
     source_type: sourceType,
     steam_asset_type: assetType,
     custom_image_path: raw.custom_image_path,
-    episode_position: raw.episode_position || "bottom-right",
+    episode_position: raw.episode_position || "bottom-left",
     episode_format: raw.episode_format || "pad2",
     font_color: raw.font_color,
     image_framing: framing,
