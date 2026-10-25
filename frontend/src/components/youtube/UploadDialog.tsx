@@ -140,7 +140,6 @@ export default function UploadDialog({
     setIsCreatingPlaylist(true);
     setPlaylistError("");
     try {
-      useAppStore.setState({ defaultPlaylistPrivacy: privacy });
       const id = await GetOrCreatePlaylist(
         newPlaylistTitle.trim(),
         "",
@@ -152,8 +151,10 @@ export default function UploadDialog({
       setIsCreating(false);
       setPlaylistId(id);
       setPlaylistSearch(newPlaylistTitle.trim());
-    } catch (e: any) {
-      setPlaylistError(e?.toString() ?? "Failed to get or create playlist");
+    } catch (e: unknown) {
+      setPlaylistError(
+        e instanceof Error ? e.message : String(e ?? "Failed to get or create playlist"),
+      );
     } finally {
       setIsCreatingPlaylist(false);
     }
@@ -437,7 +438,6 @@ export default function UploadDialog({
                     className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 rounded-sm text-xs font-semibold cursor-pointer transition-colors ${privacy === p ? "bg-accent text-white border border-accent hover:bg-accent" : "bg-elevated border border-border-subtle text-text-secondary hover:bg-card hover:border-border-medium hover:text-text-primary"}`}
                     onClick={() => {
                       setPrivacy(p);
-                      useAppStore.setState({ defaultPlaylistPrivacy: p });
                     }}
                   >
                     {p === "public" && (
