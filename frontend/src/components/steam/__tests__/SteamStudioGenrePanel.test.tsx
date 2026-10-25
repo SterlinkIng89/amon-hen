@@ -6,6 +6,7 @@ import {
   SteamStudioStatItem,
   SteamTagStatItem,
 } from "../SteamStudioGenrePanel";
+import type { GroupRatingStatsMap } from "../../../utils/steamInsightsUtils";
 
 describe("SteamStudioGenrePanel", () => {
   const sampleDevelopers: readonly SteamStudioStatItem[] = [
@@ -252,5 +253,108 @@ describe("SteamStudioGenrePanel", () => {
     expect(screen.getByText("Studio #26")).toBeDefined();
     expect(screen.getByText("Studio #35")).toBeDefined();
     expect(screen.queryByTestId("load-more-btn")).toBeNull();
+  });
+
+  const sampleRatingStatsMap: GroupRatingStatsMap = {
+    developers: {
+      fromsoftware: { avgScore: 9.5, ratedCount: 3 },
+      "cd projekt red": { avgScore: 9.0, ratedCount: 2 },
+    },
+    publishers: {
+      valve: { avgScore: 8.5, ratedCount: 4 },
+    },
+    tags: {
+      "souls-like": { avgScore: 9.6, ratedCount: 3 },
+      "co-op": { avgScore: 7.8, ratedCount: 2 },
+    },
+  };
+
+  it("triggers onSortChange when clicking sort-rating button", () => {
+    const onSortChange = vi.fn();
+    render(
+      <SteamStudioGenrePanel
+        developers={sampleDevelopers}
+        publishers={samplePublishers}
+        tags={sampleTags}
+        sortBy="hours"
+        onSortChange={onSortChange}
+        selectedGroup={null}
+        onSelectGroup={vi.fn()}
+      />
+    );
+
+    const sortRatingBtn = screen.getByTestId("sort-rating");
+    expect(sortRatingBtn.textContent).toContain("★ Score");
+    fireEvent.click(sortRatingBtn);
+    expect(onSortChange).toHaveBeenCalledWith("rating");
+  });
+
+  it("renders personal rating badges for rated studios, publishers, genres, and features", () => {
+    render(
+      <SteamStudioGenrePanel
+        developers={sampleDevelopers}
+        publishers={samplePublishers}
+        tags={sampleTags}
+        sortBy="hours"
+        onSortChange={vi.fn()}
+        selectedGroup={null}
+        onSelectGroup={vi.fn()}
+        ratingStatsMap={sampleRatingStatsMap}
+      />
+    );
+
+    const fromSoftBadge = screen.getByTestId("group-rating-badge-FromSoftware");
+    expect(fromSoftBadge).toBeDefined();
+    expect(fromSoftBadge.textContent).toContain("★ 9.5");
+
+    const cdprBadge = screen.getByTestId("group-rating-badge-CD PROJEKT RED");
+    expect(cdprBadge).toBeDefined();
+    expect(cdprBadge.textContent).toContain("★ 9.0");
+
+    expect(screen.queryByTestId("group-rating-badge-Capcom")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("tab-publishers"));
+    const valvePubBadge = screen.getByTestId("group-rating-badge-Valve");
+    expect(valvePubBadge).toBeDefined();
+    expect(valvePubBadge.textContent).toContain("★ 8.5");
+    expect(screen.queryByTestId("group-rating-badge-Bandai Namco")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("tab-genres"));
+    const soulsBadge = screen.getByTestId("group-rating-badge-Souls-like");
+    expect(soulsBadge).toBeDefined();
+    expect(soulsBadge.textContent).toContain("★ 9.6");
+
+    fireEvent.click(screen.getByTestId("tab-features"));
+    const coopBadge = screen.getByTestId("group-rating-badge-Co-op");
+    expect(coopBadge).toBeDefined();
+    expect(coopBadge.textContent).toContain("★ 7.8");
+  });
+
+  it("sorts by rating placing rated items ordered by avgScore descending ahead of unrated items", () => {
+    render(
+      <SteamStudioGenrePanel
+        developers={sampleDevelopers}
+        publishers={samplePublishers}
+        tags={sampleTags}
+        sortBy="rating"
+        onSortChange={vi.fn()}
+        selectedGroup={null}
+        onSelectGroup={vi.fn()}
+        ratingStatsMap={sampleRatingStatsMap}
+      />
+    );
+
+    const rows = screen.getAllByRole("button").filter((el) => el.getAttribute("aria-pressed") !== null);
+    expect(rows[0].textContent).toContain("FromSoftware");
+    expect(rows[0].textContent).toContain("★ 9.5");
+
+    expect(rows[1].textContent).toContain("CD PROJEKT RED");
+    expect(rows[1].textContent).toContain("★ 9.0");
+
+    expect(rows[2].textContent).toContain("Valve Corporation");
+    expect(rows[2].textContent).toContain("Unrated");
+
+    expect(rows[3].textContent).toContain("Capcom");
+    expect(rows[3].textContent).toContain("Unrated");
   });
 });

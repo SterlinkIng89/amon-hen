@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { getGameColor } from "../../utils/tagColors";
+import type { GroupRatingStatsMap, GroupRatingStat } from "../../utils/steamInsightsUtils";
 
 export type StudioGenreTab = "developers" | "publishers" | "genres" | "features";
-export type StudioSortMode = "hours" | "games" | "avg";
+export type StudioSortMode = "hours" | "games" | "avg" | "rating";
 
 export interface SteamStudioStatItem {
   readonly name: string;
@@ -33,6 +34,7 @@ export interface SteamStudioGenrePanelProps {
   readonly onSortChange: (sort: StudioSortMode) => void;
   readonly selectedGroup: SelectedGroupFilter | null;
   readonly onSelectGroup: (group: SelectedGroupFilter | null) => void;
+  readonly ratingStatsMap?: GroupRatingStatsMap;
 }
 
 interface NormalizedStatItem {
@@ -40,6 +42,8 @@ interface NormalizedStatItem {
   readonly totalHours: number;
   readonly gamesCount: number;
   readonly avgHours: number;
+  readonly avgScore: number;
+  readonly ratedCount: number;
 }
 
 interface TabOption {
@@ -59,6 +63,7 @@ const SORT_OPTIONS: readonly { key: StudioSortMode; label: string; testId: strin
   { key: "hours", label: "Hours", testId: "sort-hours" },
   { key: "games", label: "Games", testId: "sort-games" },
   { key: "avg", label: "Avg h/g", testId: "sort-avg" },
+  { key: "rating", label: "★ Score", testId: "sort-rating" },
 ];
 
 const PAGE_SIZE = 25;
@@ -67,13 +72,16 @@ function toNormalizedItem(
   name: string,
   totalHours: number,
   gamesCount: number,
-  avgHours?: number
+  avgHours?: number,
+  ratingStat?: GroupRatingStat
 ): NormalizedStatItem {
   return {
     name,
     totalHours,
     gamesCount,
     avgHours: avgHours ?? (gamesCount > 0 ? totalHours / gamesCount : 0),
+    avgScore: ratingStat?.avgScore ?? 0,
+    ratedCount: ratingStat?.ratedCount ?? 0,
   };
 }
 
@@ -100,6 +108,12 @@ function getMetricLabels(
       secondary: formatHours(item.totalHours),
     };
   }
+  if (sortBy === "rating") {
+    return {
+      primary: item.ratedCount > 0 ? `★ ${item.avgScore.toFixed(1)}` : "Unrated",
+      secondary: formatHours(item.totalHours),
+    };
+  }
   return {
     primary: formatHours(item.totalHours),
     secondary: `${item.gamesCount}g`,
@@ -114,6 +128,7 @@ export function SteamStudioGenrePanel({
   onSortChange,
   selectedGroup,
   onSelectGroup,
+  ratingStatsMap,
 }: SteamStudioGenrePanelProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<StudioGenreTab>(
     selectedGroup ? selectedGroup.type : "developers"
@@ -139,17 +154,26 @@ export function SteamStudioGenrePanel({
 
   const rawTabItems: readonly NormalizedStatItem[] = useMemo(() => {
     if (activeTab === "developers") {
-      return developers.map((d) => toNormalizedItem(d.name, d.totalHours, d.gamesCount, d.avgHours));
+      const devMap = ratingStatsMap?.developers;
+      return developers.map((d) =>
+        toNormalizedItem(d.name, d.totalHours, d.gamesCount, d.avgHours, devMap?.[d.name.toLowerCase()])
+      );
     }
     if (activeTab === "publishers") {
-      return publishers.map((p) => toNormalizedItem(p.name, p.totalHours, p.gamesCount, p.avgHours));
+      const pubMap = ratingStatsMap?.publishers;
+      return publishers.map((p) =>
+        toNormalizedItem(p.name, p.totalHours, p.gamesCount, p.avgHours, pubMap?.[p.name.toLowerCase()])
+      );
     }
 
     const isFeature = activeTab === "features";
+    const tagMap = ratingStatsMap?.tags;
     return tags
       .filter((t) => (t.category === "feature") === isFeature)
-      .map((t) => toNormalizedItem(t.tag, t.totalHours, t.gamesCount, t.avgHours));
-  }, [activeTab, developers, publishers, tags]);
+      .map((t) =>
+        toNormalizedItem(t.tag, t.totalHours, t.gamesCount, t.avgHours, tagMap?.[t.tag.toLowerCase()])
+      );
+  }, [activeTab, developers, publishers, tags, ratingStatsMap]);
 
   const filteredAndSortedItems: readonly NormalizedStatItem[] = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase();
@@ -164,7 +188,12 @@ export function SteamStudioGenrePanel({
       if (sortBy === "games") {
         return b.gamesCount - a.gamesCount || b.totalHours - a.totalHours || a.name.localeCompare(b.name);
       }
-      return b.avgHours - a.avgHours || b.totalHours - a.totalHours || a.name.localeCompare(b.name);
+      if (sortBy === "avg") {
+        return b.avgHours - a.avgHours || b.totalHours - a.totalHours || a.name.localeCompare(b.name);
+      }
+      const aScore = a.ratedCount > 0 ? a.avgScore : -1;
+      const bScore = b.ratedCount > 0 ? b.avgScore : -1;
+      return bScore - aScore || b.totalHours - a.totalHours || a.name.localeCompare(b.name);
     });
   }, [rawTabItems, searchQuery, sortBy]);
 
@@ -176,7 +205,10 @@ export function SteamStudioGenrePanel({
     if (sortBy === "games") {
       return Math.max(...filteredAndSortedItems.map((i) => i.gamesCount), 1);
     }
-    return Math.max(...filteredAndSortedItems.map((i) => i.avgHours), 1);
+    if (sortBy === "avg") {
+      return Math.max(...filteredAndSortedItems.map((i) => i.avgHours), 1);
+    }
+    return 10;
   }, [filteredAndSortedItems, sortBy]);
 
   const visibleItems = filteredAndSortedItems.slice(0, visibleCount);
@@ -269,10 +301,12 @@ export function SteamStudioGenrePanel({
                 ? item.totalHours
                 : sortBy === "games"
                 ? item.gamesCount
-                : item.avgHours;
+                : sortBy === "avg"
+                ? item.avgHours
+                : item.avgScore;
 
             const progressPct =
-              maxMetricValue > 0
+              maxMetricValue > 0 && currentMetric > 0
                 ? Math.min(100, Math.max(3, (currentMetric / maxMetricValue) * 100))
                 : 0;
 
@@ -310,6 +344,14 @@ export function SteamStudioGenrePanel({
                     >
                       {item.name}
                     </span>
+                    {item.ratedCount > 0 && (
+                      <span
+                        data-testid={`group-rating-badge-${item.name}`}
+                        className="px-1.5 py-0.5 shrink-0 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold tabular-nums border border-amber-500/30"
+                      >
+                        ★ {item.avgScore.toFixed(1)}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 text-xs tabular-nums shrink-0">

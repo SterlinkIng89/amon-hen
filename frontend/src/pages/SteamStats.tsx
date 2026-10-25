@@ -12,7 +12,7 @@ import { SteamStudioGenrePanel, type SelectedGroupFilter, type StudioSortMode, t
 import { SteamGameInspectorGrid } from "../components/steam/SteamGameInspectorGrid";
 import { SteamBacklogView } from "../components/steam/SteamBacklogView";
 import { SteamPersonalTierView } from "../components/steam/SteamPersonalTierView";
-import { filterSteamGames, normalizeGameInsight, type PlaytimeBucket, type AchievementFilter, type BacklogStatus, type TierLevel, type SteamGameInsight, type SteamLibraryPulse } from "../utils/steamInsightsUtils";
+import { filterSteamGames, normalizeGameInsight, computeGroupRatingMap, type PlaytimeBucket, type AchievementFilter, type BacklogStatus, type TierLevel, type SteamGameInsight, type SteamLibraryPulse } from "../utils/steamInsightsUtils";
 
 export type { SteamPageTab };
 
@@ -153,6 +153,7 @@ export default function SteamStats(): React.JSX.Element {
   const unrecordedGemsCount = useMemo(() => allGames.filter((g) => g.playtimeForever >= 1200 && g.ytVideosCount === 0).length, [allGames]);
   const topDevs = useMemo(() => devs.slice(0, 10).map((d) => d.name), [devs]);
   const topGenres = useMemo(() => tags.filter((t) => !t.category || t.category === "genre").slice(0, 10).map((t) => t.tag), [tags]);
+  const groupRatingMap = useMemo(() => computeGroupRatingMap(allGames), [allGames]);
 
   const hasActiveFilter = activeBucket !== "all" || activeAchievementFilter !== "all" || selectedGroup !== null || searchQuery.trim() !== "";
   const activeFilterTitle = selectedGroup ? selectedGroup.name : activeBucket !== "all" ? `Bucket: ${activeBucket}` : activeAchievementFilter !== "all" ? `Filter: ${activeAchievementFilter}` : "";
@@ -216,6 +217,7 @@ export default function SteamStats(): React.JSX.Element {
                   onSortChange={setSortBy}
                   selectedGroup={selectedGroup}
                   onSelectGroup={setSelectedGroup}
+                  ratingStatsMap={groupRatingMap}
                 />
               </ErrorBoundary>
             </div>
