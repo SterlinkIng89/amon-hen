@@ -255,3 +255,27 @@ export function groupLogsWithBursts(
 
   return result;
 }
+
+export const DEV_LOG_OP_COLORS: Readonly<Record<string, string>> = {
+  "videos.insert": "#f97316",
+  "videos.update": "#eab308",
+  "playlists.insert": "#eab308",
+  "playlistItems.insert": "#eab308",
+  "thumbnails.set": "#eab308",
+  "playlistImages.insert": "#eab308",
+  "channels.list": "#22d3ee",
+  "videos.list": "#22d3ee",
+  "playlists.list": "#22d3ee",
+  "playlistItems.list": "#22d3ee",
+};
+
+export function opColor(op: string): string {
+  return DEV_LOG_OP_COLORS[op] ?? "#94a3b8";
+}
+
+export function durationColor(durationMs: number): string {
+  if (durationMs >= 2000) return "#f97316";
+  if (durationMs >= 800) return "#eab308";
+  return "#64748b";
+}
+
