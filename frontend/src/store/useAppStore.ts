@@ -20,6 +20,7 @@ interface AppState {
   filterUploaded: boolean;
   selectedIndex: number;
   defaultPlaylistPrivacy: PlaylistPrivacy;
+  defaultVideoPrivacy: PlaylistPrivacy;
 }
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ function savePersistedPrefs(state: AppState) {
         filterUploaded: state.filterUploaded,
         selectedIndex: state.selectedIndex,
         defaultPlaylistPrivacy: state.defaultPlaylistPrivacy,
+        defaultVideoPrivacy: state.defaultVideoPrivacy,
       }),
     );
   } catch {}
@@ -70,6 +72,8 @@ let state: AppState = {
   selectedIndex: saved.selectedIndex ?? -1,
   defaultPlaylistPrivacy:
     (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "unlisted",
+  defaultVideoPrivacy:
+    (saved.defaultVideoPrivacy as PlaylistPrivacy) ?? "unlisted",
 };
 
 type Listener = () => void;
@@ -92,7 +96,8 @@ function setState(
     prevState.cardDensity !== state.cardDensity ||
     prevState.filterUploaded !== state.filterUploaded ||
     prevState.selectedIndex !== state.selectedIndex ||
-    prevState.defaultPlaylistPrivacy !== state.defaultPlaylistPrivacy
+    prevState.defaultPlaylistPrivacy !== state.defaultPlaylistPrivacy ||
+    prevState.defaultVideoPrivacy !== state.defaultVideoPrivacy
   ) {
     savePersistedPrefs(state);
   }
@@ -136,6 +141,8 @@ const setFilterUploaded = (filterUploaded: boolean) =>
 const setSelectedIndex = (selectedIndex: number) => setState({ selectedIndex });
 const setDefaultPlaylistPrivacy = (defaultPlaylistPrivacy: PlaylistPrivacy) =>
   setState({ defaultPlaylistPrivacy });
+const setDefaultVideoPrivacy = (defaultVideoPrivacy: PlaylistPrivacy) =>
+  setState({ defaultVideoPrivacy });
 
 const storeActions = {
   setQueue,
@@ -151,6 +158,7 @@ const storeActions = {
   setFilterUploaded,
   setSelectedIndex,
   setDefaultPlaylistPrivacy,
+  setDefaultVideoPrivacy,
 };
 
 // ─── React hook ───────────────────────────────────────────────────────────────

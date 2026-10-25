@@ -67,7 +67,7 @@ export default function UploadDialog({
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
     (video.privacy as PlaylistPrivacy) ||
-      useAppStore.getState().defaultPlaylistPrivacy,
+      useAppStore.getState().defaultVideoPrivacy,
   );
   const [playlistId, setPlaylistId] = useState(video.playlistId || "");
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);

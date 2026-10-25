@@ -348,7 +348,7 @@ export default function InlinePlayer({
   const [description, setDescription] = useState(video.description || "");
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
     (video.privacy as PlaylistPrivacy) ||
-      useAppStore.getState().defaultPlaylistPrivacy,
+      useAppStore.getState().defaultVideoPrivacy,
   );
   const [playlistId, setPlaylistId] = useState(video.playlistId || "");
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
@@ -487,7 +487,7 @@ export default function InlinePlayer({
     setDescription(video.description || "");
     setPrivacy(
       (video.privacy as PlaylistPrivacy) ||
-        useAppStore.getState().defaultPlaylistPrivacy,
+        useAppStore.getState().defaultVideoPrivacy,
     );
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
@@ -538,7 +538,6 @@ export default function InlinePlayer({
     setIsCreatingPlaylistLoading(true);
     setPlaylistCreateError("");
     try {
-      useAppStore.setState({ defaultPlaylistPrivacy: privacy });
       const id = await GetOrCreatePlaylist(
         newPlaylistTitle.trim(),
         "",
@@ -1151,7 +1150,8 @@ export default function InlinePlayer({
           effectiveContentType,
         )) ||
     description !== (video.description || "") ||
-    privacy !== (video.privacy || "unlisted") ||
+    privacy !==
+      (video.privacy || useAppStore.getState().defaultVideoPrivacy) ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
 
   const renderMetadataForm = () => (
@@ -1399,7 +1399,6 @@ export default function InlinePlayer({
               className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
               onClick={() => {
                 setPrivacy(p);
-                useAppStore.setState({ defaultPlaylistPrivacy: p });
               }}
             >
               {p.charAt(0).toUpperCase() + p.slice(1)}

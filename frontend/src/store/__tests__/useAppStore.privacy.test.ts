@@ -1,0 +1,29 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { useAppStore } from "../useAppStore";
+
+describe("useAppStore defaultVideoPrivacy", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("defaults defaultVideoPrivacy and defaultPlaylistPrivacy to unlisted", () => {
+    const state = useAppStore.getState();
+    expect(state.defaultPlaylistPrivacy).toBe("unlisted");
+    expect(state.defaultVideoPrivacy).toBe("unlisted");
+  });
+
+  it("updates defaultVideoPrivacy independently and persists to localStorage", () => {
+    const store = useAppStore.getState();
+    store.setDefaultVideoPrivacy("public");
+
+    const updatedState = useAppStore.getState();
+    expect(updatedState.defaultVideoPrivacy).toBe("public");
+    expect(updatedState.defaultPlaylistPrivacy).toBe("unlisted");
+
+    const rawPrefs = localStorage.getItem("amon-hen-prefs");
+    expect(rawPrefs).not.toBeNull();
+    const parsed = JSON.parse(rawPrefs ?? "{}");
+    expect(parsed.defaultVideoPrivacy).toBe("public");
+    expect(parsed.defaultPlaylistPrivacy).toBe("unlisted");
+  });
+});

@@ -320,7 +320,9 @@ export default function BulkActionBar({
             v.customVars,
           ),
         description: v.description || "",
-        privacy: (v.privacy as "public" | "unlisted" | "private") || "unlisted",
+        privacy:
+          (v.privacy as "public" | "unlisted" | "private") ||
+          useAppStore.getState().defaultVideoPrivacy,
         status: "pending" as const,
         progress: 0,
         // Use the freshly-set playlist ID if the user just applied one via the bar,
