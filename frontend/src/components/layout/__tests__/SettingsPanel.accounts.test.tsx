@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import SettingsPanel from "../SettingsPanel";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
@@ -63,14 +63,14 @@ describe("SettingsPanel - Accounts Tab (#156)", () => {
     fireEvent.click(editBtn);
 
     // API Key input should appear with type="password"
-    const keyInput = screen.getByPlaceholderText("Steam Web API Key") as HTMLInputElement;
+    const keyInput = screen.getByPlaceholderText("Steam Web API Key");
     expect(keyInput).toBeInTheDocument();
-    expect(keyInput.type).toBe("password");
+    expect(keyInput).toHaveAttribute("type", "password");
 
     // Toggle visibility
     const toggleBtn = screen.getByLabelText("Toggle API key visibility");
     fireEvent.click(toggleBtn);
-    expect(keyInput.type).toBe("text");
+    expect(keyInput).toHaveAttribute("type", "text");
   });
 
   it("triggers Sync and Disconnect actions on YouTube card", async () => {
@@ -84,12 +84,16 @@ describe("SettingsPanel - Accounts Tab (#156)", () => {
 
     // Click Sync
     const syncBtn = screen.getByRole("button", { name: /^sync$/i });
-    fireEvent.click(syncBtn);
+    await act(async () => {
+      fireEvent.click(syncBtn);
+    });
     expect(appBackend.SyncChannelData).toHaveBeenCalled();
 
     // Click Disconnect
     const disconnectBtn = screen.getByRole("button", { name: /^disconnect$/i });
-    fireEvent.click(disconnectBtn);
+    await act(async () => {
+      fireEvent.click(disconnectBtn);
+    });
     expect(appBackend.InvalidateYouTubeClient).toHaveBeenCalled();
   });
 
@@ -102,11 +106,15 @@ describe("SettingsPanel - Accounts Tab (#156)", () => {
     expect(await screen.findByText("Steam Connected")).toBeInTheDocument();
 
     const steamSyncBtn = screen.getByRole("button", { name: /sync steam/i });
-    fireEvent.click(steamSyncBtn);
+    await act(async () => {
+      fireEvent.click(steamSyncBtn);
+    });
     expect(appBackend.SyncSteamData).toHaveBeenCalled();
 
     const steamDisconnectBtn = screen.getByRole("button", { name: /disconnect steam/i });
-    fireEvent.click(steamDisconnectBtn);
+    await act(async () => {
+      fireEvent.click(steamDisconnectBtn);
+    });
     expect(appBackend.DisconnectSteam).toHaveBeenCalled();
   });
 
@@ -121,7 +129,9 @@ describe("SettingsPanel - Accounts Tab (#156)", () => {
 
     // Open Cache Folder
     const openCacheBtn = screen.getByRole("button", { name: /open cache folder/i });
-    fireEvent.click(openCacheBtn);
+    await act(async () => {
+      fireEvent.click(openCacheBtn);
+    });
     await vi.waitFor(() => {
       expect(appBackend.GetCacheDir).toHaveBeenCalled();
       expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith("/mock/cache/dir");
@@ -129,7 +139,9 @@ describe("SettingsPanel - Accounts Tab (#156)", () => {
 
     // Import YouTube JSON
     const importBtn = screen.getByRole("button", { name: /import youtube json/i });
-    fireEvent.click(importBtn);
+    await act(async () => {
+      fireEvent.click(importBtn);
+    });
     expect(appBackend.ImportYouTubeJSON).toHaveBeenCalled();
 
     // API Quota & Logs

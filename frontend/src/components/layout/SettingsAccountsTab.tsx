@@ -79,7 +79,7 @@ export function SettingsAccountsTab({
     try {
       await SaveSteamAPIKey(steamApiKey);
       const id = await LoginSteam();
-      onSteamConnected(id as string);
+      onSteamConnected(id);
       setEditingSteamKey(false);
     } catch (e: unknown) {
       setError(toErrorMessage(e));
