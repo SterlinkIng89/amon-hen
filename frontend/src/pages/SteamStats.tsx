@@ -236,6 +236,8 @@ export default function SteamStats(): React.JSX.Element {
                   }}
                   onQuickQueue={handleQuickQueue}
                   onQuickRate={handleQuickRate}
+                  onRemoveRating={handleRemoveRating}
+                  onRemoveBacklog={handleRemoveBacklog}
                 />
               </ErrorBoundary>
             </div>

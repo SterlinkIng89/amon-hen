@@ -3,8 +3,12 @@ import {
   SteamGameInsight,
   BacklogStatus,
   TierLevel,
+  InspectorSortMode,
+  sortSteamGames,
+  tierToDefaultScore,
 } from "../../utils/steamInsightsUtils";
 import { getGameColor } from "../../utils/tagColors";
+import { SteamGameRatingPopover } from "./SteamGameRatingPopover";
 
 export interface SteamGameInspectorGridProps {
   readonly games: readonly SteamGameInsight[];
@@ -15,6 +19,10 @@ export interface SteamGameInspectorGridProps {
   readonly onClearFilters: () => void;
   readonly onQuickQueue: (appid: number, status: BacklogStatus) => void;
   readonly onQuickRate: (appid: number, tier: TierLevel, score: number) => void;
+  readonly onRemoveRating?: (appid: number) => void;
+  readonly onRemoveBacklog?: (appid: number) => void;
+  readonly sortBy?: InspectorSortMode;
+  readonly onSortChange?: (sort: InspectorSortMode) => void;
 }
 
 const PAGE_SIZE = 24;
@@ -27,20 +35,6 @@ const TIER_OPTIONS: readonly { tier: TierLevel; score: number }[] = [
   { tier: "D", score: 2 },
 ];
 
-function formatBacklogStatus(status: BacklogStatus): string {
-  switch (status) {
-    case "playing":
-      return "Playing";
-    case "up_next":
-      return "Up next";
-    case "candidate":
-      return "Candidate";
-    case "on_hold":
-      return "On hold";
-    case "dropped":
-      return "Dropped";
-  }
-}
 
 function formatHours(hours: number): string {
   if (hours % 1 === 0) {
@@ -50,42 +44,70 @@ function formatHours(hours: number): string {
 }
 
 function YouTubeBridgeBadge({
-  ytVideosCount,
-  ytRecordedHours = 0,
-  playtimeForever,
+  count,
+  hours,
   appid,
-  detailed = false,
 }: {
-  readonly ytVideosCount: number;
-  readonly ytRecordedHours?: number;
-  readonly playtimeForever: number;
-  readonly appid?: number;
-  readonly detailed?: boolean;
+  count: number;
+  hours: number;
+  appid?: number;
 }): React.JSX.Element | null {
-  if (ytVideosCount > 0) {
+  if (count <= 0) return null;
+  return (
+    <span
+      data-testid={appid !== undefined ? `yt-badge-${appid}` : undefined}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-fire/15 text-[#f87171] border border-fire/30"
+      title={`${count} recorded YouTube videos totaling ${hours.toFixed(1)}h`}
+    >
+      <svg
+        className="w-2.5 h-2.5 fill-current shrink-0"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+      </svg>
+      <span>{count} YT vids</span>
+    </span>
+  );
+}
+
+function AchievementBadge({
+  pct,
+  unrecordedGem,
+  appid,
+}: {
+  pct: number;
+  unrecordedGem?: boolean;
+  appid?: number;
+}): React.JSX.Element | null {
+  if (unrecordedGem) {
     return (
       <span
-        data-testid={appid ? `yt-badge-${appid}` : undefined}
-        className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 shrink-0"
+        data-testid={appid !== undefined ? `unrecorded-gem-${appid}` : "unrecorded-gem-badge"}
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30"
+        title="Unrecorded Gem: played 10+ hours with zero recorded YouTube coverage"
       >
-        <span>{ytVideosCount} YT vids</span>
-        {detailed && ytRecordedHours > 0 && (
-          <>
-            <span className="text-red-400/60">·</span>
-            <span>{Math.round(ytRecordedHours)}h</span>
-          </>
-        )}
+        Unrecorded gem
       </span>
     );
   }
 
-  if (playtimeForever >= 1200) {
+  if (pct === 100) {
     return (
       <span
-        data-testid={appid ? `unrecorded-gem-${appid}` : undefined}
-        className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0"
+        data-testid="perfect-game-badge"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30"
       >
-        Unrecorded gem
+        <span>★</span>
+        <span>100%</span>
+      </span>
+    );
+  }
+
+  if (pct >= 80) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface text-text-secondary border border-border-subtle">
+        {pct}%
       </span>
     );
   }
@@ -102,21 +124,45 @@ export function SteamGameInspectorGrid({
   onClearFilters,
   onQuickQueue,
   onQuickRate,
+  onRemoveRating,
+  onRemoveBacklog,
+  sortBy,
+  onSortChange,
 }: SteamGameInspectorGridProps): React.JSX.Element {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [internalSortBy, setInternalSortBy] = useState<InspectorSortMode>("hours");
+  const [editingRateAppId, setEditingRateAppId] = useState<number | null>(null);
+
+  const toggleRatingPopover = (e: React.MouseEvent, appid: number) => {
+    e.stopPropagation();
+    setEditingRateAppId((prev) => (prev === appid ? null : appid));
+  };
+
+  const effectiveSortBy = sortBy ?? internalSortBy;
+  const handleSortChange = (newSort: InspectorSortMode) => {
+    if (onSortChange) {
+      onSortChange(newSort);
+    } else {
+      setInternalSortBy(newSort);
+    }
+  };
+
+  const sortedGames = useMemo(() => {
+    return sortSteamGames(games, effectiveSortBy);
+  }, [games, effectiveSortBy]);
 
   const spotlightIndex = useMemo(() => {
-    if (games.length === 0) return -1;
-    const idx = games.findIndex((g) => g.appid === selectedAppId);
+    if (sortedGames.length === 0) return -1;
+    const idx = sortedGames.findIndex((g) => g.appid === selectedAppId);
     return idx >= 0 ? idx : 0;
-  }, [games, selectedAppId]);
+  }, [sortedGames, selectedAppId]);
 
-  const spotlightGame = spotlightIndex >= 0 ? games[spotlightIndex] : null;
+  const spotlightGame = spotlightIndex >= 0 ? sortedGames[spotlightIndex] : null;
   const spotlightRank = spotlightIndex + 1;
 
-  const visibleGames = games.slice(0, visibleCount);
-  const hasMore = games.length > visibleCount;
+  const visibleGames = sortedGames.slice(0, visibleCount);
+  const hasMore = sortedGames.length > visibleCount;
 
   return (
     <div className="bg-elevated/30 border border-border-subtle rounded-xl p-4 flex flex-col gap-4 h-full">
@@ -138,15 +184,31 @@ export function SteamGameInspectorGrid({
           )}
         </div>
 
-        <div className="relative w-48 sm:w-64">
-          <input
-            type="text"
-            data-testid="inspector-game-search"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search games..."
-            className="w-full bg-surface border border-border-subtle rounded-lg px-2.5 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-medium focus:ring-1 focus:ring-accent/50"
-          />
+        <div className="flex items-center gap-2">
+          <select
+            data-testid="inspector-sort-select"
+            value={effectiveSortBy}
+            onChange={(e) => handleSortChange(e.target.value as InspectorSortMode)}
+            style={{ colorScheme: "dark" }}
+            className="bg-surface border border-border-subtle rounded-lg px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-border-medium"
+          >
+            <option value="hours" className="bg-[#18181b] text-text-primary">Most played</option>
+            <option value="score" className="bg-[#18181b] text-text-primary">Highest rated</option>
+            <option value="achievements" className="bg-[#18181b] text-text-primary">Achievements %</option>
+            <option value="recent" className="bg-[#18181b] text-text-primary">Recent 2w</option>
+            <option value="name" className="bg-[#18181b] text-text-primary">Name A–Z</option>
+          </select>
+
+          <div className="relative w-40 sm:w-56">
+            <input
+              type="text"
+              data-testid="inspector-game-search"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search games..."
+              className="w-full bg-surface border border-border-subtle rounded-lg px-2.5 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-medium focus:ring-1 focus:ring-accent/50"
+            />
+          </div>
         </div>
       </div>
 
@@ -205,53 +267,51 @@ export function SteamGameInspectorGrid({
                       className="w-1.5 h-1.5 rounded-full"
                       style={{ backgroundColor: getGameColor(spotlightGame.name) }}
                     />
-                    <span
-                      className="text-[9px] font-bold tracking-wider"
-                      style={{ color: getGameColor(spotlightGame.name) }}
-                    >
-                      {spotlightRank === 1 ? "Top played" : `#${spotlightRank} selected`}
+                    <span className="text-[10px] font-bold text-text-primary">
+                      #{spotlightRank}{" "}
+                    </span>
+                    <span className="text-[10px] text-text-secondary">
+                      {selectedAppId !== null
+                        ? "selected"
+                        : effectiveSortBy === "hours"
+                        ? "Top played"
+                        : "Spotlight"}
                     </span>
                   </span>
 
-                  <h4
-                    className="text-xs font-bold text-white leading-tight line-clamp-2"
-                    title={spotlightGame.name}
-                  >
+                  <h4 className="text-xs font-bold text-text-primary line-clamp-1 leading-snug">
                     {spotlightGame.name}
                   </h4>
 
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span className="text-sm font-bold text-white tabular-nums">
-                      {formatHours(spotlightGame.playtimeHours)}
+                  {spotlightGame.personalTier && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface/90 border border-border-subtle text-[10px] font-bold text-text-primary w-fit">
+                      Tier {spotlightGame.personalTier} · {spotlightGame.personalScore ?? tierToDefaultScore(spotlightGame.personalTier)}/10
                     </span>
-                    <span
-                      className="text-[10px] text-text-secondary truncate max-w-[90px]"
-                      title={spotlightGame.developers}
-                    >
-                      {spotlightGame.developers}
-                    </span>
-                  </div>
-
-                  {spotlightGame.achievementsPct > 0 && (
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <div className="flex-1 h-1 bg-black/50 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${spotlightGame.achievementsPct}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] font-bold text-emerald-400 tabular-nums">
-                        {Math.round(spotlightGame.achievementsPct)}%
-                      </span>
-                    </div>
                   )}
 
-                  <div className="mt-0.5">
-                    <YouTubeBridgeBadge
-                      ytVideosCount={spotlightGame.ytVideosCount}
-                      ytRecordedHours={spotlightGame.ytRecordedHours}
-                      playtimeForever={spotlightGame.playtimeForever}
-                      detailed
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-sm font-extrabold text-text-primary tabular-nums">
+                      {formatHours(spotlightGame.playtimeHours)}
+                    </span>
+                    {spotlightGame.playtime2Weeks > 0 && (
+                      <span className="text-[10px] text-accent font-medium tabular-nums">
+                        {formatHours(spotlightGame.playtime2Weeks / 60)} last 2w
+                      </span>
+                    )}
+                  </div>
+
+                  {spotlightGame.personalNotes && (
+                    <p className="text-[10px] text-text-muted italic line-clamp-2 border-t border-border-subtle pt-1 mt-0.5">
+                      {spotlightGame.personalNotes}
+                    </p>
+                  )}
+
+                  <div className="pt-0.5">
+                    <AchievementBadge
+                      pct={spotlightGame.achievementsPct}
+                      unrecordedGem={
+                        spotlightGame.ytVideosCount === 0 && spotlightGame.playtimeHours >= 10
+                      }
                     />
                   </div>
                 </div>
@@ -259,89 +319,116 @@ export function SteamGameInspectorGrid({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto pr-1">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5 content-start">
-              {visibleGames.map((game) => {
-                const isSelected = spotlightGame !== null && game.appid === spotlightGame.appid;
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-2">
+              {visibleGames.map((game, index) => {
+                const isSelected = (spotlightGame?.appid ?? -1) === game.appid;
+                const isUnrecordedGem =
+                  game.ytVideosCount === 0 && game.playtimeHours >= 10;
+                const rank = index + 1;
+
                 return (
                   <div
                     key={game.appid}
                     data-testid={`game-card-${game.appid}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
                     onClick={() => setSelectedAppId(game.appid)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedAppId(game.appid);
-                      }
-                    }}
-                    className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors duration-150 border text-left ${
+                    className={`p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                       isSelected
-                        ? "bg-card border-border-medium"
-                        : "bg-surface/50 hover:bg-card/70 border-border-subtle"
+                        ? "bg-card border-accent/40 shadow-xs"
+                        : "bg-surface/60 hover:bg-card/70 border-border-subtle hover:border-border-medium"
                     }`}
                   >
-                    <div className="w-28 aspect-[460/215] rounded-md overflow-hidden bg-surface shrink-0 border border-border-subtle relative">
-                      {game.headerUrl ? (
-                        <img
-                          src={game.headerUrl}
-                          alt=""
-                          className="w-full h-full object-cover object-center"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-surface/80">
-                          <span
-                            className="text-xs font-bold"
-                            style={{ color: getGameColor(game.name) }}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="relative w-20 h-10 rounded-md overflow-hidden bg-elevated shrink-0 border border-border-subtle">
+                        {game.headerUrl ? (
+                          <img
+                            src={game.headerUrl}
+                            alt={game.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white/80"
+                            style={{ backgroundColor: getGameColor(game.name) }}
                           >
-                            {game.name.slice(0, 3)}
-                          </span>
+                            #{rank}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-text-primary truncate">
+                            {game.name}
+                          </h4>
+                          {game.achievementsPct === 100 && (
+                            <span
+                              className="text-[9px] text-amber-300 font-bold"
+                              title="100% Achievements"
+                            >
+                              ★
+                            </span>
+                          )}
                         </div>
-                      )}
+                        <p className="text-[11px] text-text-secondary truncate">
+                          {game.developers || game.publishers || "Unknown studio"}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 min-w-0">
-                        <span
-                          className={`text-xs font-bold truncate ${
-                            isSelected
-                              ? "text-text-primary"
-                              : "text-text-primary group-hover:text-accent"
-                          }`}
-                          title={game.name}
-                        >
-                          {game.name}
-                        </span>
-                        <span className="text-xs font-bold text-text-primary tabular-nums shrink-0">
+                    <div className="flex flex-col sm:items-end gap-1.5 shrink-0 w-full sm:w-auto">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-text-primary tabular-nums">
                           {formatHours(game.playtimeHours)}
                         </span>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-1 text-[11px] text-text-secondary min-w-0">
-                        <span className="truncate" title={game.developers}>
-                          {game.developers || "Unknown developer"}
-                        </span>
-
                         <YouTubeBridgeBadge
-                          ytVideosCount={game.ytVideosCount}
-                          playtimeForever={game.playtimeForever}
                           appid={game.appid}
+                          count={game.ytVideosCount}
+                          hours={game.ytRecordedHours}
+                        />
+                        <AchievementBadge
+                          appid={game.appid}
+                          pct={game.achievementsPct}
+                          unrecordedGem={isUnrecordedGem}
                         />
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border-subtle/50 mt-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {game.backlogStatus ? (
-                          <span
+                          <div
                             data-testid={`quick-queue-${game.appid}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30 shrink-0"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface border border-border-subtle hover:border-border-medium transition-colors text-[10px] text-text-primary shrink-0"
                           >
-                            <span className="w-1 h-1 rounded-full bg-accent" />
-                            {formatBacklogStatus(game.backlogStatus)}
-                          </span>
+                            <select
+                              data-testid={`quick-queue-select-${game.appid}`}
+                              value={game.backlogStatus}
+                              onChange={(e) =>
+                                onQuickQueue(game.appid, e.target.value as BacklogStatus)
+                              }
+                              style={{ colorScheme: "dark" }}
+                              className="bg-transparent text-[10px] font-semibold text-text-primary cursor-pointer focus:outline-none pr-0.5"
+                            >
+                              <option value="playing" className="bg-[#18181b] text-text-primary">Playing</option>
+                              <option value="up_next" className="bg-[#18181b] text-text-primary">Up next</option>
+                              <option value="candidate" className="bg-[#18181b] text-text-primary">Candidate</option>
+                              <option value="on_hold" className="bg-[#18181b] text-text-primary">On hold</option>
+                              <option value="dropped" className="bg-[#18181b] text-text-primary">Dropped</option>
+                            </select>
+                            <button
+                              type="button"
+                              data-testid={`quick-queue-clear-${game.appid}`}
+                              title="Remove from queue"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveBacklog?.(game.appid);
+                              }}
+                              className="text-[10px] text-text-muted hover:text-red-400 font-bold px-0.5 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -356,36 +443,86 @@ export function SteamGameInspectorGrid({
                           </button>
                         )}
 
-                        {game.personalTier ? (
-                          <span
-                            data-testid={`quick-rate-${game.appid}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface border border-border-medium text-text-primary shrink-0"
-                          >
-                            Tier {game.personalTier}
-                          </span>
-                        ) : (
-                          <div
-                            data-testid={`quick-rate-${game.appid}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-0.5 bg-[#141418] p-0.5 rounded shrink-0"
-                          >
-                            {TIER_OPTIONS.map(({ tier, score }) => (
+                        <div className="relative">
+                          {game.personalTier ? (
+                            <div
+                              data-testid={`quick-rate-${game.appid}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 shrink-0"
+                            >
                               <button
-                                key={tier}
                                 type="button"
-                                data-tier={tier}
+                                data-testid={`quick-rate-edit-${game.appid}`}
+                                onClick={(e) => toggleRatingPopover(e, game.appid)}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface border border-border-medium text-text-primary hover:border-accent transition-colors shrink-0"
+                              >
+                                Tier {game.personalTier} ·{" "}
+                                {game.personalScore ??
+                                  tierToDefaultScore(game.personalTier)}
+                                /10
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`quick-rate-clear-${game.appid}`}
+                                title="Remove rating"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onQuickRate(game.appid, tier, score);
+                                  setEditingRateAppId(null);
+                                  onRemoveRating?.(game.appid);
                                 }}
-                                className="text-[9px] font-bold w-4 h-4 rounded text-text-muted hover:text-text-primary hover:bg-card transition-colors flex items-center justify-center"
+                                className="text-[10px] text-text-muted hover:text-red-400 font-bold px-1 py-0.5 rounded hover:bg-card transition-colors"
                               >
-                                {tier}
+                                ✕
                               </button>
-                            ))}
-                          </div>
-                        )}
+                            </div>
+                          ) : (
+                            <div
+                              data-testid={`quick-rate-${game.appid}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-0.5 bg-[#141418] p-0.5 rounded shrink-0"
+                            >
+                              {TIER_OPTIONS.map(({ tier, score }) => (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  data-tier={tier}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onQuickRate(game.appid, tier, score);
+                                  }}
+                                  className="text-[9px] font-bold w-4 h-4 rounded text-text-muted hover:text-text-primary hover:bg-card transition-colors flex items-center justify-center"
+                                >
+                                  {tier}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                data-testid={`quick-score-open-${game.appid}`}
+                                onClick={(e) => toggleRatingPopover(e, game.appid)}
+                                className="text-[9px] font-bold px-1 h-4 rounded text-text-muted hover:text-accent hover:bg-card transition-colors flex items-center justify-center border-l border-border-subtle ml-0.5"
+                              >
+                                1-10
+                              </button>
+                            </div>
+                          )}
+
+                          {editingRateAppId === game.appid && (
+                            <SteamGameRatingPopover
+                              appid={game.appid}
+                              initialTier={game.personalTier}
+                              initialScore={game.personalScore}
+                              onRate={(tier, score) =>
+                                onQuickRate(game.appid, tier, score)
+                              }
+                              onRemoveRating={
+                                onRemoveRating
+                                  ? () => onRemoveRating(game.appid)
+                                  : undefined
+                              }
+                              onClose={() => setEditingRateAppId(null)}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
