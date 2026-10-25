@@ -26,39 +26,10 @@ vi.mock("../../../../wailsjs/runtime/runtime", () => ({
 }));
 
 describe("SettingsPanel", () => {
-  it("renders the Tag Playlists section with searchable tag input and dropdown list", async () => {
+  it("does not render the legacy Tag Playlists section", async () => {
     render(<SettingsPanel open={true} onClose={() => {}} />);
-    
-    expect(await screen.findByText("Tag Playlists")).toBeInTheDocument();
-    const tagInput = screen.getByPlaceholderText("Search or select game tag...");
-    expect(tagInput).toBeInTheDocument();
-
-    fireEvent.focus(tagInput);
-
-    expect(await screen.findByText("GameA")).toBeInTheDocument();
-    expect(await screen.findByText("GameB")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("GameA"));
-    expect(tagInput).toHaveValue("GameA");
-    expect(await screen.findByText("Associated YouTube Playlist")).toBeInTheDocument();
-  });
-
-  it("orders game tags in the combobox list from most recently used to oldest", async () => {
-    localStorage.setItem("amon_hen_recent_tags", JSON.stringify(["GameRecent", "GameOld"]));
-    render(<SettingsPanel open={true} onClose={() => {}} />);
-
-    const tagInput = await screen.findByPlaceholderText("Search or select game tag...");
-    fireEvent.focus(tagInput);
-
-    const gameRecent = await screen.findByText("GameRecent");
-    const gameOld = await screen.findByText("GameOld");
-    expect(gameRecent).toBeInTheDocument();
-    expect(gameOld).toBeInTheDocument();
-
-    const buttons = screen.getAllByRole("button");
-    const recentIndex = buttons.findIndex((b) => b.textContent?.includes("GameRecent"));
-    const oldIndex = buttons.findIndex((b) => b.textContent?.includes("GameOld"));
-    expect(recentIndex).toBeLessThan(oldIndex);
+    expect(await screen.findByRole("tab", { name: /general/i })).toBeInTheDocument();
+    expect(screen.queryByText("Tag Playlists")).not.toBeInTheDocument();
   });
 
   it("renders the Default Export Destination section", async () => {
