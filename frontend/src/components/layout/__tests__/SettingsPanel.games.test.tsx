@@ -32,7 +32,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   }),
   GetAutoLaunch: vi.fn().mockResolvedValue(false),
   GetWatchFolderEnabled: vi.fn().mockResolvedValue(false),
-  GetAllGameTags: vi.fn().mockResolvedValue(["Apex Legends", "Elden Ring"]),
+  GetAllGameTags: vi.fn().mockResolvedValue(["Apex Legends", "Elden Ring", "Valorant", "Overwatch"]),
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
   GetDefaultExportFolder: vi.fn().mockResolvedValue(""),
   SaveGameProfile: vi.fn().mockResolvedValue(undefined),
@@ -41,6 +41,13 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetSteamAppID: vi.fn().mockResolvedValue(""),
   GetSteamGameAssets: vi.fn().mockResolvedValue({ heroUrl: "", headerUrl: "", posterUrl: "" }),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../../../hooks/useRecentTags", () => ({
+  useRecentTags: vi.fn().mockReturnValue({
+    suggestions: ["Hollow Knight", "Apex Legends", "Valorant"],
+    addRecentTag: vi.fn(),
+  }),
 }));
 
 vi.mock("../../../../wailsjs/runtime/runtime", () => ({
@@ -68,7 +75,36 @@ describe("SettingsPanel - Games & Titles Tab (#157)", () => {
     expect(onOpenTagManagement).toHaveBeenCalled();
   });
 
-  it("appends variable chips to title template in multiplayer profile form", async () => {
+  it("renders datalist tag suggestions excluding tags that already have a profile", async () => {
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    const gamesTab = await screen.findByRole("tab", { name: /games & titles/i });
+    fireEvent.click(gamesTab);
+
+    const addBtn = await screen.findByRole("button", { name: /\+ add profile/i });
+    fireEvent.click(addBtn);
+
+    const tagInput = screen.getByPlaceholderText(/game tag/i);
+    expect(tagInput).toHaveAttribute("list", "game-tag-suggestions");
+
+    const datalist = document.getElementById("game-tag-suggestions") as HTMLDataListElement | null;
+    expect(datalist).toBeInTheDocument();
+
+    const options = Array.from(datalist?.querySelectorAll("option") || []).map(
+      (opt) => (opt as HTMLOptionElement).value,
+    );
+
+    // Unconfigured tags must appear in suggestions
+    expect(options).toContain("Valorant");
+    expect(options).toContain("Overwatch");
+    expect(options).toContain("Hollow Knight");
+
+    // Existing profiles must be excluded
+    expect(options).not.toContain("Apex Legends");
+    expect(options).not.toContain("Elden Ring");
+  });
+
+  it("appends variable chips to title template with spacing and updates live preview", async () => {
     render(<SettingsPanel open={true} onClose={() => {}} />);
 
     const gamesTab = await screen.findByRole("tab", { name: /games & titles/i });
@@ -82,27 +118,21 @@ describe("SettingsPanel - Games & Titles Tab (#157)", () => {
     const templateInput = screen.getByPlaceholderText(/e\.g\. \{event\}/i) as HTMLInputElement;
     expect(templateInput).toBeInTheDocument();
 
+    // Clear default template
+    fireEvent.change(templateInput, { target: { value: "" } });
+
     // Click chip {game}
     const gameChip = screen.getByRole("button", { name: "{game}" });
     fireEvent.click(gameChip);
-    expect(templateInput.value).toContain("{game}");
+    expect(templateInput.value).toBe("{game}");
 
-    // Click chip {event}
+    // Click chip {event} - should append with leading space
     const eventChip = screen.getByRole("button", { name: "{event}" });
     fireEvent.click(eventChip);
-    expect(templateInput.value).toContain("{event}");
-  });
+    expect(templateInput.value).toBe("{game} {event}");
 
-  it("displays live preview when template is modified", async () => {
-    render(<SettingsPanel open={true} onClose={() => {}} />);
-
-    const gamesTab = await screen.findByRole("tab", { name: /games & titles/i });
-    fireEvent.click(gamesTab);
-
-    const addBtn = await screen.findByRole("button", { name: /\+ add profile/i });
-    fireEvent.click(addBtn);
-
-    expect(screen.getByText(/live title preview/i)).toBeInTheDocument();
+    const preview = screen.getByTestId("profile-title-preview");
+    expect(preview).toBeInTheDocument();
   });
 
   it("renders profile cards with type badges and supports inline delete without window.confirm", async () => {
@@ -119,6 +149,10 @@ describe("SettingsPanel - Games & Titles Tab (#157)", () => {
     // Badges
     expect(screen.getByText("Multiplayer")).toBeInTheDocument();
     expect(screen.getByText("Singleplayer")).toBeInTheDocument();
+
+    // Mode chips
+    expect(screen.getByText("Ranked")).toBeInTheDocument();
+    expect(screen.getByText("Trios")).toBeInTheDocument();
 
     // Find delete button for Apex Legends
     const deleteBtn = screen.getByLabelText("Delete profile for Apex Legends");

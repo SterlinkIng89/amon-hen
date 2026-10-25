@@ -13,6 +13,8 @@ export interface SettingsGamesTabProps {
   >;
   readonly titleSeparator: string;
   readonly onOpenTagManagement?: () => void;
+  readonly allTags?: string[];
+  readonly recentTagSuggestions?: string[];
 }
 
 const TEMPLATE_VARIABLE_CHIPS = [
@@ -28,6 +30,8 @@ export function SettingsGamesTab({
   setGameProfiles,
   titleSeparator,
   onOpenTagManagement,
+  allTags,
+  recentTagSuggestions,
 }: SettingsGamesTabProps) {
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
@@ -37,6 +41,10 @@ export function SettingsGamesTab({
   }>({ tag: "", profile: { type: "singleplayer", titleTemplate: "" } });
   const [savingProfile, setSavingProfile] = useState(false);
   const [deleteConfirmTag, setDeleteConfirmTag] = useState<string | null>(null);
+
+  const tagSuggestions = Array.from(
+    new Set([...(recentTagSuggestions || []), ...(allTags || [])]),
+  ).filter((tag) => Boolean(tag) && !gameProfiles[tag]);
 
   return (
     <>
@@ -109,6 +117,7 @@ export function SettingsGamesTab({
           <div className="bg-elevated border border-accent/30 rounded-md p-3 flex flex-col gap-3">
             <input
               type="text"
+              list="game-tag-suggestions"
               placeholder="Game Tag (e.g. League of Legends)"
               className="bg-black/30 border border-white/10 rounded px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
               value={editForm.tag}
@@ -117,6 +126,13 @@ export function SettingsGamesTab({
               }
               disabled={editingTag !== ""}
             />
+            {editingTag === "" && tagSuggestions.length > 0 && (
+              <datalist id="game-tag-suggestions">
+                {tagSuggestions.map((tag) => (
+                  <option key={tag} value={tag} />
+                ))}
+              </datalist>
+            )}
             <select
               className="bg-black/30 border border-white/10 rounded px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
               value={editForm.profile.type}
@@ -147,14 +163,21 @@ export function SettingsGamesTab({
                         type="button"
                         className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 border border-white/10 hover:bg-white/10 hover:border-accent text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
                         onClick={() => {
-                          setEditForm((prev) => ({
-                            ...prev,
-                            profile: {
-                              ...prev.profile,
-                              titleTemplate:
-                                (prev.profile.titleTemplate || "") + chip,
-                            },
-                          }));
+                          setEditForm((prev) => {
+                            const current = prev.profile.titleTemplate || "";
+                            const needsSpace =
+                              current.length > 0 &&
+                              !current.endsWith(" ") &&
+                              !current.endsWith("-");
+                            return {
+                              ...prev,
+                              profile: {
+                                ...prev.profile,
+                                titleTemplate:
+                                  current + (needsSpace ? " " : "") + chip,
+                              },
+                            };
+                          });
                         }}
                       >
                         {chip}
@@ -179,7 +202,10 @@ export function SettingsGamesTab({
                   }
                 />
 
-                <div className="bg-black/40 border border-white/5 rounded p-2 text-xs flex flex-col gap-1">
+                <div
+                  data-testid="profile-title-preview"
+                  className="bg-black/40 border border-white/5 rounded p-2 text-xs flex flex-col gap-1"
+                >
                   <span className="text-[10px] text-text-muted">
                     Live Title Preview
                   </span>
@@ -294,9 +320,17 @@ export function SettingsGamesTab({
                       : "Singleplayer Mode"}
                   </span>
                   {prof.modes && prof.modes.length > 0 && (
-                    <span className="text-[10px] text-text-muted truncate">
-                      Modes: {prof.modes.join(", ")}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      <span className="text-[10px] text-text-muted">Modes:</span>
+                      {prof.modes.map((mode) => (
+                        <span
+                          key={mode}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-text-secondary"
+                        >
+                          {mode}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 

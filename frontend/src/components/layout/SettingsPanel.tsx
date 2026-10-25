@@ -6,9 +6,11 @@ import {
   GetAutoLaunch,
   GetWatchFolderEnabled,
   GetDefaultExportFolder,
+  GetAllGameTags,
 } from "../../../wailsjs/go/backend/App";
 import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import { GameProfile } from "../../types";
+import { useRecentTags } from "../../hooks/useRecentTags";
 import { SettingsGeneralTab } from "./SettingsGeneralTab";
 import {
   SettingsAccountsTab,
@@ -48,6 +50,8 @@ export default function SettingsPanel({
 
   // Game Profiles state
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const { suggestions: recentTagSuggestions } = useRecentTags();
 
   useEffect(() => {
     if (!open) return;
@@ -85,6 +89,10 @@ export default function SettingsPanel({
 
     GetWatchFolderEnabled()
       .then(setWatchFolder)
+      .catch(() => {});
+
+    GetAllGameTags()
+      .then(setAllTags)
       .catch(() => {});
   }, [open]);
 
@@ -208,6 +216,8 @@ export default function SettingsPanel({
               setGameProfiles={setGameProfiles}
               titleSeparator={titleSeparator}
               onOpenTagManagement={onOpenTagManagement}
+              allTags={allTags}
+              recentTagSuggestions={recentTagSuggestions}
             />
           )}
         </div>
