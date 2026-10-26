@@ -145,6 +145,7 @@ export interface CatalogVideoDraft {
   readonly episode: number;
   readonly source: "db" | "title" | "order" | "none";
   readonly conflict: boolean;
+  readonly thumbnailUpdatedAt?: number;
 }
 
 export type BatchItemStatus =
@@ -159,6 +160,8 @@ export interface BatchItem {
   readonly videoId: string;
   readonly episode: number;
   readonly cacheKey: string;
+  readonly localFile?: string;
+  readonly thumbnailUpdatedAt?: number;
   readonly status: BatchItemStatus;
   readonly error?: string;
 }
