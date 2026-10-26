@@ -354,7 +354,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       </div>
 
       {/* Table Container */}
-      <div className="overflow-x-auto max-h-[460px] overflow-y-auto custom-scrollbar">
+      <div className="overflow-x-auto max-h-[480px] 2xl:max-h-[640px] overflow-y-auto custom-scrollbar">
         <table className="w-full text-left text-xs">
           <thead className="sticky top-0 bg-elevated/95 backdrop-blur-xs text-text-secondary border-b border-border-subtle z-10">
             <tr>
@@ -421,6 +421,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectPreviewVideo?.(vid.videoId)}
+                      aria-label={`Preview ${vid.title} in thumbnail studio`}
                       className={`relative w-16 aspect-video rounded overflow-hidden border bg-black/40 shrink-0 block transition-all group ${
                         isPreviewActive
                           ? "border-accent ring-1 ring-accent"

@@ -276,4 +276,51 @@ describe("usePlaylistCatalog", () => {
       "v-third": 1,
     });
   });
+
+  it("updates video thumbnail in draft and reloads draft from backend", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValueOnce([]);
+    const initialDraft = {
+      playlistId: "pl-sync",
+      title: "Sync Test",
+      videoCount: 1,
+      kind: "vod",
+      tag: "sync",
+      videos: [
+        { videoId: "yt-sync-1", title: "Video 1", episode: 1, thumbnailUrl: "old.jpg", thumbnailUpdatedAt: 0 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(initialDraft as any);
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-sync");
+    });
+
+    expect(result.current.draft?.videos[0].thumbnailUpdatedAt).toBe(0);
+
+    // Call updateVideoThumbnail directly
+    act(() => {
+      result.current.updateVideoThumbnail("yt-sync-1", "new.jpg", 1750000000);
+    });
+
+    expect(result.current.draft?.videos[0].thumbnailUrl).toBe("new.jpg");
+    expect(result.current.draft?.videos[0].thumbnailUpdatedAt).toBe(1750000000);
+
+    // Call reloadDraft
+    const refreshedDraft = {
+      ...initialDraft,
+      videos: [
+        { videoId: "yt-sync-1", title: "Video 1", episode: 1, thumbnailUrl: "refreshed.jpg", thumbnailUpdatedAt: 1750000100 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(refreshedDraft as any);
+
+    await act(async () => {
+      await result.current.reloadDraft();
+    });
+
+    expect(result.current.draft?.videos[0].thumbnailUrl).toBe("refreshed.jpg");
+    expect(result.current.draft?.videos[0].thumbnailUpdatedAt).toBe(1750000100);
+  });
 });

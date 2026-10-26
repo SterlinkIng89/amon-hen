@@ -1,11 +1,15 @@
 import { FC, useState, useMemo, useEffect, useRef } from "react";
 import { usePlaylistCatalog } from "../../../hooks/usePlaylistCatalog";
-import { useBatchThumbnailUpdate } from "../../../hooks/useBatchThumbnailUpdate";
+import {
+  useBatchThumbnailUpdate,
+  BatchThumbnailInputItem,
+} from "../../../hooks/useBatchThumbnailUpdate";
 import { useThumbnailAssets } from "../../../hooks/useThumbnailAssets";
 import { PlaylistCatalogRow } from "./PlaylistCatalogRow";
 import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
 import { BatchThumbnailProgress } from "./BatchThumbnailProgress";
 import {
+  GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
   SetTagThumbnailConfig,
@@ -64,7 +68,7 @@ const ThumbnailPreviewCanvas: FC<ThumbnailPreviewCanvasProps> = ({
   }, [config, baseImage, logoImage, gameTitle, episodeNumber]);
 
   return (
-    <div className="relative w-48 sm:w-56 aspect-video bg-black/40 rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
+    <div className="relative w-full aspect-video bg-black/40 rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
       <canvas ref={canvasRef} className="w-full h-full object-cover" />
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs">
@@ -91,6 +95,8 @@ export const PlaylistCatalogPanel: FC = () => {
     isLoadingDraft,
     draftError,
     selectPlaylist,
+    reloadDraft,
+    updateVideoThumbnail,
     editedTag,
     setEditedTag,
     editedEpisodes,
@@ -101,12 +107,41 @@ export const PlaylistCatalogPanel: FC = () => {
     applyError,
     applySuccess,
     applyCatalog,
+    autoNumberByDate,
+    autoNumberByOrder,
+    reverseEpisodes,
   } = usePlaylistCatalog();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterUnlinkedOnly, setFilterUnlinkedOnly] = useState(false);
   const [updateLocal, setUpdateLocal] = useState(true);
   const [matchedSteamAppId, setMatchedSteamAppId] = useState<string | null>(null);
+  const [knownTags, setKnownTags] = useState<string[]>([]);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
+
+  // Reset video selection and preview when selected playlist changes
+  useEffect(() => {
+    setSelectedVideoIds(new Set());
+    setPreviewVideoId(null);
+  }, [selectedPlaylistId]);
+
+  // Fetch known game tags for autocomplete
+  useEffect(() => {
+    let active = true;
+    void GetAllGameTags()
+      .then((tags) => {
+        if (active && Array.isArray(tags)) {
+          setKnownTags(tags);
+        }
+      })
+      .catch(() => {
+        if (active) setKnownTags([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Tag thumbnail configuration state
   const [thumbConfig, setThumbConfig] = useState<TagThumbnailConfig>({
@@ -206,12 +241,18 @@ export const PlaylistCatalogPanel: FC = () => {
     }
   };
 
-  // Sample episode for thumbnail preview (defaults to first video's episode or 1)
+  // Sample episode for thumbnail preview (previewVideoId or defaults to first video's episode or 1)
   const sampleEpisode = useMemo(() => {
     if (!draft?.videos || draft.videos.length === 0) return 1;
+    if (previewVideoId) {
+      const previewVid = draft.videos.find((v) => v.videoId === previewVideoId);
+      if (previewVid) {
+        return editedEpisodes[previewVid.videoId] ?? previewVid.episode ?? 1;
+      }
+    }
     const firstVid = draft.videos[0];
     return editedEpisodes[firstVid.videoId] ?? firstVid.episode ?? 1;
-  }, [draft?.videos, editedEpisodes]);
+  }, [draft?.videos, editedEpisodes, previewVideoId]);
 
   // Load preview assets for the current tag and thumbnail configuration
   const {
@@ -233,8 +274,8 @@ export const PlaylistCatalogPanel: FC = () => {
     });
   }, [playlists, filterUnlinkedOnly, searchQuery]);
 
-  // Prepare batch items for thumbnail updates
-  const batchItems: BatchItem[] = useMemo(() => {
+  // Prepare batch items for thumbnail updates with localFile and thumbnailUpdatedAt
+  const batchItems: BatchThumbnailInputItem[] = useMemo(() => {
     if (!draft?.videos) return [];
     return draft.videos.map((vid) => {
       const ep = editedEpisodes[vid.videoId] ?? vid.episode ?? 1;
@@ -242,7 +283,8 @@ export const PlaylistCatalogPanel: FC = () => {
         videoId: vid.videoId,
         episode: ep,
         cacheKey: `${vid.videoId}_${ep}`,
-        status: "pending",
+        localFile: vid.localFile,
+        thumbnailUpdatedAt: vid.thumbnailUpdatedAt,
       };
     });
   }, [draft?.videos, editedEpisodes]);
@@ -250,7 +292,11 @@ export const PlaylistCatalogPanel: FC = () => {
   const {
     items: currentBatchItems,
     running: isBatchProcessing,
+    isAssetsReady,
     start: startBatch,
+    startSelected,
+    startUnsynced,
+    updateSingle,
     cancel: cancelBatch,
     retryFailed,
     estimatedQuota,
@@ -258,8 +304,12 @@ export const PlaylistCatalogPanel: FC = () => {
     tag: editedTag.trim(),
     config: thumbConfig,
     items: batchItems,
+    onVideoUpdated: (videoId, newThumbUrl) => {
+      updateVideoThumbnail(videoId, newThumbUrl);
+    },
     onCompleted: () => {
       void loadPlaylists();
+      void reloadDraft();
     },
   });
 
@@ -279,10 +329,22 @@ export const PlaylistCatalogPanel: FC = () => {
     return { current, total, successCount, failCount };
   }, [currentBatchItems]);
 
+  // Resolve VOD and Clip playlist IDs for 1:1 playlist cover generator
+  const isCurrentVod = draft?.kind === "vod";
+  const isCurrentClip = draft?.kind === "clip";
+  const tagVodPlaylist = playlists.find(
+    (p) => p.tag === editedTag.trim() && p.kind === "vod"
+  );
+  const tagClipPlaylist = playlists.find(
+    (p) => p.tag === editedTag.trim() && p.kind === "clip"
+  );
+  const vodPlaylistId = isCurrentVod ? draft?.playlistId : tagVodPlaylist?.playlistId;
+  const clipPlaylistId = isCurrentClip ? draft?.playlistId : tagClipPlaylist?.playlistId;
+
   return (
     <div className="flex h-full w-full bg-base overflow-hidden">
       {/* Master List Pane (Sidebar) */}
-      <div className="w-[320px] shrink-0 border-r border-border-subtle flex flex-col bg-surface z-10">
+      <div className="w-[320px] 2xl:w-[350px] shrink-0 border-r border-border-subtle flex flex-col bg-surface z-10">
         <div className="p-3 border-b border-border-subtle bg-surface space-y-2">
           <div className="relative group">
             <svg
@@ -343,7 +405,7 @@ export const PlaylistCatalogPanel: FC = () => {
             </div>
           )}
           {filteredPlaylists.map((pl, idx) => {
-            const pId = pl.playlistId || (pl as any).id || `pl-${idx}`;
+            const pId = pl.playlistId || `pl-${idx}`;
             return (
               <PlaylistCatalogRow
                 key={pId}
@@ -387,7 +449,7 @@ export const PlaylistCatalogPanel: FC = () => {
         )}
 
         {selectedPlaylistId && !isLoadingDraft && draft && (
-          <div className="p-6 max-w-5xl space-y-6">
+          <div className="p-6 w-full space-y-6">
             {/* Header */}
             <div className="flex items-start justify-between border-b border-border-subtle pb-4">
               <div>
@@ -411,106 +473,156 @@ export const PlaylistCatalogPanel: FC = () => {
               </div>
             </div>
 
-            {/* Game Tag Mapping */}
-            <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
-              <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="w-full sm:w-72">
-                  <input
-                    type="text"
-                    value={editedTag}
-                    onChange={(e) => setEditedTag(e.target.value)}
-                    placeholder="Enter game tag (e.g. control)"
-                    className="w-full bg-elevated/60 border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors font-mono"
+            {/* Responsive Two-Column Studio Layout (Adapts from mobile to ultrawide) */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 2xl:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Metadata & Episode Mapping */}
+              <div className="xl:col-span-7 2xl:col-span-7 3xl:col-span-8 space-y-4">
+                {/* Game Tag Mapping */}
+                <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="w-full sm:w-72">
+                      <input
+                        type="text"
+                        list="catalog-known-tags"
+                        value={editedTag}
+                        onChange={(e) => setEditedTag(e.target.value)}
+                        placeholder="Enter game tag (e.g. control)"
+                        className="w-full bg-elevated/60 border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors font-mono"
+                      />
+                      <datalist id="catalog-known-tags">
+                        {knownTags.map((tag) => (
+                          <option key={tag} value={tag} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {matchedSteamAppId ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5l2.6-3.77A3.48 3.48 0 0 1 11 16.5c0-.98.4-1.87 1.05-2.51L10.3 11.2A5.5 5.5 0 0 1 12 11c3.04 0 5.5 2.46 5.5 5.5 0 2.22-1.32 4.13-3.21 4.97l2.67 3.87A10 10 0 0 0 22 12a10 10 0 0 0-10-10z" />
+                          </svg>
+                          Steam matched: AppID {matchedSteamAppId}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-elevated/50 text-text-secondary border border-border-subtle">
+                          No Steam match found
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Episode Mapping Table */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-xs font-semibold text-text-primary">Episode Mapping</h4>
+                    <p className="text-[11px] text-text-secondary mt-0.5">
+                      Verify episode numbering, select rows for thumbnail updates, or preview in the template studio.
+                    </p>
+                  </div>
+
+                  {hasConflicts && (
+                    <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl">
+                      Please resolve duplicate or invalid episode numbers before saving.
+                    </div>
+                  )}
+
+                  <PlaylistEpisodeTable
+                    videos={draft.videos || []}
+                    episodes={editedEpisodes}
+                    onEpisodeChange={setEpisode}
+                    batchItems={currentBatchItems}
+                    selectedVideoIds={selectedVideoIds}
+                    onSelectionChange={setSelectedVideoIds}
+                    previewVideoId={previewVideoId}
+                    onSelectPreviewVideo={setPreviewVideoId}
+                    onUpdateSingleVideo={updateSingle}
+                    isBatchRunning={isBatchProcessing}
+                    isAssetsReady={isAssetsReady}
+                    onAutoNumberByDate={autoNumberByDate}
+                    onAutoNumberByOrder={autoNumberByOrder}
+                    onReverseEpisodes={reverseEpisodes}
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  {matchedSteamAppId ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5l2.6-3.77A3.48 3.48 0 0 1 11 16.5c0-.98.4-1.87 1.05-2.51L10.3 11.2A5.5 5.5 0 0 1 12 11c3.04 0 5.5 2.46 5.5 5.5 0 2.22-1.32 4.13-3.21 4.97l2.67 3.87A10 10 0 0 0 22 12a10 10 0 0 0-10-10z" />
+
+                {/* Save Actions */}
+                <div className="bg-surface border border-border-subtle rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <label htmlFor="update-local-checkbox" className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="update-local-checkbox"
+                      checked={updateLocal}
+                      onChange={(e) => setUpdateLocal(e.target.checked)}
+                      className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated"
+                    />
+                    Sync game tag and episode numbers to matched local library videos
+                  </label>
+
+                  <div className="flex items-center gap-3">
+                    {applyError && (
+                      <span className="text-xs text-red-400 font-medium">
+                        {applyError}
+                      </span>
+                    )}
+                    {applySuccess && (
+                      <span className="text-xs text-emerald-400 font-medium">
+                        Playlist saved &amp; linked!
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => void applyCatalog(updateLocal)}
+                      disabled={!canApply || isApplying}
+                      className="btn btn-primary btn-sm px-4 py-2 font-semibold"
+                    >
+                      {isApplying ? "Saving..." : "Save & link playlist"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Thumbnail Studio & Batch Execution */}
+              <div className="xl:col-span-5 2xl:col-span-5 3xl:col-span-4 space-y-4 xl:sticky xl:top-4">
+                {/* Template Preview Card */}
+                <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-text-primary">Thumbnail Studio</span>
+                      {isConfigCustomized ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Customized for {editedTag.trim()}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-elevated/80 text-text-muted border border-border-subtle">
+                          Default template
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowTemplateEditor((prev) => !prev)}
+                      className="btn btn-secondary btn-xs flex items-center gap-1.5 font-medium"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`transition-transform duration-200 ${showTemplateEditor ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
                       </svg>
-                      Steam matched: AppID {matchedSteamAppId}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-elevated/50 text-text-secondary border border-border-subtle">
-                      No Steam match found
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+                      {showTemplateEditor ? "Hide editor" : "Customize"}
+                    </button>
+                  </div>
 
-            {/* Episode Mapping Table */}
-            <div className="space-y-3">
-              <div>
-                <h4 className="text-xs font-semibold text-text-primary">Episode Mapping</h4>
-                <p className="text-[11px] text-text-secondary mt-0.5">
-                  Verify and adjust episode numbering inferred from video titles.
-                </p>
-              </div>
-
-              {hasConflicts && (
-                <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl">
-                  Please resolve duplicate or invalid episode numbers before saving.
-                </div>
-              )}
-
-              <PlaylistEpisodeTable
-                videos={draft.videos || []}
-                episodes={editedEpisodes}
-                onEpisodeChange={setEpisode}
-              />
-            </div>
-
-            {/* Save Actions */}
-            <div className="bg-surface border border-border-subtle rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <label htmlFor="update-local-checkbox" className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary cursor-pointer">
-                <input
-                  type="checkbox"
-                  id="update-local-checkbox"
-                  checked={updateLocal}
-                  onChange={(e) => setUpdateLocal(e.target.checked)}
-                  className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated"
-                />
-                Sync game tag and episode numbers to matched local library videos
-              </label>
-
-              <div className="flex items-center gap-3">
-                {applyError && (
-                  <span className="text-xs text-red-400 font-medium">
-                    {applyError}
-                  </span>
-                )}
-                {applySuccess && (
-                  <span className="text-xs text-emerald-400 font-medium">
-                    Playlist saved &amp; linked!
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => void applyCatalog()}
-                  disabled={!canApply || isApplying}
-                  className="btn btn-primary btn-sm px-4 py-2 font-semibold"
-                >
-                  {isApplying ? "Saving..." : "Save & link playlist"}
-                </button>
-              </div>
-            </div>
-
-            {/* Thumbnail Synchronization & Template Preview */}
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-xs font-semibold text-text-primary">Thumbnail Synchronization</h4>
-                <p className="text-[11px] text-text-secondary mt-0.5">
-                  Generate thumbnails using the tag template and episode numbering, then update YouTube videos directly.
-                </p>
-              </div>
-
-              {/* Template Preview Card */}
-              <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-4">
-                <div className="flex flex-col md:flex-row items-start gap-4">
                   <ThumbnailPreviewCanvas
                     config={thumbConfig}
                     baseImage={baseImage}
@@ -520,130 +632,101 @@ export const PlaylistCatalogPanel: FC = () => {
                     isLoading={isLoadingAssets}
                   />
 
-                  <div className="flex-1 min-w-0 space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-text-primary">Thumbnail Template</span>
-                        {isConfigCustomized ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            Customized for {editedTag.trim()}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-elevated/80 text-text-muted border border-border-subtle">
-                            Default template (Header Capsule)
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowTemplateEditor((prev) => !prev)}
-                        className="btn btn-secondary btn-xs flex items-center gap-1.5 font-medium"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className={`transition-transform duration-200 ${showTemplateEditor ? "rotate-180" : ""}`}
-                        >
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                        {showTemplateEditor ? "Hide template editor" : "Customize template"}
-                      </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="bg-elevated/40 border border-border-subtle rounded-lg p-2.5">
+                      <span className="text-[11px] font-semibold text-text-muted block">Artwork source</span>
+                      <span className="text-text-primary font-medium mt-0.5 block truncate">
+                        {thumbConfig.source_type === "custom"
+                          ? "Custom image"
+                          : `Steam: ${
+                              thumbConfig.steam_asset_type === "hero"
+                                ? "Hero (16:9)"
+                                : thumbConfig.steam_asset_type === "poster"
+                                ? "Cover Poster"
+                                : "Header Capsule"
+                            }`}
+                      </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <div className="bg-elevated/40 border border-border-subtle/60 rounded-lg p-2.5">
-                        <span className="text-[11px] font-semibold text-text-muted block">Artwork source</span>
-                        <span className="text-text-primary font-medium mt-0.5 block truncate">
-                          {thumbConfig.source_type === "custom"
-                            ? "Custom image"
-                            : `Steam: ${
-                                thumbConfig.steam_asset_type === "hero"
-                                  ? "Hero (16:9)"
-                                  : thumbConfig.steam_asset_type === "poster"
-                                  ? "Cover Poster"
-                                  : "Header Capsule"
-                              }`}
-                        </span>
-                      </div>
-
-                      <div className="bg-elevated/40 border border-border-subtle/60 rounded-lg p-2.5">
-                        <span className="text-[11px] font-semibold text-text-muted block">Episode badge</span>
-                        <span className="text-text-primary font-medium mt-0.5 block truncate">
-                          {thumbConfig.episode_format === "hash"
-                            ? "#01"
-                            : thumbConfig.episode_format === "ep"
-                            ? "EP 01"
-                            : thumbConfig.episode_format === "number"
-                            ? "1"
-                            : "01 (Double digit)"}{" "}
-                          • {thumbConfig.episode_position.replace("-", " ")}
-                        </span>
-                      </div>
+                    <div className="bg-elevated/40 border border-border-subtle rounded-lg p-2.5">
+                      <span className="text-[11px] font-semibold text-text-muted block">Episode badge</span>
+                      <span className="text-text-primary font-medium mt-0.5 block truncate">
+                        {thumbConfig.episode_format === "hash"
+                          ? "#01"
+                          : thumbConfig.episode_format === "ep"
+                          ? "EP 01"
+                          : thumbConfig.episode_format === "number"
+                          ? "1"
+                          : "01 (Double digit)"}{" "}
+                        • {thumbConfig.episode_position.replace("-", " ")}
+                      </span>
                     </div>
-
-                    <p className="text-[11px] text-text-secondary">
-                      Sample preview showing Episode #{sampleEpisode}. When updating, each video receives its assigned episode number.
-                    </p>
                   </div>
+
+                  <p className="text-[11px] text-text-secondary">
+                    Previewing Episode #{sampleEpisode}. Click any row's thumbnail in the table to preview that episode.
+                  </p>
+
+                  {/* Collapsible Template Editor */}
+                  {showTemplateEditor && (
+                    <div className="border-t border-border-subtle pt-4 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
+                        <h5 className="text-xs font-semibold text-text-primary">
+                          Template Editor for "{editedTag.trim()}"
+                        </h5>
+
+                        <div className="flex items-center gap-3">
+                          {templateSaveSuccess && (
+                            <span className="text-xs text-emerald-400 font-medium">
+                              Template saved!
+                            </span>
+                          )}
+                          {templateSaveError && (
+                            <span className="text-xs text-red-400 font-medium">
+                              {templateSaveError}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveThumbnailTemplate()}
+                            disabled={isSavingTemplate || !editedTag.trim()}
+                            className="btn btn-primary btn-xs px-3 font-semibold"
+                          >
+                            {isSavingTemplate ? "Saving..." : "Save Template"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <TagThumbnailConfigSection
+                        tag={editedTag.trim()}
+                        value={thumbConfig}
+                        onChange={setThumbConfig}
+                        vodPlaylistId={vodPlaylistId}
+                        clipPlaylistId={clipPlaylistId}
+                        onPlaylistCoverUpdated={() => {
+                          void loadPlaylists();
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Collapsible Template Editor */}
-                {showTemplateEditor && (
-                  <div className="border-t border-border-subtle pt-4 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
-                      <h5 className="text-xs font-semibold text-text-primary">
-                        Template Editor for "{editedTag.trim()}"
-                      </h5>
-
-                      <div className="flex items-center gap-3">
-                        {templateSaveSuccess && (
-                          <span className="text-xs text-emerald-400 font-medium">
-                            Template saved for tag!
-                          </span>
-                        )}
-                        {templateSaveError && (
-                          <span className="text-xs text-red-400 font-medium">
-                            {templateSaveError}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void handleSaveThumbnailTemplate()}
-                          disabled={isSavingTemplate || !editedTag.trim()}
-                          className="btn btn-primary btn-xs px-3 font-semibold"
-                        >
-                          {isSavingTemplate ? "Saving..." : "Save Template for this Tag"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <TagThumbnailConfigSection
-                      tag={editedTag.trim()}
-                      value={thumbConfig}
-                      onChange={setThumbConfig}
-                    />
-                  </div>
-                )}
+                {/* Batch Thumbnail Execution Progress */}
+                <BatchThumbnailProgress
+                  isProcessing={isBatchProcessing}
+                  isDone={isBatchDone}
+                  isAssetsReady={isAssetsReady}
+                  items={currentBatchItems}
+                  selectedVideoIds={selectedVideoIds}
+                  progress={batchProgress}
+                  quotaEstimate={estimatedQuota}
+                  onStart={() => void startBatch()}
+                  onStartSelected={() => void startSelected(Array.from(selectedVideoIds))}
+                  onStartUnsynced={(max) => void startUnsynced(max)}
+                  onCancel={cancelBatch}
+                  onRetryFailed={() => void retryFailed()}
+                />
               </div>
-
-              {/* Batch Thumbnail Execution Progress */}
-              <BatchThumbnailProgress
-                isProcessing={isBatchProcessing}
-                isDone={isBatchDone}
-                items={currentBatchItems}
-                progress={batchProgress}
-                quotaEstimate={estimatedQuota}
-                onStart={() => void startBatch()}
-                onCancel={cancelBatch}
-                onRetryFailed={() => void retryFailed()}
-              />
             </div>
           </div>
         )}

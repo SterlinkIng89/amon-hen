@@ -222,7 +222,7 @@ export default function TagThumbnailConfigSection({
                       type="button"
                       className={`h-9 flex items-center justify-center text-center px-1 text-[11px] leading-tight rounded border transition-colors ${
                         (config.steam_asset_type || "header") === "header"
-                          ? "bg-white/15 border-white/30 text-white font-medium"
+                          ? "bg-accent/15 border-accent/60 text-accent font-medium"
                           : "bg-surface border-border-subtle text-text-muted hover:text-white"
                       }`}
                       onClick={() => update({ steam_asset_type: "header" })}
@@ -233,7 +233,7 @@ export default function TagThumbnailConfigSection({
                       type="button"
                       className={`h-9 flex items-center justify-center text-center px-1 text-[11px] leading-tight rounded border transition-colors ${
                         (config.steam_asset_type || "header") === "hero"
-                          ? "bg-white/15 border-white/30 text-white font-medium"
+                          ? "bg-accent/15 border-accent/60 text-accent font-medium"
                           : "bg-surface border-border-subtle text-text-muted hover:text-white"
                       }`}
                       onClick={() => update({ steam_asset_type: "hero" })}
@@ -244,7 +244,7 @@ export default function TagThumbnailConfigSection({
                       type="button"
                       className={`h-9 flex items-center justify-center text-center px-1 text-[11px] leading-tight rounded border transition-colors ${
                         (config.steam_asset_type || "header") === "poster"
-                          ? "bg-white/15 border-white/30 text-white font-medium"
+                          ? "bg-accent/15 border-accent/60 text-accent font-medium"
                           : "bg-surface border-border-subtle text-text-muted hover:text-white"
                       }`}
                       onClick={() => update({ steam_asset_type: "poster" })}

@@ -69,6 +69,40 @@ export function usePlaylistCatalog() {
     }
   }, []);
 
+  const reloadDraft = useCallback(async () => {
+    if (!selectedPlaylistId) return;
+    try {
+      const refreshed = await GetPlaylistCatalogDraft(selectedPlaylistId);
+      if (refreshed) {
+        setDraft(refreshed);
+      }
+    } catch {
+      // ignore reload error
+    }
+  }, [selectedPlaylistId]);
+
+  const updateVideoThumbnail = useCallback(
+    (videoId: string, thumbnailUrl: string, updatedAt?: number) => {
+      setDraft((prev) => {
+        if (!prev || !prev.videos) return prev;
+        const ts = updatedAt ?? Math.floor(Date.now() / 1000);
+        return backend.PlaylistCatalogDraft.createFrom({
+          ...prev,
+          videos: prev.videos.map((v) =>
+            v.videoId === videoId
+              ? backend.CatalogVideoDraft.createFrom({
+                  ...v,
+                  thumbnailUrl,
+                  thumbnailUpdatedAt: ts,
+                })
+              : v
+          ),
+        });
+      });
+    },
+    []
+  );
+
   const setEpisode = useCallback((videoId: string, episode: number) => {
     setEditedEpisodes((prev) => ({
       ...prev,
@@ -157,14 +191,7 @@ function buildSequentialEpisodeMap(
         await ApplyPlaylistCatalog(req);
         setApplySuccess(true);
         await loadPlaylists();
-        try {
-          const refreshed = await GetPlaylistCatalogDraft(selectedPlaylistId);
-          if (refreshed) {
-            setDraft(refreshed);
-          }
-        } catch {
-          // ignore draft refresh error
-        }
+        await reloadDraft();
         return true;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -174,7 +201,7 @@ function buildSequentialEpisodeMap(
         setIsApplying(false);
       }
     },
-    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists]
+    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists, reloadDraft]
   );
 
   return {
@@ -187,6 +214,8 @@ function buildSequentialEpisodeMap(
     isLoadingDraft,
     draftError,
     selectPlaylist,
+    reloadDraft,
+    updateVideoThumbnail,
     editedTag,
     setEditedTag,
     editedEpisodes,

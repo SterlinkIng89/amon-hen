@@ -80,19 +80,34 @@ export function useBatchThumbnailUpdate({
   const [running, setRunning] = useState(false);
   const cancelRequestedRef = useRef(false);
 
+  const batchItemsRef = useRef(batchItems);
+  useEffect(() => {
+    batchItemsRef.current = batchItems;
+  }, [batchItems]);
+
   // Sync batchItems when inputItems change if not currently running
   useEffect(() => {
     if (!running) {
-      setBatchItems(
-        inputItems.map((item) => ({
-          videoId: item.videoId,
-          episode: item.episode,
-          cacheKey: item.cacheKey,
-          localFile: item.localFile,
-          thumbnailUpdatedAt: item.thumbnailUpdatedAt,
-          status: "pending",
-        }))
-      );
+      setBatchItems((prev) => {
+        const prevMap = new Map(prev.map((p) => [p.videoId, p]));
+        return inputItems.map((item) => {
+          const existing = prevMap.get(item.videoId);
+          const inputTs = item.thumbnailUpdatedAt ?? 0;
+          const existingTs = existing?.thumbnailUpdatedAt ?? 0;
+          const latestUpdatedAt = Math.max(inputTs, existingTs);
+
+          const status = existing ? existing.status : "pending";
+          return {
+            ...(existing || {}),
+            videoId: item.videoId,
+            episode: item.episode,
+            cacheKey: item.cacheKey,
+            localFile: item.localFile,
+            thumbnailUpdatedAt: latestUpdatedAt > 0 ? latestUpdatedAt : undefined,
+            status,
+          };
+        });
+      });
     }
   }, [inputItems, running]);
 
@@ -138,7 +153,7 @@ export function useBatchThumbnailUpdate({
           continue;
         }
 
-        const item = batchItems[itemIdx];
+        const item = batchItemsRef.current[itemIdx] ?? batchItems[itemIdx];
         updateItemStatus(itemIdx, "rendering");
 
         try {
@@ -207,7 +222,9 @@ export function useBatchThumbnailUpdate({
   const startUnsynced = useCallback(
     async (maxCount?: number) => {
       let unsyncedIndices = batchItems
-        .map((item, idx) => (!item.thumbnailUpdatedAt && item.status !== "done" ? idx : -1))
+        .map((item, idx) =>
+          (!item.thumbnailUpdatedAt || item.thumbnailUpdatedAt <= 0) && item.status !== "done" ? idx : -1
+        )
         .filter((idx) => idx !== -1);
 
       if (typeof maxCount === "number" && maxCount > 0) {

@@ -50,4 +50,51 @@ describe("PlaylistCatalogRow", () => {
     expect(screen.getByText("Alan Wake 2 Playthrough")).toBeInTheDocument();
     expect(screen.getByText("alan_wake_2")).toBeInTheDocument();
   });
+
+  it("renders thumbnail image and clips badge when provided", () => {
+    const playlist = {
+      playlistId: "pl-3",
+      title: "Best Moments",
+      videoCount: 1,
+      linked: false,
+      kind: "clip",
+      thumbnailUrl: "https://example.com/thumb.jpg",
+      tag: "",
+    } as backend.CatalogPlaylistSummary;
+
+    render(
+      <PlaylistCatalogRow
+        playlist={playlist}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    const img = screen.getByRole("img", { name: "Best Moments" });
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute("src", "https://example.com/thumb.jpg");
+    expect(screen.getByText("Clips")).toBeInTheDocument();
+    expect(screen.getByText("1 video")).toBeInTheDocument();
+  });
+
+  it("renders suggested match badge when tagConfidence is known and unlinked", () => {
+    const playlist = {
+      playlistId: "pl-4",
+      title: "Control DLC",
+      videoCount: 4,
+      linked: false,
+      tag: "control",
+      tagConfidence: "known",
+    } as backend.CatalogPlaylistSummary;
+
+    render(
+      <PlaylistCatalogRow
+        playlist={playlist}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Suggested: control")).toBeInTheDocument();
+  });
 });

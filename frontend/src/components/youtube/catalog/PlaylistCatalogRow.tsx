@@ -12,41 +12,80 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
   isSelected,
   onSelect,
 }) => {
+  const isSuggested =
+    !playlist.linked && playlist.tagConfidence === "known" && Boolean(playlist.tag);
+
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full text-left p-3 rounded-xl border transition-all flex flex-col gap-1.5 cursor-pointer ${
+      className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center gap-3 cursor-pointer ${
         isSelected
           ? "bg-accent/10 border-accent/40"
           : "bg-elevated/40 border-border-subtle hover:bg-elevated hover:border-border-medium"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className={`text-xs font-semibold line-clamp-1 ${
-            isSelected ? "text-accent" : "text-text-primary"
-          }`}
-        >
-          {playlist.title}
-        </span>
-        <span className="shrink-0 text-[10px] font-mono text-text-secondary px-1.5 py-0.5 rounded bg-surface/80 border border-border-subtle">
-          {playlist.videoCount} {playlist.videoCount === 1 ? "video" : "videos"}
-        </span>
+      <div className="w-12 h-8 rounded-md overflow-hidden bg-base border border-border-subtle shrink-0 flex items-center justify-center">
+        {playlist.thumbnailUrl ? (
+          <img
+            src={playlist.thumbnailUrl}
+            alt={playlist.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <svg
+            className="w-4 h-4 text-text-muted"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10" />
+            <path d="m9 10 5 3-5 3v-6Z" />
+          </svg>
+        )}
       </div>
 
-      <div className="flex items-center gap-1.5">
-        {playlist.linked ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            {playlist.tag}
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-2">
+          <span
+            className={`text-xs font-semibold truncate ${
+              isSelected ? "text-accent" : "text-text-primary"
+            }`}
+          >
+            {playlist.title}
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface text-text-muted border border-border-subtle">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-            Unlinked
+          <span className="shrink-0 text-[10px] font-mono tabular-nums text-text-secondary px-1.5 py-0.5 rounded bg-surface/80 border border-border-subtle">
+            {playlist.videoCount} {playlist.videoCount === 1 ? "video" : "videos"}
           </span>
-        )}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {playlist.kind === "clip" && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              Clips
+            </span>
+          )}
+
+          {playlist.linked ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {playlist.tag}
+            </span>
+          ) : isSuggested ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Suggested: {playlist.tag}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface text-text-muted border border-border-subtle">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              Unlinked
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );

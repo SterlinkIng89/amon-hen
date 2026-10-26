@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useBatchThumbnailUpdate } from "../useBatchThumbnailUpdate";
+import { useBatchThumbnailUpdate, BatchThumbnailInputItem } from "../useBatchThumbnailUpdate";
 import * as appBackend from "../../../wailsjs/go/backend/App";
 import * as thumbRender from "../../utils/thumbnailRender";
 import * as thumbAssets from "../useThumbnailAssets";
@@ -19,7 +19,7 @@ describe("useBatchThumbnailUpdate", () => {
     episode_format: "pad2" as const,
   };
 
-  const mockItems = [
+  const mockItems: BatchThumbnailInputItem[] = [
     { videoId: "v1", episode: 1, cacheKey: "yt:v1", localFile: "C:\\Videos\\Ep1.mp4" },
     { videoId: "v2", episode: 2, cacheKey: "yt:v2" },
   ];
@@ -271,5 +271,45 @@ describe("useBatchThumbnailUpdate", () => {
     expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
     expect(result.current.items[0].status).toBe("done");
     expect(result.current.items[1].status).toBe("done");
+  });
+
+  it("preserves completed status and timestamp when input items re-render after completion", async () => {
+    let currentInput = [...mockItems];
+    const onVideoUpdated = vi.fn();
+    const onCompleted = vi.fn();
+
+    const { result, rerender } = renderHook(
+      (props: { items: typeof mockItems }) =>
+        useBatchThumbnailUpdate({
+          tag: "Hades",
+          config: mockConfig,
+          items: props.items,
+          onVideoUpdated,
+          onCompleted,
+        }),
+      { initialProps: { items: currentInput } }
+    );
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(result.current.items[0].status).toBe("done");
+    expect(result.current.items[0].thumbnailUpdatedAt).toBeTypeOf("number");
+    expect(onCompleted).toHaveBeenCalled();
+
+    // Re-render with new array reference
+    currentInput = [
+      { ...mockItems[0], thumbnailUpdatedAt: result.current.items[0].thumbnailUpdatedAt },
+      { ...mockItems[1], thumbnailUpdatedAt: result.current.items[1].thumbnailUpdatedAt },
+    ];
+
+    act(() => {
+      rerender({ items: currentInput });
+    });
+
+    expect(result.current.items[0].status).toBe("done");
+    expect(result.current.items[1].status).toBe("done");
+    expect(result.current.items[0].thumbnailUpdatedAt).toBeGreaterThan(0);
   });
 });

@@ -77,34 +77,36 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
   return (
     <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
       {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h4 className="text-xs font-semibold text-text-primary">YouTube Thumbnail Batch</h4>
-            <div className="flex items-center gap-1 text-[10px] font-mono">
-              <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Synced: <span className="tabular-nums">{syncedCount}</span>/{items.length}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-xs font-semibold text-text-primary shrink-0">
+            YouTube Thumbnail Batch
+          </h4>
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded whitespace-nowrap bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Synced: <span className="tabular-nums font-semibold">{syncedCount}</span>/{items.length}
+            </span>
+            {unsyncedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded whitespace-nowrap bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Needs thumb: <span className="tabular-nums font-semibold">{unsyncedCount}</span>
               </span>
-              {unsyncedCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  Needs thumb: <span className="tabular-nums">{unsyncedCount}</span>
-                </span>
-              )}
-              {selectedCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-accent/10 text-accent border border-accent/20">
-                  Selected: <span className="tabular-nums">{selectedCount}</span>
-                </span>
-              )}
-            </div>
+            )}
+            {selectedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded whitespace-nowrap bg-accent/10 text-accent border border-accent/20">
+                Selected: <span className="tabular-nums font-semibold">{selectedCount}</span>
+              </span>
+            )}
           </div>
-          <p className="text-[11px] text-text-secondary mt-0.5">
-            Estimated quota: <span className="font-mono text-text-primary">{effectiveQuota} units</span> (50 units per video)
-          </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          {!isProcessing && !isDone && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
+          <p className="text-[11px] text-text-secondary">
+            Estimated quota: <span className="font-mono text-text-primary font-medium">{effectiveQuota} units</span> (50 units per video)
+          </p>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {!isProcessing && (
             <>
               {/* Selected videos batch button */}
               {selectedCount > 0 && onStartSelected && (
@@ -151,7 +153,7 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
                 </>
               )}
 
-              {/* Fallback Update All Button */}
+              {/* Fallback Update All / Re-sync All Button */}
               {(!onStartUnsynced || unsyncedCount === 0 || selectedCount > 0) && (
                 <button
                   type="button"
@@ -162,9 +164,23 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
                       ? "btn-ghost text-text-secondary hover:text-text-primary"
                       : "btn-primary"
                   }`}
-                  title={`Update thumbnails for all ${items.length} videos`}
+                  title={
+                    unsyncedCount === 0
+                      ? `Re-sync thumbnails for all ${items.length} videos`
+                      : `Update thumbnails for all ${items.length} videos`
+                  }
                 >
-                  Update all ({items.length})
+                  {unsyncedCount === 0 ? `Re-sync all (${items.length})` : `Update all (${items.length})`}
+                </button>
+              )}
+
+              {isDone && currentProgress.failCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onRetryFailed}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Retry failed
                 </button>
               )}
             </>
@@ -179,18 +195,9 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
               Cancel
             </button>
           )}
-
-          {isDone && currentProgress.failCount > 0 && (
-            <button
-              type="button"
-              onClick={onRetryFailed}
-              className="btn btn-secondary btn-sm"
-            >
-              Retry failed
-            </button>
-          )}
         </div>
       </div>
+    </div>
 
       {/* Asset readiness alert */}
       {!isAssetsReady && !isProcessing && (
