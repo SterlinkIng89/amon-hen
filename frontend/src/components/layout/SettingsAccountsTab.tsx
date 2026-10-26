@@ -119,36 +119,36 @@ export function SettingsAccountsTab({
         )}
 
         {authed ? (
-          <div className="flex items-center justify-between gap-3 p-3 bg-elevated border border-border-subtle rounded-md">
-            <div className="flex items-center gap-3">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                style={{ color: "#4ade80", flexShrink: 0 }}
-              >
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-              </svg>
-              <div className="flex items-center gap-2.5">
+          <div className="flex flex-col gap-3 p-4 bg-elevated border border-border-subtle rounded-md">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="#4ade80"
+                  className="shrink-0"
+                >
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                </svg>
                 {channel?.thumbnail && (
                   <img
                     src={channel.thumbnail}
                     alt={channel.title}
-                    className="w-7 h-7 rounded-full object-cover"
+                    className="w-7 h-7 rounded-full object-cover shrink-0"
                   />
                 )}
-                <div>
-                  <p className="font-medium text-xs text-text-primary mb-0.5">
+                <div className="min-w-0">
+                  <p className="font-medium text-xs text-text-primary mb-0.5 truncate">
                     {channel?.title || "Connected"}
                   </p>
-                  <p className="text-[10px] text-text-secondary">
+                  <p className="text-[10px] text-text-secondary truncate">
                     Your YouTube account is linked.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-2 pt-2 border-t border-border-subtle">
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
@@ -176,7 +176,7 @@ export function SettingsAccountsTab({
               </button>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm text-red-400 hover:text-red-300"
+                className="btn btn-ghost btn-sm text-red-400 hover:text-red-300 ml-auto"
                 onClick={async () => {
                   try {
                     await InvalidateYouTubeClient();
