@@ -292,7 +292,11 @@ func (a *App) syncPlaylists(svc *youtube.Service, syncTime int64) (map[string]bo
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, video_count=excluded.video_count,
-				thumbnail_url=CASE WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url ELSE yt_playlists.thumbnail_url END,
+				thumbnail_url=CASE
+					WHEN yt_playlists.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_playlists.thumbnail_url
+					WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
+					ELSE yt_playlists.thumbnail_url
+				END,
 				published_at=excluded.published_at, synced_at=excluded.synced_at,
 				privacy=excluded.privacy`,
 				item.Id, item.Snippet.Title, item.Snippet.Description, item.ContentDetails.ItemCount, thumb, item.Snippet.PublishedAt, syncTime, privacy)
@@ -520,7 +524,13 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					ON CONFLICT(id) DO UPDATE SET
 					title=excluded.title, description=excluded.description, published_at=excluded.published_at,
-					thumbnail_url=excluded.thumbnail_url, view_count=excluded.view_count, like_count=excluded.like_count,
+					thumbnail_url=CASE
+						WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
+						THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+						WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
+						ELSE yt_videos.thumbnail_url
+					END,
+					view_count=excluded.view_count, like_count=excluded.like_count,
 					duration=excluded.duration, privacy=excluded.privacy,
 					monetization_status=excluded.monetization_status, rejection_reason=excluded.rejection_reason, status_issues=excluded.status_issues,
 					synced_at=excluded.synced_at`,
@@ -658,7 +668,13 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, published_at=excluded.published_at,
-				thumbnail_url=excluded.thumbnail_url, view_count=excluded.view_count, like_count=excluded.like_count,
+				thumbnail_url=CASE
+					WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
+					THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+					WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
+					ELSE yt_videos.thumbnail_url
+				END,
+				view_count=excluded.view_count, like_count=excluded.like_count,
 				duration=excluded.duration, privacy=excluded.privacy,
 				monetization_status=excluded.monetization_status, rejection_reason=excluded.rejection_reason, status_issues=excluded.status_issues,
 				synced_at=excluded.synced_at`,

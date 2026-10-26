@@ -69,6 +69,40 @@ export function usePlaylistCatalog() {
     }
   }, []);
 
+  const reloadDraft = useCallback(async () => {
+    if (!selectedPlaylistId) return;
+    try {
+      const refreshed = await GetPlaylistCatalogDraft(selectedPlaylistId);
+      if (refreshed) {
+        setDraft(refreshed);
+      }
+    } catch {
+      // ignore reload error
+    }
+  }, [selectedPlaylistId]);
+
+  const updateVideoThumbnail = useCallback(
+    (videoId: string, thumbnailUrl: string, updatedAt?: number) => {
+      setDraft((prev) => {
+        if (!prev || !prev.videos) return prev;
+        const ts = updatedAt ?? Math.floor(Date.now() / 1000);
+        return backend.PlaylistCatalogDraft.createFrom({
+          ...prev,
+          videos: prev.videos.map((v) =>
+            v.videoId === videoId
+              ? backend.CatalogVideoDraft.createFrom({
+                  ...v,
+                  thumbnailUrl,
+                  thumbnailUpdatedAt: ts,
+                })
+              : v
+          ),
+        });
+      });
+    },
+    []
+  );
+
   const setEpisode = useCallback((videoId: string, episode: number) => {
     setEditedEpisodes((prev) => ({
       ...prev,
@@ -96,8 +130,47 @@ export function usePlaylistCatalog() {
     );
   }, [isApplying, editedTag, hasConflicts, draft?.videos?.length]);
 
+function buildSequentialEpisodeMap(
+  videos: readonly backend.CatalogVideoDraft[]
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (let i = 0; i < videos.length; i++) {
+    map[videos[i].videoId] = i + 1;
+  }
+  return map;
+}
+
+  const autoNumberByDate = useCallback(() => {
+    if (!draft?.videos?.length) return;
+    const sorted = [...draft.videos].sort((a, b) => {
+      const diff = new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+      return diff !== 0 ? diff : a.position - b.position;
+    });
+    setEditedEpisodes(buildSequentialEpisodeMap(sorted));
+  }, [draft?.videos]);
+
+  const autoNumberByOrder = useCallback(() => {
+    if (!draft?.videos?.length) return;
+    const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
+    setEditedEpisodes(buildSequentialEpisodeMap(sorted));
+  }, [draft?.videos]);
+
+  const reverseEpisodes = useCallback(() => {
+    if (!draft?.videos?.length) return;
+    const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
+    const reversed = sorted
+      .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode || 1)))
+      .reverse();
+
+    const nextMap: Record<string, number> = { ...editedEpisodes };
+    for (let i = 0; i < sorted.length; i++) {
+      nextMap[sorted[i].videoId] = reversed[i];
+    }
+    setEditedEpisodes(nextMap);
+  }, [draft?.videos, editedEpisodes]);
+
   const applyCatalog = useCallback(
-    async (): Promise<boolean> => {
+    async (updateLocal = true): Promise<boolean> => {
       if (!selectedPlaylistId || !canApply) return false;
 
       setIsApplying(true);
@@ -109,6 +182,7 @@ export function usePlaylistCatalog() {
           playlistId: selectedPlaylistId,
           tag: editedTag.trim(),
           kind: draft?.kind || "vod",
+          updateLocal,
           assignments: Object.entries(editedEpisodes).map(([videoId, episode]) =>
             backend.CatalogAssignment.createFrom({ videoId, episode })
           ),
@@ -117,6 +191,7 @@ export function usePlaylistCatalog() {
         await ApplyPlaylistCatalog(req);
         setApplySuccess(true);
         await loadPlaylists();
+        await reloadDraft();
         return true;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -126,7 +201,7 @@ export function usePlaylistCatalog() {
         setIsApplying(false);
       }
     },
-    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists]
+    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists, reloadDraft]
   );
 
   return {
@@ -139,10 +214,15 @@ export function usePlaylistCatalog() {
     isLoadingDraft,
     draftError,
     selectPlaylist,
+    reloadDraft,
+    updateVideoThumbnail,
     editedTag,
     setEditedTag,
     editedEpisodes,
     setEpisode,
+    autoNumberByDate,
+    autoNumberByOrder,
+    reverseEpisodes,
     hasConflicts,
     canApply,
     isApplying,

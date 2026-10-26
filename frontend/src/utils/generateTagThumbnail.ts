@@ -35,29 +35,19 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   if (!src) return Promise.resolve(null);
   return new Promise((resolve) => {
     const img = new Image();
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        resolve(img);
-      }
-    }, 300);
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
+    const settle = (result: HTMLImageElement | null) => {
+      if (timer) clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      resolve(result);
+    };
+
+    timer = setTimeout(() => settle(null), 8000);
     img.crossOrigin = "anonymous";
-    img.onload = () => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        resolve(img);
-      }
-    };
-    img.onerror = () => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        resolve(null);
-      }
-    };
+    img.onload = () => settle(img);
+    img.onerror = () => settle(null);
     img.src = src;
   });
 }
@@ -84,36 +74,54 @@ export async function getTagThumbnailAssets(
   if (cached) return cached;
 
   const promise = (async (): Promise<TagAssetCacheItem> => {
-    let steamAssets: SteamGameArtwork | null = null;
-    let gameTitle = cleanTag;
+    try {
+      let steamAssets: SteamGameArtwork | null = null;
+      let gameTitle = cleanTag;
 
-    if (effectiveConfig.source_type !== "custom") {
-      try {
-        const appId = await GetSteamAppID(cleanTag);
-        if (appId && appId !== "NOT_FOUND") {
-          const assets = await GetSteamGameAssets(appId);
-          if (assets) {
-            steamAssets = assets;
-            if (assets.title) gameTitle = assets.title;
+      if (effectiveConfig.source_type !== "custom") {
+        try {
+          const appId = await GetSteamAppID(cleanTag);
+          if (appId && appId !== "NOT_FOUND") {
+            const assets = await GetSteamGameAssets(appId);
+            if (assets) {
+              steamAssets = assets;
+              if (assets.title) gameTitle = assets.title;
+            }
           }
+        } catch (err) {
+          console.error("Failed to fetch Steam assets for tag:", cleanTag, err);
         }
-      } catch (err) {
-        console.error("Failed to fetch Steam assets for tag:", cleanTag, err);
       }
+
+      const resolvedImageUrl = resolveThumbnailImageUrl(
+        effectiveConfig.source_type ?? "steam",
+        effectiveConfig.custom_image_path,
+        effectiveConfig.steam_asset_type ?? "header",
+        steamAssets,
+      );
+
+      let baseImage = await loadImage(resolvedImageUrl);
+      if (
+        !baseImage &&
+        effectiveConfig.source_type !== "custom" &&
+        steamAssets?.headerUrl &&
+        steamAssets.headerUrl !== resolvedImageUrl
+      ) {
+        baseImage = await loadImage(steamAssets.headerUrl);
+      }
+
+      const logoUrl = steamAssets?.logoUrl;
+      const logoImage = logoUrl ? await loadImage(logoUrl) : null;
+
+      if (!baseImage) {
+        assetCache.delete(cacheKey);
+      }
+
+      return { baseImage, logoImage, gameTitle };
+    } catch (err) {
+      assetCache.delete(cacheKey);
+      throw err;
     }
-
-    const resolvedImageUrl = resolveThumbnailImageUrl(
-      effectiveConfig.source_type ?? "steam",
-      effectiveConfig.custom_image_path,
-      effectiveConfig.steam_asset_type ?? "header",
-      steamAssets,
-    );
-
-    const baseImage = await loadImage(resolvedImageUrl);
-    const logoUrl = steamAssets?.logoUrl;
-    const logoImage = logoUrl ? await loadImage(logoUrl) : null;
-
-    return { baseImage, logoImage, gameTitle };
   })();
 
   assetCache.set(cacheKey, promise);

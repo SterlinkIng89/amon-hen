@@ -56,3 +56,17 @@ export function getGameColor(game: string): string {
   if (!game || game.trim().length === 0) return DEFAULT_GAME_COLOR;
   return getTagColor(game) || DEFAULT_GAME_COLOR;
 }
+
+export function getTagBadgeStyle(tag: string): {
+  readonly color: string;
+  readonly backgroundColor: string;
+  readonly borderColor: string;
+} {
+  const color = getGameColor(tag);
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color} 25%, transparent)`,
+  };
+}
+

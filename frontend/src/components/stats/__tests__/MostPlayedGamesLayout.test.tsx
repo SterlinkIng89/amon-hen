@@ -234,12 +234,8 @@ describe("MostPlayedGames Monthly Layout", () => {
   it("allows selecting a game and resetting via PlaytimeStackedChart legend filter chips", async () => {
     render(<MostPlayedGames />);
 
-    await waitFor(() => {
-      expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    });
-
     // Locate the legend chip for Silksong via test id
-    const silksongChip = screen.getByTestId("legend-chip-Hollow Knight: Silksong");
+    const silksongChip = await screen.findByTestId("legend-chip-Hollow Knight: Silksong");
     expect(silksongChip).toBeDefined();
 
     fireEvent.click(silksongChip);
@@ -262,11 +258,7 @@ describe("MostPlayedGames Monthly Layout", () => {
   it("selects day bar on click, synchronizes timeline stint and dominant game, and toggles selection off", async () => {
     render(<MostPlayedGames />);
 
-    await waitFor(() => {
-      expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    });
-
-    const dayColumn = screen.getByTestId("bar-column-2026-10-05");
+    const dayColumn = await screen.findByTestId("bar-column-2026-10-05");
     expect(dayColumn).toBeDefined();
 
     const barEl = screen.getByTestId("stacked-bar-2026-10-05");
@@ -292,11 +284,7 @@ describe("MostPlayedGames Monthly Layout", () => {
   it("ignores click on empty day bar stub with 0 recorded hours", async () => {
     render(<MostPlayedGames />);
 
-    await waitFor(() => {
-      expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    });
-
-    const emptyStubColumn = screen.getByTestId("bar-column-2026-10-02");
+    const emptyStubColumn = await screen.findByTestId("bar-column-2026-10-02");
     expect(emptyStubColumn).toBeDefined();
 
     fireEvent.click(emptyStubColumn);
@@ -380,11 +368,7 @@ describe("MostPlayedGames Monthly Layout", () => {
   it("cross-highlights matching stint in GamingTimelineStrip when selecting a game from TopGamesList", async () => {
     render(<MostPlayedGames />);
 
-    await waitFor(() => {
-      expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    });
-
-    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const hadesStint = await screen.findByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
     const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
 
     // By default no game is selected -> both have opacity-100
@@ -408,15 +392,11 @@ describe("MostPlayedGames Monthly Layout", () => {
   it("cross-highlights matching stint in GamingTimelineStrip when clicking a legend chip in PlaytimeStackedChart", async () => {
     render(<MostPlayedGames />);
 
-    await waitFor(() => {
-      expect(screen.getByText("#1 Game of the month")).toBeDefined();
-    });
-
-    const hadesStint = screen.getByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
+    const hadesStint = await screen.findByTestId("stint-card-2026-10-01_2026-10-03_Hades II");
     const silksongStint = screen.getByTestId("stint-card-2026-10-05_2026-10-05_Hollow Knight: Silksong");
 
     // Click on Hades II legend chip in PlaytimeStackedChart
-    const hadesChip = screen.getByTestId("legend-chip-Hades II");
+    const hadesChip = await screen.findByTestId("legend-chip-Hades II");
     fireEvent.click(hadesChip);
 
     await waitFor(() => {

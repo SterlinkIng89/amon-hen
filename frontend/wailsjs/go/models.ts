@@ -46,6 +46,7 @@ export namespace backend {
 	    playlistId: string;
 	    tag: string;
 	    kind: string;
+	    updateLocal: boolean;
 	    assignments: CatalogAssignment[];
 	
 	    static createFrom(source: any = {}) {
@@ -57,6 +58,7 @@ export namespace backend {
 	        this.playlistId = source["playlistId"];
 	        this.tag = source["tag"];
 	        this.kind = source["kind"];
+	        this.updateLocal = source["updateLocal"];
 	        this.assignments = this.convertValues(source["assignments"], CatalogAssignment);
 	    }
 	
@@ -82,6 +84,7 @@ export namespace backend {
 	export class CatalogPlaylistSummary {
 	    playlistId: string;
 	    title: string;
+	    thumbnailUrl: string;
 	    videoCount: number;
 	    kind: string;
 	    tag: string;
@@ -96,6 +99,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.playlistId = source["playlistId"];
 	        this.title = source["title"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.videoCount = source["videoCount"];
 	        this.kind = source["kind"];
 	        this.tag = source["tag"];
@@ -114,6 +118,7 @@ export namespace backend {
 	    episode: number;
 	    source: string;
 	    conflict: boolean;
+	    thumbnailUpdatedAt: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogVideoDraft(source);
@@ -131,6 +136,7 @@ export namespace backend {
 	        this.episode = source["episode"];
 	        this.source = source["source"];
 	        this.conflict = source["conflict"];
+	        this.thumbnailUpdatedAt = source["thumbnailUpdatedAt"];
 	    }
 	}
 	export class HistoricalVideo {
@@ -646,6 +652,7 @@ export namespace backend {
 	export class PlaylistCatalogDraft {
 	    playlistId: string;
 	    title: string;
+	    thumbnailUrl: string;
 	    videoCount: number;
 	    kind: string;
 	    tag: string;
@@ -664,6 +671,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.playlistId = source["playlistId"];
 	        this.title = source["title"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.videoCount = source["videoCount"];
 	        this.kind = source["kind"];
 	        this.tag = source["tag"];

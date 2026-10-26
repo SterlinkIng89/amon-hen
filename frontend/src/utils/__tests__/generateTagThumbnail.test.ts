@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   generateAndSaveTagThumbnail,
   getTagThumbnailAssets,
@@ -15,7 +15,9 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   GetSteamGameAssets: vi.fn().mockResolvedValue({
     headerUrl: "https://steam.cdn/header.jpg",
     logoUrl: "https://steam.cdn/logo.png",
-    name: "Control Resonant",
+    posterUrl: "https://steam.cdn/poster.jpg",
+    heroUrl: "https://steam.cdn/hero.jpg",
+    title: "Control Resonant",
   }),
   GetTagPlaylistConfig: vi.fn().mockResolvedValue({
     thumbnail_config: {
@@ -35,10 +37,40 @@ vi.mock("../thumbnailRender", () => ({
   renderTagThumbnailDataUrl: vi.fn().mockReturnValue("data:image/jpeg;base64,mockdata"),
 }));
 
+class MockImage {
+  private _src = "";
+  crossOrigin = "";
+  complete = false;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  get src(): string {
+    return this._src;
+  }
+
+  set src(val: string) {
+    this._src = val;
+    queueMicrotask(() => {
+      if (val.includes("fail") || val.includes("error")) {
+        this.complete = false;
+        this.onerror?.();
+      } else {
+        this.complete = true;
+        this.onload?.();
+      }
+    });
+  }
+}
+
 describe("generateAndSaveTagThumbnail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearTagThumbnailAssetCache();
+    vi.stubGlobal("Image", MockImage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("returns null if videoPath or tag is empty", async () => {
@@ -147,5 +179,55 @@ describe("generateAndSaveTagThumbnail", () => {
     await getTagThumbnailAssets("Control Resonant");
 
     expect(appBackend.GetSteamAppID).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to headerUrl when primary asset fails to load", async () => {
+    vi.mocked(appBackend.GetSteamAppID).mockResolvedValueOnce("12345");
+    vi.mocked(appBackend.GetSteamGameAssets).mockResolvedValueOnce({
+      heroUrl: "https://steam.cdn/hero_fail.jpg",
+      headerUrl: "https://steam.cdn/header.jpg",
+      posterUrl: "https://steam.cdn/poster.jpg",
+      logoUrl: "https://steam.cdn/logo.png",
+      title: "Control Resonant",
+    });
+
+    const assets = await getTagThumbnailAssets("Control Resonant", {
+      enabled: true,
+      source_type: "steam",
+      steam_asset_type: "hero",
+      episode_position: "bottom-left",
+      episode_format: "pad2",
+    });
+
+    expect(assets.baseImage).not.toBeNull();
+    expect(assets.baseImage?.src).toBe("https://steam.cdn/header.jpg");
+  });
+
+  it("evicts cacheKey from assetCache when baseImage is null, allowing retry", async () => {
+    vi.mocked(appBackend.GetSteamAppID).mockResolvedValue("12345");
+    vi.mocked(appBackend.GetSteamGameAssets).mockResolvedValue({
+      headerUrl: "https://steam.cdn/header_fail.jpg",
+      heroUrl: "https://steam.cdn/hero_fail.jpg",
+      posterUrl: "https://steam.cdn/poster_fail.jpg",
+      logoUrl: "https://steam.cdn/logo.png",
+      title: "Control Resonant",
+    });
+
+    const first = await getTagThumbnailAssets("Control Resonant");
+    expect(first.baseImage).toBeNull();
+    expect(appBackend.GetSteamAppID).toHaveBeenCalledTimes(1);
+
+    vi.mocked(appBackend.GetSteamGameAssets).mockResolvedValue({
+      headerUrl: "https://steam.cdn/header_success.jpg",
+      heroUrl: "https://steam.cdn/hero_success.jpg",
+      posterUrl: "https://steam.cdn/poster_success.jpg",
+      logoUrl: "https://steam.cdn/logo.png",
+      title: "Control Resonant",
+    });
+
+    const second = await getTagThumbnailAssets("Control Resonant");
+    expect(appBackend.GetSteamAppID).toHaveBeenCalledTimes(2);
+    expect(second.baseImage).not.toBeNull();
+    expect(second.baseImage?.src).toBe("https://steam.cdn/header_success.jpg");
   });
 });

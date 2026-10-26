@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -194,6 +195,152 @@ func TestListCatalogPlaylistsOrdering(t *testing.T) {
 	}
 	if playlists[1].PlaylistID != "pl-1" {
 		t.Errorf("expected pl-1 to be second, got %s (%s)", playlists[1].PlaylistID, playlists[1].Title)
+	}
+}
+
+func TestListCatalogPlaylists_ReverseLookupAndThumbnail(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	// Seed playlist with non-inferrable title and custom thumbnail
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, thumbnail_url, published_at)
+		VALUES ('pl-linked-custom', 'Unrelated Title 2026', 1, 'https://example.com/pl_cover.jpg', '2026-01-01T00:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert playlist: %v", err)
+	}
+
+	app.configMu.Lock()
+	if app.config.TagPlaylistConfigs == nil {
+		app.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	app.config.TagPlaylistConfigs["Custom Elden Tag"] = TagPlaylistConfig{
+		VodPlaylistID: "pl-linked-custom",
+	}
+	app.configMu.Unlock()
+
+	summaries, err := app.ListCatalogPlaylists()
+	if err != nil {
+		t.Fatalf("ListCatalogPlaylists failed: %v", err)
+	}
+
+	var found *CatalogPlaylistSummary
+	for i := range summaries {
+		if summaries[i].PlaylistID == "pl-linked-custom" {
+			found = &summaries[i]
+			break
+		}
+	}
+
+	if found == nil {
+		t.Fatalf("expected to find pl-linked-custom in summaries")
+	}
+
+	if found.Tag != "Custom Elden Tag" || found.Kind != "vod" || found.TagConfidence != "known" || !found.Linked {
+		t.Errorf("expected reverse lookup tag 'Custom Elden Tag', known, linked=true; got tag=%s, kind=%s, conf=%s, linked=%v",
+			found.Tag, found.Kind, found.TagConfidence, found.Linked)
+	}
+	if found.ThumbnailUrl != "https://example.com/pl_cover.jpg" {
+		t.Errorf("expected ThumbnailUrl 'https://example.com/pl_cover.jpg', got %s", found.ThumbnailUrl)
+	}
+}
+
+func TestGetPlaylistCatalogDraft_ThumbnailAndTagPrecedence(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, thumbnail_url, published_at)
+		VALUES ('pl-draft-test', 'Unrelated Title', 1, '/cache/yt_thumbs/pl_test.jpg', '2026-01-01T00:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert playlist: %v", err)
+	}
+
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at)
+		VALUES ('v-thumb-1', 'Episode 1', '2026-01-02T00:00:00Z', 'https://example.com/yt_v1.jpg?v=1777888999', 1777888999)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position)
+		VALUES ('pl-draft-test', 'v-thumb-1', 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert playlist item: %v", err)
+	}
+
+	app.configMu.Lock()
+	if app.config.TagPlaylistConfigs == nil {
+		app.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	app.config.TagPlaylistConfigs["Pre-Configured Tag"] = TagPlaylistConfig{
+		VodPlaylistID: "pl-draft-test",
+	}
+	app.configMu.Unlock()
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-draft-test")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if draft.Tag != "Pre-Configured Tag" || !draft.Linked || draft.TagConfidence != "known" {
+		t.Errorf("expected Pre-Configured Tag, linked=true, known; got tag=%s, linked=%v, conf=%s", draft.Tag, draft.Linked, draft.TagConfidence)
+	}
+	if draft.ThumbnailUrl != "/cache/yt_thumbs/pl_test.jpg" {
+		t.Errorf("expected draft.ThumbnailUrl '/cache/yt_thumbs/pl_test.jpg', got %s", draft.ThumbnailUrl)
+	}
+	if len(draft.Videos) != 1 {
+		t.Fatalf("expected 1 video in draft, got %d", len(draft.Videos))
+	}
+	if draft.Videos[0].ThumbnailUpdatedAt != 1777888999 {
+		t.Errorf("expected video ThumbnailUpdatedAt 1777888999, got %d", draft.Videos[0].ThumbnailUpdatedAt)
+	}
+}
+
+func TestApplyPlaylistCatalog_UpdateLocal(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	localFilePath := filepath.Join(t.TempDir(), "hades_01.mp4")
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, local_file)
+		VALUES ('vid-loc-1', 'Hades Ep 1', ?)
+	`, localFilePath)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	req := CatalogApplyRequest{
+		PlaylistID:  "pl-local-sync",
+		Tag:         "Hades II",
+		Kind:        "vod",
+		UpdateLocal: true,
+		Assignments: []CatalogAssignment{
+			{VideoID: "vid-loc-1", Episode: 10},
+		},
+	}
+
+	err = app.ApplyPlaylistCatalog(req)
+	if err != nil {
+		t.Fatalf("ApplyPlaylistCatalog failed: %v", err)
+	}
+
+	app.configMu.Lock()
+	gameTag := app.config.VideoGames[localFilePath]
+	meta := app.config.VideoMetadata[localFilePath]
+	app.configMu.Unlock()
+
+	if gameTag != "Hades II" {
+		t.Errorf("expected VideoGames[%q] == 'Hades II', got %q", localFilePath, gameTag)
+	}
+	if meta.Game != "Hades II" || meta.Episode != 10 || meta.PlaylistID != "pl-local-sync" || meta.ContentType != "vod" {
+		t.Errorf("expected VideoMetadata updated: Game='Hades II', Episode=10, PlaylistID='pl-local-sync', ContentType='vod'; got %+v", meta)
 	}
 }
 

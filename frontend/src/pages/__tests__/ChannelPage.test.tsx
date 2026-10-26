@@ -27,6 +27,7 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   ListCatalogPlaylists: vi.fn().mockResolvedValue([]),
   GetPlaylistCatalogDraft: vi.fn().mockResolvedValue(null),
   GetSteamAppID: vi.fn().mockResolvedValue(""),
+  GetAllGameTags: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock runtime events

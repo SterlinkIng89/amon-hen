@@ -1,8 +1,24 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import "@testing-library/jest-dom";
 import TagThumbnailConfigSection from "../TagThumbnailConfigSection";
 import { TagThumbnailConfig } from "../../../types";
+
+// Mock useThumbnailAssets so canvas assets are immediately ready
+vi.mock("../../../hooks/useThumbnailAssets", () => ({
+  useThumbnailAssets: vi.fn().mockReturnValue({
+    steamAssets: {
+      heroUrl: "https://steam.cdn/hero.jpg",
+      headerUrl: "https://steam.cdn/header.jpg",
+      posterUrl: "https://steam.cdn/poster.jpg",
+    },
+    loadingAssets: false,
+    baseImage: {} as HTMLImageElement,
+    logoImage: null,
+    gameTitle: "Cyberpunk 2077",
+  }),
+}));
 
 // Mock Wails backend App functions
 vi.mock("../../../../wailsjs/go/backend/App", () => ({

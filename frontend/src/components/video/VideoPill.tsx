@@ -727,7 +727,7 @@ function VideoPillComponent({
   );
 }
 
-function areVideoPillPropsEqual(
+export function areVideoPillPropsEqual(
   prev: VideoPillProps,
   next: VideoPillProps,
 ): boolean {
@@ -761,7 +761,10 @@ function areVideoPillPropsEqual(
         p.privacy !== n.privacy ||
         p.viewCount !== n.viewCount ||
         p.likeCount !== n.likeCount ||
-        p.monetizationStatus !== n.monetizationStatus
+        p.monetizationStatus !== n.monetizationStatus ||
+        p.thumbnailUrl !== n.thumbnailUrl ||
+        p.gameTag !== n.gameTag ||
+        p.episode !== n.episode
       ) {
         return false;
       }
