@@ -46,7 +46,7 @@ export namespace backend {
 	    playlistId: string;
 	    tag: string;
 	    kind: string;
-	    updateLocal?: boolean;
+	    updateLocal: boolean;
 	    assignments: CatalogAssignment[];
 	
 	    static createFrom(source: any = {}) {
@@ -118,7 +118,7 @@ export namespace backend {
 	    episode: number;
 	    source: string;
 	    conflict: boolean;
-	    thumbnailUpdatedAt?: number;
+	    thumbnailUpdatedAt: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogVideoDraft(source);
@@ -652,6 +652,7 @@ export namespace backend {
 	export class PlaylistCatalogDraft {
 	    playlistId: string;
 	    title: string;
+	    thumbnailUrl: string;
 	    videoCount: number;
 	    kind: string;
 	    tag: string;
@@ -670,6 +671,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.playlistId = source["playlistId"];
 	        this.title = source["title"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.videoCount = source["videoCount"];
 	        this.kind = source["kind"];
 	        this.tag = source["tag"];

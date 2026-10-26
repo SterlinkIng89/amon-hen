@@ -1,5 +1,6 @@
 import { FC } from "react";
 import { backend } from "../../../../wailsjs/go/models";
+import { getTagBadgeStyle } from "../../../utils/tagColors";
 
 interface PlaylistCatalogRowProps {
   readonly playlist: backend.CatalogPlaylistSummary;
@@ -70,18 +71,18 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
           )}
 
           {playlist.linked ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
+              style={getTagBadgeStyle(playlist.tag)}
+            >
               {playlist.tag}
             </span>
           ) : isSuggested ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
               Suggested: {playlist.tag}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface text-text-muted border border-border-subtle">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface text-text-muted border border-border-subtle">
               Unlinked
             </span>
           )}

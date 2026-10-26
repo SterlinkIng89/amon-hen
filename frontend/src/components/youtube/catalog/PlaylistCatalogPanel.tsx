@@ -19,6 +19,7 @@ import { BatchItem, TagThumbnailConfig } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
 import { renderThumbnailToCanvas } from "../../../utils/thumbnailGenerator";
+import { getTagBadgeStyle } from "../../../utils/tagColors";
 
 interface ThumbnailPreviewCanvasProps {
   readonly config: TagThumbnailConfig;
@@ -460,13 +461,14 @@ export const PlaylistCatalogPanel: FC = () => {
               </div>
               <div>
                 {draft.linked ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span
+                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
+                    style={getTagBadgeStyle(draft.tag)}
+                  >
                     Linked to {draft.tag}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-surface text-text-muted border border-border-subtle">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-surface text-text-muted border border-border-subtle">
                     Unlinked
                   </span>
                 )}
@@ -591,11 +593,14 @@ export const PlaylistCatalogPanel: FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-text-primary">Thumbnail Studio</span>
                       {isConfigCustomized ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border"
+                          style={getTagBadgeStyle(editedTag.trim())}
+                        >
                           Customized for {editedTag.trim()}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-elevated/80 text-text-muted border border-border-subtle">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-elevated/80 text-text-muted border border-border-subtle">
                           Default template
                         </span>
                       )}

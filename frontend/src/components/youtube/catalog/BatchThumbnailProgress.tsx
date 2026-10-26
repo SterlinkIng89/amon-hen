@@ -201,8 +201,7 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
 
       {/* Asset readiness alert */}
       {!isAssetsReady && !isProcessing && (
-        <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+        <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 flex items-center">
           <span>Thumbnail artwork assets are loading or incomplete. Updates are disabled until assets are ready.</span>
         </div>
       )}

@@ -52,8 +52,7 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
 }) => {
   if (isDuplicate) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire">
         Duplicate
       </span>
     );
@@ -61,8 +60,7 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
 
   if (isInvalid) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire">
         Invalid
       </span>
     );
@@ -70,8 +68,7 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
 
   if (batchItem?.status === "rendering") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse">
         Rendering...
       </span>
     );
@@ -79,8 +76,7 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
 
   if (batchItem?.status === "uploading") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse">
         Uploading...
       </span>
     );
@@ -89,10 +85,9 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
   if (batchItem?.status === "failed") {
     return (
       <span
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire"
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire"
         title={batchItem.error || "Thumbnail upload failed"}
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
         Failed
       </span>
     );
@@ -100,16 +95,14 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
 
   if (isSynced) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
         Synced
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
       Needs thumb
     </span>
   );

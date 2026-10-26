@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTagColor, getGameColor, DEFAULT_GAME_COLOR } from "../tagColors";
+import { getTagColor, getGameColor, getTagBadgeStyle, DEFAULT_GAME_COLOR } from "../tagColors";
 
 describe("tagColors and getGameColor utils", () => {
   it("returns deterministic HSL color for any string", () => {
@@ -30,4 +30,13 @@ describe("tagColors and getGameColor utils", () => {
     const colorB = getGameColor("Hollow Knight");
     expect(colorA).not.toBe(colorB);
   });
+
+  it("getTagBadgeStyle produces matching color, background, and border tokens", () => {
+    const style = getTagBadgeStyle("Hades II");
+    const color = getGameColor("Hades II");
+    expect(style.color).toBe(color);
+    expect(style.backgroundColor).toBe(`color-mix(in srgb, ${color} 12%, transparent)`);
+    expect(style.borderColor).toBe(`color-mix(in srgb, ${color} 25%, transparent)`);
+  });
 });
+
