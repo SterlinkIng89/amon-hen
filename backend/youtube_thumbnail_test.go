@@ -186,22 +186,27 @@ func TestPersistThumbnailURL(t *testing.T) {
 	}
 
 	targetURL := "https://example.com/thumb_updated.jpg?v=12345"
-	err = app.persistThumbnailURL("vid-test-1", targetURL)
+	updatedAt := int64(12345)
+	err = app.persistThumbnailURL("vid-test-1", targetURL, updatedAt)
 	if err != nil {
 		t.Fatalf("persistThumbnailURL failed: %v", err)
 	}
 
 	var savedURL string
-	err = app.db.conn.QueryRow("SELECT thumbnail_url FROM yt_videos WHERE id = 'vid-test-1'").Scan(&savedURL)
+	var savedUpdatedAt int64
+	err = app.db.conn.QueryRow("SELECT thumbnail_url, custom_thumb_updated_at FROM yt_videos WHERE id = 'vid-test-1'").Scan(&savedURL, &savedUpdatedAt)
 	if err != nil {
 		t.Fatalf("failed to query thumbnail_url: %v", err)
 	}
 	if savedURL != targetURL {
 		t.Errorf("expected %s, got %s", targetURL, savedURL)
 	}
+	if savedUpdatedAt != updatedAt {
+		t.Errorf("expected updated_at %d, got %d", updatedAt, savedUpdatedAt)
+	}
 
 	// Non-existent video does not error out
-	err = app.persistThumbnailURL("non-existent-id", "https://example.com/another.jpg")
+	err = app.persistThumbnailURL("non-existent-id", "https://example.com/another.jpg", updatedAt)
 	if err != nil {
 		t.Errorf("expected non-existent video update to succeed without error, got: %v", err)
 	}

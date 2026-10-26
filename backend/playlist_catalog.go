@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"database/sql"
 	"fmt"
 	"regexp"
 	"sort"
@@ -9,21 +10,23 @@ import (
 )
 
 type CatalogVideoDraft struct {
-	VideoID         string `json:"videoId"`
-	Title           string `json:"title"`
-	PublishedAt     string `json:"publishedAt"`
-	ThumbnailUrl    string `json:"thumbnailUrl"`
-	LocalFile       string `json:"localFile,omitempty"`
-	Position        int    `json:"position"`
-	ExistingEpisode int    `json:"existingEpisode"`
-	Episode         int    `json:"episode"`
-	Source          string `json:"source"` // "db" | "title" | "order" | "none"
-	Conflict        bool   `json:"conflict"`
+	VideoID            string `json:"videoId"`
+	Title              string `json:"title"`
+	PublishedAt        string `json:"publishedAt"`
+	ThumbnailUrl       string `json:"thumbnailUrl"`
+	LocalFile          string `json:"localFile,omitempty"`
+	Position           int    `json:"position"`
+	ExistingEpisode    int    `json:"existingEpisode"`
+	Episode            int    `json:"episode"`
+	Source             string `json:"source"` // "db" | "title" | "order" | "none"
+	Conflict           bool   `json:"conflict"`
+	ThumbnailUpdatedAt int64  `json:"thumbnailUpdatedAt"`
 }
 
 type CatalogPlaylistSummary struct {
 	PlaylistID    string `json:"playlistId"`
 	Title         string `json:"title"`
+	ThumbnailUrl  string `json:"thumbnailUrl"`
 	VideoCount    int    `json:"videoCount"`
 	Kind          string `json:"kind"` // "vod" | "clip"
 	Tag           string `json:"tag"`
@@ -48,6 +51,7 @@ type CatalogApplyRequest struct {
 	PlaylistID  string              `json:"playlistId"`
 	Tag         string              `json:"tag"`
 	Kind        string              `json:"kind"` // "vod" | "clip"
+	UpdateLocal bool                `json:"updateLocal"`
 	Assignments []CatalogAssignment `json:"assignments"`
 }
 
@@ -177,6 +181,54 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 	return result
 }
 
+type playlistLinkInfo struct {
+	tag  string
+	kind string
+}
+
+// playlistLinkMap builds a lookup table from YouTube playlist ID to its linked game tag and content kind.
+func (cfg *Config) playlistLinkMap() map[string]playlistLinkInfo {
+	m := make(map[string]playlistLinkInfo)
+	if cfg == nil {
+		return m
+	}
+	if cfg.TagPlaylistConfigs != nil {
+		for tag, c := range cfg.TagPlaylistConfigs {
+			if c.VodPlaylistID != "" {
+				m[c.VodPlaylistID] = playlistLinkInfo{tag: tag, kind: "vod"}
+			}
+			if c.ClipPlaylistID != "" {
+				m[c.ClipPlaylistID] = playlistLinkInfo{tag: tag, kind: "clip"}
+			}
+		}
+	}
+	if cfg.TagPlaylists != nil {
+		for tag, plId := range cfg.TagPlaylists {
+			if plId != "" {
+				if _, exists := m[plId]; !exists {
+					m[plId] = playlistLinkInfo{tag: tag, kind: "vod"}
+				}
+			}
+		}
+	}
+	return m
+}
+
+// resolvePlaylistLink looks up whether a playlist ID is mapped to a game tag in config.
+func (a *App) resolvePlaylistLink(playlistID string) (tag string, kind string, linked bool) {
+	if playlistID == "" {
+		return "", "", false
+	}
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+
+	link, ok := a.config.playlistLinkMap()[playlistID]
+	if ok {
+		return link.tag, link.kind, true
+	}
+	return "", "", false
+}
+
 // ListCatalogPlaylists lists YouTube playlists with inferred tag metadata and link status.
 func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	if a.db == nil {
@@ -189,32 +241,14 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	}
 
 	a.configMu.Lock()
-	linkedVodMap := make(map[string]bool)
-	linkedClipMap := make(map[string]bool)
-	if a.config.TagPlaylistConfigs != nil {
-		for _, cfg := range a.config.TagPlaylistConfigs {
-			if cfg.VodPlaylistID != "" {
-				linkedVodMap[cfg.VodPlaylistID] = true
-			}
-			if cfg.ClipPlaylistID != "" {
-				linkedClipMap[cfg.ClipPlaylistID] = true
-			}
-		}
-	}
-	if a.config.TagPlaylists != nil {
-		for _, plId := range a.config.TagPlaylists {
-			if plId != "" {
-				linkedVodMap[plId] = true
-			}
-		}
-	}
+	playlistLinkMap := a.config.playlistLinkMap()
 	a.configMu.Unlock()
 
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
 	rows, err := a.db.conn.Query(`
-		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0)
+		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0), COALESCE(p.thumbnail_url, '')
 		FROM yt_playlists p
 		ORDER BY COALESCE(
 			(SELECT MAX(v.published_at) FROM yt_videos v JOIN yt_playlist_items pi ON v.id = pi.video_id WHERE pi.playlist_id = p.id),
@@ -230,15 +264,18 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	var summaries []CatalogPlaylistSummary
 	for rows.Next() {
 		var s CatalogPlaylistSummary
-		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount); err != nil {
+		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount, &s.ThumbnailUrl); err != nil {
 			continue
 		}
 
-		s.Tag, s.Kind, s.TagConfidence = inferTagFromPlaylistTitle(s.Title, knownTags)
-		if s.Kind == "clip" {
-			s.Linked = linkedClipMap[s.PlaylistID]
+		if link, ok := playlistLinkMap[s.PlaylistID]; ok {
+			s.Tag = link.tag
+			s.Kind = link.kind
+			s.TagConfidence = "known"
+			s.Linked = true
 		} else {
-			s.Linked = linkedVodMap[s.PlaylistID]
+			s.Tag, s.Kind, s.TagConfidence = inferTagFromPlaylistTitle(s.Title, knownTags)
+			s.Linked = false
 		}
 
 		summaries = append(summaries, s)
@@ -262,7 +299,8 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	a.db.mu.Lock()
 	var plTitle string
 	var videoCount int
-	err = a.db.conn.QueryRow(`SELECT COALESCE(title, ''), COALESCE(video_count, 0) FROM yt_playlists WHERE id = ?`, playlistID).Scan(&plTitle, &videoCount)
+	var plThumb string
+	err = a.db.conn.QueryRow(`SELECT COALESCE(title, ''), COALESCE(video_count, 0), COALESCE(thumbnail_url, '') FROM yt_playlists WHERE id = ?`, playlistID).Scan(&plTitle, &videoCount, &plThumb)
 	if err != nil {
 		a.db.mu.Unlock()
 		return draft, fmt.Errorf("playlist not found: %w", err)
@@ -271,7 +309,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	// Fetch videos linked in this playlist
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''),
-		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0)
+		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0)
 		FROM yt_playlist_items pi
 		JOIN yt_videos v ON pi.video_id = v.id
 		WHERE pi.playlist_id = ?
@@ -287,33 +325,29 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	for rows.Next() {
 		var vd CatalogVideoDraft
 		var localFile string
-		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode); err == nil {
+		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt); err == nil {
 			vd.LocalFile = localFile
 			vids = append(vids, vd)
 		}
 	}
 	a.db.mu.Unlock()
 
-	tag, kind, conf := inferTagFromPlaylistTitle(plTitle, knownTags)
-
-	a.configMu.Lock()
-	linked := false
-	if a.config.TagPlaylistConfigs != nil {
-		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
-			if (kind == "clip" && cfg.ClipPlaylistID == playlistID) || (kind == "vod" && cfg.VodPlaylistID == playlistID) {
-				linked = true
-			}
-		}
+	tag, kind, isLinked := a.resolvePlaylistLink(playlistID)
+	var conf string
+	if isLinked {
+		conf = "known"
+	} else {
+		tag, kind, conf = inferTagFromPlaylistTitle(plTitle, knownTags)
 	}
-	a.configMu.Unlock()
 
 	draft.PlaylistID = playlistID
 	draft.Title = plTitle
+	draft.ThumbnailUrl = plThumb
 	draft.VideoCount = videoCount
 	draft.Kind = kind
 	draft.Tag = tag
 	draft.TagConfidence = conf
-	draft.Linked = linked
+	draft.Linked = isLinked
 
 	// Check if full sync is needed
 	if videoCount > 0 && len(vids) == 0 {
@@ -374,6 +408,23 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	}
 	defer updateStmt.Close()
 
+	type localSyncEntry struct {
+		localFile string
+		episode   int
+	}
+	var localSyncList []localSyncEntry
+
+	var selectLocalStmt *sql.Stmt
+	if req.UpdateLocal {
+		selectLocalStmt, err = tx.Prepare(`SELECT local_file FROM yt_videos WHERE id = ?`)
+		if err != nil {
+			tx.Rollback()
+			a.db.mu.Unlock()
+			return err
+		}
+		defer selectLocalStmt.Close()
+	}
+
 	for _, asgn := range req.Assignments {
 		if asgn.VideoID == "" {
 			continue
@@ -390,6 +441,16 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 			a.db.mu.Unlock()
 			return err
 		}
+
+		if req.UpdateLocal && selectLocalStmt != nil {
+			var lf sql.NullString
+			if sErr := selectLocalStmt.QueryRow(asgn.VideoID).Scan(&lf); sErr == nil && lf.Valid && strings.TrimSpace(lf.String) != "" {
+				localSyncList = append(localSyncList, localSyncEntry{
+					localFile: strings.TrimSpace(lf.String),
+					episode:   asgn.Episode,
+				})
+			}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -398,7 +459,7 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	}
 	a.db.mu.Unlock()
 
-	// Update persistent TagPlaylistConfigs
+	// Update persistent TagPlaylistConfigs and optionally local video metadata
 	a.configMu.Lock()
 	if a.config.TagPlaylistConfigs == nil {
 		a.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
@@ -415,9 +476,29 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 		a.config.TagPlaylists[tag] = req.PlaylistID
 	}
 	a.config.TagPlaylistConfigs[tag] = existingCfg
+
+	if req.UpdateLocal && len(localSyncList) > 0 {
+		if a.config.VideoGames == nil {
+			a.config.VideoGames = make(map[string]string)
+		}
+		if a.config.VideoMetadata == nil {
+			a.config.VideoMetadata = make(map[string]VideoMeta)
+		}
+		for _, entry := range localSyncList {
+			a.config.VideoGames[entry.localFile] = tag
+			meta := a.config.VideoMetadata[entry.localFile]
+			meta.Game = tag
+			meta.Episode = entry.episode
+			meta.PlaylistID = req.PlaylistID
+			if req.Kind != "" {
+				meta.ContentType = req.Kind
+			}
+			a.config.VideoMetadata[entry.localFile] = meta
+		}
+	}
 	a.configMu.Unlock()
 
 	a.saveConfig()
-	appLog("[Catalog] Applied catalog for tag %q (%s) to playlist %s with %d assignments", tag, req.Kind, req.PlaylistID, len(req.Assignments))
+	appLog("[Catalog] Applied catalog for tag %q (%s) to playlist %s with %d assignments (local updated: %d)", tag, req.Kind, req.PlaylistID, len(req.Assignments), len(localSyncList))
 	return nil
 }

@@ -106,8 +106,8 @@ func friendlyThumbnailError(err error) error {
 	return err
 }
 
-// persistThumbnailURL updates the cached thumbnail_url for the given video ID in the local SQLite database.
-func (a *App) persistThumbnailURL(videoID string, url string) error {
+// persistThumbnailURL updates the cached thumbnail_url and custom_thumb_updated_at for the given video ID in the local SQLite database.
+func (a *App) persistThumbnailURL(videoID string, url string, updatedAt int64) error {
 	if a.db == nil || videoID == "" {
 		return nil
 	}
@@ -115,7 +115,7 @@ func (a *App) persistThumbnailURL(videoID string, url string) error {
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
-	_, err := a.db.conn.Exec("UPDATE yt_videos SET thumbnail_url = ? WHERE id = ?", url, videoID)
+	_, err := a.db.conn.Exec("UPDATE yt_videos SET thumbnail_url = ?, custom_thumb_updated_at = ? WHERE id = ?", url, updatedAt, videoID)
 	return err
 }
 
@@ -182,18 +182,32 @@ func (a *App) setYouTubeThumbnailInternal(videoID string, imagePath string) (str
 }
 
 // UpdateYouTubeThumbnail sets a custom thumbnail for an existing YouTube video,
-// updates the local database cache with a cache-busting timestamp, and returns the thumbnail URL.
+// updates the local database cache with a cache-busting timestamp, copies the file to yt_thumbs local cache,
+// and returns the thumbnail URL.
 func (a *App) UpdateYouTubeThumbnail(videoID string, imagePath string) (string, error) {
 	thumbURL, err := a.setYouTubeThumbnailInternal(videoID, imagePath)
 	if err != nil {
 		return "", err
 	}
 
+	now := time.Now().Unix()
 	persistedURL := thumbURL
 	if persistedURL != "" {
-		persistedURL = fmt.Sprintf("%s?v=%d", persistedURL, time.Now().Unix())
-		if pErr := a.persistThumbnailURL(videoID, persistedURL); pErr != nil {
+		persistedURL = fmt.Sprintf("%s?v=%d", persistedURL, now)
+		if pErr := a.persistThumbnailURL(videoID, persistedURL, now); pErr != nil {
 			appLog("[YouTube] Warning: failed to persist thumbnail_url in local DB for %s: %v", videoID, pErr)
+		}
+	}
+
+	// Cache image locally in yt_thumbs directory for immediate local preview
+	if a.cacheDir != "" {
+		cacheDir := filepath.Join(a.cacheDir, "yt_thumbs")
+		_ = os.MkdirAll(cacheDir, 0755)
+		destPath := filepath.Join(cacheDir, customThumbKey("yt:"+videoID)+".jpg")
+		if filepath.Clean(imagePath) != filepath.Clean(destPath) {
+			if data, readErr := os.ReadFile(imagePath); readErr == nil {
+				_ = os.WriteFile(destPath, data, 0644)
+			}
 		}
 	}
 
