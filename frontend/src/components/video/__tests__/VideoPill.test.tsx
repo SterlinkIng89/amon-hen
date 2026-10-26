@@ -2,7 +2,7 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import VideoPill from "../VideoPill";
+import VideoPill, { areVideoPillPropsEqual } from "../VideoPill";
 import { YTVideo, VideoFile } from "../../../types";
 
 // Mock Wails backend App calls
@@ -850,4 +850,76 @@ describe("VideoPill YouTube Quick Actions (Edit Metadata, Open in Browser)", () 
     expect(screen.queryByTitle("Open on YouTube")).not.toBeInTheDocument();
   });
 });
+
+describe("VideoPill YTVideo Memoization & areVideoPillPropsEqual", () => {
+  it("returns false when thumbnailUrl changes on YTVideo", () => {
+    const prevProps = { video: mockVideo, viewMode: "grid" as const };
+    const nextProps = {
+      video: { ...mockVideo, thumbnailUrl: "https://example.com/new_thumb.jpg" },
+      viewMode: "grid" as const,
+    };
+
+    expect(areVideoPillPropsEqual(prevProps, nextProps)).toBe(false);
+  });
+
+  it("returns false when gameTag changes on YTVideo", () => {
+    const prevProps = {
+      video: { ...mockVideo, gameTag: "GameAlpha" },
+      viewMode: "grid" as const,
+    };
+    const nextProps = {
+      video: { ...mockVideo, gameTag: "GameBeta" },
+      viewMode: "grid" as const,
+    };
+
+    expect(areVideoPillPropsEqual(prevProps, nextProps)).toBe(false);
+  });
+
+  it("returns false when episode changes on YTVideo", () => {
+    const prevProps = {
+      video: { ...mockVideo, episode: 1 },
+      viewMode: "grid" as const,
+    };
+    const nextProps = {
+      video: { ...mockVideo, episode: 2 },
+      viewMode: "grid" as const,
+    };
+
+    expect(areVideoPillPropsEqual(prevProps, nextProps)).toBe(false);
+  });
+
+  it("returns true when YTVideo properties match", () => {
+    const prevProps = {
+      video: { ...mockVideo, gameTag: "GameTag", episode: 10 },
+      viewMode: "grid" as const,
+    };
+    const nextProps = {
+      video: { ...mockVideo, gameTag: "GameTag", episode: 10 },
+      viewMode: "grid" as const,
+    };
+
+    expect(areVideoPillPropsEqual(prevProps, nextProps)).toBe(true);
+  });
+
+  it("re-renders when thumbnailUrl changes on YTVideo via rerender", async () => {
+    const { rerender } = render(
+      <VideoPill video={mockVideo} viewMode="grid" />,
+    );
+
+    const initialImg = await screen.findByRole("img");
+    expect(initialImg).toHaveAttribute("src", mockVideo.thumbnailUrl);
+
+    const updatedVideo: YTVideo = {
+      ...mockVideo,
+      thumbnailUrl: "https://example.com/updated_thumb.jpg",
+    };
+
+    rerender(<VideoPill video={updatedVideo} viewMode="grid" />);
+
+    const updatedImg = screen.getByRole("img");
+    expect(updatedImg).toHaveAttribute("src", "https://example.com/updated_thumb.jpg");
+  });
+});
+
+
 
