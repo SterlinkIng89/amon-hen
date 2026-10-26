@@ -3,6 +3,7 @@ import {
   SteamLibraryPulse,
   PlaytimeBucket,
   AchievementFilter,
+  RatingStatusFilter,
 } from "../../utils/steamInsightsUtils";
 
 export interface SteamLibraryPulseBarProps {
@@ -12,6 +13,11 @@ export interface SteamLibraryPulseBarProps {
   readonly unrecordedGemsCount: number;
   readonly onSelectBucket: (bucket: PlaytimeBucket) => void;
   readonly onSelectAchievementFilter: (filter: AchievementFilter) => void;
+  readonly activeRatingFilter?: RatingStatusFilter;
+  readonly ratedGamesCount?: number;
+  readonly unrated10hGamesCount?: number;
+  readonly queuedGamesCount?: number;
+  readonly onSelectRatingFilter?: (filter: RatingStatusFilter) => void;
 }
 
 interface BucketConfig {
@@ -28,6 +34,11 @@ export function SteamLibraryPulseBar({
   unrecordedGemsCount,
   onSelectBucket,
   onSelectAchievementFilter,
+  activeRatingFilter = "all",
+  ratedGamesCount = 0,
+  unrated10hGamesCount = 0,
+  queuedGamesCount = 0,
+  onSelectRatingFilter,
 }: SteamLibraryPulseBarProps): React.JSX.Element {
   const totalGames = pulse.totalGames || 0;
   const completionPct =
@@ -121,12 +132,75 @@ export function SteamLibraryPulseBar({
     },
   ];
 
+  const ratingFilterChips = [
+    {
+      key: "rated" as const,
+      label: `Rated (${ratedGamesCount})`,
+      testId: "filter-chip-rated",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5 text-amber-400 shrink-0"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ),
+    },
+    {
+      key: "unrated_10h" as const,
+      label: `Unrated 10h+ (${unrated10hGamesCount})`,
+      testId: "filter-chip-unrated_10h",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5 text-rose-400 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      ),
+    },
+    {
+      key: "queued" as const,
+      label: `In backlog (${queuedGamesCount})`,
+      testId: "filter-chip-queued",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5 text-indigo-400 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+      ),
+    },
+  ];
+
   const handleBucketClick = (bucket: Exclude<PlaytimeBucket, "all">) => {
     onSelectBucket(activeBucket === bucket ? "all" : bucket);
   };
 
   const handleFilterClick = (filter: Exclude<AchievementFilter, "all">) => {
     onSelectAchievementFilter(activeAchievementFilter === filter ? "all" : filter);
+  };
+
+  const handleRatingFilterClick = (filter: Exclude<RatingStatusFilter, "all">) => {
+    if (!onSelectRatingFilter) return;
+    onSelectRatingFilter(activeRatingFilter === filter ? "all" : filter);
   };
 
   const getChipStyle = (isActive: boolean) =>
@@ -258,6 +332,25 @@ export function SteamLibraryPulseBar({
               data-testid={chip.testId}
               aria-pressed={isActive}
               onClick={() => handleFilterClick(chip.key)}
+              className={getChipStyle(isActive)}
+            >
+              {chip.icon}
+              <span>{chip.label}</span>
+            </button>
+          );
+        })}
+
+        <div className="h-4 w-px bg-border-subtle/80 mx-1 hidden sm:block" />
+
+        {ratingFilterChips.map((chip) => {
+          const isActive = activeRatingFilter === chip.key;
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              data-testid={chip.testId}
+              aria-pressed={isActive}
+              onClick={() => handleRatingFilterClick(chip.key)}
               className={getChipStyle(isActive)}
             >
               {chip.icon}

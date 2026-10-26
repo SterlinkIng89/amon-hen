@@ -292,4 +292,78 @@ describe("SteamStats Page Redesign", () => {
       expect(screen.queryByText("Fetching playtime...")).not.toBeInTheDocument();
     });
   });
+
+  it("handles 1-click unrate and dequeue actions from game cards in insights", async () => {
+    render(<SteamStats />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("game-card-10")).toBeInTheDocument();
+    });
+
+    // Counter-Strike (10) is rated and queued in mock data
+    const unrateBtn = screen.getByTestId("quick-rate-clear-10");
+    fireEvent.click(unrateBtn);
+
+    await waitFor(() => {
+      expect(AppBackend.RemoveSteamGameRating).toHaveBeenCalledWith(10);
+    });
+
+    const dequeueBtn = screen.getByTestId("quick-queue-clear-10");
+    fireEvent.click(dequeueBtn);
+
+    await waitFor(() => {
+      expect(AppBackend.RemoveSteamBacklogItem).toHaveBeenCalledWith(10);
+    });
+  });
+
+  it("filters games by rating status filter chip and updates inspector results", async () => {
+    render(<SteamStats />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("game-card-10")).toBeInTheDocument();
+      expect(screen.getByTestId("game-card-20")).toBeInTheDocument();
+      expect(screen.getByTestId("filter-chip-unrated_10h")).toBeInTheDocument();
+    });
+
+    // Click Unrated 10h+ chip
+    fireEvent.click(screen.getByTestId("filter-chip-unrated_10h"));
+
+    await waitFor(() => {
+      // Counter-Strike is already rated (personalTier: "S"), so it should be filtered out
+      expect(screen.queryByTestId("game-card-10")).not.toBeInTheDocument();
+      // Team Fortress Classic is unrated with 40h (2400 mins >= 600), so it remains
+      expect(screen.getByTestId("game-card-20")).toBeInTheDocument();
+    });
+
+    // Clear filters
+    const clearBtn = screen.getByTestId("inspector-clear-filter");
+    fireEvent.click(clearBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("game-card-10")).toBeInTheDocument();
+      expect(screen.getByTestId("game-card-20")).toBeInTheDocument();
+    });
+  });
+
+  it("passes hours fallback to backend stats when rating sort mode is selected", async () => {
+    render(<SteamStats />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sort-rating")).toBeInTheDocument();
+    });
+
+    vi.mocked(AppBackend.GetSteamDeveloperStats).mockClear();
+    vi.mocked(AppBackend.GetSteamPublisherStats).mockClear();
+    vi.mocked(AppBackend.GetSteamTagStats).mockClear();
+
+    // Click rating sort in studio panel
+    fireEvent.click(screen.getByTestId("sort-rating"));
+
+    await waitFor(() => {
+      expect(AppBackend.GetSteamDeveloperStats).toHaveBeenCalledWith("hours");
+      expect(AppBackend.GetSteamPublisherStats).toHaveBeenCalledWith("hours");
+      expect(AppBackend.GetSteamTagStats).toHaveBeenCalledWith("hours");
+    });
+  });
 });
+

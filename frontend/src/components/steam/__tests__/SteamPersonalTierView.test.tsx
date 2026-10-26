@@ -343,4 +343,159 @@ describe("SteamPersonalTierView", () => {
     fireEvent.click(screen.getByTestId("tier-editor-cancel"));
     expect(screen.queryByTestId("tier-editor-panel")).not.toBeInTheDocument();
   });
+
+  it("renders personal ranking KPI strip with accurate metrics", () => {
+    render(
+      <SteamPersonalTierView
+        allGames={sampleGames}
+        onSaveRating={vi.fn()}
+        onRemoveRating={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("ranking-kpi-strip")).toBeInTheDocument();
+    expect(screen.getByTestId("kpi-rated-count")).toHaveTextContent("5");
+    expect(screen.getByTestId("kpi-avg-score")).toHaveTextContent("7.8/10");
+    expect(screen.getByTestId("kpi-top-studio")).toHaveTextContent("Re-Logic (10.0/10)");
+    expect(screen.getByTestId("kpi-top-masterpiece")).toHaveTextContent("Terraria (250h)");
+  });
+
+  it("immediately removes rating when clicking quick remove on poster card without opening inline editor", async () => {
+    const handleSave = vi.fn();
+    const handleRemove = vi.fn();
+
+    render(
+      <SteamPersonalTierView
+        allGames={sampleGames}
+        onSaveRating={handleSave}
+        onRemoveRating={handleRemove}
+      />
+    );
+
+    const removeBtn = screen.getByTestId("tier-card-remove-105600");
+    await act(async () => {
+      fireEvent.click(removeBtn);
+    });
+
+    expect(handleRemove).toHaveBeenCalledWith(105600);
+    expect(screen.queryByTestId("tier-editor-panel")).not.toBeInTheDocument();
+  });
+
+  it("immediately updates score when changing score select on poster card", async () => {
+    const handleSave = vi.fn();
+    const handleRemove = vi.fn();
+
+    render(
+      <SteamPersonalTierView
+        allGames={sampleGames}
+        onSaveRating={handleSave}
+        onRemoveRating={handleRemove}
+      />
+    );
+
+    const scoreSelect = screen.getByTestId("tier-card-score-292030");
+    await act(async () => {
+      fireEvent.change(scoreSelect, { target: { value: "10" } });
+    });
+
+    expect(handleSave).toHaveBeenCalledWith(
+      292030,
+      "S",
+      10,
+      "Incredible storytelling and DLCs"
+    );
+    expect(screen.queryByTestId("tier-editor-panel")).not.toBeInTheDocument();
+  });
+
+  it("filters unrated games by category tab and supports 1-click auto-tier rating", async () => {
+    const handleSave = vi.fn();
+    const handleRemove = vi.fn();
+
+    render(
+      <SteamPersonalTierView
+        allGames={sampleGames}
+        onSaveRating={handleSave}
+        onRemoveRating={handleRemove}
+      />
+    );
+
+    // Default tab is "top_played": shows Hades (4800m), Hollow Knight (3000m), Portal (900m)
+    expect(screen.getByTestId("unrated-row-1145360")).toBeInTheDocument();
+    expect(screen.getByTestId("unrated-row-367520")).toBeInTheDocument();
+    expect(screen.getByTestId("unrated-row-400")).toBeInTheDocument();
+
+    // Switch to "unrated_20h": playtimeForever >= 1200 (Hades: 4800m = 80h, Hollow Knight: 3000m = 50h, Portal: 900m = 15h is excluded)
+    const tab20h = screen.getByTestId("unrated-filter-unrated_20h");
+    fireEvent.click(tab20h);
+
+    expect(screen.getByTestId("unrated-row-1145360")).toBeInTheDocument();
+    expect(screen.getByTestId("unrated-row-367520")).toBeInTheDocument();
+    expect(screen.queryByTestId("unrated-row-400")).not.toBeInTheDocument();
+
+    // Switch to "perfect": achievementsPct >= 100 (Portal: 100%, Hades: 60%, Hollow Knight: 55%)
+    const tabPerfect = screen.getByTestId("unrated-filter-perfect");
+    fireEvent.click(tabPerfect);
+
+    expect(screen.getByTestId("unrated-row-400")).toBeInTheDocument();
+    expect(screen.queryByTestId("unrated-row-1145360")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("unrated-row-367520")).not.toBeInTheDocument();
+
+    // Switch back to "top_played"
+    fireEvent.click(screen.getByTestId("unrated-filter-top_played"));
+
+    // Change score for Hades to 7 and use 1-click auto-tier button
+    const scoreSelect = screen.getByTestId("unrated-score-1145360");
+    fireEvent.change(scoreSelect, { target: { value: "7" } });
+
+    // scoreToDefaultTier(7) is "B"
+    const autoRateBtn = screen.getByTestId("rate-auto-btn-1145360");
+    expect(autoRateBtn).toHaveTextContent("Auto B (7/10)");
+
+    await act(async () => {
+      fireEvent.click(autoRateBtn);
+    });
+
+    expect(handleSave).toHaveBeenCalledWith(1145360, "B", 7, "");
+  });
+
+  it("supports pagination on the all tab when unrated games exceed page size", () => {
+    // Create a list with 21 unrated games (3 from sampleGames + 18 generated)
+    const manyUnratedGames: SteamGameInsight[] = [
+      ...sampleGames,
+      ...Array.from({ length: 18 }, (_, i) => ({
+        appid: 200000 + i,
+        name: `Unrated Game ${i + 1}`,
+        playtimeHours: 2.0,
+        playtimeForever: 120,
+        playtime2Weeks: 0,
+        headerUrl: "",
+        posterUrl: "",
+        achievementsPct: 10,
+        developers: "Indie Dev",
+        publishers: "Indie Pub",
+        genres: "Action",
+        ytVideosCount: 0,
+        ytRecordedHours: 0,
+      })),
+    ];
+
+    render(
+      <SteamPersonalTierView
+        allGames={manyUnratedGames}
+        onSaveRating={vi.fn()}
+        onRemoveRating={vi.fn()}
+      />
+    );
+
+    // Switch to "all" tab
+    fireEvent.click(screen.getByTestId("unrated-filter-all"));
+
+    // Load more button should be present since total unrated = 3 + 18 = 21 > 15
+    const loadMoreBtn = screen.getByTestId("unrated-load-more");
+    expect(loadMoreBtn).toBeInTheDocument();
+
+    fireEvent.click(loadMoreBtn);
+    // Now all 21 are rendered and load more button disappears
+    expect(screen.queryByTestId("unrated-load-more")).not.toBeInTheDocument();
+  });
 });

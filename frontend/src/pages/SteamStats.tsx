@@ -12,7 +12,19 @@ import { SteamStudioGenrePanel, type SelectedGroupFilter, type StudioSortMode, t
 import { SteamGameInspectorGrid } from "../components/steam/SteamGameInspectorGrid";
 import { SteamBacklogView } from "../components/steam/SteamBacklogView";
 import { SteamPersonalTierView } from "../components/steam/SteamPersonalTierView";
-import { filterSteamGames, normalizeGameInsight, type PlaytimeBucket, type AchievementFilter, type BacklogStatus, type TierLevel, type SteamGameInsight, type SteamLibraryPulse } from "../utils/steamInsightsUtils";
+import {
+  filterSteamGames,
+  normalizeGameInsight,
+  computeGroupRatingMap,
+  type PlaytimeBucket,
+  type AchievementFilter,
+  type RatingStatusFilter,
+  type InspectorSortMode,
+  type BacklogStatus,
+  type TierLevel,
+  type SteamGameInsight,
+  type SteamLibraryPulse,
+} from "../utils/steamInsightsUtils";
 
 export type { SteamPageTab };
 
@@ -32,6 +44,8 @@ export default function SteamStats(): React.JSX.Element {
   const [sortBy, setSortBy] = useState<StudioSortMode>("hours");
   const [activeBucket, setActiveBucket] = useState<PlaytimeBucket>("all");
   const [activeAchievementFilter, setActiveAchievementFilter] = useState<AchievementFilter>("all");
+  const [activeRatingFilter, setActiveRatingFilter] = useState<RatingStatusFilter>("all");
+  const [inspectorSortBy, setInspectorSortBy] = useState<InspectorSortMode>("hours");
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroupFilter | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [hasCreds, setHasCreds] = useState(false);
@@ -52,12 +66,13 @@ export default function SteamStats(): React.JSX.Element {
       }
       setHasCreds(true);
 
+      const backendSort = sortBy === "rating" ? "hours" : sortBy;
       const [pulseData, gamesData, dStats, pStats, tStats] = await Promise.all([
         GetSteamLibraryPulse(hideUtilities),
         GetEnrichedSteamGames(hideUtilities),
-        GetSteamDeveloperStats(sortBy),
-        GetSteamPublisherStats(sortBy),
-        GetSteamTagStats(sortBy),
+        GetSteamDeveloperStats(backendSort),
+        GetSteamPublisherStats(backendSort),
+        GetSteamTagStats(backendSort),
       ]);
 
       setPulse(pulseData || null);
@@ -142,20 +157,39 @@ export default function SteamStats(): React.JSX.Element {
       search: searchQuery,
       bucket: activeBucket,
       achievementFilter: activeAchievementFilter,
+      ratingStatusFilter: activeRatingFilter,
       developer: selectedGroup?.type === "developers" ? selectedGroup.name : null,
       publisher: selectedGroup?.type === "publishers" ? selectedGroup.name : null,
       tag: selectedGroup && (selectedGroup.type === "genres" || selectedGroup.type === "features") ? selectedGroup.name : null,
     });
-  }, [allGames, searchQuery, activeBucket, activeAchievementFilter, selectedGroup]);
+  }, [allGames, searchQuery, activeBucket, activeAchievementFilter, activeRatingFilter, selectedGroup]);
 
   const queuedCount = useMemo(() => allGames.filter((g) => Boolean(g.backlogStatus)).length, [allGames]);
   const ratedCount = useMemo(() => allGames.filter((g) => Boolean(g.personalTier)).length, [allGames]);
+  const unrated10hCount = useMemo(
+    () => allGames.filter((g) => !g.personalTier && !g.isUtility && g.playtimeForever >= 600).length,
+    [allGames]
+  );
   const unrecordedGemsCount = useMemo(() => allGames.filter((g) => g.playtimeForever >= 1200 && g.ytVideosCount === 0).length, [allGames]);
   const topDevs = useMemo(() => devs.slice(0, 10).map((d) => d.name), [devs]);
   const topGenres = useMemo(() => tags.filter((t) => !t.category || t.category === "genre").slice(0, 10).map((t) => t.tag), [tags]);
+  const groupRatingMap = useMemo(() => computeGroupRatingMap(allGames), [allGames]);
 
-  const hasActiveFilter = activeBucket !== "all" || activeAchievementFilter !== "all" || selectedGroup !== null || searchQuery.trim() !== "";
-  const activeFilterTitle = selectedGroup ? selectedGroup.name : activeBucket !== "all" ? `Bucket: ${activeBucket}` : activeAchievementFilter !== "all" ? `Filter: ${activeAchievementFilter}` : "";
+  const hasActiveFilter =
+    activeBucket !== "all" ||
+    activeAchievementFilter !== "all" ||
+    activeRatingFilter !== "all" ||
+    selectedGroup !== null ||
+    searchQuery.trim() !== "";
+  const activeFilterTitle = selectedGroup
+    ? selectedGroup.name
+    : activeBucket !== "all"
+      ? `Bucket: ${activeBucket}`
+      : activeAchievementFilter !== "all"
+        ? `Filter: ${activeAchievementFilter}`
+        : activeRatingFilter !== "all"
+          ? `Rating: ${activeRatingFilter}`
+          : "";
 
   if (!hasCreds && !loading) {
     return (
@@ -202,6 +236,11 @@ export default function SteamStats(): React.JSX.Element {
               unrecordedGemsCount={unrecordedGemsCount}
               onSelectBucket={setActiveBucket}
               onSelectAchievementFilter={setActiveAchievementFilter}
+              activeRatingFilter={activeRatingFilter}
+              ratedGamesCount={ratedCount}
+              unrated10hGamesCount={unrated10hCount}
+              queuedGamesCount={queuedCount}
+              onSelectRatingFilter={setActiveRatingFilter}
             />
           </ErrorBoundary>
 
@@ -216,6 +255,7 @@ export default function SteamStats(): React.JSX.Element {
                   onSortChange={setSortBy}
                   selectedGroup={selectedGroup}
                   onSelectGroup={setSelectedGroup}
+                  ratingStatsMap={groupRatingMap}
                 />
               </ErrorBoundary>
             </div>
@@ -231,11 +271,16 @@ export default function SteamStats(): React.JSX.Element {
                   onClearFilters={() => {
                     setActiveBucket("all");
                     setActiveAchievementFilter("all");
+                    setActiveRatingFilter("all");
                     setSelectedGroup(null);
                     setSearchQuery("");
                   }}
                   onQuickQueue={handleQuickQueue}
                   onQuickRate={handleQuickRate}
+                  onRemoveRating={handleRemoveRating}
+                  onRemoveBacklog={handleRemoveBacklog}
+                  sortBy={inspectorSortBy}
+                  onSortChange={setInspectorSortBy}
                 />
               </ErrorBoundary>
             </div>

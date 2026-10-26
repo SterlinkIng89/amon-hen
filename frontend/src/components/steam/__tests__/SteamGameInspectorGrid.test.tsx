@@ -264,4 +264,234 @@ describe("SteamGameInspectorGrid", () => {
     expect(screen.getByTestId("game-card-1029")).toBeDefined();
     expect(screen.queryByTestId("inspector-load-more")).toBeNull();
   });
+
+  it("opens inline 1-10 popover on unrated game and allows selecting concrete score", () => {
+    const onQuickRate = vi.fn();
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={onQuickRate}
+      />
+    );
+
+    const openPopoverBtn = screen.getByTestId("quick-score-open-105600");
+    expect(openPopoverBtn).toBeDefined();
+
+    // Click trigger to open popover
+    fireEvent.click(openPopoverBtn);
+    expect(screen.getByTestId("quick-rate-popover-105600")).toBeDefined();
+
+    // Select score 9 -> maps to tier S by default
+    const score9Btn = screen.getByTestId("popover-score-105600-9");
+    fireEvent.click(score9Btn);
+    expect(onQuickRate).toHaveBeenCalledWith(105600, "S", 9);
+    expect(screen.queryByTestId("quick-rate-popover-105600")).toBeNull();
+
+    // Open again and select score 7 -> maps to tier B by default
+    fireEvent.click(openPopoverBtn);
+    const score7Btn = screen.getByTestId("popover-score-105600-7");
+    fireEvent.click(score7Btn);
+    expect(onQuickRate).toHaveBeenCalledWith(105600, "B", 7);
+  });
+
+  it("renders rated game with edit badge, popover selection, and 1-click remove rating", () => {
+    const onQuickRate = vi.fn();
+    const onRemoveRating = vi.fn();
+
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={onQuickRate}
+        onRemoveRating={onRemoveRating}
+      />
+    );
+
+    // Rated badge displays tier and score
+    const editBtn = screen.getByTestId("quick-rate-edit-292030");
+    expect(editBtn.textContent).toContain("Tier S");
+    expect(editBtn.textContent).toContain("10/10");
+
+    // Open popover from rated badge and change score to 9
+    fireEvent.click(editBtn);
+    expect(screen.getByTestId("quick-rate-popover-292030")).toBeDefined();
+    const score9Btn = screen.getByTestId("popover-score-292030-9");
+    fireEvent.click(score9Btn);
+    expect(onQuickRate).toHaveBeenCalledWith(292030, "S", 9);
+
+    // 1-click remove button calls onRemoveRating
+    const clearBtn = screen.getByTestId("quick-rate-clear-292030");
+    fireEvent.click(clearBtn);
+    expect(onRemoveRating).toHaveBeenCalledWith(292030);
+
+    // Also verify popover remove button
+    fireEvent.click(editBtn);
+    const popoverRemoveBtn = screen.getByTestId("popover-remove-rating-292030");
+    fireEvent.click(popoverRemoveBtn);
+    expect(onRemoveRating).toHaveBeenCalledWith(292030);
+  });
+
+  it("handles backlog status selection dropdown and 1-click dequeue button", () => {
+    const onQuickQueue = vi.fn();
+    const onRemoveBacklog = vi.fn();
+
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={onQuickQueue}
+        onQuickRate={vi.fn()}
+        onRemoveBacklog={onRemoveBacklog}
+      />
+    );
+
+    // Quick queue container preserves readable text label
+    const queueContainer = screen.getByTestId("quick-queue-292030");
+    expect(queueContainer.textContent).toContain("Up next");
+
+    // Select element allows changing status
+    const selectElem = screen.getByTestId("quick-queue-select-292030");
+    fireEvent.change(selectElem, { target: { value: "playing" } });
+    expect(onQuickQueue).toHaveBeenCalledWith(292030, "playing");
+
+    // 1-click dequeue button calls onRemoveBacklog
+    const dequeueBtn = screen.getByTestId("quick-queue-clear-292030");
+    fireEvent.click(dequeueBtn);
+    expect(onRemoveBacklog).toHaveBeenCalledWith(292030);
+  });
+
+  it("supports sorting games via inspector-sort-select in both controlled and uncontrolled modes", () => {
+    const onSortChange = vi.fn();
+
+    const { rerender } = render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+        sortBy="hours"
+        onSortChange={onSortChange}
+      />
+    );
+
+    const sortSelect = screen.getByTestId("inspector-sort-select");
+    expect(sortSelect).toBeDefined();
+
+    // Controlled mode: fires onSortChange
+    fireEvent.change(sortSelect, { target: { value: "score" } });
+    expect(onSortChange).toHaveBeenCalledWith("score");
+
+    // Re-render with sortBy="score"
+    rerender(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+        sortBy="score"
+        onSortChange={onSortChange}
+      />
+    );
+
+    // Highest rated game (The Witcher 3: Wild Hunt, score 10) is spotlighted
+    const spotlight = screen.getByTestId("inspector-spotlight-card");
+    expect(spotlight.textContent).toContain("The Witcher 3: Wild Hunt");
+  });
+
+  it("renders enriched spotlight card with rating badge, 2-week playtime, and personal notes", () => {
+    const enrichedGames: SteamGameInsight[] = [
+      {
+        appid: 292030,
+        name: "The Witcher 3: Wild Hunt",
+        playtimeHours: 85.0,
+        playtimeForever: 5100,
+        playtime2Weeks: 120, // 2 hours
+        headerUrl: "",
+        posterUrl: "",
+        achievementsPct: 65,
+        developers: "CD PROJEKT RED",
+        publishers: "CD PROJEKT RED",
+        genres: "RPG",
+        ytVideosCount: 2,
+        ytRecordedHours: 4,
+        personalTier: "S",
+        personalScore: 10,
+        personalNotes: "Masterpiece open world RPG",
+      },
+    ];
+
+    render(
+      <SteamGameInspectorGrid
+        games={enrichedGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={vi.fn()}
+      />
+    );
+
+    const spotlight = screen.getByTestId("inspector-spotlight-card");
+    expect(spotlight.textContent).toContain("Tier S · 10/10");
+    expect(spotlight.textContent).toContain("2h last 2w");
+    expect(spotlight.textContent).toContain("Masterpiece open world RPG");
+  });
+
+  it("supports typing concrete or decimal scores via score input in popover", () => {
+    const onQuickRate = vi.fn();
+    render(
+      <SteamGameInspectorGrid
+        games={sampleGames}
+        activeFilterTitle="All games"
+        hasActiveFilter={false}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        onQuickQueue={vi.fn()}
+        onQuickRate={onQuickRate}
+      />
+    );
+
+    // Open popover on unrated game
+    const openBtn = screen.getByTestId("quick-score-open-105600");
+    fireEvent.click(openBtn);
+
+    // Enter decimal score 8.5
+    const scoreInput = screen.getByTestId("popover-score-input-105600");
+    fireEvent.change(scoreInput, { target: { value: "8.5" } });
+
+    // Click apply button
+    const applyBtn = screen.getByTestId("popover-score-apply-105600");
+    fireEvent.click(applyBtn);
+
+    // 8.5 maps to Tier A by default
+    expect(onQuickRate).toHaveBeenCalledWith(105600, "A", 8.5);
+    expect(screen.queryByTestId("quick-rate-popover-105600")).toBeNull();
+  });
 });
+

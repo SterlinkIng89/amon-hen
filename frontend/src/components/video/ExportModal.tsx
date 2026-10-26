@@ -8,6 +8,7 @@ import {
 } from "../../../wailsjs/go/backend/App";
 import { VideoFile, GameProfile, ExportItem, ExportResult } from "../../types";
 import { resolveDisplayTitle } from "../../utils/videoUtils";
+import { useAppStore } from "../../store/useAppStore";
 
 export interface ExportModalProps {
   readonly open: boolean;
@@ -95,7 +96,7 @@ export default function ExportModal({
           description: v.description || "",
           game: v.game || "",
           playlistTitle: v.playlistTitle || "",
-          privacy: v.privacy || "unlisted",
+          privacy: v.privacy || useAppStore.getState().defaultVideoPrivacy,
           tags: v.game ? [v.game] : [],
         };
       });

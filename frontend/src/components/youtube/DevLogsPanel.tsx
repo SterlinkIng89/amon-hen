@@ -1,54 +1,27 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { GetAPILogs, GetQuotaUsedToday } from "../../../wailsjs/go/backend/App";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { GetAPILogs } from "../../../wailsjs/go/backend/App";
 import { useToast } from "../ui/ToastContainer";
 import { useQuotaStatus } from "../../hooks/useQuotaStatus";
-import { formatCountdown, formatResetClock } from "../../utils/quotaStatus";
+import {
+  formatCountdown,
+  formatResetClock,
+  uploadsRemaining,
+  UPLOAD_BASE_COST,
+} from "../../utils/quotaStatus";
+import {
+  filterLogsByTimeScope,
+  computeOperationSummary,
+  filterAPILogs,
+  groupLogsWithBursts,
+  APILogEntry,
+  LogTimeScope,
+  LogFilterTier,
+} from "../../utils/devLogsUtils";
+import DevLogsKpiStrip from "./DevLogsKpiStrip";
+import DevLogsFilterBar from "./DevLogsFilterBar";
+import DevLogsTable from "./DevLogsTable";
 
-interface APILog {
-  id: number;
-  ts: number;
-  operation: string;
-  resourceId: string;
-  resourceTitle: string;
-  success: boolean;
-  errorMsg: string;
-  quotaCost: number;
-  durationMs: number;
-}
-
-// Quota costs reference (YouTube Data API v3 daily limit = 10,000 units)
 const DAILY_LIMIT = 10000;
-
-const OP_COLORS: Record<string, string> = {
-  "videos.insert": "#f97316", // orange — expensive
-  "videos.update": "#eab308", // yellow
-  "playlists.insert": "#eab308",
-  "playlistItems.insert": "#eab308",
-  "thumbnails.set": "#eab308",
-  "playlistImages.insert": "#eab308",
-  "channels.list": "#22d3ee", // cyan — cheap
-  "videos.list": "#22d3ee",
-  "playlists.list": "#22d3ee",
-  "playlistItems.list": "#22d3ee",
-};
-
-function opColor(op: string): string {
-  return OP_COLORS[op] ?? "#94a3b8";
-}
-
-function fmtTime(ts: number): string {
-  const d = new Date(ts * 1000);
-  return d.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function fmtDate(ts: number): string {
-  const d = new Date(ts * 1000);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 export function QuotaBadge() {
   const { status, msUntilReset } = useQuotaStatus();
@@ -122,51 +95,143 @@ export function QuotaBadge() {
   );
 }
 
-interface DevLogsPanelProps {
-  open: boolean;
-  onClose: () => void;
+export interface DevLogsPanelProps {
+  readonly open: boolean;
+  readonly onClose: () => void;
 }
 
 export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
-  const [logs, setLogs] = useState<APILog[]>([]);
-  const [quotaToday, setQuotaToday] = useState(0);
+  const [logs, setLogs] = useState<APILogEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<"all" | "errors">("all");
+  const [scope, setScope] = useState<LogTimeScope>("today");
+  const [tier, setTier] = useState<LogFilterTier>("all");
+  const [selectedOp, setSelectedOp] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [groupBursts, setGroupBursts] = useState(true);
+  const [expandedBursts, setExpandedBursts] = useState<Set<string>>(new Set());
+  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set());
+  const [copiedErrorId, setCopiedErrorId] = useState<number | null>(null);
+
+  const { status, msUntilReset, refresh: refreshQuota } = useQuotaStatus();
+
+  const toggleBurst = useCallback((id: string) => {
+    setExpandedBursts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleError = useCallback((id: number) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCopyError = useCallback((id: number, text: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedErrorId(id);
+      setTimeout(() => setCopiedErrorId(null), 2000);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [l, q] = await Promise.all([GetAPILogs(200), GetQuotaUsedToday()]);
+      const l = await GetAPILogs(200);
       setLogs(l ?? []);
-      setQuotaToday(q ?? 0);
+      refreshQuota();
     } catch {
-      //
+      // Ignored: keep existing logs if network fails
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshQuota]);
 
   useEffect(() => {
     if (open) refresh();
   }, [open, refresh]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || !autoRefresh) return;
+    const timer = setInterval(() => {
+      refresh();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [open, autoRefresh, refresh]);
+
+  const resetsAt = status?.resetsAt ?? 0;
+  const scopedLogs = useMemo(
+    () => filterLogsByTimeScope(logs, scope, resetsAt),
+    [logs, scope, resetsAt],
+  );
+  const opSummaries = useMemo(
+    () => computeOperationSummary(scopedLogs),
+    [scopedLogs],
+  );
+  const filteredLogs = useMemo(
+    () => filterAPILogs(scopedLogs, { tier, selectedOp, searchQuery }),
+    [scopedLogs, tier, selectedOp, searchQuery],
+  );
+  const displayItems = useMemo(
+    () => groupLogsWithBursts(filteredLogs, groupBursts),
+    [filteredLogs, groupBursts],
+  );
+
+  const quotaUsed = status?.used ?? 0;
+  const quotaLimit = status?.limit ?? DAILY_LIMIT;
+  const quotaRemaining = status?.remaining ?? Math.max(0, quotaLimit - quotaUsed);
+  const remainingUploads = uploadsRemaining(quotaRemaining, UPLOAD_BASE_COST);
+  const usedPct = Math.min((quotaUsed / quotaLimit) * 100, 100);
+  const barColor = usedPct > 80 ? "#ef4444" : usedPct > 50 ? "#f59e0b" : "#22d3ee";
+  const countdownText = formatCountdown(msUntilReset);
+  const resetClockText = status?.resetsAt ? formatResetClock(status.resetsAt) : "Midnight";
+
+  const allCount = useMemo(
+    () => filterAPILogs(scopedLogs, { tier: "all", selectedOp, searchQuery: "" }).length,
+    [scopedLogs, selectedOp],
+  );
+  const writesCount = useMemo(
+    () => filterAPILogs(scopedLogs, { tier: "writes", selectedOp, searchQuery: "" }).length,
+    [scopedLogs, selectedOp],
+  );
+  const readsCount = useMemo(
+    () => filterAPILogs(scopedLogs, { tier: "reads", selectedOp, searchQuery: "" }).length,
+    [scopedLogs, selectedOp],
+  );
+  const errorsCount = useMemo(
+    () => filterAPILogs(scopedLogs, { tier: "errors", selectedOp, searchQuery: "" }).length,
+    [scopedLogs, selectedOp],
+  );
+  const filteredTotalCost = useMemo(
+    () => filteredLogs.reduce((acc, l) => acc + (l.success ? l.quotaCost : 0), 0),
+    [filteredLogs],
+  );
+
   if (!open) return null;
-
-  const shown = filter === "errors" ? logs.filter((l) => !l.success) : logs;
-  const totalCost = logs.reduce((s, l) => s + l.quotaCost, 0);
-  const pct = Math.min((quotaToday / DAILY_LIMIT) * 100, 100);
-  const barColor = pct > 80 ? "#ef4444" : pct > 50 ? "#f59e0b" : "#22d3ee";
-
-  // Group by operation for summary
-  const byOp: Record<string, { count: number; cost: number; errors: number }> =
-    {};
-  for (const l of logs) {
-    if (!byOp[l.operation])
-      byOp[l.operation] = { count: 0, cost: 0, errors: 0 };
-    byOp[l.operation].count++;
-    byOp[l.operation].cost += l.quotaCost;
-    if (!l.success) byOp[l.operation].errors++;
-  }
 
   return (
     <div
@@ -185,9 +250,9 @@ export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "860px",
-          maxWidth: "95vw",
-          maxHeight: "85vh",
+          width: "920px",
+          maxWidth: "96vw",
+          maxHeight: "90vh",
           background: "hsl(220 13% 9%)",
           border: "1px solid hsl(220 13% 18%)",
           borderRadius: "12px",
@@ -203,7 +268,7 @@ export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "14px 18px",
+            padding: "12px 18px",
             borderBottom: "1px solid hsl(220 13% 16%)",
             background: "hsl(220 13% 7%)",
           }}
@@ -233,6 +298,27 @@ export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button
+              type="button"
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              style={{
+                background: autoRefresh
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : "hsl(220 13% 16%)",
+                border: autoRefresh
+                  ? "1px solid rgba(34, 197, 94, 0.4)"
+                  : "1px solid hsl(220 13% 22%)",
+                borderRadius: "6px",
+                color: autoRefresh ? "#22c55e" : "#94a3b8",
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "4px 10px",
+                cursor: "pointer",
+              }}
+            >
+              {autoRefresh ? "Auto-refresh: 10s" : "Auto-refresh: Off"}
+            </button>
+            <button
+              type="button"
               onClick={refresh}
               disabled={loading}
               style={{
@@ -249,6 +335,7 @@ export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
               {loading ? "Loading..." : "Refresh"}
             </button>
             <button
+              type="button"
               onClick={onClose}
               style={{
                 background: "transparent",
@@ -273,332 +360,52 @@ export default function DevLogsPanel({ open, onClose }: DevLogsPanelProps) {
           </div>
         </div>
 
-        {/* Quota bar */}
-        <div
-          style={{
-            padding: "12px 18px 8px",
-            borderBottom: "1px solid hsl(220 13% 14%)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "6px",
-            }}
-          >
-            <span
-              style={{ color: "#64748b", fontSize: "11px", fontWeight: 600 }}
-            >
-              Estimated quota used today
-            </span>
-            <span
-              style={{
-                color: barColor,
-                fontSize: "11px",
-                fontWeight: 700,
-                fontFamily: "monospace",
-              }}
-            >
-              {quotaToday.toLocaleString()} / {DAILY_LIMIT.toLocaleString()}{" "}
-              units ({pct.toFixed(1)}%)
-            </span>
-          </div>
-          <div
-            style={{
-              height: "4px",
-              background: "hsl(220 13% 16%)",
-              borderRadius: "2px",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${pct}%`,
-                background: barColor,
-                borderRadius: "2px",
-                transition: "width 0.4s ease",
-              }}
-            />
-          </div>
+        {/* 3-Card Quota KPI Strip */}
+        <DevLogsKpiStrip
+          quotaUsed={quotaUsed}
+          quotaLimit={quotaLimit}
+          quotaRemaining={quotaRemaining}
+          remainingUploads={remainingUploads}
+          usedPct={usedPct}
+          barColor={barColor}
+          countdownText={countdownText}
+          resetClockText={resetClockText}
+          opSummaries={opSummaries}
+        />
 
-          {/* Summary by operation */}
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "10px",
-              flexWrap: "wrap",
-            }}
-          >
-            {Object.entries(byOp)
-              .sort((a, b) => b[1].cost - a[1].cost)
-              .map(([op, stats]) => (
-                <div
-                  key={op}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    background: `${opColor(op)}10`,
-                    border: `1px solid ${opColor(op)}30`,
-                    borderRadius: "5px",
-                    padding: "3px 8px",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: opColor(op),
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {op}
-                  </span>
-                  <span style={{ color: "#64748b", fontSize: "10px" }}>
-                    ×{stats.count}
-                  </span>
-                  <span
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: "10px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {stats.cost.toLocaleString()} units
-                  </span>
-                  {stats.errors > 0 && (
-                    <span
-                      style={{
-                        color: "#ef4444",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      ⚠ {stats.errors} err
-                    </span>
-                  )}
-                </div>
-              ))}
-            {Object.keys(byOp).length === 0 && (
-              <span style={{ color: "#475569", fontSize: "11px" }}>
-                No API calls recorded yet.
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Filter tabs + total */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "8px 18px",
-            borderBottom: "1px solid hsl(220 13% 14%)",
-          }}
-        >
-          <div style={{ display: "flex", gap: "4px" }}>
-            {(["all", "errors"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  background: filter === f ? "hsl(220 13% 18%)" : "transparent",
-                  border:
-                    filter === f
-                      ? "1px solid hsl(220 13% 26%)"
-                      : "1px solid transparent",
-                  borderRadius: "5px",
-                  color: filter === f ? "#e2e8f0" : "#64748b",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                  textTransform: "capitalize",
-                }}
-              >
-                {f === "all"
-                  ? `All (${logs.length})`
-                  : `Errors (${logs.filter((l) => !l.success).length})`}
-              </button>
-            ))}
-          </div>
-          <span
-            style={{
-              color: "#475569",
-              fontSize: "10px",
-              fontFamily: "monospace",
-            }}
-          >
-            {logs.length} calls · {totalCost.toLocaleString()} total units in
-            log
-          </span>
-        </div>
+        {/* Scope, Pills, Tabs and Search Bar */}
+        <DevLogsFilterBar
+          scope={scope}
+          onScopeChange={setScope}
+          tier={tier}
+          onTierChange={setTier}
+          selectedOp={selectedOp}
+          onSelectedOpChange={setSelectedOp}
+          groupBursts={groupBursts}
+          onGroupBurstsChange={setGroupBursts}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          opSummaries={opSummaries}
+          allCount={allCount}
+          writesCount={writesCount}
+          readsCount={readsCount}
+          errorsCount={errorsCount}
+          totalShownCount={filteredLogs.length}
+          totalScopeCount={scopedLogs.length}
+          totalCostInView={filteredTotalCost}
+        />
 
         {/* Log table */}
         <div style={{ flex: 1, overflowY: "auto", fontSize: "11px" }}>
-          {shown.length === 0 ? (
-            <div
-              style={{
-                color: "#475569",
-                textAlign: "center",
-                padding: "40px",
-                fontSize: "12px",
-              }}
-            >
-              No logs to show.
-            </div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  background: "hsl(220 13% 9%)",
-                  zIndex: 1,
-                }}
-              >
-                <tr style={{ borderBottom: "1px solid hsl(220 13% 16%)" }}>
-                  {[
-                    "Time",
-                    "Operation",
-                    "Resource",
-                    "Cost",
-                    "Duration",
-                    "Status",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        textAlign: "left",
-                        padding: "6px 12px",
-                        color: "#475569",
-                        fontWeight: 700,
-                        fontSize: "10px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((log, i) => (
-                  <tr
-                    key={log.id}
-                    style={{
-                      background:
-                        i % 2 === 0 ? "transparent" : "hsl(220 13% 7%)",
-                      borderBottom: "1px solid hsl(220 13% 13%)",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "5px 12px",
-                        color: "#475569",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <span
-                        title={fmtDate(log.ts)}
-                        style={{ fontFamily: "monospace" }}
-                      >
-                        {fmtTime(log.ts)}
-                      </span>
-                    </td>
-                    <td style={{ padding: "5px 12px", whiteSpace: "nowrap" }}>
-                      <span
-                        style={{
-                          color: opColor(log.operation),
-                          fontFamily: "monospace",
-                          fontWeight: 700,
-                          fontSize: "10px",
-                        }}
-                      >
-                        {log.operation}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: "5px 12px",
-                        color: "#94a3b8",
-                        maxWidth: "220px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={log.resourceTitle}
-                      >
-                        {log.resourceTitle || log.resourceId || "—"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "5px 12px", whiteSpace: "nowrap" }}>
-                      <span
-                        style={{
-                          color:
-                            log.quotaCost >= 1600
-                              ? "#f97316"
-                              : log.quotaCost >= 50
-                                ? "#eab308"
-                                : "#64748b",
-                          fontFamily: "monospace",
-                          fontWeight: log.quotaCost >= 50 ? 700 : 400,
-                        }}
-                      >
-                        {log.quotaCost.toLocaleString()}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: "5px 12px",
-                        color: "#64748b",
-                        fontFamily: "monospace",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {log.durationMs}ms
-                    </td>
-                    <td style={{ padding: "5px 12px" }}>
-                      {log.success ? (
-                        <span
-                          style={{
-                            color: "#22c55e",
-                            fontWeight: 700,
-                            fontSize: "10px",
-                          }}
-                        >
-                          OK
-                        </span>
-                      ) : (
-                        <span
-                          title={log.errorMsg}
-                          style={{
-                            color: "#ef4444",
-                            fontWeight: 700,
-                            fontSize: "10px",
-                            cursor: "help",
-                            borderBottom: "1px dashed #ef4444",
-                          }}
-                        >
-                          ERR
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <DevLogsTable
+            displayItems={displayItems}
+            expandedBursts={expandedBursts}
+            onToggleBurst={toggleBurst}
+            expandedErrors={expandedErrors}
+            onToggleError={toggleError}
+            copiedErrorId={copiedErrorId}
+            onCopyError={handleCopyError}
+          />
         </div>
       </div>
     </div>

@@ -189,4 +189,76 @@ describe("SteamLibraryPulseBar", () => {
     fireEvent.click(gemsChip);
     expect(handleSelectFilter).toHaveBeenCalledWith("unrecorded_gems");
   });
+
+  it("renders rating and backlog filter chips and toggles them on click", () => {
+    const handleSelectRatingFilter = vi.fn();
+
+    const { rerender } = render(
+      <SteamLibraryPulseBar
+        pulse={samplePulse}
+        activeBucket="all"
+        activeAchievementFilter="all"
+        unrecordedGemsCount={6}
+        onSelectBucket={vi.fn()}
+        onSelectAchievementFilter={vi.fn()}
+        activeRatingFilter="all"
+        ratedGamesCount={12}
+        unrated10hGamesCount={5}
+        queuedGamesCount={4}
+        onSelectRatingFilter={handleSelectRatingFilter}
+      />
+    );
+
+    const ratedChip = screen.getByTestId("filter-chip-rated");
+    expect(ratedChip.textContent).toContain("Rated (12)");
+    fireEvent.click(ratedChip);
+    expect(handleSelectRatingFilter).toHaveBeenCalledWith("rated");
+
+    rerender(
+      <SteamLibraryPulseBar
+        pulse={samplePulse}
+        activeBucket="all"
+        activeAchievementFilter="all"
+        unrecordedGemsCount={6}
+        onSelectBucket={vi.fn()}
+        onSelectAchievementFilter={vi.fn()}
+        activeRatingFilter="rated"
+        ratedGamesCount={12}
+        unrated10hGamesCount={5}
+        queuedGamesCount={4}
+        onSelectRatingFilter={handleSelectRatingFilter}
+      />
+    );
+
+    fireEvent.click(ratedChip);
+    expect(handleSelectRatingFilter).toHaveBeenCalledWith("all");
+
+    const unratedChip = screen.getByTestId("filter-chip-unrated_10h");
+    expect(unratedChip.textContent).toContain("Unrated 10h+ (5)");
+    fireEvent.click(unratedChip);
+    expect(handleSelectRatingFilter).toHaveBeenCalledWith("unrated_10h");
+
+    const queuedChip = screen.getByTestId("filter-chip-queued");
+    expect(queuedChip.textContent).toContain("In backlog (4)");
+    fireEvent.click(queuedChip);
+    expect(handleSelectRatingFilter).toHaveBeenCalledWith("queued");
+  });
+
+  it("handles optional rating props gracefully with default counts of 0", () => {
+    render(
+      <SteamLibraryPulseBar
+        pulse={samplePulse}
+        activeBucket="all"
+        activeAchievementFilter="all"
+        unrecordedGemsCount={6}
+        onSelectBucket={vi.fn()}
+        onSelectAchievementFilter={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("filter-chip-rated").textContent).toContain("Rated (0)");
+    expect(screen.getByTestId("filter-chip-unrated_10h").textContent).toContain("Unrated 10h+ (0)");
+    expect(screen.getByTestId("filter-chip-queued").textContent).toContain("In backlog (0)");
+  });
 });
+

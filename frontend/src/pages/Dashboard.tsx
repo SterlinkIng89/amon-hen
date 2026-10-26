@@ -894,6 +894,14 @@ export default function Dashboard() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        onOpenTagManagement={() => {
+          setSettingsOpen(false);
+          setTagManagementOpen(true);
+        }}
+        onOpenDevLogs={() => {
+          setSettingsOpen(false);
+          setDevLogsOpen(true);
+        }}
       />
       <DevLogsPanel open={devLogsOpen} onClose={() => setDevLogsOpen(false)} />
       <FolderSettingsDialog
