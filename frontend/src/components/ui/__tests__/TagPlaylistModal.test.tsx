@@ -39,7 +39,6 @@ describe("TagPlaylistModal", () => {
     localStorage.clear();
     vi.clearAllMocks();
     HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue("data:image/jpeg;base64,123");
-    useAppStore.setState({ defaultPlaylistPrivacy: "public" });
   });
 
   it("should create playlist with default 'public' privacy when no preference is stored", async () => {
@@ -101,12 +100,12 @@ describe("TagPlaylistModal", () => {
     });
   });
 
-  it("should initialize privacy selector from stored preference across sessions", async () => {
-    useAppStore.setState({ defaultPlaylistPrivacy: "private" });
+  it("should initialize visibility selectors to public and reset to public on tag switch even if store had different privacy", async () => {
+    useAppStore.setState({ defaultPlaylistPrivacy: "unlisted" });
     const onClose = vi.fn();
     const onSaved = vi.fn();
 
-    render(
+    const { rerender } = render(
       <TagPlaylistModal tag="Minecraft" onClose={onClose} onSaved={onSaved} />,
     );
 
@@ -117,7 +116,27 @@ describe("TagPlaylistModal", () => {
       expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
         "Minecraft",
         "",
-        "private",
+        "public",
+      );
+    });
+
+    // Manually switch privacy to private
+    const privateBtns = screen.getAllByRole("button", { name: /private/i });
+    fireEvent.click(privateBtns[0]);
+
+    // Rerender with a new tag
+    rerender(
+      <TagPlaylistModal tag="Terraria" onClose={onClose} onSaved={onSaved} />,
+    );
+
+    const newCreateBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(newCreateBtns[0]);
+
+    await waitFor(() => {
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalledWith(
+        "Terraria",
+        "",
+        "public",
       );
     });
   });

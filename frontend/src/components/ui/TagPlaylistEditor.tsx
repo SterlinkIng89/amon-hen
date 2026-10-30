@@ -43,17 +43,13 @@ export default function TagPlaylistEditor({
   const [selectedVodId, setSelectedVodId] = useState("");
   const [vodSearchQuery, setVodSearchQuery] = useState("");
   const [newVodTitle, setNewVodTitle] = useState(tag);
-  const [vodPrivacy, setVodPrivacy] = useState<PlaylistPrivacy>(
-    () => useAppStore.getState().defaultPlaylistPrivacy,
-  );
+  const [vodPrivacy, setVodPrivacy] = useState<PlaylistPrivacy>("public");
 
   // Clip playlist section state
   const [selectedClipId, setSelectedClipId] = useState("");
   const [clipSearchQuery, setClipSearchQuery] = useState("");
   const [newClipTitle, setNewClipTitle] = useState(`${tag} Clips`);
-  const [clipPrivacy, setClipPrivacy] = useState<PlaylistPrivacy>(
-    () => useAppStore.getState().defaultPlaylistPrivacy,
-  );
+  const [clipPrivacy, setClipPrivacy] = useState<PlaylistPrivacy>("public");
 
   // Cover generation & upload state
   const [applyCoverOnCreateVod, setApplyCoverOnCreateVod] = useState(true);
@@ -69,6 +65,8 @@ export default function TagPlaylistEditor({
   useEffect(() => {
     setNewVodTitle(tag);
     setNewClipTitle(`${tag} Clips`);
+    setVodPrivacy("public");
+    setClipPrivacy("public");
     setError("");
 
     LoadConfig()
