@@ -360,6 +360,104 @@ describe("TagPlaylistModal", () => {
       );
     });
   });
+
+  it("should keep modal open and display 'Saved!' feedback when saving thumbnail template", async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />
+    );
+
+    const saveBtn = screen.getByRole("button", { name: /save thumbnail template/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: /saved!/i })).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  it("should keep modal open and immediately display 'Linked: <Title>' when creating and linking playlist", async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Apex Legends" onClose={onClose} onSaved={onSaved} />
+    );
+
+    const createBtns = screen.getAllByRole("button", { name: /create & link/i });
+    fireEvent.click(createBtns[0]);
+
+    await waitFor(() => {
+      expect(appBackend.GetOrCreatePlaylist).toHaveBeenCalled();
+      expect(screen.getByText(/linked:/i)).toBeInTheDocument();
+      expect(screen.getAllByText("Apex Legends").length).toBeGreaterThanOrEqual(2);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  it("should render Confirm button alongside Cancel in footer and persist thumbConfig on confirm", async () => {
+    vi.mocked(appBackend.LoadConfig).mockResolvedValueOnce({
+      tag_playlists: {},
+      tag_playlist_configs: {
+        Valorant: {
+          vod_playlist_id: "",
+          clip_playlist_id: "",
+          thumbnail_config: {
+            enabled: true,
+            source_type: "steam",
+            episode_position: "bottom-right",
+            episode_format: "pad2",
+          },
+        },
+      },
+    } as unknown as backend.Config);
+
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />
+    );
+
+    const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
+    const confirmBtn = screen.getByRole("button", { name: /confirm/i });
+    expect(cancelBtn).toBeInTheDocument();
+    expect(confirmBtn).toBeInTheDocument();
+
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagThumbnailConfig).toHaveBeenCalledWith(
+        "Valorant",
+        expect.anything()
+      );
+      expect(onSaved).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it("should close modal when clicking skip", async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <TagPlaylistModal tag="Valorant" onClose={onClose} onSaved={onSaved} />
+    );
+
+    const skipBtn = screen.getByRole("button", {
+      name: /no playlist for "valorant" — don't ask again/i,
+    });
+    fireEvent.click(skipBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SetTagPlaylistConfig).toHaveBeenCalledWith(
+        "Valorant",
+        "none",
+        "none"
+      );
+      expect(onSaved).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
 });
 
 
