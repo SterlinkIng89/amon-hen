@@ -19,6 +19,7 @@ export interface TagThumbnailConfigSectionProps {
   readonly vodPlaylistId?: string;
   readonly clipPlaylistId?: string;
   readonly onPlaylistCoverUpdated?: (playlistId: string, thumbUrl: string) => void;
+  readonly hidePreviewCanvas?: boolean;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -47,6 +48,7 @@ export default function TagThumbnailConfigSection({
   vodPlaylistId,
   clipPlaylistId,
   onPlaylistCoverUpdated,
+  hidePreviewCanvas = false,
 }: TagThumbnailConfigSectionProps) {
   const parsed = parseTagThumbnailConfig(value);
   const config: TagThumbnailConfig = {
@@ -152,17 +154,21 @@ export default function TagThumbnailConfigSection({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2 border-t border-border-subtle animate-fadeIn">
           {/* Left Column: Preview Canvas, Framing Controls & Elements Controls (5 cols) */}
           <div className="md:col-span-5 flex flex-col gap-2">
-            <span className="text-xs font-medium text-text-secondary">
-              Thumbnail Preview
-            </span>
-            <ThumbnailCanvasEditor
-              config={config}
-              baseImage={baseImage}
-              logoImage={logoImage}
-              gameTitle={gameTitle}
-              episodeNumber={1}
-              onConfigChange={update}
-            />
+            {!hidePreviewCanvas && (
+              <>
+                <span className="text-xs font-medium text-text-secondary">
+                  Thumbnail Preview
+                </span>
+                <ThumbnailCanvasEditor
+                  config={config}
+                  baseImage={baseImage}
+                  logoImage={logoImage}
+                  gameTitle={gameTitle}
+                  episodeNumber={1}
+                  onConfigChange={update}
+                />
+              </>
+            )}
             <ThumbnailFramingControls
               framing={config.image_framing}
               disabled={!baseImage}

@@ -18,72 +18,8 @@ import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem, TagThumbnailConfig } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
-import { renderThumbnailToCanvas } from "../../../utils/thumbnailGenerator";
+import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
-
-interface ThumbnailPreviewCanvasProps {
-  readonly config: TagThumbnailConfig;
-  readonly baseImage: HTMLImageElement | null;
-  readonly logoImage: HTMLImageElement | null;
-  readonly gameTitle: string;
-  readonly episodeNumber: number;
-  readonly isLoading: boolean;
-}
-
-const ThumbnailPreviewCanvas: FC<ThumbnailPreviewCanvasProps> = ({
-  config,
-  baseImage,
-  logoImage,
-  gameTitle,
-  episodeNumber,
-  isLoading,
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = 1280;
-    canvas.height = 720;
-    renderThumbnailToCanvas(canvas, baseImage, {
-      showEpisode: episodeNumber > 0,
-      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
-      episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-left",
-      fontColor: config.font_color || "#ffffff",
-      framing: config.image_framing,
-      episodeLayout: config.episode_layout,
-      logo: config.logo?.enabled
-        ? {
-            image: logoImage,
-            layout: config.logo,
-          }
-        : undefined,
-      title: config.title?.enabled
-        ? {
-            text: config.title.text_override || gameTitle,
-            layout: config.title,
-          }
-        : undefined,
-    });
-  }, [config, baseImage, logoImage, gameTitle, episodeNumber]);
-
-  return (
-    <div className="relative w-full aspect-video bg-black/40 rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
-      <canvas ref={canvasRef} className="w-full h-full object-cover" />
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs">
-          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-      {!isLoading && !baseImage && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80">
-          No artwork loaded
-        </span>
-      )}
-    </div>
-  );
-};
 
 export const PlaylistCatalogPanel: FC = () => {
   const {
@@ -628,14 +564,28 @@ export const PlaylistCatalogPanel: FC = () => {
                     </button>
                   </div>
 
-                  <ThumbnailPreviewCanvas
-                    config={thumbConfig}
-                    baseImage={baseImage}
-                    logoImage={logoImage}
-                    gameTitle={gameTitle}
-                    episodeNumber={sampleEpisode}
-                    isLoading={isLoadingAssets}
-                  />
+                  <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
+                    <ThumbnailCanvasEditor
+                      config={thumbConfig}
+                      baseImage={baseImage}
+                      logoImage={logoImage}
+                      gameTitle={gameTitle}
+                      episodeNumber={sampleEpisode}
+                      onConfigChange={(patch) =>
+                        setThumbConfig((prev) => ({ ...prev, ...patch, enabled: true }))
+                      }
+                    />
+                    {isLoadingAssets && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs pointer-events-none">
+                        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                    {!isLoadingAssets && !baseImage && (
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80 pointer-events-none">
+                        No artwork loaded
+                      </span>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div className="bg-elevated/40 border border-border-subtle rounded-lg p-2.5">
@@ -711,6 +661,7 @@ export const PlaylistCatalogPanel: FC = () => {
                         onPlaylistCoverUpdated={() => {
                           void loadPlaylists();
                         }}
+                        hidePreviewCanvas={true}
                       />
                     </div>
                   )}

@@ -144,5 +144,11 @@ describe("PlaylistCatalogPanel", () => {
     const customizeBtn = screen.getByRole("button", { name: /customize/i });
     fireEvent.click(customizeBtn);
     expect(screen.getByText(/Template Editor for "control"/i)).toBeInTheDocument();
+
+    // Verify unified single interactive canvas (no duplicate preview canvas rendered in collapsible editor)
+    const interactiveCanvases = screen.getAllByLabelText(/Thumbnail canvas preview with interactive elements/i);
+    expect(interactiveCanvases.length).toBe(1);
+    expect(screen.queryByText("Thumbnail Preview")).not.toBeInTheDocument();
   });
 });
+

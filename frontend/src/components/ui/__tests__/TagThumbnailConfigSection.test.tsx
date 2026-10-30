@@ -172,5 +172,37 @@ describe("TagThumbnailConfigSection", () => {
       );
     });
   });
+
+  it("renders embedded preview canvas when hidePreviewCanvas is false or omitted", () => {
+    render(
+      <TagThumbnailConfigSection
+        tag="Cyberpunk 2077"
+        value={defaultConfig}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Thumbnail Preview")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Thumbnail canvas preview with interactive elements/i)).toBeInTheDocument();
+  });
+
+  it("omits embedded preview canvas when hidePreviewCanvas is true while preserving controls", () => {
+    render(
+      <TagThumbnailConfigSection
+        tag="Cyberpunk 2077"
+        value={defaultConfig}
+        onChange={vi.fn()}
+        hidePreviewCanvas={true}
+      />
+    );
+
+    expect(screen.queryByText("Thumbnail Preview")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Thumbnail canvas preview with interactive elements/i)).not.toBeInTheDocument();
+
+    // Framing controls and element controls remain accessible
+    expect(screen.getByText(/zoom framing/i)).toBeInTheDocument();
+    expect(screen.getByText("Title & Logo Layers")).toBeInTheDocument();
+  });
 });
+
 
