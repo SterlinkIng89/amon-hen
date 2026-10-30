@@ -97,4 +97,50 @@ describe("PlaylistCatalogRow", () => {
 
     expect(screen.getByText("Suggested: control")).toBeInTheDocument();
   });
+
+  it("renders custom thumb badge and accented thumbnail border when hasCustomTemplate is true", () => {
+    const playlist = {
+      playlistId: "pl-custom",
+      title: "Hades VODs",
+      videoCount: 5,
+      linked: true,
+      tag: "Hades",
+      hasCustomTemplate: true,
+      thumbnailUrl: "https://example.com/custom_preview.jpg",
+    } as backend.CatalogPlaylistSummary;
+
+    render(
+      <PlaylistCatalogRow
+        playlist={playlist}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Custom thumb")).toBeInTheDocument();
+    const thumbContainer = screen.getByRole("img", { name: "Hades VODs" }).parentElement;
+    expect(thumbContainer).toHaveClass("border-accent/40");
+  });
+
+  it("does not render custom thumb badge when hasCustomTemplate is false", () => {
+    const playlist = {
+      playlistId: "pl-default",
+      title: "Hades VODs",
+      videoCount: 5,
+      linked: true,
+      tag: "Hades",
+      hasCustomTemplate: false,
+    } as backend.CatalogPlaylistSummary;
+
+    render(
+      <PlaylistCatalogRow
+        playlist={playlist}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Custom thumb")).not.toBeInTheDocument();
+  });
 });
+

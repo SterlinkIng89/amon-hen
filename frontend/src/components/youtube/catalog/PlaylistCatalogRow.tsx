@@ -26,7 +26,11 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
           : "bg-elevated/40 border-border-subtle hover:bg-elevated hover:border-border-medium"
       }`}
     >
-      <div className="w-12 h-8 rounded-md overflow-hidden bg-base border border-border-subtle shrink-0 flex items-center justify-center">
+      <div
+        className={`w-12 h-8 rounded-md overflow-hidden bg-base border shrink-0 flex items-center justify-center ${
+          playlist.hasCustomTemplate ? "border-accent/40" : "border-border-subtle"
+        }`}
+      >
         {playlist.thumbnailUrl ? (
           <img
             src={playlist.thumbnailUrl}
@@ -64,6 +68,12 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
+          {playlist.hasCustomTemplate && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Custom thumb
+            </span>
+          )}
+
           {playlist.kind === "clip" && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
               Clips

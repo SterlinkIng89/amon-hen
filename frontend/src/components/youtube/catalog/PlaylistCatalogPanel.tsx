@@ -12,11 +12,13 @@ import {
   GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
+  SaveCustomThumbnail,
   SetTagThumbnailConfig,
 } from "../../../../wailsjs/go/backend/App";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem, TagThumbnailConfig } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
+import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
 import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
@@ -34,6 +36,7 @@ export const PlaylistCatalogPanel: FC = () => {
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
     editedEpisodes,
@@ -170,6 +173,25 @@ export const PlaylistCatalogPanel: FC = () => {
       setIsConfigCustomized(true);
       setTemplateSaveSuccess(true);
       setTimeout(() => setTemplateSaveSuccess(false), 3000);
+
+      let previewDataUrl = "";
+      if (baseImage) {
+        try {
+          previewDataUrl = renderTagThumbnailDataUrl({
+            baseImage,
+            logoImage,
+            gameTitle,
+            episodeNumber: sampleEpisode,
+            config: thumbConfig,
+          });
+          await SaveCustomThumbnail("tag_template_" + tag.toLowerCase(), previewDataUrl);
+        } catch (renderErr: unknown) {
+          console.warn("[PlaylistCatalogPanel] Failed to render tag template preview:", renderErr);
+        }
+      }
+
+      updatePlaylistTemplatePreview(tag, previewDataUrl);
+      void loadPlaylists();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setTemplateSaveError(msg);
