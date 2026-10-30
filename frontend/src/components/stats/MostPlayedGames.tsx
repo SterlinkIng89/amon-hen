@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { GetChannelAnalytics } from "../../../wailsjs/go/backend/App";
+import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import {
   HistoricalVideo,
   filterHistoricalVideos,
@@ -57,23 +58,32 @@ export default function MostPlayedGames({
   // 1. Fetch historical videos from backend
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    GetChannelAnalytics()
-      .then((res: unknown) => {
-        const typedRes = res as { allHistoricalVideos?: HistoricalVideo[] };
-        if (mounted && typedRes && typedRes.allHistoricalVideos) {
-          setVideos(typedRes.allHistoricalVideos);
-        }
-      })
-      .catch((err: Error) => {
-        if (mounted) setError(err?.message || "Failed to load historical data");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+    const loadAnalytics = () => {
+      setLoading(true);
+      GetChannelAnalytics()
+        .then((res: unknown) => {
+          const typedRes = res as { allHistoricalVideos?: HistoricalVideo[] };
+          if (mounted && typedRes && typedRes.allHistoricalVideos) {
+            setVideos(typedRes.allHistoricalVideos);
+          }
+        })
+        .catch((err: Error) => {
+          if (mounted) setError(err?.message || "Failed to load historical data");
+        })
+        .finally(() => {
+          if (mounted) setLoading(false);
+        });
+    };
+
+    loadAnalytics();
+
+    const unsub1 = EventsOn("youtube:sync-done", loadAnalytics);
+    const unsub2 = EventsOn("youtube:done", loadAnalytics);
 
     return () => {
       mounted = false;
+      unsub1();
+      unsub2();
     };
   }, []);
 

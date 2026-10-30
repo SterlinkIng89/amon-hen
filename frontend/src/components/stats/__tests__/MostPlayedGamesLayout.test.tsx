@@ -1,8 +1,26 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import MostPlayedGames from "../MostPlayedGames";
 import { GetChannelAnalytics } from "../../../../wailsjs/go/backend/App";
+
+type EventCallback = (...args: unknown[]) => void;
+const eventHandlers = new Map<string, EventCallback[]>();
+
+vi.mock("../../../../wailsjs/runtime/runtime", () => ({
+  EventsOn: vi.fn((event: string, callback: EventCallback) => {
+    const list = eventHandlers.get(event) || [];
+    list.push(callback);
+    eventHandlers.set(event, list);
+    return () => {
+      const current = eventHandlers.get(event) || [];
+      eventHandlers.set(
+        event,
+        current.filter((cb) => cb !== callback),
+      );
+    };
+  }),
+}));
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetChannelAnalytics: vi.fn(),
@@ -42,6 +60,7 @@ describe("MostPlayedGames Monthly Layout", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    eventHandlers.clear();
     vi.mocked(GetChannelAnalytics).mockResolvedValue({
       allHistoricalVideos: mockHistoricalVideos,
     } as never);
@@ -482,6 +501,25 @@ describe("MostPlayedGames Monthly Layout", () => {
 
     await waitFor(() => {
       expect(screen.getByText("#1 Game of the year")).toBeDefined();
+    });
+  });
+
+  it("re-fetches channel analytics when youtube:sync-done fires", async () => {
+    render(<MostPlayedGames />);
+
+    await waitFor(() => {
+      expect(GetChannelAnalytics).toHaveBeenCalledTimes(1);
+    });
+
+    const syncDoneHandlers = eventHandlers.get("youtube:sync-done") || [];
+    expect(syncDoneHandlers.length).toBeGreaterThan(0);
+
+    act(() => {
+      syncDoneHandlers[0]();
+    });
+
+    await waitFor(() => {
+      expect(GetChannelAnalytics).toHaveBeenCalledTimes(2);
     });
   });
 });
