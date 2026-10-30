@@ -8,13 +8,23 @@ import * as thumbnailGenerator from "../../../utils/thumbnailGenerator";
 // Mock HTMLCanvasElement.getContext
 HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
   fillStyle: "",
+  strokeStyle: "",
+  lineWidth: 1,
   fillRect: vi.fn(),
+  strokeRect: vi.fn(),
   drawImage: vi.fn(),
   measureText: vi.fn().mockReturnValue({ width: 50 }),
   save: vi.fn(),
   restore: vi.fn(),
   strokeText: vi.fn(),
   fillText: vi.fn(),
+  setLineDash: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  stroke: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
 }) as any;
 
 describe("ThumbnailCanvasEditor", () => {
@@ -117,4 +127,121 @@ describe("ThumbnailCanvasEditor", () => {
       })
     );
   });
+
+  it("snaps dragged logo element to center grid axes and displays HUD pill indicator", () => {
+    const onConfigChange = vi.fn();
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 640, y: 360 });
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.48, y: 0.48, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    expect(canvas).toBeDefined();
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Drag logo slightly towards 0.50 center (from 0.48 by +25px -> ~0.50)
+    fireEvent.pointerDown(canvas, { clientX: 614, clientY: 345, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 640, clientY: 360, pointerId: 1 });
+
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.logo).toBeDefined();
+    // Snapped to exact center (0.5, 0.5)
+    expect(lastCall.logo.x).toBe(0.5);
+    expect(lastCall.logo.y).toBe(0.5);
+  });
+
+  it("bypasses magnetic snapping when Alt key is held during drag", () => {
+    const onConfigChange = vi.fn();
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.49, y: 0.49, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Drag with altKey=true to bypass snap
+    fireEvent.pointerDown(canvas, { clientX: 627, clientY: 352, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 633, clientY: 356, pointerId: 1, altKey: true });
+
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.logo).toBeDefined();
+    // Since snap was bypassed, it should not lock to 0.5
+    expect(lastCall.logo.x).not.toBe(0.5);
+  });
+
+  it("toggles snap and grid overlay via floating toolbar buttons", () => {
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const snapBtn = getByRole("button", { name: /toggle magnetic grid snap/i });
+    expect(snapBtn).toHaveTextContent(/Snap: On/i);
+    fireEvent.click(snapBtn);
+    expect(snapBtn).toHaveTextContent(/Snap: Off/i);
+
+    const gridBtn = getByRole("button", { name: /show or hide 3x3 alignment grid/i });
+    expect(gridBtn).toHaveTextContent(/Grid: Off/i);
+    fireEvent.click(gridBtn);
+    expect(gridBtn).toHaveTextContent(/Grid: On/i);
+  });
 });
+
