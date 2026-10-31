@@ -41,6 +41,12 @@ export interface RenderAlignmentGuidesOptions {
   readonly showBaseGrid: boolean;
   readonly lockState: SnapLockState;
   readonly activeRect?: ElementRect;
+  readonly selectedRect?: ElementRect;
+  readonly showCrosshairs?: boolean;
+  readonly autoFade?: boolean;
+  readonly gridOpacity?: number;
+  readonly showSafeZone?: boolean;
+  readonly showMarginReadouts?: boolean;
 }
 
 // Crisp, targeted capture threshold: captures when pointer is very close to anchor (~12px on 1280px canvas)
@@ -373,6 +379,206 @@ export function detectActiveAnchorPreset(
   return matchedPreset;
 }
 
+function strokeWithBackdrop(
+  ctx: CanvasRenderingContext2D,
+  dash: number[],
+  backdropColor: string,
+  backdropWidth: number,
+  fgColor: string,
+  fgWidth: number,
+  draw: () => void
+): void {
+  ctx.setLineDash(dash);
+  ctx.strokeStyle = backdropColor;
+  ctx.lineWidth = backdropWidth;
+  draw();
+
+  ctx.strokeStyle = fgColor;
+  ctx.lineWidth = fgWidth;
+  draw();
+}
+
+function renderFullBleedBaseGrid(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  whiteAlpha: number,
+  darkAlpha: number
+): void {
+  ctx.save();
+  strokeWithBackdrop(
+    ctx,
+    [],
+    `rgba(0, 0, 0, ${darkAlpha})`,
+    1.5,
+    `rgba(255, 255, 255, ${whiteAlpha})`,
+    1,
+    () => {
+      ctx.beginPath();
+      for (const anchor of GRID_ANCHORS_X) {
+        const x = Math.round(anchor.value * width);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      for (const anchor of GRID_ANCHORS_Y) {
+        const y = Math.round(anchor.value * height);
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.stroke();
+    }
+  );
+  ctx.restore();
+}
+
+function renderYouTubeSafeZone(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): void {
+  const szX = Math.round(0.86 * width);
+  const szY = Math.round(0.86 * height);
+  const szW = Math.round(0.12 * width);
+  const szH = Math.round(0.10 * height);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+  if (typeof ctx.fillRect === "function") {
+    ctx.fillRect(szX, szY, szW, szH);
+  }
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.48)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(szX, szY, szW, szH);
+  ctx.restore();
+}
+
+function renderElementCrosshairsAndSelection(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  rect: ElementRect,
+  isLocked: boolean,
+  showCrosshairs: boolean,
+  showMarginReadouts: boolean
+): void {
+  const { x, y, w, h } = rect;
+  const left = Math.round(x);
+  const right = Math.round(x + w);
+  const top = Math.round(y);
+  const bottom = Math.round(y + h);
+  const cx = Math.round(x + w / 2);
+  const cy = Math.round(y + h / 2);
+  const accentColor = isLocked ? "#38bdf8" : "#ffffff";
+
+  ctx.save();
+
+  if (showCrosshairs) {
+    strokeWithBackdrop(
+      ctx,
+      [4, 4],
+      "rgba(0, 0, 0, 0.22)",
+      1.25,
+      "rgba(255, 255, 255, 0.26)",
+      1,
+      () => {
+        ctx.beginPath();
+        ctx.moveTo(left, 0);
+        ctx.lineTo(left, height);
+        ctx.moveTo(right, 0);
+        ctx.lineTo(right, height);
+        ctx.moveTo(0, top);
+        ctx.lineTo(width, top);
+        ctx.moveTo(0, bottom);
+        ctx.lineTo(width, bottom);
+        ctx.stroke();
+      }
+    );
+
+    strokeWithBackdrop(
+      ctx,
+      [5, 4],
+      "rgba(0, 0, 0, 0.36)",
+      1.75,
+      isLocked ? "#38bdf8" : "rgba(255, 255, 255, 0.62)",
+      1.25,
+      () => {
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, height);
+        ctx.moveTo(0, cy);
+        ctx.lineTo(width, cy);
+        ctx.stroke();
+      }
+    );
+  }
+
+  strokeWithBackdrop(
+    ctx,
+    [],
+    "rgba(0, 0, 0, 0.48)",
+    2.5,
+    isLocked ? "#38bdf8" : "rgba(255, 255, 255, 0.92)",
+    1.5,
+    () => ctx.strokeRect(x, y, w, h)
+  );
+
+  const cornerLen = Math.max(10, Math.min(18, Math.min(w, h) / 3));
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y + cornerLen);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x + cornerLen, y);
+  ctx.moveTo(x + w - cornerLen, y);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w, y + cornerLen);
+  ctx.moveTo(x, y + h - cornerLen);
+  ctx.lineTo(x, y + h);
+  ctx.lineTo(x + cornerLen, y + h);
+  ctx.moveTo(x + w - cornerLen, y + h);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x + w, y + h - cornerLen);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3.25, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (showMarginReadouts && typeof ctx.fillText === "function") {
+    const xPct = Math.round((cx / width) * 100);
+    const yPct = Math.round((cy / height) * 100);
+    const badgeW = 54;
+    const badgeH = 20;
+    const xBadgeX = clamp(cx - badgeW / 2, 6, width - badgeW - 6);
+    const xBadgeY =
+      top > 32 ? Math.max(6, top - badgeH - 6) : Math.min(height - badgeH - 6, bottom + 6);
+    const yBadgeX =
+      left > 64 ? Math.max(6, left - badgeW - 6) : Math.min(width - badgeW - 6, right + 6);
+    const yBadgeY = clamp(cy - badgeH / 2, 6, height - badgeH - 6);
+
+    ctx.fillStyle = "rgba(9, 13, 22, 0.82)";
+    if (typeof ctx.fillRect === "function") {
+      ctx.fillRect(xBadgeX, xBadgeY, badgeW, badgeH);
+      ctx.fillRect(yBadgeX, yBadgeY, badgeW, badgeH);
+    }
+
+    ctx.font = "600 11px Inter, system-ui, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(`X ${xPct}%`, xBadgeX + 8, xBadgeY + 14);
+    ctx.fillText(`Y ${yPct}%`, yBadgeX + 8, yBadgeY + 14);
+  }
+
+  ctx.restore();
+}
+
 export function renderAlignmentGuides(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -383,72 +589,32 @@ export function renderAlignmentGuides(
 
   ctx.save();
 
-  // High-contrast outer image / canvas perimeter border (shown whenever grid is on or an element is dragged)
   ctx.save();
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([]);
-  ctx.strokeRect(1, 1, width - 2, height - 2);
-
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(1, 1, width - 2, height - 2);
+  strokeWithBackdrop(
+    ctx,
+    [],
+    "rgba(0, 0, 0, 0.22)",
+    1.5,
+    "rgba(255, 255, 255, 0.28)",
+    1,
+    () => ctx.strokeRect(0.5, 0.5, width - 1, height - 1)
+  );
   ctx.restore();
 
-  if (options.showBaseGrid) {
-    const xMin = Math.round(0.05 * width);
-    const xMax = Math.round(0.95 * width);
-    const yMin = Math.round(0.05 * height);
-    const yMax = Math.round(0.95 * height);
-    const midX = Math.round(0.5 * width);
-    const midY = Math.round(0.5 * height);
+  if (options.showBaseGrid || options.autoFade) {
+    const whiteAlpha =
+      options.gridOpacity ?? (options.showBaseGrid ? 0.32 : 0.18);
+    const darkAlpha =
+      options.gridOpacity !== undefined
+        ? Math.min(1, options.gridOpacity * 0.7)
+        : options.showBaseGrid
+          ? 0.22
+          : 0.12;
+    renderFullBleedBaseGrid(ctx, width, height, whiteAlpha, darkAlpha);
+  }
 
-    // Pass 1: Dark halo backdrop for universal contrast against light or busy artwork
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.lineWidth = 3.5;
-    ctx.setLineDash([]);
-    ctx.strokeRect(xMin, yMin, xMax - xMin, yMax - yMin);
-
-    ctx.beginPath();
-    ctx.moveTo(midX, yMin);
-    ctx.lineTo(midX, yMax);
-    ctx.moveTo(xMin, midY);
-    ctx.lineTo(xMax, midY);
-    for (const anchor of GRID_ANCHORS_Y) {
-      if (anchor.kind === "safe") {
-        const y = Math.round(anchor.value * height);
-        ctx.moveTo(xMin, y);
-        ctx.lineTo(xMax, y);
-      }
-    }
-    ctx.stroke();
-
-    // Pass 2: High-contrast foreground strokes
-    // Outer bounding frame & center crosshair in vibrant golden yellow
-    ctx.strokeStyle = "#ffd000";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(xMin, yMin, xMax - xMin, yMax - yMin);
-
-    ctx.beginPath();
-    ctx.moveTo(midX, yMin);
-    ctx.lineTo(midX, yMax);
-    ctx.moveTo(xMin, midY);
-    ctx.lineTo(xMax, midY);
-    ctx.stroke();
-
-    // Horizontal extra safe guides (vibrant sky cyan)
-    ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2;
-    for (const anchor of GRID_ANCHORS_Y) {
-      if (anchor.kind === "safe") {
-        const y = Math.round(anchor.value * height);
-        ctx.beginPath();
-        ctx.moveTo(xMin, y);
-        ctx.lineTo(xMax, y);
-        ctx.stroke();
-      }
-    }
+  if (options.showSafeZone) {
+    renderYouTubeSafeZone(ctx, width, height);
   }
 
   const { lockedX, lockedY } = options.lockState;
@@ -456,103 +622,38 @@ export function renderAlignmentGuides(
   if (lockedX) {
     const x = Math.round(lockedX.value * width);
     ctx.save();
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.95)";
-    ctx.lineWidth = 4.5;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-
-    ctx.strokeStyle = lockedX.kind === "safe" ? "#38bdf8" : "#ffd000";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
+    strokeWithBackdrop(ctx, [], "rgba(0, 0, 0, 0.45)", 2.5, "#38bdf8", 1.5, () => {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
   if (lockedY) {
     const y = Math.round(lockedY.value * height);
     ctx.save();
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.95)";
-    ctx.lineWidth = 4.5;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-
-    ctx.strokeStyle = lockedY.kind === "safe" ? "#38bdf8" : "#ffd000";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
+    strokeWithBackdrop(ctx, [], "rgba(0, 0, 0, 0.45)", 2.5, "#38bdf8", 1.5, () => {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
-  if (options.activeRect) {
-    const { x, y, w, h } = options.activeRect;
-    const isLocked = Boolean(lockedX || lockedY);
-
-    ctx.save();
-    // 1. Dark outer shadow/halo for bounding box
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.95)";
-    ctx.lineWidth = 4;
-    ctx.setLineDash([]);
-    ctx.strokeRect(x, y, w, h);
-
-    // 2. High-contrast foreground bounding box (vibrant gold when locked/aligned, pure white when moving)
-    ctx.strokeStyle = isLocked ? "#ffd000" : "#ffffff";
-    ctx.lineWidth = 2.25;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(x, y, w, h);
-
-    // 3. Pro corner ticks/brackets
-    const cornerLen = Math.max(10, Math.min(18, Math.min(w, h) / 3));
-    ctx.setLineDash([]);
-    ctx.strokeStyle = isLocked ? "#ffd000" : "#ffffff";
-    ctx.lineWidth = 3;
-
-    // Top-left
-    ctx.beginPath();
-    ctx.moveTo(x, y + cornerLen);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x + cornerLen, y);
-    // Top-right
-    ctx.moveTo(x + w - cornerLen, y);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + cornerLen);
-    // Bottom-left
-    ctx.moveTo(x, y + h - cornerLen);
-    ctx.lineTo(x, y + h);
-    ctx.lineTo(x + cornerLen, y + h);
-    // Bottom-right
-    ctx.moveTo(x + w - cornerLen, y + h);
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x + w, y + h - cornerLen);
-    ctx.stroke();
-
-    // 4. Center anchor pin
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = isLocked ? "#ff7700" : "#00f0ff";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.restore();
+  const targetRect = options.activeRect ?? options.selectedRect;
+  if (targetRect) {
+    renderElementCrosshairsAndSelection(
+      ctx,
+      width,
+      height,
+      targetRect,
+      Boolean(lockedX || lockedY),
+      options.showCrosshairs ?? true,
+      options.showMarginReadouts ?? false
+    );
   }
 
   ctx.restore();

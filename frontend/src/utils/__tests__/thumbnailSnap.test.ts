@@ -202,12 +202,17 @@ describe("thumbnailSnap - renderAlignmentGuides", () => {
       lineTo: vi.fn(),
       stroke: vi.fn(),
       strokeRect: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
       arc: vi.fn(),
       fill: vi.fn(),
       setLineDash: vi.fn(),
       strokeStyle: "",
       fillStyle: "",
       lineWidth: 0,
+      font: "",
+      textAlign: "left",
+      textBaseline: "alphabetic",
     } as unknown as CanvasRenderingContext2D;
   }
 
@@ -221,7 +226,7 @@ describe("thumbnailSnap - renderAlignmentGuides", () => {
     expect(ctx.save).not.toHaveBeenCalled();
   });
 
-  it("renders base grid lines when showBaseGrid is true", () => {
+  it("renders full-bleed (0 to width and 0 to height) hairline grid lines when showBaseGrid is true", () => {
     const ctx = createMockContext();
     renderAlignmentGuides(ctx, 1280, 720, {
       showBaseGrid: true,
@@ -229,9 +234,45 @@ describe("thumbnailSnap - renderAlignmentGuides", () => {
     });
 
     expect(ctx.save).toHaveBeenCalled();
-    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 4]);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+
+    // Vertical grid lines must extend full-bleed from y=0 to y=720
+    for (const anchor of GRID_ANCHORS_X) {
+      const x = Math.round(anchor.value * 1280);
+      expect(ctx.moveTo).toHaveBeenCalledWith(x, 0);
+      expect(ctx.lineTo).toHaveBeenCalledWith(x, 720);
+    }
+
+    // Horizontal grid lines must extend full-bleed from x=0 to x=1280
+    for (const anchor of GRID_ANCHORS_Y) {
+      const y = Math.round(anchor.value * 720);
+      expect(ctx.moveTo).toHaveBeenCalledWith(0, y);
+      expect(ctx.lineTo).toHaveBeenCalledWith(1280, y);
+    }
+
     expect(ctx.stroke).toHaveBeenCalled();
     expect(ctx.restore).toHaveBeenCalled();
+  });
+
+  it("renders auto-fade base grid when showBaseGrid is false and autoFade is true", () => {
+    const ctx = createMockContext();
+    const strokeStyles: string[] = [];
+    Object.defineProperty(ctx, "strokeStyle", {
+      get: () => strokeStyles[strokeStyles.length - 1] ?? "",
+      set: (val: string) => {
+        strokeStyles.push(val);
+      },
+    });
+
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      autoFade: true,
+      lockState: { lockedX: null, lockedY: null },
+    });
+
+    expect(ctx.moveTo).toHaveBeenCalledWith(640, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(640, 720);
+    expect(strokeStyles).toContain("rgba(255, 255, 255, 0.18)");
   });
 
   it("renders locked axis guides for center and safe-zone anchors", () => {
@@ -247,7 +288,81 @@ describe("thumbnailSnap - renderAlignmentGuides", () => {
       },
     });
 
-    expect(ctx.beginPath).toHaveBeenCalled();
+    expect(ctx.moveTo).toHaveBeenCalledWith(640, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(640, 720);
+    expect(ctx.moveTo).toHaveBeenCalledWith(0, Math.round(0.28 * 720));
+    expect(ctx.lineTo).toHaveBeenCalledWith(1280, Math.round(0.28 * 720));
     expect(ctx.stroke).toHaveBeenCalled();
+  });
+
+  it("renders full-canvas center X/Y crosshairs and 4 bounding edge projection lines for selectedRect or activeRect", () => {
+    const ctx = createMockContext();
+    const rect = { x: 200, y: 120, w: 300, h: 160 };
+
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      lockState: { lockedX: null, lockedY: null },
+      selectedRect: rect,
+    });
+
+    const cx = Math.round(rect.x + rect.w / 2); // 350
+    const cy = Math.round(rect.y + rect.h / 2); // 200
+
+    // Full-canvas center X/Y crosshairs
+    expect(ctx.moveTo).toHaveBeenCalledWith(cx, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(cx, 720);
+    expect(ctx.moveTo).toHaveBeenCalledWith(0, cy);
+    expect(ctx.lineTo).toHaveBeenCalledWith(1280, cy);
+
+    // Full-canvas 4 edge projection hairlines (left, right, top, bottom)
+    expect(ctx.moveTo).toHaveBeenCalledWith(200, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(200, 720);
+    expect(ctx.moveTo).toHaveBeenCalledWith(500, 0);
+    expect(ctx.lineTo).toHaveBeenCalledWith(500, 720);
+    expect(ctx.moveTo).toHaveBeenCalledWith(0, 120);
+    expect(ctx.lineTo).toHaveBeenCalledWith(1280, 120);
+    expect(ctx.moveTo).toHaveBeenCalledWith(0, 280);
+    expect(ctx.lineTo).toHaveBeenCalledWith(1280, 280);
+
+    // Selection bounding box
+    expect(ctx.strokeRect).toHaveBeenCalledWith(200, 120, 300, 160);
+  });
+
+  it("renders compact margin percentage readouts only when showMarginReadouts is true", () => {
+    const ctx = createMockContext();
+    const rect = { x: 256, y: 144, w: 256, h: 144 };
+
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      lockState: { lockedX: null, lockedY: null },
+      selectedRect: rect,
+      showMarginReadouts: false,
+    });
+    expect(ctx.fillText).not.toHaveBeenCalled();
+
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      lockState: { lockedX: null, lockedY: null },
+      activeRect: rect,
+      showMarginReadouts: true,
+    });
+    expect(ctx.fillText).toHaveBeenCalled();
+  });
+
+  it("renders YouTube bottom-right timestamp safe-zone indicator when showSafeZone is true", () => {
+    const ctx = createMockContext();
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      lockState: { lockedX: null, lockedY: null },
+      showSafeZone: true,
+    });
+
+    const szX = Math.round(0.86 * 1280);
+    const szY = Math.round(0.86 * 720);
+    const szW = Math.round(0.12 * 1280);
+    const szH = Math.round(0.10 * 720);
+
+    expect(ctx.fillRect).toHaveBeenCalledWith(szX, szY, szW, szH);
+    expect(ctx.strokeRect).toHaveBeenCalledWith(szX, szY, szW, szH);
   });
 });
