@@ -12,10 +12,20 @@ import {
   ThumbnailElementId,
 } from "../../utils/thumbnailGenerator";
 import {
+  buildSnapLabel,
   computeStickySnap,
+  GRID_ANCHORS_X,
+  GRID_ANCHORS_Y,
+  ARTWORK_ANCHORS_X,
+  ARTWORK_ANCHORS_Y,
   renderAlignmentGuides,
   SnapLockState,
 } from "../../utils/thumbnailSnap";
+import {
+  useThumbnailHistory,
+  buildConfigRestorePatch,
+  isEditableKeyboardTarget,
+} from "../../hooks/useThumbnailHistory";
 
 export interface ThumbnailCanvasEditorProps {
   readonly config: Partial<TagThumbnailConfig>;
@@ -24,7 +34,11 @@ export interface ThumbnailCanvasEditorProps {
   readonly gameTitle?: string;
   readonly episodeNumber: number;
   readonly className?: string;
+  readonly isLoading?: boolean;
+  readonly emptyMessage?: string;
   readonly onConfigChange: (patch: Partial<TagThumbnailConfig>) => void;
+  readonly onRenderRects?: (rects: ThumbnailRects) => void;
+  readonly historyResetKey?: string | number;
 }
 
 export default function ThumbnailCanvasEditor({
@@ -34,27 +48,61 @@ export default function ThumbnailCanvasEditor({
   gameTitle = "",
   episodeNumber,
   className = "",
+  isLoading = false,
+  emptyMessage,
   onConfigChange,
+  onRenderRects,
+  historyResetKey,
 }: ThumbnailCanvasEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectsRef = useRef<ThumbnailRects>({});
   const [activeDrag, setActiveDrag] = useState<ThumbnailElementId | "image" | null>(null);
   const dragStartRef = useRef<{ clientX: number; clientY: number } | null>(null);
-  const currentFramingRef = useRef<ImageFraming>(
+  const rawFramingRef = useRef<ImageFraming>(
     config.image_framing || DEFAULT_FRAMING
   );
+
+  const history = useThumbnailHistory(config, {
+    resetKey: historyResetKey,
+  });
 
   const [snapEnabled, setSnapEnabled] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [activeSnapLabel, setActiveSnapLabel] = useState<string | null>(null);
+  const [quickAlignedElement, setQuickAlignedElement] = useState<ThumbnailElementId | null>(null);
+  const quickAlignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevCoordsRef = useRef<{
+    title?: { x?: number; y?: number };
+    logo?: { x?: number; y?: number };
+    episode?: { x?: number; y?: number };
+  }>({
+    title: config.title ? { x: config.title.x, y: config.title.y } : undefined,
+    logo: config.logo ? { x: config.logo.x, y: config.logo.y } : undefined,
+    episode: config.episode_layout ? { x: config.episode_layout.x, y: config.episode_layout.y } : undefined,
+  });
 
   const snapLockRef = useRef<SnapLockState>({ lockedX: null, lockedY: null });
   const dragRawPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const selectedElementRef = useRef<ThumbnailElementId | null>(null);
 
-  useEffect(() => {
-    currentFramingRef.current = config.image_framing || DEFAULT_FRAMING;
-  }, [config.image_framing]);
+  const handleCenterArtwork = () => {
+    const current = config.image_framing || DEFAULT_FRAMING;
+    const centeredFraming = clampFraming({ ...current, offset_x: 0.5, offset_y: 0.5 });
+    rawFramingRef.current = centeredFraming;
+    const lockState: SnapLockState = {
+      lockedX: ARTWORK_ANCHORS_X[0] || null,
+      lockedY: ARTWORK_ANCHORS_Y[0] || null,
+    };
+    snapLockRef.current = lockState;
+    setActiveSnapLabel(buildSnapLabel(lockState));
+    history.pushState({
+      ...config,
+      image_framing: centeredFraming,
+    });
+    onConfigChange({
+      image_framing: centeredFraming,
+    });
+  };
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -83,13 +131,15 @@ export default function ThumbnailCanvasEditor({
     });
 
     rectsRef.current = renderedRects;
+    onRenderRects?.(renderedRects);
 
     const ctx = canvas.getContext("2d");
-    if (ctx && (showGrid || activeDrag !== null)) {
+    const isHighlighting = activeDrag !== null || quickAlignedElement !== null;
+    if (ctx && (showGrid || isHighlighting)) {
+      const activeTarget =
+        activeDrag && activeDrag !== "image" ? activeDrag : quickAlignedElement;
       const activeRect =
-        activeDrag && activeDrag !== "image"
-          ? renderedRects[activeDrag]
-          : undefined;
+        activeTarget ? renderedRects[activeTarget] : undefined;
       renderAlignmentGuides(ctx, canvas.width || 1280, canvas.height || 720, {
         showBaseGrid: showGrid,
         lockState: snapLockRef.current,
@@ -110,11 +160,109 @@ export default function ThumbnailCanvasEditor({
     config.title,
     showGrid,
     activeDrag,
+    quickAlignedElement,
+    onRenderRects,
   ]);
 
   useEffect(() => {
     draw();
   }, [draw]);
+
+  useEffect(() => {
+    return () => {
+      if (quickAlignTimerRef.current) {
+        clearTimeout(quickAlignTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeDrag !== null) {
+      prevCoordsRef.current = {
+        title: config.title ? { x: config.title.x, y: config.title.y } : undefined,
+        logo: config.logo ? { x: config.logo.x, y: config.logo.y } : undefined,
+        episode: config.episode_layout ? { x: config.episode_layout.x, y: config.episode_layout.y } : undefined,
+      };
+      return;
+    }
+
+    const curTitle = config.title ? { x: config.title.x, y: config.title.y } : undefined;
+    const curLogo = config.logo ? { x: config.logo.x, y: config.logo.y } : undefined;
+    const curEpisode = config.episode_layout ? { x: config.episode_layout.x, y: config.episode_layout.y } : undefined;
+
+    const prevTitle = prevCoordsRef.current.title;
+    const prevLogo = prevCoordsRef.current.logo;
+    const prevEpisode = prevCoordsRef.current.episode;
+
+    let alignedTarget: ThumbnailElementId | null = null;
+    let targetX = 0.5;
+    let targetY = 0.5;
+
+    if (
+      curTitle &&
+      prevTitle &&
+      (curTitle.x !== prevTitle.x || curTitle.y !== prevTitle.y)
+    ) {
+      alignedTarget = "title";
+      targetX = curTitle.x ?? 0.5;
+      targetY = curTitle.y ?? 0.85;
+    } else if (
+      curLogo &&
+      prevLogo &&
+      (curLogo.x !== prevLogo.x || curLogo.y !== prevLogo.y)
+    ) {
+      alignedTarget = "logo";
+      targetX = curLogo.x ?? 0.2;
+      targetY = curLogo.y ?? 0.2;
+    } else if (
+      curEpisode &&
+      prevEpisode &&
+      (curEpisode.x !== prevEpisode.x || curEpisode.y !== prevEpisode.y)
+    ) {
+      alignedTarget = "episode";
+      targetX = curEpisode.x ?? 0.85;
+      targetY = curEpisode.y ?? 0.85;
+    }
+
+    prevCoordsRef.current = {
+      title: curTitle,
+      logo: curLogo,
+      episode: curEpisode,
+    };
+
+    if (alignedTarget) {
+      const activeRect = rectsRef.current[alignedTarget];
+      const canvasW = canvasRef.current?.width || 1280;
+      const canvasH = canvasRef.current?.height || 720;
+      const halfW = activeRect ? (activeRect.w / canvasW) / 2 : 0.13;
+      const halfH = activeRect ? (activeRect.h / canvasH) / 2 : 0.13;
+
+      const snapResult = computeStickySnap(targetX, targetY, undefined, {
+        elementSize: { halfW, halfH },
+      });
+
+      snapLockRef.current = snapResult.lockState;
+      setActiveSnapLabel(snapResult.activeLabel);
+      setQuickAlignedElement(alignedTarget);
+
+      if (quickAlignTimerRef.current) {
+        clearTimeout(quickAlignTimerRef.current);
+      }
+      quickAlignTimerRef.current = setTimeout(() => {
+        setQuickAlignedElement(null);
+        snapLockRef.current = { lockedX: null, lockedY: null };
+        setActiveSnapLabel(null);
+      }, 2500);
+    }
+  }, [
+    config.title?.x,
+    config.title?.y,
+    config.logo?.x,
+    config.logo?.y,
+    config.episode_layout?.x,
+    config.episode_layout?.y,
+    activeDrag,
+  ]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -132,6 +280,7 @@ export default function ThumbnailCanvasEditor({
     const hit = hitTestElements(rectsRef.current, canvasPoint.x, canvasPoint.y);
 
     if (hit) {
+      history.beginBatch();
       setActiveDrag(hit);
       selectedElementRef.current = hit;
       const canvasW = canvas.width || 1280;
@@ -162,8 +311,12 @@ export default function ThumbnailCanvasEditor({
       snapLockRef.current = { lockedX: null, lockedY: null };
       setActiveSnapLabel(null);
     } else if (baseImage) {
+      history.beginBatch();
       setActiveDrag("image");
       selectedElementRef.current = null;
+      rawFramingRef.current = clampFraming(config.image_framing || DEFAULT_FRAMING);
+      snapLockRef.current = { lockedX: null, lockedY: null };
+      setActiveSnapLabel(null);
     } else {
       return;
     }
@@ -189,38 +342,62 @@ export default function ThumbnailCanvasEditor({
     const scaleX = canvasW / (rect.width || 1);
     const scaleY = canvasH / (rect.height || 1);
 
+    const bypassSnap = !snapEnabled || Boolean(e.altKey);
+
     if (activeDrag === "image") {
       if (!baseImage) return;
-      const dxCanvas = dx * scaleX;
-      const dyCanvas = dy * scaleY;
-      const updated = panFraming(
-        currentFramingRef.current,
-        dxCanvas,
-        dyCanvas,
+      const rawFraming = panFraming(
+        rawFramingRef.current,
+        dx * scaleX,
+        dy * scaleY,
         baseImage.naturalWidth,
         baseImage.naturalHeight,
         canvasW,
         canvasH
       );
-      currentFramingRef.current = updated;
-      onConfigChange({ image_framing: updated });
+      rawFramingRef.current = rawFraming;
+
+      const snapResult = computeStickySnap(
+        rawFraming.offset_x,
+        rawFraming.offset_y,
+        snapLockRef.current,
+        {
+          bypassSnap,
+          anchorsX: ARTWORK_ANCHORS_X,
+          anchorsY: ARTWORK_ANCHORS_Y,
+        }
+      );
+
+      snapLockRef.current = snapResult.lockState;
+      setActiveSnapLabel(snapResult.activeLabel);
+      const framingPatch = {
+        image_framing: { ...rawFraming, offset_x: snapResult.x, offset_y: snapResult.y },
+      };
+      history.updateBatchPreview({ ...config, ...framingPatch });
+      onConfigChange(framingPatch);
     } else {
       // Moving an element (episode, logo, or title)
       const deltaNormalizedX = (dx * scaleX) / canvasW;
       const deltaNormalizedY = (dy * scaleY) / canvasH;
 
-      dragRawPosRef.current = {
-        x: Math.max(0, Math.min(1, dragRawPosRef.current.x + deltaNormalizedX)),
-        y: Math.max(0, Math.min(1, dragRawPosRef.current.y + deltaNormalizedY)),
-      };
+      const rawX = Math.max(0, Math.min(1, dragRawPosRef.current.x + deltaNormalizedX));
+      const rawY = Math.max(0, Math.min(1, dragRawPosRef.current.y + deltaNormalizedY));
+      dragRawPosRef.current = { x: rawX, y: rawY };
 
-      const bypassSnap = !snapEnabled || Boolean(e.altKey);
+      const activeRect = rectsRef.current[activeDrag];
+      const halfW = activeRect ? (activeRect.w / canvasW) / 2 : 0;
+      const halfH = activeRect ? (activeRect.h / canvasH) / 2 : 0;
+
       const snapResult = computeStickySnap(
-        dragRawPosRef.current.x,
-        dragRawPosRef.current.y,
+        rawX,
+        rawY,
         snapLockRef.current,
-        { bypassSnap }
+        {
+          bypassSnap,
+          elementSize: { halfW, halfH },
+        }
       );
+
       snapLockRef.current = snapResult.lockState;
       setActiveSnapLabel(snapResult.activeLabel);
 
@@ -234,35 +411,42 @@ export default function ThumbnailCanvasEditor({
             : 0.85,
           scale: 1,
         };
-        onConfigChange({
+        const epPatch = {
           episode_layout: {
             ...cur,
             x: snapResult.x,
             y: snapResult.y,
           },
-        });
+        };
+        history.updateBatchPreview({ ...config, ...epPatch });
+        onConfigChange(epPatch);
       } else if (activeDrag === "logo" && config.logo) {
-        onConfigChange({
+        const logoPatch = {
           logo: {
             ...config.logo,
             x: snapResult.x,
             y: snapResult.y,
           },
-        });
+        };
+        history.updateBatchPreview({ ...config, ...logoPatch });
+        onConfigChange(logoPatch);
       } else if (activeDrag === "title" && config.title) {
-        onConfigChange({
+        const titlePatch = {
           title: {
             ...config.title,
             x: snapResult.x,
             y: snapResult.y,
           },
-        });
+        };
+        history.updateBatchPreview({ ...config, ...titlePatch });
+        onConfigChange(titlePatch);
       }
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!activeDrag) return;
+    history.commitBatch();
     setActiveDrag(null);
     dragStartRef.current = null;
     snapLockRef.current = { lockedX: null, lockedY: null };
@@ -297,7 +481,9 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
-      onConfigChange({ logo: { ...cur, ...updated } });
+      const patch = { logo: { ...cur, ...updated } };
+      history.pushState({ ...config, ...patch });
+      onConfigChange(patch);
       e.preventDefault();
     } else if (target === "title" && config.title?.enabled) {
       const cur = config.title;
@@ -306,7 +492,9 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
-      onConfigChange({ title: { ...cur, ...updated } });
+      const patch = { title: { ...cur, ...updated } };
+      history.pushState({ ...config, ...patch });
+      onConfigChange(patch);
       e.preventDefault();
     } else if (target === "episode") {
       const cur = config.episode_layout || { x: 0.85, y: 0.85, scale: 1 };
@@ -315,74 +503,219 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
-      onConfigChange({ episode_layout: updated });
+      const patch = { episode_layout: updated };
+      history.pushState({ ...config, ...patch });
+      onConfigChange(patch);
       e.preventDefault();
     }
   };
 
-  return (
-    <div
-      className={`aspect-video w-full rounded border border-white/10 overflow-hidden bg-black/60 relative select-none ${className}`}
-    >
-      {/* Active Snap HUD Indicator */}
-      {activeSnapLabel && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none z-10">
-          <span className="bg-black/80 text-accent border border-accent/40 rounded-full px-2.5 py-0.5 text-[11px] font-medium shadow-sm flex items-center gap-1.5 whitespace-nowrap select-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-            {activeSnapLabel}
-          </span>
-        </div>
-      )}
+  const handleUndo = useCallback(() => {
+    const target = history.undo();
+    if (!target) return;
+    const patch = buildConfigRestorePatch(config, target);
+    onConfigChange(patch);
+  }, [config, history, onConfigChange]);
 
-      {/* Floating Toolbar (Top Right) */}
-      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10 bg-black/60 backdrop-blur-xs p-1 rounded-md border border-white/10 text-xs select-none">
-        <button
-          type="button"
-          aria-label="Toggle magnetic grid snap"
-          title="Toggle magnetic grid snap (or hold Alt while dragging)"
-          onClick={() => setSnapEnabled((prev) => !prev)}
-          className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-            snapEnabled
-              ? "bg-accent/20 text-accent border border-accent/40"
-              : "text-text-muted hover:text-white"
+  const handleRedo = useCallback(() => {
+    const target = history.redo();
+    if (!target) return;
+    const patch = buildConfigRestorePatch(config, target);
+    onConfigChange(patch);
+  }, [config, history, onConfigChange]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(e.target)) return;
+
+      const isMac =
+        typeof navigator !== "undefined" &&
+        Boolean(navigator.platform && navigator.platform.toUpperCase().includes("MAC"));
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+      if (!modifier || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if (key === "y" && !e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [handleUndo, handleRedo]);
+
+  return (
+    <div className={`flex flex-col gap-2 w-full ${className}`}>
+      {/* 16:9 Canvas Frame */}
+      <div
+        className={`aspect-video w-full rounded-lg overflow-hidden bg-black/60 relative select-none shadow-xs transition-colors duration-150 ${
+          activeDrag !== null || quickAlignedElement !== null
+            ? "border-2 border-accent"
+            : "border border-border-subtle"
+        }`}
+      >
+        {/* Active Snap HUD Indicator */}
+        {activeSnapLabel && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+            <span className="bg-black/80 text-accent border border-accent/40 rounded-full px-2.5 py-0.5 text-[11px] font-medium shadow-xs flex items-center gap-1.5 whitespace-nowrap select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              {activeSnapLabel}
+            </span>
+          </div>
+        )}
+
+        <canvas
+          ref={canvasRef}
+          width={1280}
+          height={720}
+          tabIndex={0}
+          aria-label="Thumbnail canvas preview with interactive elements"
+          className={`w-full h-full object-cover touch-none outline-none ${
+            activeDrag
+              ? "cursor-grabbing"
+              : baseImage
+              ? "cursor-grab"
+              : "cursor-default"
           }`}
-        >
-          Snap: {snapEnabled ? "On" : "Off"}
-        </button>
-        <button
-          type="button"
-          aria-label="Show or hide 3x3 alignment grid"
-          title="Show or hide 3x3 alignment grid"
-          onClick={() => setShowGrid((prev) => !prev)}
-          className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-            showGrid
-              ? "bg-accent/20 text-accent border border-accent/40"
-              : "text-text-muted hover:text-white"
-          }`}
-        >
-          Grid: {showGrid ? "On" : "Off"}
-        </button>
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onKeyDown={handleKeyDown}
+        />
+
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs pointer-events-none z-10">
+            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!isLoading && !baseImage && (
+          <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80 pointer-events-none z-10">
+            {emptyMessage || "No artwork loaded"}
+          </span>
+        )}
       </div>
 
-      <canvas
-        ref={canvasRef}
-        width={1280}
-        height={720}
-        tabIndex={0}
-        aria-label="Thumbnail canvas preview with interactive elements"
-        className={`w-full h-full object-cover touch-none outline-none ${
-          activeDrag
-            ? "cursor-grabbing"
-            : baseImage
-            ? "cursor-grab"
-            : "cursor-default"
-        }`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onKeyDown={handleKeyDown}
-      />
+      {/* Canvas Tooling Controls (Underneath the preview) */}
+      <div className="flex items-center justify-between gap-1.5 text-xs select-none flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="Center artwork"
+            title="Center the background artwork (offset 50%, 50%)"
+            disabled={!baseImage}
+            onClick={handleCenterArtwork}
+            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="22" y1="12" x2="18" y2="12" />
+              <line x1="6" y1="12" x2="2" y2="12" />
+              <line x1="12" y1="6" x2="12" y2="2" />
+              <line x1="12" y1="22" x2="12" y2="18" />
+            </svg>
+            <span>Center art</span>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Undo"
+            title="Undo (Ctrl+Z)"
+            disabled={!history.canUndo}
+            onClick={handleUndo}
+            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+            <span>Undo</span>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Redo"
+            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+            disabled={!history.canRedo}
+            onClick={handleRedo}
+            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            <span>Redo</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="Toggle magnetic grid snap"
+            title="Toggle magnetic grid snap (or hold Alt while dragging)"
+            onClick={() => setSnapEnabled((prev) => !prev)}
+            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
+              snapEnabled
+                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
+                : "btn-secondary text-text-muted hover:text-white"
+            }`}
+          >
+            Snap: {snapEnabled ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            aria-label="Show or hide 3x3 alignment grid"
+            title="Show or hide 3x3 alignment grid"
+            onClick={() => setShowGrid((prev) => !prev)}
+            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
+              showGrid
+                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
+                : "btn-secondary text-text-muted hover:text-white"
+            }`}
+          >
+            Grid: {showGrid ? "On" : "Off"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

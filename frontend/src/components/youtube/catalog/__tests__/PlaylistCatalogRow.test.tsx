@@ -98,7 +98,7 @@ describe("PlaylistCatalogRow", () => {
     expect(screen.getByText("Suggested: control")).toBeInTheDocument();
   });
 
-  it("renders custom thumb badge and accented thumbnail border when hasCustomTemplate is true", () => {
+  it("does not render a custom thumb badge and shows the template image as the cover", () => {
     const playlist = {
       playlistId: "pl-custom",
       title: "Hades VODs",
@@ -106,30 +106,7 @@ describe("PlaylistCatalogRow", () => {
       linked: true,
       tag: "Hades",
       hasCustomTemplate: true,
-      thumbnailUrl: "https://example.com/custom_preview.jpg",
-    } as backend.CatalogPlaylistSummary;
-
-    render(
-      <PlaylistCatalogRow
-        playlist={playlist}
-        isSelected={false}
-        onSelect={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText("Custom thumb")).toBeInTheDocument();
-    const thumbContainer = screen.getByRole("img", { name: "Hades VODs" }).parentElement;
-    expect(thumbContainer).toHaveClass("border-accent/40");
-  });
-
-  it("does not render custom thumb badge when hasCustomTemplate is false", () => {
-    const playlist = {
-      playlistId: "pl-default",
-      title: "Hades VODs",
-      videoCount: 5,
-      linked: true,
-      tag: "Hades",
-      hasCustomTemplate: false,
+      thumbnailUrl: "/cache/yt_thumbs/tag_template.jpg?v=1",
     } as backend.CatalogPlaylistSummary;
 
     render(
@@ -141,6 +118,9 @@ describe("PlaylistCatalogRow", () => {
     );
 
     expect(screen.queryByText("Custom thumb")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Hades VODs" })).toHaveAttribute(
+      "src",
+      "/cache/yt_thumbs/tag_template.jpg?v=1"
+    );
   });
 });
-

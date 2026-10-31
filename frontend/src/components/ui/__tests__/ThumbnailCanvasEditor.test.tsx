@@ -1,31 +1,9 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ThumbnailCanvasEditor from "../ThumbnailCanvasEditor";
 import { TagThumbnailConfig } from "../../../types";
 import * as thumbnailGenerator from "../../../utils/thumbnailGenerator";
-
-// Mock HTMLCanvasElement.getContext
-HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
-  fillStyle: "",
-  strokeStyle: "",
-  lineWidth: 1,
-  fillRect: vi.fn(),
-  strokeRect: vi.fn(),
-  drawImage: vi.fn(),
-  measureText: vi.fn().mockReturnValue({ width: 50 }),
-  save: vi.fn(),
-  restore: vi.fn(),
-  strokeText: vi.fn(),
-  fillText: vi.fn(),
-  setLineDash: vi.fn(),
-  beginPath: vi.fn(),
-  moveTo: vi.fn(),
-  lineTo: vi.fn(),
-  stroke: vi.fn(),
-  arc: vi.fn(),
-  fill: vi.fn(),
-}) as any;
 
 describe("ThumbnailCanvasEditor", () => {
   const baseConfig: TagThumbnailConfig = {
@@ -40,6 +18,33 @@ describe("ThumbnailCanvasEditor", () => {
     naturalWidth: 1000,
     naturalHeight: 1000,
   } as unknown as HTMLImageElement;
+
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      drawImage: vi.fn(),
+      measureText: vi.fn().mockReturnValue({ width: 50 }),
+      save: vi.fn(),
+      restore: vi.fn(),
+      strokeText: vi.fn(),
+      fillText: vi.fn(),
+      setLineDash: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+    }) as any;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("renders a canvas and calls onConfigChange with new image_framing when dragged", () => {
     const onConfigChange = vi.fn();
@@ -243,5 +248,195 @@ describe("ThumbnailCanvasEditor", () => {
     fireEvent.click(gridBtn);
     expect(gridBtn).toHaveTextContent(/Grid: On/i);
   });
+
+  it("centers artwork framing when 'Center art' button is clicked", () => {
+    const onConfigChange = vi.fn();
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={{
+          ...baseConfig,
+          image_framing: { offset_x: 0.2, offset_y: 0.8, zoom: 1.5 },
+        }}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const centerBtn = getByRole("button", { name: /center artwork/i });
+    fireEvent.click(centerBtn);
+
+    expect(onConfigChange).toHaveBeenCalledWith({
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1.5 },
+    });
+  });
+
+  it("renders empty message when no baseImage is loaded", () => {
+    const { getByText } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={null}
+        episodeNumber={1}
+        emptyMessage="Custom empty text"
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    expect(getByText("Custom empty text")).toBeInTheDocument();
+  });
+
+  it("renders Undo and Redo toolbar buttons with initial disabled state", () => {
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    const redoBtn = getByRole("button", { name: /^redo/i });
+
+    expect(undoBtn).toBeInTheDocument();
+    expect(redoBtn).toBeInTheDocument();
+    expect(undoBtn).toBeDisabled();
+    expect(redoBtn).toBeDisabled();
+  });
+
+  it("records a single undoable step on canvas drag pointerUp and reverts via Undo button", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1 },
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { container, getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    expect(canvas).toBeDefined();
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 180,
+      height: 101.25,
+      left: 0,
+      top: 0,
+      right: 180,
+      bottom: 101.25,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Start drag
+    fireEvent.pointerDown(canvas, { clientX: 50, clientY: 50, pointerId: 1 });
+    // Intermediate drag moves
+    fireEvent.pointerMove(canvas, { clientX: 70, clientY: 60, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 90, clientY: 70, pointerId: 1 });
+    // Release pointer (commits single batch)
+    fireEvent.pointerUp(canvas, { clientX: 90, clientY: 70, pointerId: 1 });
+
+    // Rerender with latest config
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    expect(undoBtn).not.toBeDisabled();
+
+    // Click Undo
+    fireEvent.click(undoBtn);
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.image_framing).toBeDefined();
+    expect(lastCall.image_framing?.offset_x).toBe(0.5);
+    expect(lastCall.image_framing?.offset_y).toBe(0.5);
+
+    // Redo should now be enabled
+    const redoBtn = getByRole("button", { name: /^redo/i });
+    expect(redoBtn).not.toBeDisabled();
+    fireEvent.click(redoBtn);
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  it("handles Ctrl+Z and Ctrl+Y keyboard shortcuts to undo and redo", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1 },
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    // Click Center art to produce a state change
+    const centerBtn = getByRole("button", { name: /center artwork/i });
+    fireEvent.click(centerBtn);
+
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    // Ctrl+Z should trigger undo
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+
+    // Ctrl+Y should trigger redo
+    fireEvent.keyDown(window, { key: "y", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  it("does not trigger undo/redo when typing inside an input element", () => {
+    const onConfigChange = vi.fn();
+    render(
+      <div>
+        <ThumbnailCanvasEditor
+          config={baseConfig}
+          baseImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+        <input data-testid="test-input" type="text" />
+      </div>
+    );
+
+    const input = document.querySelector('input[data-testid="test-input"]');
+    expect(input).toBeInTheDocument();
+    if (!input) return;
+
+    fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+    expect(onConfigChange).not.toHaveBeenCalled();
+  });
 });
+
 

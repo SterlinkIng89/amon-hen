@@ -11,6 +11,7 @@ import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import ThumbnailCanvasEditor from "./ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "./ThumbnailFramingControls";
 import ThumbnailElementControls from "./ThumbnailElementControls";
+import { ThumbnailRects } from "../../utils/thumbnailGenerator";
 
 export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
@@ -20,6 +21,7 @@ export interface TagThumbnailConfigSectionProps {
   readonly clipPlaylistId?: string;
   readonly onPlaylistCoverUpdated?: (playlistId: string, thumbUrl: string) => void;
   readonly hidePreviewCanvas?: boolean;
+  readonly elementRects?: ThumbnailRects;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -49,7 +51,9 @@ export default function TagThumbnailConfigSection({
   clipPlaylistId,
   onPlaylistCoverUpdated,
   hidePreviewCanvas = false,
+  elementRects,
 }: TagThumbnailConfigSectionProps) {
+  const [localRects, setLocalRects] = useState<ThumbnailRects>({});
   const parsed = parseTagThumbnailConfig(value);
   const config: TagThumbnailConfig = {
     ...DEFAULT_CONFIG,
@@ -166,6 +170,8 @@ export default function TagThumbnailConfigSection({
                   gameTitle={gameTitle}
                   episodeNumber={1}
                   onConfigChange={update}
+                  onRenderRects={setLocalRects}
+                  historyResetKey={tag}
                 />
               </>
             )}
@@ -179,6 +185,7 @@ export default function TagThumbnailConfigSection({
               hasLogo={Boolean(steamAssets?.logoUrl)}
               defaultTitle={gameTitle}
               onChange={update}
+              elementRects={elementRects ?? localRects}
             />
           </div>
 

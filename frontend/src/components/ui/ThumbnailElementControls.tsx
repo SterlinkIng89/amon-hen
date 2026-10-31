@@ -4,7 +4,11 @@ import {
   ANCHOR_PRESETS,
   AnchorPresetId,
   detectActiveAnchorPreset,
+  getElementHalfDimensions,
+  getPresetCoordinates,
+  ElementHalfDimensions,
 } from "../../utils/thumbnailSnap";
+import { ThumbnailRects } from "../../utils/thumbnailGenerator";
 
 interface QuickAlignmentControlProps {
   readonly label: string;
@@ -12,6 +16,7 @@ interface QuickAlignmentControlProps {
   readonly y: number;
   readonly onChangeCoord: (x: number, y: number) => void;
   readonly cornersOnly?: boolean;
+  readonly elementSize?: ElementHalfDimensions;
 }
 
 const PRESET_MATRIX: readonly { readonly id: AnchorPresetId; readonly shortLabel: string }[] = [
@@ -32,8 +37,9 @@ function QuickAlignmentControl({
   y,
   onChangeCoord,
   cornersOnly = false,
+  elementSize,
 }: QuickAlignmentControlProps) {
-  const activePreset = detectActiveAnchorPreset({ x, y });
+  const activePreset = detectActiveAnchorPreset({ x, y }, elementSize);
 
   return (
     <div className="flex flex-col gap-2 pt-1 border-t border-border-subtle/60 mt-1">
@@ -61,13 +67,14 @@ function QuickAlignmentControl({
             }
             const isActive = activePreset === id;
             const presetInfo = ANCHOR_PRESETS[id];
+            const targetCoords = getPresetCoordinates(id, elementSize);
             return (
               <button
                 key={id}
                 type="button"
                 aria-label={`${label} ${presetInfo.label}`}
-                title={`${label} ${presetInfo.label} (${Math.round(presetInfo.x * 100)}%, ${Math.round(presetInfo.y * 100)}%)`}
-                onClick={() => onChangeCoord(presetInfo.x, presetInfo.y)}
+                title={`${label} ${presetInfo.label} (${Math.round(targetCoords.x * 100)}%, ${Math.round(targetCoords.y * 100)}%)`}
+                onClick={() => onChangeCoord(targetCoords.x, targetCoords.y)}
                 className={`w-5 h-5 rounded text-[9px] font-semibold transition-colors flex items-center justify-center cursor-pointer ${
                   isActive
                     ? "bg-accent text-white border border-accent shadow-xs"
@@ -138,6 +145,7 @@ export interface ThumbnailElementControlsProps {
   readonly hasLogo: boolean;
   readonly defaultTitle: string;
   readonly onChange: (patch: Partial<TagThumbnailConfig>) => void;
+  readonly elementRects?: ThumbnailRects;
 }
 
 export default function ThumbnailElementControls({
@@ -145,10 +153,24 @@ export default function ThumbnailElementControls({
   hasLogo,
   defaultTitle,
   onChange,
+  elementRects,
 }: ThumbnailElementControlsProps) {
   const logo = config.logo;
   const title = config.title;
   const episodeLayout = config.episode_layout;
+
+  const logoSize = getElementHalfDimensions("logo", config, elementRects?.logo);
+  const titleSize = getElementHalfDimensions(
+    "title",
+    config,
+    elementRects?.title,
+    defaultTitle
+  );
+  const episodeSize = getElementHalfDimensions(
+    "episode",
+    config,
+    elementRects?.episode
+  );
 
   const toggleLogo = () => {
     if (logo?.enabled) {
@@ -262,6 +284,7 @@ export default function ThumbnailElementControls({
               label="Logo"
               x={logo.x ?? 0.2}
               y={logo.y ?? 0.2}
+              elementSize={logoSize}
               onChangeCoord={(newX, newY) =>
                 onChange({
                   logo: {
@@ -340,6 +363,7 @@ export default function ThumbnailElementControls({
               label="Title"
               x={title.x ?? 0.5}
               y={title.y ?? 0.85}
+              elementSize={titleSize}
               onChangeCoord={(newX, newY) =>
                 onChange({
                   title: {
@@ -383,6 +407,7 @@ export default function ThumbnailElementControls({
             x={episodeLayout.x ?? 0.85}
             y={episodeLayout.y ?? 0.85}
             cornersOnly={true}
+            elementSize={episodeSize}
             onChangeCoord={(newX, newY) =>
               onChange({
                 episode_layout: {

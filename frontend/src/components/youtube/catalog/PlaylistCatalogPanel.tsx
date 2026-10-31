@@ -21,6 +21,7 @@ import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
 import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
+import { ThumbnailRects } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
 
 export const PlaylistCatalogPanel: FC = () => {
@@ -93,10 +94,11 @@ export const PlaylistCatalogPanel: FC = () => {
     font_color: "#ffffff",
   });
   const [isConfigCustomized, setIsConfigCustomized] = useState(false);
-  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(true);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
+  const [editorRects, setEditorRects] = useState<ThumbnailRects>({});
 
   // Check Steam App ID when editedTag changes
   useEffect(() => {
@@ -586,28 +588,20 @@ export const PlaylistCatalogPanel: FC = () => {
                     </button>
                   </div>
 
-                  <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
-                    <ThumbnailCanvasEditor
-                      config={thumbConfig}
-                      baseImage={baseImage}
-                      logoImage={logoImage}
-                      gameTitle={gameTitle}
-                      episodeNumber={sampleEpisode}
-                      onConfigChange={(patch) =>
-                        setThumbConfig((prev) => ({ ...prev, ...patch, enabled: true }))
-                      }
-                    />
-                    {isLoadingAssets && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs pointer-events-none">
-                        <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
-                    {!isLoadingAssets && !baseImage && (
-                      <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80 pointer-events-none">
-                        No artwork loaded
-                      </span>
-                    )}
-                  </div>
+                  <ThumbnailCanvasEditor
+                    config={thumbConfig}
+                    baseImage={baseImage}
+                    logoImage={logoImage}
+                    gameTitle={gameTitle}
+                    episodeNumber={sampleEpisode}
+                    isLoading={isLoadingAssets}
+                    emptyMessage="No artwork loaded"
+                    onConfigChange={(patch) =>
+                      setThumbConfig((prev) => ({ ...prev, ...patch, enabled: true }))
+                    }
+                    onRenderRects={setEditorRects}
+                    historyResetKey={editedTag.trim()}
+                  />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div className="bg-elevated/40 border border-border-subtle rounded-lg p-2.5">
@@ -684,6 +678,7 @@ export const PlaylistCatalogPanel: FC = () => {
                           void loadPlaylists();
                         }}
                         hidePreviewCanvas={true}
+                        elementRects={editorRects}
                       />
                     </div>
                   )}

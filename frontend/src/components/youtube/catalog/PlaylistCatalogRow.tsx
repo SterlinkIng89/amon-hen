@@ -1,6 +1,6 @@
 import { FC } from "react";
 import { backend } from "../../../../wailsjs/go/models";
-import { getTagBadgeStyle } from "../../../utils/tagColors";
+import { getGameColor, getTagBadgeStyle } from "../../../utils/tagColors";
 
 interface PlaylistCatalogRowProps {
   readonly playlist: backend.CatalogPlaylistSummary;
@@ -16,26 +16,27 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
   const isSuggested =
     !playlist.linked && playlist.tagConfidence === "known" && Boolean(playlist.tag);
 
+  const tagColor = playlist.tag ? getGameColor(playlist.tag) : undefined;
+  const isTagSameAsTitle =
+    Boolean(playlist.tag) &&
+    playlist.title.trim().toLowerCase() === playlist.tag.trim().toLowerCase();
+
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center gap-3 cursor-pointer ${
+      className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center gap-3 cursor-pointer group ${
         isSelected
           ? "bg-accent/10 border-accent/40"
           : "bg-elevated/40 border-border-subtle hover:bg-elevated hover:border-border-medium"
       }`}
     >
-      <div
-        className={`w-12 h-8 rounded-md overflow-hidden bg-base border shrink-0 flex items-center justify-center ${
-          playlist.hasCustomTemplate ? "border-accent/40" : "border-border-subtle"
-        }`}
-      >
+      <div className="w-14 aspect-video rounded-md overflow-hidden bg-base border border-border-subtle shrink-0 flex items-center justify-center shadow-xs">
         {playlist.thumbnailUrl ? (
           <img
             src={playlist.thumbnailUrl}
             alt={playlist.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
           />
         ) : (
           <svg
@@ -56,9 +57,8 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
           <span
-            className={`text-xs font-semibold truncate ${
-              isSelected ? "text-accent" : "text-text-primary"
-            }`}
+            className="text-xs font-semibold truncate"
+            style={tagColor ? { color: tagColor } : undefined}
           >
             {playlist.title}
           </span>
@@ -68,12 +68,6 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {playlist.hasCustomTemplate && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Custom thumb
-            </span>
-          )}
-
           {playlist.kind === "clip" && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
               Clips
@@ -85,7 +79,7 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
               className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
               style={getTagBadgeStyle(playlist.tag)}
             >
-              {playlist.tag}
+              {isTagSameAsTitle ? "Linked" : playlist.tag}
             </span>
           ) : isSuggested ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">

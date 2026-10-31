@@ -155,7 +155,14 @@ describe("PlaylistCatalogPanel", () => {
 
     expect(screen.getByText(/Previewing Episode #2/i)).toBeInTheDocument();
 
-    // Toggle template editor
+    // Template editor is open by default
+    expect(screen.getByText(/Template Editor for "control"/i)).toBeInTheDocument();
+    const hideBtn = screen.getByRole("button", { name: /hide editor/i });
+    expect(hideBtn).toBeInTheDocument();
+
+    // Toggle template editor to hide and show again
+    fireEvent.click(hideBtn);
+    expect(screen.queryByText(/Template Editor for "control"/i)).not.toBeInTheDocument();
     const customizeBtn = screen.getByRole("button", { name: /customize/i });
     fireEvent.click(customizeBtn);
     expect(screen.getByText(/Template Editor for "control"/i)).toBeInTheDocument();
@@ -190,9 +197,6 @@ describe("PlaylistCatalogPanel", () => {
 
     const rowBtn = await screen.findByText("Control Walkthrough");
     fireEvent.click(rowBtn);
-
-    const customizeBtn = await screen.findByRole("button", { name: /customize/i });
-    fireEvent.click(customizeBtn);
 
     const saveTemplateBtn = await screen.findByRole("button", { name: /save template/i });
     fireEvent.click(saveTemplateBtn);
