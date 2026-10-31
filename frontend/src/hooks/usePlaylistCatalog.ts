@@ -103,6 +103,35 @@ export function usePlaylistCatalog() {
     []
   );
 
+  const updatePlaylistTemplatePreview = useCallback(
+    (tag: string, thumbnailUrl: string) => {
+      const normalizedTag = tag.trim().toLowerCase();
+      setPlaylists((prev) =>
+        prev.map((pl) => {
+          const plTag = (pl.tag || "").trim().toLowerCase();
+          if (plTag === normalizedTag || pl.playlistId === selectedPlaylistId) {
+            return backend.CatalogPlaylistSummary.createFrom({
+              ...pl,
+              thumbnailUrl: thumbnailUrl || pl.thumbnailUrl,
+              hasCustomTemplate: true,
+            });
+          }
+          return pl;
+        })
+      );
+      setDraft((prev) => {
+        if (!prev) return prev;
+        return backend.PlaylistCatalogDraft.createFrom({
+          ...prev,
+          thumbnailUrl: thumbnailUrl || prev.thumbnailUrl,
+          hasCustomTemplate: true,
+        });
+      });
+    },
+    [selectedPlaylistId]
+  );
+
+
   const setEpisode = useCallback((videoId: string, episode: number) => {
     setEditedEpisodes((prev) => ({
       ...prev,
@@ -216,6 +245,7 @@ function buildSequentialEpisodeMap(
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
     editedEpisodes,

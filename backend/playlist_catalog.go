@@ -3,6 +3,8 @@ package backend
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -24,14 +26,46 @@ type CatalogVideoDraft struct {
 }
 
 type CatalogPlaylistSummary struct {
-	PlaylistID    string `json:"playlistId"`
-	Title         string `json:"title"`
-	ThumbnailUrl  string `json:"thumbnailUrl"`
-	VideoCount    int    `json:"videoCount"`
-	Kind          string `json:"kind"` // "vod" | "clip"
-	Tag           string `json:"tag"`
-	TagConfidence string `json:"tagConfidence"` // "known" | "guess"
-	Linked        bool   `json:"linked"`
+	PlaylistID        string `json:"playlistId"`
+	Title             string `json:"title"`
+	ThumbnailUrl      string `json:"thumbnailUrl"`
+	VideoCount        int    `json:"videoCount"`
+	Kind              string `json:"kind"` // "vod" | "clip"
+	Tag               string `json:"tag"`
+	TagConfidence     string `json:"tagConfidence"` // "known" | "guess"
+	Linked            bool   `json:"linked"`
+	HasCustomTemplate bool   `json:"hasCustomTemplate"`
+}
+
+func hasCustomThumbnailConfig(cfg TagThumbnailConfig) bool {
+	return cfg.Enabled || cfg.SourceType != "" || cfg.SteamAssetType != ""
+}
+
+func (a *App) resolveTagTemplatePreviewURL(tag string) string {
+	cleanTag := strings.ToLower(strings.TrimSpace(tag))
+	if cleanTag == "" || a.cacheDir == "" {
+		return ""
+	}
+	key := customThumbKey("tag_template_" + cleanTag)
+	filePath := filepath.Join(a.cacheDir, "yt_thumbs", key+".jpg")
+	info, err := os.Stat(filePath)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+}
+
+func (a *App) resolvePlaylistThumbnailCandidate(currentThumb, tag, fallbackCustomVidThumb string) string {
+	if strings.HasPrefix(currentThumb, "/cache/yt_thumbs/") {
+		return currentThumb
+	}
+	if preview := a.resolveTagTemplatePreviewURL(tag); preview != "" {
+		return preview
+	}
+	if fallbackCustomVidThumb != "" {
+		return fallbackCustomVidThumb
+	}
+	return currentThumb
 }
 
 type PlaylistCatalogDraft struct {
@@ -248,7 +282,15 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	defer a.db.mu.Unlock()
 
 	rows, err := a.db.conn.Query(`
-		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0), COALESCE(p.thumbnail_url, '')
+		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0), COALESCE(p.thumbnail_url, ''),
+		       COALESCE((
+		           SELECT v.thumbnail_url
+		           FROM yt_playlist_items pi
+		           JOIN yt_videos v ON pi.video_id = v.id
+		           WHERE pi.playlist_id = p.id AND COALESCE(v.custom_thumb_updated_at, 0) > 0
+		           ORDER BY v.custom_thumb_updated_at DESC, pi.position ASC
+		           LIMIT 1
+		       ), '')
 		FROM yt_playlists p
 		ORDER BY COALESCE(
 			(SELECT MAX(v.published_at) FROM yt_videos v JOIN yt_playlist_items pi ON v.id = pi.video_id WHERE pi.playlist_id = p.id),
@@ -264,7 +306,8 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	var summaries []CatalogPlaylistSummary
 	for rows.Next() {
 		var s CatalogPlaylistSummary
-		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount, &s.ThumbnailUrl); err != nil {
+		var customVidThumb string
+		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount, &s.ThumbnailUrl, &customVidThumb); err != nil {
 			continue
 		}
 
@@ -277,6 +320,10 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 			s.Tag, s.Kind, s.TagConfidence = inferTagFromPlaylistTitle(s.Title, knownTags)
 			s.Linked = false
 		}
+
+		tagCfg := a.GetTagPlaylistConfig(s.Tag)
+		s.HasCustomTemplate = hasCustomThumbnailConfig(tagCfg.ThumbnailConfig)
+		s.ThumbnailUrl = a.resolvePlaylistThumbnailCandidate(s.ThumbnailUrl, s.Tag, customVidThumb)
 
 		summaries = append(summaries, s)
 	}
@@ -375,9 +422,19 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 
 	// Thumbnail config for tag
 	tagCfg := a.GetTagPlaylistConfig(tag)
-	if tagCfg.ThumbnailConfig.SourceType != "" || tagCfg.ThumbnailConfig.SteamAssetType != "" || tagCfg.ThumbnailConfig.Enabled {
+	if hasCustomThumbnailConfig(tagCfg.ThumbnailConfig) {
 		draft.ThumbnailConfig = &tagCfg.ThumbnailConfig
 	}
+	draft.HasCustomTemplate = hasCustomThumbnailConfig(tagCfg.ThumbnailConfig)
+
+	var customVidThumb string
+	for _, vid := range vids {
+		if vid.ThumbnailUpdatedAt > 0 && vid.ThumbnailUrl != "" {
+			customVidThumb = vid.ThumbnailUrl
+			break
+		}
+	}
+	draft.ThumbnailUrl = a.resolvePlaylistThumbnailCandidate(draft.ThumbnailUrl, tag, customVidThumb)
 
 	return draft, nil
 }

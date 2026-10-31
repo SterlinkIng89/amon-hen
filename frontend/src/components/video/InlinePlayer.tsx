@@ -373,6 +373,7 @@ export default function InlinePlayer({
     null,
   );
   const pendingSaveAfterTagModalRef = useRef(false);
+  const tagSavedDuringModalRef = useRef(false);
 
   const effectiveDuration = video.durationSecs || 0;
   const autoResolvedType: "vod" | "clip" =
@@ -854,6 +855,7 @@ export default function InlinePlayer({
     if (tagChanged && tagInput && tagPlaylists[tagInput] === undefined) {
       setSavingInfo(false);
       pendingSaveAfterTagModalRef.current = true;
+      tagSavedDuringModalRef.current = false;
       setPendingTagForModal(tagInput);
       return;
     }
@@ -1593,6 +1595,7 @@ export default function InlinePlayer({
         onYouTubeUpdated={() => onTagSaved?.()}
         onOpenTagSettings={() => {
           pendingSaveAfterTagModalRef.current = false;
+          tagSavedDuringModalRef.current = false;
           setPendingTagForModal(tagInput);
         }}
       />
@@ -2333,9 +2336,19 @@ export default function InlinePlayer({
       {pendingTagForModal && (
         <TagPlaylistModal
           tag={pendingTagForModal}
-          onClose={() => setPendingTagForModal(null)}
-          onSaved={() => {
+          onClose={() => {
             setPendingTagForModal(null);
+            if (pendingSaveAfterTagModalRef.current) {
+              const shouldSave = tagSavedDuringModalRef.current;
+              pendingSaveAfterTagModalRef.current = false;
+              tagSavedDuringModalRef.current = false;
+              if (shouldSave) {
+                performSaveInfo(true);
+              }
+            }
+          }}
+          onSaved={() => {
+            tagSavedDuringModalRef.current = true;
             LoadConfig()
               .then((cfg) => {
                 setGameProfiles(cfg.game_profiles || {});
@@ -2348,10 +2361,6 @@ export default function InlinePlayer({
                 );
               })
               .catch(() => {});
-            if (pendingSaveAfterTagModalRef.current) {
-              pendingSaveAfterTagModalRef.current = false;
-              performSaveInfo(true);
-            }
           }}
         />
       )}

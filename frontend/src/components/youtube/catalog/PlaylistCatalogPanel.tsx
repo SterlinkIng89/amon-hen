@@ -12,78 +12,17 @@ import {
   GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
+  SaveCustomThumbnail,
   SetTagThumbnailConfig,
 } from "../../../../wailsjs/go/backend/App";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem, TagThumbnailConfig } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
+import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
-import { renderThumbnailToCanvas } from "../../../utils/thumbnailGenerator";
+import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
+import { ThumbnailRects } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
-
-interface ThumbnailPreviewCanvasProps {
-  readonly config: TagThumbnailConfig;
-  readonly baseImage: HTMLImageElement | null;
-  readonly logoImage: HTMLImageElement | null;
-  readonly gameTitle: string;
-  readonly episodeNumber: number;
-  readonly isLoading: boolean;
-}
-
-const ThumbnailPreviewCanvas: FC<ThumbnailPreviewCanvasProps> = ({
-  config,
-  baseImage,
-  logoImage,
-  gameTitle,
-  episodeNumber,
-  isLoading,
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = 1280;
-    canvas.height = 720;
-    renderThumbnailToCanvas(canvas, baseImage, {
-      showEpisode: episodeNumber > 0,
-      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
-      episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-left",
-      fontColor: config.font_color || "#ffffff",
-      framing: config.image_framing,
-      episodeLayout: config.episode_layout,
-      logo: config.logo?.enabled
-        ? {
-            image: logoImage,
-            layout: config.logo,
-          }
-        : undefined,
-      title: config.title?.enabled
-        ? {
-            text: config.title.text_override || gameTitle,
-            layout: config.title,
-          }
-        : undefined,
-    });
-  }, [config, baseImage, logoImage, gameTitle, episodeNumber]);
-
-  return (
-    <div className="relative w-full aspect-video bg-black/40 rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
-      <canvas ref={canvasRef} className="w-full h-full object-cover" />
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs">
-          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-      {!isLoading && !baseImage && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80">
-          No artwork loaded
-        </span>
-      )}
-    </div>
-  );
-};
 
 export const PlaylistCatalogPanel: FC = () => {
   const {
@@ -98,6 +37,7 @@ export const PlaylistCatalogPanel: FC = () => {
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
     editedEpisodes,
@@ -154,10 +94,11 @@ export const PlaylistCatalogPanel: FC = () => {
     font_color: "#ffffff",
   });
   const [isConfigCustomized, setIsConfigCustomized] = useState(false);
-  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(true);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
+  const [editorRects, setEditorRects] = useState<ThumbnailRects>({});
 
   // Check Steam App ID when editedTag changes
   useEffect(() => {
@@ -234,6 +175,25 @@ export const PlaylistCatalogPanel: FC = () => {
       setIsConfigCustomized(true);
       setTemplateSaveSuccess(true);
       setTimeout(() => setTemplateSaveSuccess(false), 3000);
+
+      let previewDataUrl = "";
+      if (baseImage) {
+        try {
+          previewDataUrl = renderTagThumbnailDataUrl({
+            baseImage,
+            logoImage,
+            gameTitle,
+            episodeNumber: sampleEpisode,
+            config: thumbConfig,
+          });
+          await SaveCustomThumbnail("tag_template_" + tag.toLowerCase(), previewDataUrl);
+        } catch (renderErr: unknown) {
+          console.warn("[PlaylistCatalogPanel] Failed to render tag template preview:", renderErr);
+        }
+      }
+
+      updatePlaylistTemplatePreview(tag, previewDataUrl);
+      void loadPlaylists();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setTemplateSaveError(msg);
@@ -628,13 +588,19 @@ export const PlaylistCatalogPanel: FC = () => {
                     </button>
                   </div>
 
-                  <ThumbnailPreviewCanvas
+                  <ThumbnailCanvasEditor
                     config={thumbConfig}
                     baseImage={baseImage}
                     logoImage={logoImage}
                     gameTitle={gameTitle}
                     episodeNumber={sampleEpisode}
                     isLoading={isLoadingAssets}
+                    emptyMessage="No artwork loaded"
+                    onConfigChange={(patch) =>
+                      setThumbConfig((prev) => ({ ...prev, ...patch, enabled: true }))
+                    }
+                    onRenderRects={setEditorRects}
+                    historyResetKey={editedTag.trim()}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -711,6 +677,8 @@ export const PlaylistCatalogPanel: FC = () => {
                         onPlaylistCoverUpdated={() => {
                           void loadPlaylists();
                         }}
+                        hidePreviewCanvas={true}
+                        elementRects={editorRects}
                       />
                     </div>
                   )}

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PlaylistCatalogPanel } from "../PlaylistCatalogPanel";
 import * as AppBindings from "../../../../../wailsjs/go/backend/App";
@@ -9,9 +9,24 @@ vi.mock("../../../../../wailsjs/go/backend/App", () => ({
   ApplyPlaylistCatalog: vi.fn(),
   GetSteamAppID: vi.fn(),
   GetTagPlaylistConfig: vi.fn(),
+  SetTagThumbnailConfig: vi.fn(),
+  SaveCustomThumbnail: vi.fn(),
   GetSteamGameAssets: vi.fn(),
   UpdateYouTubeThumbnail: vi.fn(),
   GetAllGameTags: vi.fn(),
+}));
+
+vi.mock("../../../../utils/thumbnailRender", () => ({
+  renderTagThumbnailDataUrl: vi.fn().mockReturnValue("data:image/jpeg;base64,renderedtemplate"),
+}));
+
+vi.mock("../../../../hooks/useThumbnailAssets", () => ({
+  useThumbnailAssets: vi.fn().mockReturnValue({
+    baseImage: {} as HTMLImageElement,
+    logoImage: null,
+    gameTitle: "Control",
+    loadingAssets: false,
+  }),
 }));
 
 describe("PlaylistCatalogPanel", () => {
@@ -140,9 +155,68 @@ describe("PlaylistCatalogPanel", () => {
 
     expect(screen.getByText(/Previewing Episode #2/i)).toBeInTheDocument();
 
-    // Toggle template editor
+    // Template editor is open by default
+    expect(screen.getByText(/Template Editor for "control"/i)).toBeInTheDocument();
+    const hideBtn = screen.getByRole("button", { name: /hide editor/i });
+    expect(hideBtn).toBeInTheDocument();
+
+    // Toggle template editor to hide and show again
+    fireEvent.click(hideBtn);
+    expect(screen.queryByText(/Template Editor for "control"/i)).not.toBeInTheDocument();
     const customizeBtn = screen.getByRole("button", { name: /customize/i });
     fireEvent.click(customizeBtn);
     expect(screen.getByText(/Template Editor for "control"/i)).toBeInTheDocument();
+
+    // Verify unified single interactive canvas (no duplicate preview canvas rendered in collapsible editor)
+    const interactiveCanvases = screen.getAllByLabelText(/Thumbnail canvas preview with interactive elements/i);
+    expect(interactiveCanvases.length).toBe(1);
+    expect(screen.queryByText("Thumbnail Preview")).not.toBeInTheDocument();
+  });
+
+  it("renders and saves thumbnail template preview via SaveCustomThumbnail and updates playlist row on Save Template", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "Control Walkthrough", videoCount: 1, linked: true, tag: "control", hasCustomTemplate: false },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-1",
+      title: "Control Walkthrough",
+      videoCount: 1,
+      kind: "vod",
+      tag: "control",
+      tagConfidence: "high",
+      linked: true,
+      hasCustomTemplate: false,
+      videos: [
+        { videoId: "yt-1", title: "Control - Ep 1", existingEpisode: 0, episode: 1, conflict: false },
+      ],
+    } as any);
+    vi.mocked(AppBindings.SetTagThumbnailConfig).mockResolvedValue(undefined as any);
+    vi.mocked(AppBindings.SaveCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/tag_template_control.jpg");
+
+    render(<PlaylistCatalogPanel />);
+
+    const rowBtn = await screen.findByText("Control Walkthrough");
+    fireEvent.click(rowBtn);
+
+    const saveTemplateBtn = await screen.findByRole("button", { name: /save template/i });
+    fireEvent.click(saveTemplateBtn);
+
+    await waitFor(() => {
+      expect(AppBindings.SetTagThumbnailConfig).toHaveBeenCalledWith(
+        "control",
+        expect.anything()
+      );
+    });
+
+    await waitFor(() => {
+      expect(AppBindings.SaveCustomThumbnail).toHaveBeenCalledWith(
+        "tag_template_control",
+        "data:image/jpeg;base64,renderedtemplate"
+      );
+    });
+
+    expect(await screen.findByText("Template saved!")).toBeInTheDocument();
   });
 });
+
+

@@ -1,7 +1,9 @@
 package backend
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -343,4 +345,123 @@ func TestApplyPlaylistCatalog_UpdateLocal(t *testing.T) {
 		t.Errorf("expected VideoMetadata updated: Game='Hades II', Episode=10, PlaylistID='pl-local-sync', ContentType='vod'; got %+v", meta)
 	}
 }
+
+func TestListCatalogPlaylists_CustomTemplateAndPreviewPrecedence(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	// 1. Setup cache dir and write a tag_template thumbnail for "Hades"
+	cacheDir := t.TempDir()
+	app.cacheDir = cacheDir
+	thumbDir := filepath.Join(cacheDir, "yt_thumbs")
+	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+		t.Fatalf("failed to create thumb dir: %v", err)
+	}
+	hadesKey := customThumbKey("tag_template_hades")
+	hadesThumbPath := filepath.Join(thumbDir, hadesKey+".jpg")
+	if err := os.WriteFile(hadesThumbPath, []byte("fake-hades-preview"), 0644); err != nil {
+		t.Fatalf("failed to write hades preview: %v", err)
+	}
+
+	// 2. Insert playlists
+	// pl-hades: default YT thumb, has tag template file & config
+	// pl-elden: default YT thumb, no template file, but has video with custom_thumb_updated_at > 0
+	// pl-explicit: already has explicit /cache/yt_thumbs/ cover, has tag template file
+	// pl-none: default YT thumb, no custom config, no custom video
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, thumbnail_url, published_at) VALUES
+		('pl-hades', 'Hades VODs', 2, 'https://i.ytimg.com/vi/default_hades.jpg', '2026-01-01T00:00:00Z'),
+		('pl-elden', 'Elden Ring VODs', 1, 'https://i.ytimg.com/vi/default_elden.jpg', '2026-01-02T00:00:00Z'),
+		('pl-explicit', 'Hades Clips', 1, '/cache/yt_thumbs/playlist_pl-explicit.jpg', '2026-01-03T00:00:00Z'),
+		('pl-none', 'Random Game', 1, 'https://i.ytimg.com/vi/default_none.jpg', '2026-01-04T00:00:00Z');
+
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at) VALUES
+		('v-elden-1', 'Elden Ep 1', '2026-01-02T01:00:00Z', 'https://custom.thumb/elden_1.jpg?v=177', 177),
+		('v-none-1', 'None Ep 1', '2026-01-04T01:00:00Z', 'https://i.ytimg.com/vi/none_1.jpg', 0);
+
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES
+		('pl-elden', 'v-elden-1', 0),
+		('pl-none', 'v-none-1', 0);
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert fixtures: %v", err)
+	}
+
+	app.configMu.Lock()
+	if app.config.TagPlaylistConfigs == nil {
+		app.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	app.config.TagPlaylistConfigs["Hades"] = TagPlaylistConfig{
+		VodPlaylistID: "pl-hades",
+		ThumbnailConfig: TagThumbnailConfig{
+			Enabled: true,
+		},
+	}
+	app.configMu.Unlock()
+
+	summaries, err := app.ListCatalogPlaylists()
+	if err != nil {
+		t.Fatalf("ListCatalogPlaylists failed: %v", err)
+	}
+
+	byID := make(map[string]CatalogPlaylistSummary)
+	for _, s := range summaries {
+		byID[s.PlaylistID] = s
+	}
+
+	// pl-hades: should have HasCustomTemplate = true, and ThumbnailUrl resolved to /cache/yt_thumbs/...
+	sHades, ok := byID["pl-hades"]
+	if !ok {
+		t.Fatalf("missing pl-hades in summaries")
+	}
+	if !sHades.HasCustomTemplate {
+		t.Errorf("expected pl-hades HasCustomTemplate to be true")
+	}
+	if !strings.HasPrefix(sHades.ThumbnailUrl, "/cache/yt_thumbs/"+hadesKey+".jpg") {
+		t.Errorf("expected pl-hades ThumbnailUrl to start with /cache/yt_thumbs/%s.jpg, got %s", hadesKey, sHades.ThumbnailUrl)
+	}
+
+	// pl-elden: should prefer video custom thumb over default YT thumbnail
+	sElden, ok := byID["pl-elden"]
+	if !ok {
+		t.Fatalf("missing pl-elden in summaries")
+	}
+	if sElden.ThumbnailUrl != "https://custom.thumb/elden_1.jpg?v=177" {
+		t.Errorf("expected pl-elden ThumbnailUrl to be video custom thumb, got %s", sElden.ThumbnailUrl)
+	}
+
+	// pl-explicit: should keep explicit /cache/yt_thumbs/ cover untouched
+	sExplicit, ok := byID["pl-explicit"]
+	if !ok {
+		t.Fatalf("missing pl-explicit in summaries")
+	}
+	if sExplicit.ThumbnailUrl != "/cache/yt_thumbs/playlist_pl-explicit.jpg" {
+		t.Errorf("expected pl-explicit ThumbnailUrl to be preserved, got %s", sExplicit.ThumbnailUrl)
+	}
+
+	// pl-none: HasCustomTemplate should be false, ThumbnailUrl should be default
+	sNone, ok := byID["pl-none"]
+	if !ok {
+		t.Fatalf("missing pl-none in summaries")
+	}
+	if sNone.HasCustomTemplate {
+		t.Errorf("expected pl-none HasCustomTemplate to be false")
+	}
+	if sNone.ThumbnailUrl != "https://i.ytimg.com/vi/default_none.jpg" {
+		t.Errorf("expected pl-none ThumbnailUrl to be default, got %s", sNone.ThumbnailUrl)
+	}
+
+	// Also verify GetPlaylistCatalogDraft
+	draftHades, err := app.GetPlaylistCatalogDraft("pl-hades")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft pl-hades failed: %v", err)
+	}
+	if !draftHades.HasCustomTemplate {
+		t.Errorf("expected draftHades.HasCustomTemplate to be true")
+	}
+	if !strings.HasPrefix(draftHades.ThumbnailUrl, "/cache/yt_thumbs/"+hadesKey+".jpg") {
+		t.Errorf("expected draftHades.ThumbnailUrl to start with /cache/yt_thumbs/%s.jpg, got %s", hadesKey, draftHades.ThumbnailUrl)
+	}
+}
+
 

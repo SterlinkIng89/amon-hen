@@ -90,6 +90,7 @@ export namespace backend {
 	    tag: string;
 	    tagConfidence: string;
 	    linked: boolean;
+	    hasCustomTemplate: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogPlaylistSummary(source);
@@ -105,6 +106,7 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
+	        this.hasCustomTemplate = Boolean(source["hasCustomTemplate"]);
 	    }
 	}
 	export class CatalogVideoDraft {
@@ -658,6 +660,7 @@ export namespace backend {
 	    tag: string;
 	    tagConfidence: string;
 	    linked: boolean;
+	    hasCustomTemplate?: boolean;
 	    steamAppId: string;
 	    needsSync: boolean;
 	    thumbnailConfig?: TagThumbnailConfig;
@@ -677,6 +680,7 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
+	        this.hasCustomTemplate = Boolean(source["hasCustomTemplate"]);
 	        this.steamAppId = source["steamAppId"];
 	        this.needsSync = source["needsSync"];
 	        this.thumbnailConfig = this.convertValues(source["thumbnailConfig"], TagThumbnailConfig);

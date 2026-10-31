@@ -323,4 +323,58 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.draft?.videos[0].thumbnailUrl).toBe("refreshed.jpg");
     expect(result.current.draft?.videos[0].thumbnailUpdatedAt).toBe(1750000100);
   });
+
+  it("updates playlist template preview and hasCustomTemplate in playlists and active draft", async () => {
+    const mockPlaylists = [
+      {
+        playlistId: "pl-hades",
+        title: "Hades Playlist",
+        thumbnailUrl: "old-thumb.jpg",
+        videoCount: 5,
+        kind: "vod",
+        tag: "Hades",
+        tagConfidence: "known",
+        linked: true,
+        hasCustomTemplate: false,
+      },
+      {
+        playlistId: "pl-other",
+        title: "Other Playlist",
+        thumbnailUrl: "other.jpg",
+        videoCount: 2,
+        kind: "vod",
+        tag: "Other",
+        tagConfidence: "known",
+        linked: false,
+        hasCustomTemplate: false,
+      },
+    ];
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue(mockPlaylists as any);
+    const mockDraft = {
+      ...mockPlaylists[0],
+      videos: [],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(mockDraft as any);
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.loadPlaylists();
+      await result.current.selectPlaylist("pl-hades");
+    });
+
+    expect(result.current.playlists[0].hasCustomTemplate).toBe(false);
+    expect(result.current.draft?.hasCustomTemplate).toBe(false);
+
+    act(() => {
+      result.current.updatePlaylistTemplatePreview("Hades", "data:image/jpeg;base64,newpreview");
+    });
+
+    expect(result.current.playlists[0].thumbnailUrl).toBe("data:image/jpeg;base64,newpreview");
+    expect(result.current.playlists[0].hasCustomTemplate).toBe(true);
+    expect(result.current.playlists[1].hasCustomTemplate).toBe(false);
+    expect(result.current.draft?.thumbnailUrl).toBe("data:image/jpeg;base64,newpreview");
+    expect(result.current.draft?.hasCustomTemplate).toBe(true);
+  });
 });
+

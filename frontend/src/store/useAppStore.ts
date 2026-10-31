@@ -71,7 +71,7 @@ let state: AppState = {
   filterUploaded: saved.filterUploaded ?? false,
   selectedIndex: saved.selectedIndex ?? -1,
   defaultPlaylistPrivacy:
-    (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "unlisted",
+    (saved.defaultPlaylistPrivacy as PlaylistPrivacy) ?? "public",
   defaultVideoPrivacy:
     (saved.defaultVideoPrivacy as PlaylistPrivacy) ?? "unlisted",
 };

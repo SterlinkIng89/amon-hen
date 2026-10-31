@@ -97,4 +97,30 @@ describe("PlaylistCatalogRow", () => {
 
     expect(screen.getByText("Suggested: control")).toBeInTheDocument();
   });
+
+  it("does not render a custom thumb badge and shows the template image as the cover", () => {
+    const playlist = {
+      playlistId: "pl-custom",
+      title: "Hades VODs",
+      videoCount: 5,
+      linked: true,
+      tag: "Hades",
+      hasCustomTemplate: true,
+      thumbnailUrl: "/cache/yt_thumbs/tag_template.jpg?v=1",
+    } as backend.CatalogPlaylistSummary;
+
+    render(
+      <PlaylistCatalogRow
+        playlist={playlist}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Custom thumb")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Hades VODs" })).toHaveAttribute(
+      "src",
+      "/cache/yt_thumbs/tag_template.jpg?v=1"
+    );
+  });
 });
