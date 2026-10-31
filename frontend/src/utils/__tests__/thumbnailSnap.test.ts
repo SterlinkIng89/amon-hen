@@ -13,6 +13,9 @@ import {
   SnapLockState,
   getPresetCoordinates,
   getElementHalfDimensions,
+  SiblingElementSnapTarget,
+  SmartGuideLine,
+  buildSiblingAnchors,
 } from "../thumbnailSnap";
 
 describe("thumbnailSnap - computeStickySnap", () => {
@@ -365,4 +368,203 @@ describe("thumbnailSnap - renderAlignmentGuides", () => {
     expect(ctx.fillRect).toHaveBeenCalledWith(szX, szY, szW, szH);
     expect(ctx.strokeRect).toHaveBeenCalledWith(szX, szY, szW, szH);
   });
+
+  it("renders connecting smart guide lines and boundary ticks when smartGuides are present", () => {
+    const ctx = createMockContext();
+    const smartGuides: SmartGuideLine[] = [
+      {
+        axis: "x",
+        coordinate: 640,
+        sourceRect: { x: 540, y: 100, w: 200, h: 100 },
+        targetRect: { x: 590, y: 300, w: 100, h: 80 },
+        alignment: "center",
+        targetEdge: "center",
+        targetLabel: "Game Title",
+      },
+      {
+        axis: "y",
+        coordinate: 250,
+        sourceRect: { x: 200, y: 200, w: 150, h: 100 },
+        targetRect: { x: 500, y: 200, w: 200, h: 100 },
+        alignment: "leading",
+        targetEdge: "leading",
+        targetLabel: "Episode Badge",
+      },
+    ];
+
+    renderAlignmentGuides(ctx, 1280, 720, {
+      showBaseGrid: false,
+      lockState: {
+        lockedX: {
+          value: 0.5,
+          label: "Aligned with Game Title Center X",
+          kind: "element",
+        },
+        lockedY: null,
+      },
+      smartGuides,
+    });
+
+    // Smart guide connecting line along x=640 from minY (100 - 12 = 88) to maxY (380 + 12 = 392)
+    expect(ctx.moveTo).toHaveBeenCalledWith(640, 88);
+    expect(ctx.lineTo).toHaveBeenCalledWith(640, 392);
+
+    // Smart guide horizontal line along y=250 from minX (200 - 12 = 188) to maxX (700 + 12 = 712)
+    expect(ctx.moveTo).toHaveBeenCalledWith(188, 250);
+    expect(ctx.lineTo).toHaveBeenCalledWith(712, 250);
+
+    // Must not draw full-bleed canvas line for element-kind locks
+    expect(ctx.moveTo).not.toHaveBeenCalledWith(640, 0);
+  });
 });
+
+describe("thumbnailSnap - Multi-Edge Inner Guide Snapping", () => {
+  const elementSize = { halfW: 0.12, halfH: 0.08 };
+
+  it("snaps element trailing edge (bottom edge) to 72% lower guide", () => {
+    // When element center is at 0.642 (rawY + halfH = 0.642 + 0.08 = 0.722, within capture)
+    const result = computeStickySnap(0.5, 0.642, undefined, { elementSize });
+
+    expect(result.y).toBeCloseTo(0.72 - 0.08, 4);
+    expect(result.lockState.lockedY?.alignment).toBe("trailing");
+    expect(result.lockState.lockedY?.label).toBe("Bottom Edge -> Lower Guide (72%)");
+    expect(result.activeLabel).toContain("Bottom Edge -> Lower Guide (72%)");
+  });
+
+  it("snaps element leading edge (top edge) to 28% upper guide", () => {
+    // When element center is at 0.358 (rawY - halfH = 0.358 - 0.08 = 0.278, within capture)
+    const result = computeStickySnap(0.5, 0.358, undefined, { elementSize });
+
+    expect(result.y).toBeCloseTo(0.28 + 0.08, 4);
+    expect(result.lockState.lockedY?.alignment).toBe("leading");
+    expect(result.lockState.lockedY?.label).toBe("Top Edge -> Upper Guide (28%)");
+    expect(result.activeLabel).toContain("Top Edge -> Upper Guide (28%)");
+  });
+
+  it("snaps element left edge and right edge to 50% Center X guide", () => {
+    // Left edge (rawX - halfW = 0.619 - 0.12 = 0.499, within capture of 0.50)
+    const leftSnap = computeStickySnap(0.619, 0.5, undefined, { elementSize });
+    expect(leftSnap.x).toBeCloseTo(0.50 + 0.12, 4);
+    expect(leftSnap.lockState.lockedX?.alignment).toBe("leading");
+    expect(leftSnap.lockState.lockedX?.label).toBe("Left Edge -> Center X (50%)");
+
+    // Right edge (rawX + halfW = 0.381 + 0.12 = 0.501, within capture of 0.50)
+    const rightSnap = computeStickySnap(0.381, 0.5, undefined, { elementSize });
+    expect(rightSnap.x).toBeCloseTo(0.50 - 0.12, 4);
+    expect(rightSnap.lockState.lockedX?.alignment).toBe("trailing");
+    expect(rightSnap.lockState.lockedX?.label).toBe("Right Edge -> Center X (50%)");
+  });
+
+  it("holds edge alignment lock with breakout hysteresis", () => {
+    const initial = computeStickySnap(0.5, 0.642, undefined, { elementSize });
+    expect(initial.lockState.lockedY).not.toBeNull();
+
+    // Small movement within breakout threshold
+    const held = computeStickySnap(0.5, 0.642 + 0.005, initial.lockState, { elementSize });
+    expect(held.y).toBeCloseTo(0.72 - 0.08, 4);
+    expect(held.lockState.lockedY).toBe(initial.lockState.lockedY);
+
+    // Breakout force
+    const broke = computeStickySnap(0.5, 0.642 + SNAP_BREAKOUT_THRESHOLD + 0.002, initial.lockState, { elementSize });
+    expect(broke.lockState.lockedY).toBeNull();
+  });
+});
+
+describe("thumbnailSnap - Inter-Element Smart Guides", () => {
+  const elementSize = { halfW: 0.10, halfH: 0.06 }; // 256x86 px on 1280x720
+  const otherElements: SiblingElementSnapTarget[] = [
+    {
+      id: "logo",
+      label: "Steam Game Logo",
+      // Centered at x: 600, y: 140, w: 200, h: 80
+      rect: { x: 500, y: 100, w: 200, h: 80 },
+    },
+    {
+      id: "episode",
+      label: "Episode Badge",
+      // Centered at x: 950, y: 580, w: 100, h: 60
+      rect: { x: 900, y: 550, w: 100, h: 60 },
+    },
+  ];
+
+  it("snaps center to sibling element center X and Y", () => {
+    const logoCenterY = 140 / 720;
+    const result = computeStickySnap(0.20, logoCenterY - 0.001, undefined, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+
+    expect(result.y).toBeCloseTo(logoCenterY, 4);
+    expect(result.lockState.lockedY?.kind).toBe("element");
+    expect(result.lockState.lockedY?.label).toBe("Aligned with Steam Game Logo Center Y");
+    expect(result.smartGuides).toHaveLength(1);
+    expect(result.smartGuides[0].axis).toBe("y");
+    expect(result.smartGuides[0].targetLabel).toBe("Steam Game Logo");
+  });
+
+  it("snaps top edge to sibling element bottom edge (vertical stacking)", () => {
+    // Sibling logo bottom is (100 + 80)/720 = 180/720 = 0.25
+    const logoBottom = 180 / 720;
+    // Active element top edge is rawY - halfH, so rawY = logoBottom + halfH = 0.25 + 0.06 = 0.31
+    const result = computeStickySnap(0.20, logoBottom + 0.06 + 0.002, undefined, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+
+    expect(result.y).toBeCloseTo(logoBottom + 0.06, 4);
+    expect(result.lockState.lockedY?.kind).toBe("element");
+    expect(result.lockState.lockedY?.label).toBe("Top Edge -> Steam Game Logo Bottom Edge");
+    expect(result.smartGuides).toHaveLength(1);
+    expect(result.smartGuides[0].alignment).toBe("leading");
+    expect(result.smartGuides[0].targetEdge).toBe("trailing");
+  });
+
+  it("snaps matching left edges between active element and sibling", () => {
+    // Sibling episode left is 900/1280 = 0.703125
+    const epLeft = 900 / 1280;
+    // Active left is rawX - halfW, so rawX = epLeft + halfW = 0.703125 + 0.10 = 0.803125
+    // Use rawY = 0.38 which does not collide with any Y guide
+    const result = computeStickySnap(epLeft + 0.10 - 0.002, 0.38, undefined, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+
+    expect(result.x).toBeCloseTo(epLeft + 0.10, 4);
+    expect(result.lockState.lockedX?.kind).toBe("element");
+    expect(result.lockState.lockedX?.label).toBe("Left Edge -> Episode Badge Left Edge");
+    expect(result.smartGuides).toHaveLength(1);
+    expect(result.smartGuides[0].axis).toBe("x");
+  });
+
+  it("maintains inter-element lock with hysteresis until breakout", () => {
+    const logoCenterY = 140 / 720;
+    const initial = computeStickySnap(0.20, logoCenterY + 0.002, undefined, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+
+    expect(initial.lockState.lockedY?.kind).toBe("element");
+
+    // Move pointer slightly within breakout
+    const held = computeStickySnap(0.20, logoCenterY + 0.010, initial.lockState, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+    expect(held.y).toBeCloseTo(logoCenterY, 4);
+    expect(held.lockState.lockedY).toBe(initial.lockState.lockedY);
+
+    // Move pointer beyond breakout
+    const broke = computeStickySnap(0.20, logoCenterY + SNAP_BREAKOUT_THRESHOLD + 0.005, initial.lockState, {
+      elementSize,
+      otherElements,
+      canvasDimensions: { width: 1280, height: 720 },
+    });
+    expect(broke.lockState.lockedY).toBeNull();
+  });
+});
+

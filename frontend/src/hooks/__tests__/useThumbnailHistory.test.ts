@@ -266,4 +266,33 @@ describe("useThumbnailHistory hook", () => {
     expect(result.current.past).toHaveLength(0);
     expect(result.current.future).toHaveLength(0);
   });
+
+  it("tracks external config prop mutations and enables undo immediately", () => {
+    let current = initialConfig;
+    const { result, rerender } = renderHook(
+      ({ cfg }) => useThumbnailHistory(cfg),
+      { initialProps: { cfg: current } }
+    );
+
+    expect(result.current.canUndo).toBe(false);
+
+    // External change (e.g. from 3x3 alignment button or zoom slider)
+    current = {
+      ...initialConfig,
+      image_framing: { offset_x: 0.8, offset_y: 0.8, zoom: 2 },
+    };
+    rerender({ cfg: current });
+
+    expect(result.current.canUndo).toBe(true);
+
+    let restored: Partial<TagThumbnailConfig> | null = null;
+    act(() => {
+      restored = result.current.undo();
+    });
+
+    expect(restored).toEqual(initialConfig);
+    expect(result.current.present).toEqual(initialConfig);
+    expect(result.current.canRedo).toBe(true);
+  });
 });
+

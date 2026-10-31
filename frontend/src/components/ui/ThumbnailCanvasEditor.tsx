@@ -18,9 +18,11 @@ import {
   GRID_ANCHORS_Y,
   ARTWORK_ANCHORS_X,
   ARTWORK_ANCHORS_Y,
-  renderAlignmentGuides,
   SnapLockState,
+  SiblingElementSnapTarget,
+  SmartGuideLine,
 } from "../../utils/thumbnailSnap";
+import { renderAlignmentGuides } from "../../utils/thumbnailGuideRenderer";
 import {
   useThumbnailHistory,
   buildConfigRestorePatch,
@@ -82,8 +84,41 @@ export default function ThumbnailCanvasEditor({
   });
 
   const snapLockRef = useRef<SnapLockState>({ lockedX: null, lockedY: null });
+  const smartGuidesRef = useRef<readonly SmartGuideLine[]>([]);
   const dragRawPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const selectedElementRef = useRef<ThumbnailElementId | null>(null);
+
+  const getSiblingElements = useCallback(
+    (currentDrag: ThumbnailElementId): readonly SiblingElementSnapTarget[] => {
+      const siblings: SiblingElementSnapTarget[] = [];
+      const rects = rectsRef.current;
+
+      if (currentDrag !== "logo" && rects.logo && rects.logo.w > 0 && rects.logo.h > 0) {
+        siblings.push({
+          id: "logo",
+          label: "Steam Game Logo",
+          rect: rects.logo,
+        });
+      }
+      if (currentDrag !== "title" && rects.title && rects.title.w > 0 && rects.title.h > 0) {
+        siblings.push({
+          id: "title",
+          label: "Game Title",
+          rect: rects.title,
+        });
+      }
+      if (currentDrag !== "episode" && rects.episode && rects.episode.w > 0 && rects.episode.h > 0) {
+        siblings.push({
+          id: "episode",
+          label: "Episode Badge",
+          rect: rects.episode,
+        });
+      }
+
+      return siblings;
+    },
+    []
+  );
 
   const handleCenterArtwork = () => {
     const current = config.image_framing || DEFAULT_FRAMING;
@@ -94,6 +129,7 @@ export default function ThumbnailCanvasEditor({
       lockedY: ARTWORK_ANCHORS_Y[0] || null,
     };
     snapLockRef.current = lockState;
+    smartGuidesRef.current = [];
     setActiveSnapLabel(buildSnapLabel(lockState));
     history.pushState({
       ...config,
@@ -144,6 +180,7 @@ export default function ThumbnailCanvasEditor({
         showBaseGrid: showGrid,
         lockState: snapLockRef.current,
         activeRect,
+        smartGuides: smartGuidesRef.current,
       });
     }
   }, [
@@ -242,6 +279,7 @@ export default function ThumbnailCanvasEditor({
       });
 
       snapLockRef.current = snapResult.lockState;
+      smartGuidesRef.current = snapResult.smartGuides;
       setActiveSnapLabel(snapResult.activeLabel);
       setQuickAlignedElement(alignedTarget);
 
@@ -251,6 +289,7 @@ export default function ThumbnailCanvasEditor({
       quickAlignTimerRef.current = setTimeout(() => {
         setQuickAlignedElement(null);
         snapLockRef.current = { lockedX: null, lockedY: null };
+        smartGuidesRef.current = [];
         setActiveSnapLabel(null);
       }, 2500);
     }
@@ -388,6 +427,8 @@ export default function ThumbnailCanvasEditor({
       const halfW = activeRect ? (activeRect.w / canvasW) / 2 : 0;
       const halfH = activeRect ? (activeRect.h / canvasH) / 2 : 0;
 
+      const otherElements = getSiblingElements(activeDrag);
+
       const snapResult = computeStickySnap(
         rawX,
         rawY,
@@ -395,10 +436,13 @@ export default function ThumbnailCanvasEditor({
         {
           bypassSnap,
           elementSize: { halfW, halfH },
+          otherElements,
+          canvasDimensions: { width: canvasW, height: canvasH },
         }
       );
 
       snapLockRef.current = snapResult.lockState;
+      smartGuidesRef.current = snapResult.smartGuides;
       setActiveSnapLabel(snapResult.activeLabel);
 
       if (activeDrag === "episode") {
@@ -450,6 +494,7 @@ export default function ThumbnailCanvasEditor({
     setActiveDrag(null);
     dragStartRef.current = null;
     snapLockRef.current = { lockedX: null, lockedY: null };
+    smartGuidesRef.current = [];
     setActiveSnapLabel(null);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -512,16 +557,16 @@ export default function ThumbnailCanvasEditor({
 
   const handleUndo = useCallback(() => {
     const target = history.undo();
-    if (!target) return;
-    const patch = buildConfigRestorePatch(config, target);
-    onConfigChange(patch);
+    if (target) {
+      onConfigChange(buildConfigRestorePatch(config, target));
+    }
   }, [config, history, onConfigChange]);
 
   const handleRedo = useCallback(() => {
     const target = history.redo();
-    if (!target) return;
-    const patch = buildConfigRestorePatch(config, target);
-    onConfigChange(patch);
+    if (target) {
+      onConfigChange(buildConfigRestorePatch(config, target));
+    }
   }, [config, history, onConfigChange]);
 
   useEffect(() => {

@@ -1,7 +1,9 @@
 import { ElementLayout, TagThumbnailConfig } from "../types";
 import { ElementRect } from "./thumbnailGenerator";
 
-export type AnchorKind = "center" | "safe" | "edge";
+export type AnchorKind = "center" | "safe" | "edge" | "element";
+
+export type EdgeAlignment = "center" | "leading" | "trailing";
 
 export type AnchorPresetId =
   | "top-left"
@@ -18,6 +20,12 @@ export interface GridAnchor {
   readonly value: number;
   readonly label: string;
   readonly kind: AnchorKind;
+  readonly alignment?: EdgeAlignment;
+  readonly targetElementId?: string;
+  readonly targetElementLabel?: string;
+  readonly rawLabel?: string;
+  readonly targetEdge?: "leading" | "center" | "trailing";
+  readonly siblingRect?: ElementRect;
 }
 
 export interface SnapLockState {
@@ -30,23 +38,28 @@ export interface SnapAxisResult {
   readonly locked: GridAnchor | null;
 }
 
+export interface SiblingElementSnapTarget {
+  readonly id: "logo" | "title" | "episode" | string;
+  readonly label: string;
+  readonly rect: ElementRect;
+}
+
+export interface SmartGuideLine {
+  readonly axis: "x" | "y";
+  readonly coordinate: number;
+  readonly sourceRect: ElementRect;
+  readonly targetRect: ElementRect;
+  readonly alignment: EdgeAlignment;
+  readonly targetEdge: "leading" | "center" | "trailing";
+  readonly targetLabel: string;
+}
+
 export interface StickySnapResult {
   readonly x: number;
   readonly y: number;
   readonly lockState: SnapLockState;
   readonly activeLabel: string | null;
-}
-
-export interface RenderAlignmentGuidesOptions {
-  readonly showBaseGrid: boolean;
-  readonly lockState: SnapLockState;
-  readonly activeRect?: ElementRect;
-  readonly selectedRect?: ElementRect;
-  readonly showCrosshairs?: boolean;
-  readonly autoFade?: boolean;
-  readonly gridOpacity?: number;
-  readonly showSafeZone?: boolean;
-  readonly showMarginReadouts?: boolean;
+  readonly smartGuides: readonly SmartGuideLine[];
 }
 
 // Crisp, targeted capture threshold: captures when pointer is very close to anchor (~12px on 1280px canvas)
@@ -128,19 +141,15 @@ export function getPresetCoordinates(
 
   let x = base.x;
   if (base.x < 0.5) {
-    // Left edge aligns with base.x (0.05) -> center is 0.05 + halfW
     x = Math.min(0.5, base.x + halfW);
   } else if (base.x > 0.5) {
-    // Right edge aligns with base.x (0.95) -> center is 0.95 - halfW
     x = Math.max(0.5, base.x - halfW);
   }
 
   let y = base.y;
   if (base.y < 0.5) {
-    // Top edge aligns with base.y (0.05) -> center is 0.05 + halfH
     y = Math.min(0.5, base.y + halfH);
   } else if (base.y > 0.5) {
-    // Bottom edge aligns with base.y (0.95) -> center is 0.95 - halfH
     y = Math.max(0.5, base.y - halfH);
   }
 
@@ -192,11 +201,145 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(val) ? val : min));
 }
 
+export function formatCandidateLabel(
+  anchor: GridAnchor,
+  alignment: EdgeAlignment,
+  axisName?: "x" | "y"
+): string {
+  if (anchor.kind === "element") {
+    return anchor.label;
+  }
+  const isX =
+    axisName === "x" ||
+    anchor.label.includes("X") ||
+    anchor.label.includes("Left") ||
+    anchor.label.includes("Right");
+
+  if (alignment === "center") {
+    if (anchor.kind === "edge") {
+      return isX ? `Center X -> ${anchor.label}` : `Center Y -> ${anchor.label}`;
+    }
+    return anchor.label;
+  }
+
+  if (alignment === "leading") {
+    const edgeName = isX ? "Left Edge" : "Top Edge";
+    if (anchor.kind === "edge" && anchor.value <= 0.5) {
+      return anchor.label;
+    }
+    return `${edgeName} -> ${anchor.label}`;
+  }
+
+  if (alignment === "trailing") {
+    const edgeName = isX ? "Right Edge" : "Bottom Edge";
+    if (anchor.kind === "edge" && anchor.value > 0.5) {
+      return anchor.label;
+    }
+    return `${edgeName} -> ${anchor.label}`;
+  }
+
+  return anchor.label;
+}
+
+export function buildSiblingAnchors(
+  otherElements: readonly SiblingElementSnapTarget[],
+  canvasW: number,
+  canvasH: number,
+  axis: "x" | "y"
+): readonly GridAnchor[] {
+  const anchors: GridAnchor[] = [];
+
+  for (const sibling of otherElements) {
+    if (!sibling.rect || sibling.rect.w <= 0 || sibling.rect.h <= 0) continue;
+
+    const descriptors =
+      axis === "x"
+        ? [
+            {
+              value: (sibling.rect.x + sibling.rect.w / 2) / canvasW,
+              alignment: "center" as const,
+              targetEdge: "center" as const,
+              label: `Aligned with ${sibling.label} Center X`,
+            },
+            {
+              value: sibling.rect.x / canvasW,
+              alignment: "leading" as const,
+              targetEdge: "leading" as const,
+              label: `Left Edge -> ${sibling.label} Left Edge`,
+            },
+            {
+              value: (sibling.rect.x + sibling.rect.w) / canvasW,
+              alignment: "trailing" as const,
+              targetEdge: "trailing" as const,
+              label: `Right Edge -> ${sibling.label} Right Edge`,
+            },
+            {
+              value: (sibling.rect.x + sibling.rect.w) / canvasW,
+              alignment: "leading" as const,
+              targetEdge: "trailing" as const,
+              label: `Left Edge -> ${sibling.label} Right Edge`,
+            },
+            {
+              value: sibling.rect.x / canvasW,
+              alignment: "trailing" as const,
+              targetEdge: "leading" as const,
+              label: `Right Edge -> ${sibling.label} Left Edge`,
+            },
+          ]
+        : [
+            {
+              value: (sibling.rect.y + sibling.rect.h / 2) / canvasH,
+              alignment: "center" as const,
+              targetEdge: "center" as const,
+              label: `Aligned with ${sibling.label} Center Y`,
+            },
+            {
+              value: sibling.rect.y / canvasH,
+              alignment: "leading" as const,
+              targetEdge: "leading" as const,
+              label: `Top Edge -> ${sibling.label} Top Edge`,
+            },
+            {
+              value: (sibling.rect.y + sibling.rect.h) / canvasH,
+              alignment: "trailing" as const,
+              targetEdge: "trailing" as const,
+              label: `Bottom Edge -> ${sibling.label} Bottom Edge`,
+            },
+            {
+              value: (sibling.rect.y + sibling.rect.h) / canvasH,
+              alignment: "leading" as const,
+              targetEdge: "trailing" as const,
+              label: `Top Edge -> ${sibling.label} Bottom Edge`,
+            },
+            {
+              value: sibling.rect.y / canvasH,
+              alignment: "trailing" as const,
+              targetEdge: "leading" as const,
+              label: `Bottom Edge -> ${sibling.label} Top Edge`,
+            },
+          ];
+
+    for (const d of descriptors) {
+      anchors.push({
+        value: d.value,
+        kind: "element",
+        alignment: d.alignment,
+        targetEdge: d.targetEdge,
+        targetElementId: sibling.id,
+        targetElementLabel: sibling.label,
+        siblingRect: sibling.rect,
+        label: d.label,
+      });
+    }
+  }
+
+  return anchors;
+}
+
 /**
  * Stateful magnetic snap with hysteresis:
- * 1. Only captures when the element's edge (for edge guides) or center (for center guides)
- *    enters within `captureThreshold`.
- * 2. When locked, the coordinate remains strictly pinned so the bounding edge touches the guide.
+ * 1. Evaluates candidate alignment modes (center, leading edge, trailing edge) for all anchors.
+ * 2. When locked, coordinates remain strictly pinned with breakout hysteresis.
  * 3. Moving past `breakoutThreshold` cleanly releases the lock for fluid movement.
  */
 export function snapAxisWithHysteresis(
@@ -207,38 +350,42 @@ export function snapAxisWithHysteresis(
     readonly captureThreshold?: number;
     readonly breakoutThreshold?: number;
     readonly halfSize?: number;
+    readonly axisName?: "x" | "y";
   }
 ): SnapAxisResult {
   const clamped = clamp(rawCoord, 0, 1);
   const captureThreshold = options?.captureThreshold ?? SNAP_CAPTURE_THRESHOLD;
   const breakoutThreshold = options?.breakoutThreshold ?? SNAP_BREAKOUT_THRESHOLD;
   const half = options?.halfSize ?? 0;
+  const axisName = options?.axisName;
 
-  const getAnchorMetrics = (anchor: GridAnchor) => {
-    if (anchor.kind === "edge") {
-      if (anchor.value <= 0.5) {
-        // Min edge (left / top): element's leading edge is clamped - half
-        const edgeCoord = clamped - half;
-        const targetCenter = Math.min(0.5, anchor.value + half);
-        const dist = Math.abs(edgeCoord - anchor.value);
-        return { dist, targetCenter };
-      } else {
-        // Max edge (right / bottom): element's trailing edge is clamped + half
-        const edgeCoord = clamped + half;
-        const targetCenter = Math.max(0.5, anchor.value - half);
-        const dist = Math.abs(edgeCoord - anchor.value);
-        return { dist, targetCenter };
-      }
+  const resolveLockedMetrics = (locked: GridAnchor) => {
+    let alignment: EdgeAlignment = locked.alignment ?? "center";
+    if (locked.alignment === undefined && locked.kind === "edge") {
+      alignment = locked.value <= 0.5 ? "leading" : "trailing";
     }
-    // Center or safe-zone: aligns element center
-    return {
-      dist: Math.abs(clamped - anchor.value),
-      targetCenter: anchor.value,
-    };
+
+    let dist: number;
+    let targetCenter: number;
+
+    if (alignment === "leading") {
+      const edgeCoord = clamped - half;
+      dist = Math.abs(edgeCoord - locked.value);
+      targetCenter = locked.value + half;
+    } else if (alignment === "trailing") {
+      const edgeCoord = clamped + half;
+      dist = Math.abs(edgeCoord - locked.value);
+      targetCenter = locked.value - half;
+    } else {
+      dist = Math.abs(clamped - locked.value);
+      targetCenter = locked.value;
+    }
+
+    return { dist, targetCenter, alignment };
   };
 
   if (currentLocked !== null) {
-    const { dist, targetCenter } = getAnchorMetrics(currentLocked);
+    const { dist, targetCenter } = resolveLockedMetrics(currentLocked);
     if (dist <= breakoutThreshold) {
       return {
         value: targetCenter,
@@ -257,11 +404,83 @@ export function snapAxisWithHysteresis(
   let minDistance = Infinity;
 
   for (const anchor of anchors) {
-    const { dist, targetCenter } = getAnchorMetrics(anchor);
-    if (dist <= captureThreshold && dist < minDistance) {
-      minDistance = dist;
-      nearest = anchor;
-      nearestTargetCenter = targetCenter;
+    if (anchor.alignment !== undefined) {
+      let edgeCoord = clamped;
+      let targetCenter = anchor.value;
+      if (anchor.alignment === "leading") {
+        edgeCoord = clamped - half;
+        targetCenter = anchor.value + half;
+      } else if (anchor.alignment === "trailing") {
+        edgeCoord = clamped + half;
+        targetCenter = anchor.value - half;
+      }
+      const dist = Math.abs(edgeCoord - anchor.value);
+      if (dist <= captureThreshold && dist < minDistance) {
+        minDistance = dist;
+        nearest = anchor;
+        nearestTargetCenter = targetCenter;
+      }
+      continue;
+    }
+
+    if (half <= 0) {
+      const dist = Math.abs(clamped - anchor.value);
+      if (dist <= captureThreshold && dist < minDistance) {
+        minDistance = dist;
+        nearest = {
+          ...anchor,
+          alignment: "center",
+          label: formatCandidateLabel(anchor, "center", axisName),
+        };
+        nearestTargetCenter = anchor.value;
+      }
+      continue;
+    }
+
+    interface Candidate {
+      alignment: EdgeAlignment;
+      dist: number;
+      targetCenter: number;
+      priorityBonus: number;
+    }
+
+    const candidates: Candidate[] = [
+      {
+        alignment: "center",
+        dist: Math.abs(clamped - anchor.value),
+        targetCenter: anchor.value,
+        priorityBonus: anchor.kind === "center" ? 0.001 : 0,
+      },
+      {
+        alignment: "leading",
+        dist: Math.abs(clamped - half - anchor.value),
+        targetCenter: anchor.value + half,
+        priorityBonus: anchor.kind === "edge" && anchor.value <= 0.5 ? 0.001 : 0,
+      },
+      {
+        alignment: "trailing",
+        dist: Math.abs(clamped + half - anchor.value),
+        targetCenter: anchor.value - half,
+        priorityBonus: anchor.kind === "edge" && anchor.value > 0.5 ? 0.001 : 0,
+      },
+    ];
+
+    for (const cand of candidates) {
+      if (cand.dist <= captureThreshold) {
+        const effectiveDist = cand.dist - cand.priorityBonus;
+        const currentBestEffective = nearest
+          ? minDistance - (nearest.kind === "center" && nearest.alignment === "center" ? 0.001 : 0)
+          : Infinity;
+        if (effectiveDist < currentBestEffective) {
+          minDistance = cand.dist;
+          nearestTargetCenter = cand.targetCenter;
+          nearest = {
+            ...anchor,
+            alignment: cand.alignment,
+            label: formatCandidateLabel(anchor, cand.alignment, axisName),
+          };
+        }
+      }
     }
   }
 
@@ -310,6 +529,8 @@ export function computeStickySnap(
     readonly anchorsX?: readonly GridAnchor[];
     readonly anchorsY?: readonly GridAnchor[];
     readonly elementSize?: ElementHalfDimensions;
+    readonly otherElements?: readonly SiblingElementSnapTarget[];
+    readonly canvasDimensions?: { readonly width: number; readonly height: number };
   }
 ): StickySnapResult {
   const clampedX = clamp(rawX, 0, 1);
@@ -321,30 +542,84 @@ export function computeStickySnap(
       y: clampedY,
       lockState: { lockedX: null, lockedY: null },
       activeLabel: null,
+      smartGuides: [],
     };
   }
 
-  const anchorsX = options?.anchorsX ?? GRID_ANCHORS_X;
-  const anchorsY = options?.anchorsY ?? GRID_ANCHORS_Y;
+  const canvasW = options?.canvasDimensions?.width || 1280;
+  const canvasH = options?.canvasDimensions?.height || 720;
+
+  const baseAnchorsX = options?.anchorsX ?? GRID_ANCHORS_X;
+  const baseAnchorsY = options?.anchorsY ?? GRID_ANCHORS_Y;
+
+  const siblingAnchorsX = options?.otherElements
+    ? buildSiblingAnchors(options.otherElements, canvasW, canvasH, "x")
+    : [];
+  const siblingAnchorsY = options?.otherElements
+    ? buildSiblingAnchors(options.otherElements, canvasW, canvasH, "y")
+    : [];
+
+  const combinedAnchorsX = [...baseAnchorsX, ...siblingAnchorsX];
+  const combinedAnchorsY = [...baseAnchorsY, ...siblingAnchorsY];
+
   const currentLockedX = prevLock?.lockedX ?? null;
   const currentLockedY = prevLock?.lockedY ?? null;
 
-  const resX = snapAxisWithHysteresis(clampedX, currentLockedX, anchorsX, {
+  const resX = snapAxisWithHysteresis(clampedX, currentLockedX, combinedAnchorsX, {
     ...options,
     halfSize: options?.elementSize?.halfW ?? 0,
+    axisName: "x",
   });
-  const resY = snapAxisWithHysteresis(clampedY, currentLockedY, anchorsY, {
+  const resY = snapAxisWithHysteresis(clampedY, currentLockedY, combinedAnchorsY, {
     ...options,
     halfSize: options?.elementSize?.halfH ?? 0,
+    axisName: "y",
   });
 
   const lockState: SnapLockState = { lockedX: resX.locked, lockedY: resY.locked };
+
+  const smartGuides: SmartGuideLine[] = [];
+  const activeW = (options?.elementSize?.halfW ?? 0) * 2 * canvasW;
+  const activeH = (options?.elementSize?.halfH ?? 0) * 2 * canvasH;
+  const activePxX = resX.value * canvasW - activeW / 2;
+  const activePxY = resY.value * canvasH - activeH / 2;
+  const sourceRect: ElementRect = {
+    x: activePxX,
+    y: activePxY,
+    w: activeW,
+    h: activeH,
+  };
+
+  if (resX.locked?.kind === "element" && resX.locked.siblingRect) {
+    smartGuides.push({
+      axis: "x",
+      coordinate: Math.round(resX.locked.value * canvasW),
+      sourceRect,
+      targetRect: resX.locked.siblingRect,
+      alignment: resX.locked.alignment ?? "center",
+      targetEdge: resX.locked.targetEdge ?? "center",
+      targetLabel: resX.locked.targetElementLabel ?? resX.locked.label,
+    });
+  }
+
+  if (resY.locked?.kind === "element" && resY.locked.siblingRect) {
+    smartGuides.push({
+      axis: "y",
+      coordinate: Math.round(resY.locked.value * canvasH),
+      sourceRect,
+      targetRect: resY.locked.siblingRect,
+      alignment: resY.locked.alignment ?? "center",
+      targetEdge: resY.locked.targetEdge ?? "center",
+      targetLabel: resY.locked.targetElementLabel ?? resY.locked.label,
+    });
+  }
 
   return {
     x: resX.value,
     y: resY.value,
     lockState,
     activeLabel: buildSnapLabel(lockState),
+    smartGuides,
   };
 }
 
@@ -379,282 +654,7 @@ export function detectActiveAnchorPreset(
   return matchedPreset;
 }
 
-function strokeWithBackdrop(
-  ctx: CanvasRenderingContext2D,
-  dash: number[],
-  backdropColor: string,
-  backdropWidth: number,
-  fgColor: string,
-  fgWidth: number,
-  draw: () => void
-): void {
-  ctx.setLineDash(dash);
-  ctx.strokeStyle = backdropColor;
-  ctx.lineWidth = backdropWidth;
-  draw();
-
-  ctx.strokeStyle = fgColor;
-  ctx.lineWidth = fgWidth;
-  draw();
-}
-
-function renderFullBleedBaseGrid(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  whiteAlpha: number,
-  darkAlpha: number
-): void {
-  ctx.save();
-  strokeWithBackdrop(
-    ctx,
-    [],
-    `rgba(0, 0, 0, ${darkAlpha})`,
-    1.5,
-    `rgba(255, 255, 255, ${whiteAlpha})`,
-    1,
-    () => {
-      ctx.beginPath();
-      for (const anchor of GRID_ANCHORS_X) {
-        const x = Math.round(anchor.value * width);
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-      }
-      for (const anchor of GRID_ANCHORS_Y) {
-        const y = Math.round(anchor.value * height);
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-      }
-      ctx.stroke();
-    }
-  );
-  ctx.restore();
-}
-
-function renderYouTubeSafeZone(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
-): void {
-  const szX = Math.round(0.86 * width);
-  const szY = Math.round(0.86 * height);
-  const szW = Math.round(0.12 * width);
-  const szH = Math.round(0.10 * height);
-
-  ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
-  if (typeof ctx.fillRect === "function") {
-    ctx.fillRect(szX, szY, szW, szH);
-  }
-
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.48)";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 4]);
-  ctx.strokeRect(szX, szY, szW, szH);
-  ctx.restore();
-}
-
-function renderElementCrosshairsAndSelection(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  rect: ElementRect,
-  isLocked: boolean,
-  showCrosshairs: boolean,
-  showMarginReadouts: boolean
-): void {
-  const { x, y, w, h } = rect;
-  const left = Math.round(x);
-  const right = Math.round(x + w);
-  const top = Math.round(y);
-  const bottom = Math.round(y + h);
-  const cx = Math.round(x + w / 2);
-  const cy = Math.round(y + h / 2);
-  const accentColor = isLocked ? "#38bdf8" : "#ffffff";
-
-  ctx.save();
-
-  if (showCrosshairs) {
-    strokeWithBackdrop(
-      ctx,
-      [4, 4],
-      "rgba(0, 0, 0, 0.22)",
-      1.25,
-      "rgba(255, 255, 255, 0.26)",
-      1,
-      () => {
-        ctx.beginPath();
-        ctx.moveTo(left, 0);
-        ctx.lineTo(left, height);
-        ctx.moveTo(right, 0);
-        ctx.lineTo(right, height);
-        ctx.moveTo(0, top);
-        ctx.lineTo(width, top);
-        ctx.moveTo(0, bottom);
-        ctx.lineTo(width, bottom);
-        ctx.stroke();
-      }
-    );
-
-    strokeWithBackdrop(
-      ctx,
-      [5, 4],
-      "rgba(0, 0, 0, 0.36)",
-      1.75,
-      isLocked ? "#38bdf8" : "rgba(255, 255, 255, 0.62)",
-      1.25,
-      () => {
-        ctx.beginPath();
-        ctx.moveTo(cx, 0);
-        ctx.lineTo(cx, height);
-        ctx.moveTo(0, cy);
-        ctx.lineTo(width, cy);
-        ctx.stroke();
-      }
-    );
-  }
-
-  strokeWithBackdrop(
-    ctx,
-    [],
-    "rgba(0, 0, 0, 0.48)",
-    2.5,
-    isLocked ? "#38bdf8" : "rgba(255, 255, 255, 0.92)",
-    1.5,
-    () => ctx.strokeRect(x, y, w, h)
-  );
-
-  const cornerLen = Math.max(10, Math.min(18, Math.min(w, h) / 3));
-  ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(x, y + cornerLen);
-  ctx.lineTo(x, y);
-  ctx.lineTo(x + cornerLen, y);
-  ctx.moveTo(x + w - cornerLen, y);
-  ctx.lineTo(x + w, y);
-  ctx.lineTo(x + w, y + cornerLen);
-  ctx.moveTo(x, y + h - cornerLen);
-  ctx.lineTo(x, y + h);
-  ctx.lineTo(x + cornerLen, y + h);
-  ctx.moveTo(x + w - cornerLen, y + h);
-  ctx.lineTo(x + w, y + h);
-  ctx.lineTo(x + w, y + h - cornerLen);
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = accentColor;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 3.25, 0, Math.PI * 2);
-  ctx.fill();
-
-  if (showMarginReadouts && typeof ctx.fillText === "function") {
-    const xPct = Math.round((cx / width) * 100);
-    const yPct = Math.round((cy / height) * 100);
-    const badgeW = 54;
-    const badgeH = 20;
-    const xBadgeX = clamp(cx - badgeW / 2, 6, width - badgeW - 6);
-    const xBadgeY =
-      top > 32 ? Math.max(6, top - badgeH - 6) : Math.min(height - badgeH - 6, bottom + 6);
-    const yBadgeX =
-      left > 64 ? Math.max(6, left - badgeW - 6) : Math.min(width - badgeW - 6, right + 6);
-    const yBadgeY = clamp(cy - badgeH / 2, 6, height - badgeH - 6);
-
-    ctx.fillStyle = "rgba(9, 13, 22, 0.82)";
-    if (typeof ctx.fillRect === "function") {
-      ctx.fillRect(xBadgeX, xBadgeY, badgeW, badgeH);
-      ctx.fillRect(yBadgeX, yBadgeY, badgeW, badgeH);
-    }
-
-    ctx.font = "600 11px Inter, system-ui, sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(`X ${xPct}%`, xBadgeX + 8, xBadgeY + 14);
-    ctx.fillText(`Y ${yPct}%`, yBadgeX + 8, yBadgeY + 14);
-  }
-
-  ctx.restore();
-}
-
-export function renderAlignmentGuides(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  options: RenderAlignmentGuidesOptions
-): void {
-  if (width <= 0 || height <= 0) return;
-
-  ctx.save();
-
-  ctx.save();
-  strokeWithBackdrop(
-    ctx,
-    [],
-    "rgba(0, 0, 0, 0.22)",
-    1.5,
-    "rgba(255, 255, 255, 0.28)",
-    1,
-    () => ctx.strokeRect(0.5, 0.5, width - 1, height - 1)
-  );
-  ctx.restore();
-
-  if (options.showBaseGrid || options.autoFade) {
-    const whiteAlpha =
-      options.gridOpacity ?? (options.showBaseGrid ? 0.32 : 0.18);
-    const darkAlpha =
-      options.gridOpacity !== undefined
-        ? Math.min(1, options.gridOpacity * 0.7)
-        : options.showBaseGrid
-          ? 0.22
-          : 0.12;
-    renderFullBleedBaseGrid(ctx, width, height, whiteAlpha, darkAlpha);
-  }
-
-  if (options.showSafeZone) {
-    renderYouTubeSafeZone(ctx, width, height);
-  }
-
-  const { lockedX, lockedY } = options.lockState;
-
-  if (lockedX) {
-    const x = Math.round(lockedX.value * width);
-    ctx.save();
-    strokeWithBackdrop(ctx, [], "rgba(0, 0, 0, 0.45)", 2.5, "#38bdf8", 1.5, () => {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  if (lockedY) {
-    const y = Math.round(lockedY.value * height);
-    ctx.save();
-    strokeWithBackdrop(ctx, [], "rgba(0, 0, 0, 0.45)", 2.5, "#38bdf8", 1.5, () => {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  const targetRect = options.activeRect ?? options.selectedRect;
-  if (targetRect) {
-    renderElementCrosshairsAndSelection(
-      ctx,
-      width,
-      height,
-      targetRect,
-      Boolean(lockedX || lockedY),
-      options.showCrosshairs ?? true,
-      options.showMarginReadouts ?? false
-    );
-  }
-
-  ctx.restore();
-}
+export {
+  renderAlignmentGuides,
+  type RenderAlignmentGuidesOptions,
+} from "./thumbnailGuideRenderer";

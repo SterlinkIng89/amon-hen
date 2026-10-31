@@ -437,6 +437,50 @@ describe("ThumbnailCanvasEditor", () => {
     fireEvent.keyDown(input, { key: "z", ctrlKey: true });
     expect(onConfigChange).not.toHaveBeenCalled();
   });
+
+  it("enables undo on external studio control mutations and restores state via Ctrl+Z", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      episode_position: "bottom-left",
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    expect(undoBtn).toBeDisabled();
+
+    // External change from studio control (e.g. 3x3 matrix or dropdown)
+    currentConfig = {
+      ...currentConfig,
+      episode_position: "top-right",
+    };
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    expect(undoBtn).not.toBeDisabled();
+
+    // Ctrl+Z reverts external change
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.episode_position).toBe("bottom-left");
+  });
 });
 
 

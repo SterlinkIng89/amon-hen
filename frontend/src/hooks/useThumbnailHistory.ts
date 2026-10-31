@@ -122,7 +122,7 @@ export function buildConfigRestorePatch(
 
   for (const key of optionalKeys) {
     if (current[key] !== undefined && target[key] === undefined) {
-      (patch as Record<string, unknown>)[key] = undefined;
+      patch[key] = undefined;
     }
   }
 
@@ -141,6 +141,15 @@ export function isEditableKeyboardTarget(target: EventTarget | null): boolean {
     target.getAttribute?.("contenteditable") === "true" ||
     target.getAttribute?.("contenteditable") === ""
   );
+}
+
+function appendHistoryItem(
+  history: readonly Partial<TagThumbnailConfig>[],
+  item: Partial<TagThumbnailConfig>,
+  maxHistory: number
+): Partial<TagThumbnailConfig>[] {
+  const next = [...history, item];
+  return next.length > maxHistory ? next.slice(next.length - maxHistory) : next;
 }
 
 export function useThumbnailHistory(
@@ -165,21 +174,76 @@ export function useThumbnailHistory(
 
   const isBatchingRef = useRef(false);
   const batchStartPresentRef = useRef<Partial<TagThumbnailConfig> | null>(null);
+  const isHistoryNavigatingRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const externalBatchStartRef = useRef<Partial<TagThumbnailConfig> | null>(null);
 
-  // Synchronize when external config changes outside of batching and history navigation
+  const flushExternalBatch = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const startingPresent = externalBatchStartRef.current;
+    if (startingPresent && !isThumbnailConfigEqual(startingPresent, presentRef.current)) {
+      externalBatchStartRef.current = null;
+      const nextPast = appendHistoryItem(pastRef.current, startingPresent, maxHistory);
+      pastRef.current = nextPast;
+      setPast(nextPast);
+      setFuture([]);
+      futureRef.current = [];
+    } else {
+      externalBatchStartRef.current = null;
+    }
+  }, [maxHistory]);
+
+  // Synchronize when external config changes (from framing controls, element controls, color, format)
   useEffect(() => {
     if (isBatchingRef.current) return;
-    if (!isThumbnailConfigEqual(initialOrExternalConfig, presentRef.current)) {
-      setPresent(cloneThumbnailConfig(initialOrExternalConfig));
+    if (isHistoryNavigatingRef.current) {
+      isHistoryNavigatingRef.current = false;
+      return;
     }
-  }, [initialOrExternalConfig]);
+    if (!isThumbnailConfigEqual(initialOrExternalConfig, presentRef.current)) {
+      if (externalBatchStartRef.current === null) {
+        externalBatchStartRef.current = cloneThumbnailConfig(presentRef.current);
+      }
+      setFuture([]);
+      futureRef.current = [];
+      const nextCloned = cloneThumbnailConfig(initialOrExternalConfig);
+      presentRef.current = nextCloned;
+      setPresent(nextCloned);
+
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        flushExternalBatch();
+      }, 300);
+    }
+  }, [initialOrExternalConfig, flushExternalBatch]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Reset when resetKey changes
   const prevResetKeyRef = useRef(resetKey);
   useEffect(() => {
     if (prevResetKeyRef.current !== resetKey) {
       prevResetKeyRef.current = resetKey;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      externalBatchStartRef.current = null;
       const fresh = cloneThumbnailConfig(initialOrExternalConfig);
+      pastRef.current = [];
+      presentRef.current = fresh;
+      futureRef.current = [];
       setPast([]);
       setPresent(fresh);
       setFuture([]);
@@ -190,29 +254,25 @@ export function useThumbnailHistory(
 
   const pushState = useCallback(
     (nextState: Partial<TagThumbnailConfig>) => {
+      flushExternalBatch();
       const clonedNext = cloneThumbnailConfig(nextState);
       if (isThumbnailConfigEqual(clonedNext, presentRef.current)) {
         return;
       }
       const previousPresent = presentRef.current;
       presentRef.current = clonedNext;
-      setPast((prevPast) => {
-        const nextPast = [...prevPast, previousPresent];
-        if (nextPast.length > maxHistory) {
-          return nextPast.slice(nextPast.length - maxHistory);
-        }
-        return nextPast;
-      });
+      setPast((prevPast) => appendHistoryItem(prevPast, previousPresent, maxHistory));
       setPresent(clonedNext);
       setFuture([]);
     },
-    [maxHistory]
+    [maxHistory, flushExternalBatch]
   );
 
   const beginBatch = useCallback(() => {
+    flushExternalBatch();
     isBatchingRef.current = true;
     batchStartPresentRef.current = cloneThumbnailConfig(presentRef.current);
-  }, []);
+  }, [flushExternalBatch]);
 
   const updateBatchPreview = useCallback(
     (nextState: Partial<TagThumbnailConfig>) => {
@@ -240,13 +300,7 @@ export function useThumbnailHistory(
       }
 
       presentRef.current = resolvedFinal;
-      setPast((prevPast) => {
-        const nextPast = [...prevPast, startingPresent];
-        if (nextPast.length > maxHistory) {
-          return nextPast.slice(nextPast.length - maxHistory);
-        }
-        return nextPast;
-      });
+      setPast((prevPast) => appendHistoryItem(prevPast, startingPresent, maxHistory));
       setPresent(resolvedFinal);
       setFuture([]);
     },
@@ -254,8 +308,10 @@ export function useThumbnailHistory(
   );
 
   const undo = useCallback((): Partial<TagThumbnailConfig> | null => {
+    flushExternalBatch();
     if (pastRef.current.length === 0) return null;
 
+    isHistoryNavigatingRef.current = true;
     const currentPresent = presentRef.current;
     const previous = pastRef.current[pastRef.current.length - 1];
     const newPast = pastRef.current.slice(0, pastRef.current.length - 1);
@@ -270,19 +326,17 @@ export function useThumbnailHistory(
     setPresent(previous);
 
     return previous;
-  }, []);
+  }, [flushExternalBatch]);
 
   const redo = useCallback((): Partial<TagThumbnailConfig> | null => {
+    flushExternalBatch();
     if (futureRef.current.length === 0) return null;
 
+    isHistoryNavigatingRef.current = true;
     const currentPresent = presentRef.current;
     const next = futureRef.current[0];
     const newFuture = futureRef.current.slice(1);
-    const nextPast = [...pastRef.current, currentPresent];
-    const resolvedPast =
-      nextPast.length > maxHistory
-        ? nextPast.slice(nextPast.length - maxHistory)
-        : nextPast;
+    const resolvedPast = appendHistoryItem(pastRef.current, currentPresent, maxHistory);
 
     presentRef.current = next;
     pastRef.current = resolvedPast;
@@ -293,7 +347,7 @@ export function useThumbnailHistory(
     setPresent(next);
 
     return next;
-  }, [maxHistory]);
+  }, [maxHistory, flushExternalBatch]);
 
   const resetHistory = useCallback(
     (initialState?: Partial<TagThumbnailConfig>) => {
@@ -307,11 +361,15 @@ export function useThumbnailHistory(
     [initialOrExternalConfig]
   );
 
+  const hasPendingExternalChange =
+    externalBatchStartRef.current !== null &&
+    !isThumbnailConfigEqual(externalBatchStartRef.current, present);
+
   return {
     past,
     present,
     future,
-    canUndo: past.length > 0,
+    canUndo: past.length > 0 || hasPendingExternalChange,
     canRedo: future.length > 0,
     pushState,
     beginBatch,
