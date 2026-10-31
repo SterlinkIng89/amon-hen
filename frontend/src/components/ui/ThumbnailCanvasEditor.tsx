@@ -70,9 +70,12 @@ export default function ThumbnailCanvasEditor({
 
   const [snapEnabled, setSnapEnabled] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(false);
+  const [showSafeZone, setShowSafeZone] = useState<boolean>(false);
+  const [selectedElement, setSelectedElement] = useState<ThumbnailElementId | null>(null);
   const [activeSnapLabel, setActiveSnapLabel] = useState<string | null>(null);
   const [quickAlignedElement, setQuickAlignedElement] = useState<ThumbnailElementId | null>(null);
   const quickAlignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevCoordsRef = useRef<{
     title?: { x?: number; y?: number };
     logo?: { x?: number; y?: number };
@@ -86,7 +89,14 @@ export default function ThumbnailCanvasEditor({
   const snapLockRef = useRef<SnapLockState>({ lockedX: null, lockedY: null });
   const smartGuidesRef = useRef<readonly SmartGuideLine[]>([]);
   const dragRawPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
-  const selectedElementRef = useRef<ThumbnailElementId | null>(null);
+
+  useEffect(() => {
+    if (selectedElement === "logo" && !config.logo?.enabled) {
+      setSelectedElement(null);
+    } else if (selectedElement === "title" && !config.title?.enabled) {
+      setSelectedElement(null);
+    }
+  }, [config.logo?.enabled, config.title?.enabled, selectedElement]);
 
   const getSiblingElements = useCallback(
     (currentDrag: ThumbnailElementId): readonly SiblingElementSnapTarget[] => {
@@ -170,16 +180,27 @@ export default function ThumbnailCanvasEditor({
     onRenderRects?.(renderedRects);
 
     const ctx = canvas.getContext("2d");
-    const isHighlighting = activeDrag !== null || quickAlignedElement !== null;
-    if (ctx && (showGrid || isHighlighting)) {
+    const shouldRenderGuides =
+      showGrid ||
+      showSafeZone ||
+      activeDrag !== null ||
+      quickAlignedElement !== null ||
+      selectedElement !== null;
+    if (ctx && shouldRenderGuides) {
       const activeTarget =
-        activeDrag && activeDrag !== "image" ? activeDrag : quickAlignedElement;
-      const activeRect =
+        activeDrag && activeDrag !== "image"
+          ? activeDrag
+          : (quickAlignedElement ?? selectedElement);
+      const targetRect =
         activeTarget ? renderedRects[activeTarget] : undefined;
       renderAlignmentGuides(ctx, canvas.width || 1280, canvas.height || 720, {
         showBaseGrid: showGrid,
+        autoFade: activeDrag !== null && !showGrid,
         lockState: snapLockRef.current,
-        activeRect,
+        activeRect: targetRect,
+        selectedRect: targetRect,
+        showCrosshairs: Boolean(targetRect),
+        showSafeZone,
         smartGuides: smartGuidesRef.current,
       });
     }
@@ -196,6 +217,8 @@ export default function ThumbnailCanvasEditor({
     config.logo,
     config.title,
     showGrid,
+    showSafeZone,
+    selectedElement,
     activeDrag,
     quickAlignedElement,
     onRenderRects,
@@ -209,6 +232,9 @@ export default function ThumbnailCanvasEditor({
     return () => {
       if (quickAlignTimerRef.current) {
         clearTimeout(quickAlignTimerRef.current);
+      }
+      if (nudgeTimerRef.current) {
+        clearTimeout(nudgeTimerRef.current);
       }
     };
   }, []);
@@ -318,10 +344,15 @@ export default function ThumbnailCanvasEditor({
 
     const hit = hitTestElements(rectsRef.current, canvasPoint.x, canvasPoint.y);
 
+    if (nudgeTimerRef.current) {
+      clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = null;
+    }
+
     if (hit) {
       history.beginBatch();
       setActiveDrag(hit);
-      selectedElementRef.current = hit;
+      setSelectedElement(hit);
       const canvasW = canvas.width || 1280;
       const canvasH = canvas.height || 720;
       if (hit === "episode") {
@@ -352,11 +383,12 @@ export default function ThumbnailCanvasEditor({
     } else if (baseImage) {
       history.beginBatch();
       setActiveDrag("image");
-      selectedElementRef.current = null;
+      setSelectedElement(null);
       rawFramingRef.current = clampFraming(config.image_framing || DEFAULT_FRAMING);
       snapLockRef.current = { lockedX: null, lockedY: null };
       setActiveSnapLabel(null);
     } else {
+      setSelectedElement(null);
       return;
     }
 
@@ -504,12 +536,31 @@ export default function ThumbnailCanvasEditor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (e.key === "Escape") {
+      setSelectedElement(null);
+      snapLockRef.current = { lockedX: null, lockedY: null };
+      smartGuidesRef.current = [];
+      setActiveSnapLabel(null);
+      if (nudgeTimerRef.current) {
+        clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = null;
+      }
+      e.preventDefault();
+      return;
+    }
+
     const arrowKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
     if (!arrowKeys.includes(e.key)) return;
 
     const target =
-      selectedElementRef.current ||
+      selectedElement ||
       (config.logo?.enabled ? "logo" : config.title?.enabled ? "title" : "episode");
+
+    if (!target) return;
+
+    if (selectedElement !== target) {
+      setSelectedElement(target);
+    }
 
     const step = e.shiftKey ? 0.02 : 0.005;
     let dx = 0;
@@ -519,6 +570,8 @@ export default function ThumbnailCanvasEditor({
     if (e.key === "ArrowUp") dy = -step;
     if (e.key === "ArrowDown") dy = step;
 
+    let updatedCoord: { x: number; y: number } | null = null;
+
     if (target === "logo" && config.logo?.enabled) {
       const cur = config.logo;
       const updated = clampLayout({
@@ -526,6 +579,7 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
+      updatedCoord = { x: updated.x, y: updated.y };
       const patch = { logo: { ...cur, ...updated } };
       history.pushState({ ...config, ...patch });
       onConfigChange(patch);
@@ -537,6 +591,7 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
+      updatedCoord = { x: updated.x, y: updated.y };
       const patch = { title: { ...cur, ...updated } };
       history.pushState({ ...config, ...patch });
       onConfigChange(patch);
@@ -548,10 +603,46 @@ export default function ThumbnailCanvasEditor({
         y: cur.y + dy,
         scale: cur.scale,
       });
+      updatedCoord = { x: updated.x, y: updated.y };
       const patch = { episode_layout: updated };
       history.pushState({ ...config, ...patch });
       onConfigChange(patch);
       e.preventDefault();
+    }
+
+    if (updatedCoord) {
+      const canvasW = canvasRef.current?.width || 1280;
+      const canvasH = canvasRef.current?.height || 720;
+      const targetRect = rectsRef.current[target];
+      const halfW = targetRect ? (targetRect.w / canvasW) / 2 : 0;
+      const halfH = targetRect ? (targetRect.h / canvasH) / 2 : 0;
+      const otherElements = getSiblingElements(target);
+
+      const snapResult = computeStickySnap(
+        updatedCoord.x,
+        updatedCoord.y,
+        undefined,
+        {
+          bypassSnap: !snapEnabled,
+          elementSize: { halfW, halfH },
+          otherElements,
+          canvasDimensions: { width: canvasW, height: canvasH },
+        }
+      );
+
+      snapLockRef.current = snapResult.lockState;
+      smartGuidesRef.current = snapResult.smartGuides;
+      const pctLabel = `X ${Math.round(updatedCoord.x * 100)}% • Y ${Math.round(updatedCoord.y * 100)}%`;
+      setActiveSnapLabel(snapResult.activeLabel || pctLabel);
+
+      if (nudgeTimerRef.current) {
+        clearTimeout(nudgeTimerRef.current);
+      }
+      nudgeTimerRef.current = setTimeout(() => {
+        snapLockRef.current = { lockedX: null, lockedY: null };
+        smartGuidesRef.current = [];
+        setActiveSnapLabel(null);
+      }, 1500);
     }
   };
 
@@ -572,6 +663,18 @@ export default function ThumbnailCanvasEditor({
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (isEditableKeyboardTarget(e.target)) return;
+
+      if (e.key === "Escape") {
+        setSelectedElement(null);
+        snapLockRef.current = { lockedX: null, lockedY: null };
+        smartGuidesRef.current = [];
+        setActiveSnapLabel(null);
+        if (nudgeTimerRef.current) {
+          clearTimeout(nudgeTimerRef.current);
+          nudgeTimerRef.current = null;
+        }
+        return;
+      }
 
       const isMac =
         typeof navigator !== "undefined" &&
@@ -758,6 +861,19 @@ export default function ThumbnailCanvasEditor({
             }`}
           >
             Grid: {showGrid ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            aria-label="Toggle YouTube timestamp safe zone overlay"
+            title="Toggle YouTube timestamp safe zone (bottom-right 14% area)"
+            onClick={() => setShowSafeZone((prev) => !prev)}
+            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
+              showSafeZone
+                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
+                : "btn-secondary text-text-muted hover:text-white"
+            }`}
+          >
+            Safe zone: {showSafeZone ? "On" : "Off"}
           </button>
         </div>
       </div>
