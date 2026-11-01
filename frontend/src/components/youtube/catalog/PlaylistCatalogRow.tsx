@@ -1,6 +1,7 @@
 import { FC } from "react";
 import { backend } from "../../../../wailsjs/go/models";
 import { getGameColor, getTagBadgeStyle } from "../../../utils/tagColors";
+import { cleanThumbnailUrl } from "../../../utils/thumbnailGenerator";
 
 interface PlaylistCatalogRowProps {
   readonly playlist: backend.CatalogPlaylistSummary;
@@ -34,7 +35,7 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
       <div className="w-14 aspect-video rounded-md overflow-hidden bg-base border border-border-subtle shrink-0 flex items-center justify-center shadow-xs">
         {playlist.thumbnailUrl ? (
           <img
-            src={playlist.thumbnailUrl}
+            src={cleanThumbnailUrl(playlist.thumbnailUrl)}
             alt={playlist.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
           />

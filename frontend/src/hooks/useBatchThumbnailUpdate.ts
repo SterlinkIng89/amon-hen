@@ -85,6 +85,26 @@ export function useBatchThumbnailUpdate({
     batchItemsRef.current = batchItems;
   }, [batchItems]);
 
+  const prevTagRef = useRef(tag);
+  useEffect(() => {
+    if (prevTagRef.current !== tag) {
+      prevTagRef.current = tag;
+      if (running) {
+        cancelRequestedRef.current = true;
+      }
+      setBatchItems(
+        inputItems.map((item) => ({
+          videoId: item.videoId,
+          episode: item.episode,
+          cacheKey: item.cacheKey,
+          localFile: item.localFile,
+          thumbnailUpdatedAt: item.thumbnailUpdatedAt,
+          status: "pending",
+        }))
+      );
+    }
+  }, [tag, running, inputItems]);
+
   // Sync batchItems when inputItems change if not currently running
   useEffect(() => {
     if (!running) {

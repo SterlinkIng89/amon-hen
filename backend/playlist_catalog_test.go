@@ -464,4 +464,62 @@ func TestListCatalogPlaylists_CustomTemplateAndPreviewPrecedence(t *testing.T) {
 	}
 }
 
+func TestResolveVideoThumbnailCandidate(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.cacheDir = t.TempDir()
+	ytThumbsDir := filepath.Join(app.cacheDir, "yt_thumbs")
+	if err := os.MkdirAll(ytThumbsDir, 0755); err != nil {
+		t.Fatalf("failed to create yt_thumbs dir: %v", err)
+	}
+
+	vidWithCache := "vid-with-local"
+	key := customThumbKey("yt:" + vidWithCache)
+	cacheFile := filepath.Join(ytThumbsDir, key+".jpg")
+	if err := os.WriteFile(cacheFile, []byte("fake-jpeg"), 0644); err != nil {
+		t.Fatalf("failed to write cache file: %v", err)
+	}
+
+	// 1. Video with local cache file (yt:<vid>) should return /cache/yt_thumbs/<key>.jpg?v=<modtime>
+	resolved := app.resolveVideoThumbnailCandidate(vidWithCache, "", nil, "https://i.ytimg.com/vi/vid-with-local/maxresdefault.jpg")
+	if !strings.HasPrefix(resolved, "/cache/yt_thumbs/"+key+".jpg?v=") {
+		t.Errorf("expected local cache preview URL, got %q", resolved)
+	}
+
+	// 2. Video with episode cache key (<vid>_<ep>)
+	epVid := "vid-ep-test"
+	epKey := customThumbKey(epVid + "_2")
+	epCacheFile := filepath.Join(ytThumbsDir, epKey+".jpg")
+	if err := os.WriteFile(epCacheFile, []byte("fake-jpeg-ep"), 0644); err != nil {
+		t.Fatalf("failed to write ep cache file: %v", err)
+	}
+	ep2 := 2
+	resolvedEp := app.resolveVideoThumbnailCandidate(epVid, "", &ep2, "https://i.ytimg.com/vi/vid-ep-test/maxresdefault.jpg")
+	if !strings.HasPrefix(resolvedEp, "/cache/yt_thumbs/"+epKey+".jpg?v=") {
+		t.Errorf("expected episode cache URL, got %q", resolvedEp)
+	}
+
+	// 3. Video with localFile key
+	localFilePath := "C:\\Videos\\Game_03.mp4"
+	localFileKey := customThumbKey(localFilePath)
+	localCacheFile := filepath.Join(ytThumbsDir, localFileKey+".jpg")
+	if err := os.WriteFile(localCacheFile, []byte("fake-jpeg-local"), 0644); err != nil {
+		t.Fatalf("failed to write local file cache: %v", err)
+	}
+	resolvedLocalFile := app.resolveVideoThumbnailCandidate("vid-other", localFilePath, nil, "https://i.ytimg.com/vi/vid-other/maxresdefault.jpg")
+	if !strings.HasPrefix(resolvedLocalFile, "/cache/yt_thumbs/"+localFileKey+".jpg?v=") {
+		t.Errorf("expected localFile cache URL, got %q", resolvedLocalFile)
+	}
+
+	// 4. Video without local cache should strip ?v= query params from i.ytimg.com
+	vidWithoutCache := "vid-no-local"
+	urlWithQuery := "https://i.ytimg.com/vi/vid-no-local/maxresdefault.jpg?v=1792994612"
+	resolvedNoCache := app.resolveVideoThumbnailCandidate(vidWithoutCache, "", nil, urlWithQuery)
+	expectedClean := "https://i.ytimg.com/vi/vid-no-local/maxresdefault.jpg"
+	if resolvedNoCache != expectedClean {
+		t.Errorf("expected clean URL %q, got %q", expectedClean, resolvedNoCache)
+	}
+}
+
 

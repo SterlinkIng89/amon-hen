@@ -91,6 +91,18 @@ export function panFraming(
   });
 }
 
+/**
+ * Strips query parameters from YouTube CDN thumbnail URLs.
+ * YouTube's i.ytimg.com returns HTTP 404 if arbitrary query parameters (e.g. cache-busting ?v=...) are appended.
+ */
+export function cleanThumbnailUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.includes("i.ytimg.com") && url.includes("?")) {
+    return url.split("?")[0];
+  }
+  return url;
+}
+
 export type ThumbnailElementId = "episode" | "logo" | "title";
 
 export interface ElementRect {

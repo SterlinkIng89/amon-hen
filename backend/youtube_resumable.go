@@ -514,21 +514,7 @@ func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gam
 func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode int, videoID string, thumbnailPath string) {
 	a.LinkLocalToYouTube(path, videoID, gameTag, episode)
 
-	// Automatically upload custom thumbnail if provided or cached
-	resolvedThumb := thumbnailPath
-	if resolvedThumb == "" && a.cacheDir != "" {
-		cand := filepath.Join(a.cacheDir, "yt_thumbs", customThumbKey(path)+".jpg")
-		if _, err := os.Stat(cand); err == nil {
-			resolvedThumb = cand
-		}
-	}
-	if resolvedThumb != "" {
-		if err := a.SetYouTubeThumbnail(videoID, resolvedThumb); err != nil {
-			appLog("[Queue] Warning: Failed to set YouTube thumbnail for video %s: %v", videoID, err)
-		}
-	}
-
-	if a.db != nil && gameTag != "" {
+	if a.db != nil {
 		dur, _ := a.GetVideoDuration(path)
 		durStr := ""
 		if dur > 0 {
@@ -539,6 +525,7 @@ func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode in
 			INSERT INTO yt_videos (id, title, game_tag, episode, local_file, duration, published_at, synced_at)
 			VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)
 			ON CONFLICT(id) DO UPDATE SET
+				title = CASE WHEN yt_videos.title IS NULL OR yt_videos.title = '' THEN excluded.title ELSE yt_videos.title END,
 				game_tag = excluded.game_tag,
 				episode  = excluded.episode,
 				local_file = excluded.local_file,
@@ -547,6 +534,20 @@ func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode in
 			videoID, title, gameTag, episode, path, durStr, time.Now().Unix(),
 		)
 		a.db.mu.Unlock()
+	}
+
+	// Automatically upload custom thumbnail if provided or cached
+	resolvedThumb := thumbnailPath
+	if resolvedThumb == "" && a.cacheDir != "" {
+		cand := filepath.Join(a.cacheDir, "yt_thumbs", customThumbKey(path)+".jpg")
+		if _, err := os.Stat(cand); err == nil {
+			resolvedThumb = cand
+		}
+	}
+	if resolvedThumb != "" {
+		if _, err := a.UpdateYouTubeThumbnail(videoID, resolvedThumb); err != nil {
+			appLog("[Queue] Warning: Failed to set YouTube thumbnail for video %s: %v", videoID, err)
+		}
 	}
 
 	if playlistID != "" {

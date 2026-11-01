@@ -312,4 +312,40 @@ describe("useBatchThumbnailUpdate", () => {
     expect(result.current.items[1].status).toBe("done");
     expect(result.current.items[0].thumbnailUpdatedAt).toBeGreaterThan(0);
   });
+
+  it("resets items and cancels ongoing queue when tag changes", async () => {
+    let currentTag = "Hades";
+    let currentItems: BatchThumbnailInputItem[] = [
+      { videoId: "hades-1", episode: 1, cacheKey: "yt:hades-1" },
+    ];
+
+    const { result, rerender } = renderHook(
+      (props: { tag: string; items: BatchThumbnailInputItem[] }) =>
+        useBatchThumbnailUpdate({
+          tag: props.tag,
+          config: mockConfig,
+          items: props.items,
+        }),
+      { initialProps: { tag: currentTag, items: currentItems } }
+    );
+
+    expect(result.current.items[0].videoId).toBe("hades-1");
+
+    // Change to new game / tag with new items
+    currentTag = "Felvidek";
+    currentItems = [
+      { videoId: "felvidek-1", episode: 1, cacheKey: "yt:felvidek-1" },
+      { videoId: "felvidek-2", episode: 2, cacheKey: "yt:felvidek-2" },
+    ];
+
+    act(() => {
+      rerender({ tag: currentTag, items: currentItems });
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].videoId).toBe("felvidek-1");
+    expect(result.current.items[1].videoId).toBe("felvidek-2");
+    expect(result.current.items[0].status).toBe("pending");
+  });
 });
+

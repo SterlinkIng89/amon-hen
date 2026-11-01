@@ -303,6 +303,13 @@ export const PlaylistCatalogPanel: FC = () => {
   const vodPlaylistId = isCurrentVod ? draft?.playlistId : tagVodPlaylist?.playlistId;
   const clipPlaylistId = isCurrentClip ? draft?.playlistId : tagClipPlaylist?.playlistId;
 
+  const isTagDivergent = Boolean(
+    draft &&
+    editedTag.trim() &&
+    (draft.tag ? draft.tag.toLowerCase() !== editedTag.trim().toLowerCase() : true) &&
+    !draft.title.toLowerCase().includes(editedTag.trim().toLowerCase())
+  );
+
   return (
     <div className="flex h-full w-full bg-base overflow-hidden">
       {/* Master List Pane (Sidebar) */}
@@ -373,7 +380,12 @@ export const PlaylistCatalogPanel: FC = () => {
                 key={pId}
                 playlist={pl}
                 isSelected={selectedPlaylistId === pId}
-                onSelect={() => void selectPlaylist(pId)}
+                onSelect={() => {
+                  if (isBatchProcessing) {
+                    cancelBatch();
+                  }
+                  void selectPlaylist(pId);
+                }}
               />
             );
           })}
@@ -474,6 +486,18 @@ export const PlaylistCatalogPanel: FC = () => {
                       )}
                     </div>
                   </div>
+                  {isTagDivergent && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span>
+                        Note: You are editing the tag for playlist &quot;{draft?.title}&quot;. Videos in the table below belong to &quot;{draft?.title}&quot;.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Episode Mapping Table */}

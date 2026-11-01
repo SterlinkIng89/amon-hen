@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ListCatalogPlaylists,
   GetPlaylistCatalogDraft,
@@ -41,15 +41,24 @@ export function usePlaylistCatalog() {
     void loadPlaylists();
   }, [loadPlaylists]);
 
+  const selectSeqRef = useRef(0);
+
   const selectPlaylist = useCallback(async (playlistId: string) => {
+    const seq = ++selectSeqRef.current;
     setSelectedPlaylistId(playlistId);
     setIsLoadingDraft(true);
+    setDraft(null);
+    setEditedTag("");
+    setEditedEpisodes({});
     setDraftError(null);
     setApplyError(null);
     setApplySuccess(false);
 
     try {
       const result = await GetPlaylistCatalogDraft(playlistId);
+      if (selectSeqRef.current !== seq) {
+        return;
+      }
       setDraft(result);
       setEditedTag(result.tag || "");
 
@@ -61,20 +70,39 @@ export function usePlaylistCatalog() {
       }
       setEditedEpisodes(episodeMap);
     } catch (err: unknown) {
+      if (selectSeqRef.current !== seq) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       setDraftError(message);
       setDraft(null);
     } finally {
-      setIsLoadingDraft(false);
+      if (selectSeqRef.current === seq) {
+        setIsLoadingDraft(false);
+      }
     }
   }, []);
 
   const reloadDraft = useCallback(async () => {
     if (!selectedPlaylistId) return;
+    const seq = ++selectSeqRef.current;
     try {
       const refreshed = await GetPlaylistCatalogDraft(selectedPlaylistId);
+      if (selectSeqRef.current !== seq) return;
       if (refreshed) {
         setDraft(refreshed);
+        setEditedTag((prev) => prev || refreshed.tag || "");
+        if (refreshed.videos) {
+          setEditedEpisodes((prev) => {
+            const next = { ...prev };
+            for (const vid of refreshed.videos) {
+              if (next[vid.videoId] === undefined) {
+                next[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode || 1);
+              }
+            }
+            return next;
+          });
+        }
       }
     } catch {
       // ignore reload error

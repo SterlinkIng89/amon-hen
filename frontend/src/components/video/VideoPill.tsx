@@ -9,6 +9,7 @@ import {
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
 import { useCustomThumbnail } from "../../hooks/useCustomThumbnail";
+import { cleanThumbnailUrl } from "../../utils/thumbnailGenerator";
 import {
   enqueueThumb,
   enqueueDuration,
@@ -356,7 +357,7 @@ function VideoPillComponent({
         ) : (
           <img
             key={thumbnail}
-            src={thumbnail || "/placeholder-thumb.jpg"}
+            src={cleanThumbnailUrl(thumbnail) || "/placeholder-thumb.jpg"}
             alt={title}
             onLoad={() => setImgLoaded(true)}
             className={`w-full h-full object-cover transition-opacity duration-700 ${

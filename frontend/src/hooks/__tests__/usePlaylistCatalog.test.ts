@@ -2,6 +2,7 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { usePlaylistCatalog } from "../usePlaylistCatalog";
 import * as AppBindings from "../../../wailsjs/go/backend/App";
+import { backend } from "../../../wailsjs/go/models";
 
 vi.mock("../../../wailsjs/go/backend/App", () => ({
   ListCatalogPlaylists: vi.fn(),
@@ -376,5 +377,117 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.draft?.thumbnailUrl).toBe("data:image/jpeg;base64,newpreview");
     expect(result.current.draft?.hasCustomTemplate).toBe(true);
   });
+
+  it("discards stale async response when switching playlists rapidly", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+
+    let resolveFirst: (val: any) => void = () => {};
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    let resolveSecond: (val: any) => void = () => {};
+    const secondPromise = new Promise((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockImplementation((plId: string) => {
+      if (plId === "pl-slow") return firstPromise as any;
+      if (plId === "pl-fast") return secondPromise as any;
+      return Promise.resolve({} as any);
+    });
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    // Start slow playlist
+    act(() => {
+      void result.current.selectPlaylist("pl-slow");
+    });
+    expect(result.current.selectedPlaylistId).toBe("pl-slow");
+    expect(result.current.isLoadingDraft).toBe(true);
+    expect(result.current.draft).toBeNull();
+
+    // Quickly switch to fast playlist
+    act(() => {
+      void result.current.selectPlaylist("pl-fast");
+    });
+    expect(result.current.selectedPlaylistId).toBe("pl-fast");
+    expect(result.current.isLoadingDraft).toBe(true);
+
+    // Fast playlist resolves first
+    await act(async () => {
+      resolveSecond({
+        playlistId: "pl-fast",
+        title: "Fast Game",
+        tag: "FastGame",
+        videos: [{ videoId: "v-fast", title: "Fast Ep 1", episode: 1 }],
+      });
+      await secondPromise;
+    });
+
+    expect(result.current.selectedPlaylistId).toBe("pl-fast");
+    expect(result.current.draft?.playlistId).toBe("pl-fast");
+    expect(result.current.editedTag).toBe("FastGame");
+    expect(result.current.isLoadingDraft).toBe(false);
+
+    // Now slow playlist finishes late -> MUST BE DISCARDED
+    await act(async () => {
+      resolveFirst({
+        playlistId: "pl-slow",
+        title: "Slow Game",
+        tag: "SlowGame",
+        videos: [{ videoId: "v-slow", title: "Slow Ep 1", episode: 1 }],
+      });
+      await firstPromise;
+    });
+
+    // Verify it was NOT overwritten by the slow playlist
+    expect(result.current.selectedPlaylistId).toBe("pl-fast");
+    expect(result.current.draft?.playlistId).toBe("pl-fast");
+    expect(result.current.editedTag).toBe("FastGame");
+    expect(result.current.draft?.title).toBe("Fast Game");
+  });
+
+  it("synchronizes editedTag and new episodes on reloadDraft", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const initialDraft = {
+      playlistId: "pl-1",
+      title: "Game One",
+      tag: "GameOne",
+      videos: [{ videoId: "v-1", title: "Ep 1", episode: 1 }],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(initialDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-1");
+    });
+
+    expect(result.current.editedTag).toBe("GameOne");
+
+    const refreshedDraft = {
+      playlistId: "pl-1",
+      title: "Game One",
+      tag: "GameOneUpdated",
+      videos: [
+        { videoId: "v-1", title: "Ep 1", episode: 1 },
+        { videoId: "v-2", title: "Ep 2", episode: 2 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(refreshedDraft)
+    );
+
+    await act(async () => {
+      await result.current.reloadDraft();
+    });
+
+    expect(result.current.draft?.tag).toBe("GameOneUpdated");
+    expect(result.current.editedEpisodes["v-2"]).toBe(2);
+  });
 });
+
 

@@ -151,7 +151,7 @@ func (db *DB) migrate() error {
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
 	}
-	
+
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {
 			return fmt.Errorf("migration failed on query: %w", err)
@@ -245,6 +245,18 @@ func (db *DB) migrate() error {
 			}
 		}
 	}
+
+	// Strip query parameters from i.ytimg.com URLs that cause 404 in YouTube CDN
+	db.conn.Exec(`
+		UPDATE yt_videos
+		SET thumbnail_url = SUBSTR(thumbnail_url, 1, INSTR(thumbnail_url, '?') - 1)
+		WHERE thumbnail_url LIKE '%i.ytimg.com/%?%'
+	`)
+	db.conn.Exec(`
+		UPDATE yt_playlists
+		SET thumbnail_url = SUBSTR(thumbnail_url, 1, INSTR(thumbnail_url, '?') - 1)
+		WHERE thumbnail_url LIKE '%i.ytimg.com/%?%'
+	`)
 
 	return nil
 }

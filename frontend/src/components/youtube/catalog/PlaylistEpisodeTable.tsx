@@ -1,6 +1,7 @@
 import { FC, useMemo, useState } from "react";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem } from "../../../types";
+import { cleanThumbnailUrl } from "../../../utils/thumbnailGenerator";
 
 export type VideoFilter = "all" | "needs-thumb" | "synced";
 
@@ -424,7 +425,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     >
                       {vid.thumbnailUrl ? (
                         <img
-                          src={vid.thumbnailUrl}
+                          src={cleanThumbnailUrl(vid.thumbnailUrl)}
                           alt=""
                           className="w-full h-full object-cover"
                           loading="lazy"

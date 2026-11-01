@@ -13,6 +13,7 @@ import {
   hitTestResizeHandle,
   computeCornerResizeScale,
   renderPlaylistCoverToCanvas,
+  cleanThumbnailUrl,
 } from "../thumbnailGenerator";
 
 describe("thumbnailGenerator utils", () => {
@@ -365,6 +366,40 @@ describe("thumbnailGenerator utils", () => {
       expect(rects.episode).toBeUndefined();
     });
   });
+
+  describe("cleanThumbnailUrl", () => {
+    it("returns empty string when url is null or undefined", () => {
+      expect(cleanThumbnailUrl(null)).toBe("");
+      expect(cleanThumbnailUrl(undefined)).toBe("");
+      expect(cleanThumbnailUrl("")).toBe("");
+    });
+
+    it("strips query parameters from i.ytimg.com URLs", () => {
+      expect(
+        cleanThumbnailUrl("https://i.ytimg.com/vi/MfBL7RqsTsg/hqdefault.jpg?v=1792994580")
+      ).toBe("https://i.ytimg.com/vi/MfBL7RqsTsg/hqdefault.jpg");
+
+      expect(
+        cleanThumbnailUrl("https://i.ytimg.com/vi/vsQQMJzWUa4/maxresdefault.jpg?v=66a7e897?v=1792994612")
+      ).toBe("https://i.ytimg.com/vi/vsQQMJzWUa4/maxresdefault.jpg");
+    });
+
+    it("leaves clean i.ytimg.com URLs untouched", () => {
+      expect(
+        cleanThumbnailUrl("https://i.ytimg.com/vi/MfBL7RqsTsg/hqdefault.jpg")
+      ).toBe("https://i.ytimg.com/vi/MfBL7RqsTsg/hqdefault.jpg");
+    });
+
+    it("preserves non-YouTube URLs and local cache URLs", () => {
+      expect(cleanThumbnailUrl("/cache/yt_thumbs/local_1.jpg?v=123")).toBe(
+        "/cache/yt_thumbs/local_1.jpg?v=123"
+      );
+      expect(cleanThumbnailUrl("https://steam.cdn/header.jpg?v=456")).toBe(
+        "https://steam.cdn/header.jpg?v=456"
+      );
+    });
+  });
 });
+
 
 

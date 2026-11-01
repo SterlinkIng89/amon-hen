@@ -169,6 +169,51 @@ func TestSyncPlaylists_PreservesCustomThumbnail(t *testing.T) {
 	}
 }
 
+func TestSyncVideos_PreservesCustomThumbnail(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	customURL := "/cache/yt_thumbs/yt_vid_custom.jpg?v=12345"
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, monetization_status, rejection_reason, status_issues, synced_at)
+		VALUES ('vid-preserve-1', 'My Video', 'Desc', '2026-01-01', ?, 10, 2, 'PT5M', 'public', 'monetized', '', '', 1000)
+	`, customURL)
+	if err != nil {
+		t.Fatalf("failed to insert initial video: %v", err)
+	}
+
+	// Simulate sync upsert where YouTube returns a remote thumbnail
+	incomingThumb := "https://i.ytimg.com/vi/vid-preserve-1/hqdefault.jpg"
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, description, published_at, thumbnail_url, view_count, like_count, duration, privacy, monetization_status, rejection_reason, status_issues, synced_at)
+		VALUES ('vid-preserve-1', 'My Video Updated', 'New Desc', '2026-01-01', ?, 20, 5, 'PT5M', 'public', 'monetized', '', '', 2000)
+		ON CONFLICT(id) DO UPDATE SET
+		title=excluded.title, description=excluded.description, published_at=excluded.published_at,
+		thumbnail_url=CASE
+			WHEN yt_videos.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_videos.thumbnail_url
+			WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
+			ELSE yt_videos.thumbnail_url
+		END,
+		view_count=excluded.view_count, like_count=excluded.like_count,
+		duration=excluded.duration, privacy=excluded.privacy,
+		monetization_status=excluded.monetization_status, rejection_reason=excluded.rejection_reason, status_issues=excluded.status_issues,
+		synced_at=excluded.synced_at
+	`, incomingThumb)
+	if err != nil {
+		t.Fatalf("failed to run sync upsert: %v", err)
+	}
+
+	var savedThumb string
+	err = app.db.conn.QueryRow("SELECT thumbnail_url FROM yt_videos WHERE id = 'vid-preserve-1'").Scan(&savedThumb)
+	if err != nil {
+		t.Fatalf("failed to query saved thumbnail: %v", err)
+	}
+
+	if savedThumb != customURL {
+		t.Errorf("expected yt_videos thumbnail_url %q to be preserved, got %q", customURL, savedThumb)
+	}
+}
+
 func TestUpdateYouTubeVideoGameMeta(t *testing.T) {
 	app := setupTestDB(t)
 	defer app.db.conn.Close()

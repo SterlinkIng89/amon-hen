@@ -525,8 +525,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 					ON CONFLICT(id) DO UPDATE SET
 					title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 					thumbnail_url=CASE
-						WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
-						THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+						WHEN yt_videos.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_videos.thumbnail_url
 						WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
 						ELSE yt_videos.thumbnail_url
 					END,
@@ -669,8 +668,7 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 				thumbnail_url=CASE
-					WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
-					THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+					WHEN yt_videos.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_videos.thumbnail_url
 					WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
 					ELSE yt_videos.thumbnail_url
 				END,
@@ -777,6 +775,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 				epVal := int(ep.Int64)
 				v.Episode = &epVal
 			}
+			v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 			v.StatusIssues = parseStatusIssues(issuesStr)
 
 			if hasDateFilter {
@@ -899,6 +898,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			epVal := int(ep.Int64)
 			v.Episode = &epVal
 		}
+		v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}
@@ -1008,6 +1008,7 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 			epVal := int(ep.Int64)
 			v.Episode = &epVal
 		}
+		v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}

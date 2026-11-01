@@ -68,6 +68,41 @@ func (a *App) resolvePlaylistThumbnailCandidate(currentThumb, tag, fallbackCusto
 	return currentThumb
 }
 
+func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode *int, currentThumb string) string {
+	if a.cacheDir != "" {
+		ytThumbsDir := filepath.Join(a.cacheDir, "yt_thumbs")
+		// 1. Check yt:<videoID>
+		if videoID != "" {
+			key := customThumbKey("yt:" + videoID)
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+			}
+		}
+		// 2. Check <videoID>_<episode>
+		if videoID != "" && episode != nil && *episode > 0 {
+			key := customThumbKey(fmt.Sprintf("%s_%d", videoID, *episode))
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+			}
+		}
+		// 3. Check localFile
+		if localFile != "" {
+			key := customThumbKey(localFile)
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+			}
+		}
+	}
+	// Fallback: strip query parameters from i.ytimg.com URLs to prevent 404
+	if strings.Contains(currentThumb, "i.ytimg.com") && strings.Contains(currentThumb, "?") {
+		return strings.Split(currentThumb, "?")[0]
+	}
+	return currentThumb
+}
+
 type PlaylistCatalogDraft struct {
 	CatalogPlaylistSummary
 	SteamAppID      string              `json:"steamAppId"`
@@ -374,6 +409,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 		var localFile string
 		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt); err == nil {
 			vd.LocalFile = localFile
+			vd.ThumbnailUrl = a.resolveVideoThumbnailCandidate(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
 			vids = append(vids, vd)
 		}
 	}
