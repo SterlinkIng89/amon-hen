@@ -751,6 +751,228 @@ describe("ThumbnailCanvasEditor", () => {
       })
     );
   });
+
+  describe("Interactive Corner Resize Handles", () => {
+    it("updates canvas cursor to diagonal resize on hovering corner handles of selected element", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.23, y: 0.2, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={vi.fn()}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Click inside logo to select it
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // 2. Hover over bottom-right (se) corner -> (400, 200) -> cursor-nwse-resize
+      fireEvent.pointerMove(canvas, { clientX: 400, clientY: 200 });
+      expect(canvas.className).toContain("cursor-nwse-resize");
+
+      // 3. Hover over top-right (ne) corner -> (400, 100) -> cursor-nesw-resize
+      fireEvent.pointerMove(canvas, { clientX: 400, clientY: 100 });
+      expect(canvas.className).toContain("cursor-nesw-resize");
+
+      // 4. Pointer leave resets hover states
+      fireEvent.pointerLeave(canvas);
+      expect(canvas.className).not.toContain("cursor-nwse-resize");
+      expect(canvas.className).not.toContain("cursor-nesw-resize");
+    });
+
+    it("resizes logo scale smoothly on dragging a corner handle, showing live HUD scale pill", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.23, y: 0.2, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Select logo
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // 2. Press down on se corner handle (400, 200)
+      fireEvent.pointerDown(canvas, { clientX: 400, clientY: 200, pointerId: 1 });
+
+      // Active scale HUD pill should appear
+      const hudPill = container.querySelector(".animate-pulse");
+      expect(hudPill).toBeDefined();
+
+      // 3. Drag outward to (420, 210) to scale up
+      fireEvent.pointerMove(canvas, { clientX: 420, clientY: 210, pointerId: 1 });
+
+      expect(onConfigChange).toHaveBeenCalled();
+      const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+      expect(lastCall.logo?.scale).toBeGreaterThan(1);
+
+      // 4. Release pointer to commit batch
+      fireEvent.pointerUp(canvas, { clientX: 420, clientY: 210, pointerId: 1 });
+      expect(canvas.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it("resizes episode layout scale on corner drag when episode is selected", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        episode: { x: 900, y: 500, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const epConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        episode_layout: { x: 0.8, y: 0.7, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={epConfig}
+          baseImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Select episode
+      fireEvent.pointerDown(canvas, { clientX: 950, clientY: 550, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 950, clientY: 550, pointerId: 1 });
+
+      // 2. Drag se corner handle (1100, 600) inward to (1050, 575)
+      fireEvent.pointerDown(canvas, { clientX: 1100, clientY: 600, pointerId: 1 });
+      fireEvent.pointerMove(canvas, { clientX: 1050, clientY: 575, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 1050, clientY: 575, pointerId: 1 });
+
+      expect(onConfigChange).toHaveBeenCalled();
+      const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+      expect(lastCall.episode_layout?.scale).toBeLessThan(1);
+    });
+
+    it("adjusts scale with + and - keyboard shortcuts when an element is selected", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.2, y: 0.2, scale: 1.0 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      // Select logo
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // Press '+'
+      fireEvent.keyDown(canvas, { key: "+" });
+      expect(onConfigChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logo: expect.objectContaining({ scale: 1.05 }),
+        })
+      );
+
+      // Press '-'
+      fireEvent.keyDown(canvas, { key: "-" });
+      expect(onConfigChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logo: expect.objectContaining({ scale: 0.95 }),
+        })
+      );
+    });
+  });
 });
 
 

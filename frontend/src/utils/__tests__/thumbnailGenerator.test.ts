@@ -10,6 +10,8 @@ import {
   clampLayout,
   pointerToCanvasPoint,
   hitTestElements,
+  hitTestResizeHandle,
+  computeCornerResizeScale,
   renderPlaylistCoverToCanvas,
 } from "../thumbnailGenerator";
 
@@ -228,6 +230,107 @@ describe("thumbnailGenerator utils", () => {
       expect(hitTestElements(rects, 400, 200)).toBe("logo");
       // Outside
       expect(hitTestElements(rects, 10, 10)).toBeNull();
+    });
+
+    describe("hitTestResizeHandle", () => {
+      const rect = { x: 100, y: 100, w: 200, h: 100 };
+
+      it("detects nw corner within tolerance", () => {
+        expect(hitTestResizeHandle(rect, 100, 100, 16)).toBe("nw");
+        expect(hitTestResizeHandle(rect, 108, 95, 16)).toBe("nw");
+      });
+
+      it("detects ne corner within tolerance", () => {
+        expect(hitTestResizeHandle(rect, 300, 100, 16)).toBe("ne");
+        expect(hitTestResizeHandle(rect, 295, 105, 16)).toBe("ne");
+      });
+
+      it("detects sw corner within tolerance", () => {
+        expect(hitTestResizeHandle(rect, 100, 200, 16)).toBe("sw");
+        expect(hitTestResizeHandle(rect, 105, 195, 16)).toBe("sw");
+      });
+
+      it("detects se corner within tolerance", () => {
+        expect(hitTestResizeHandle(rect, 300, 200, 16)).toBe("se");
+        expect(hitTestResizeHandle(rect, 310, 208, 16)).toBe("se");
+      });
+
+      it("returns null when pointer is outside tolerance or in center", () => {
+        // Center of rect
+        expect(hitTestResizeHandle(rect, 200, 150, 16)).toBeNull();
+        // Far outside
+        expect(hitTestResizeHandle(rect, 50, 50, 16)).toBeNull();
+        // Just outside tolerance from nw
+        expect(hitTestResizeHandle(rect, 75, 75, 16)).toBeNull();
+      });
+    });
+
+    describe("computeCornerResizeScale", () => {
+      const initialRect = { x: 100, y: 100, w: 200, h: 100 }; // Center: (200, 150)
+
+      it("increases scale when dragging se handle outward", () => {
+        // se initial position: (300, 200), center is (200, 150), half vector (100, 50)
+        // Drag outward along the same vector by 20%
+        const scale = computeCornerResizeScale({
+          handle: "se",
+          initialRect,
+          initialScale: 1.0,
+          currentCanvasX: 320,
+          currentCanvasY: 210,
+        });
+        expect(scale).toBeCloseTo(1.2, 2);
+      });
+
+      it("decreases scale when dragging se handle inward", () => {
+        // Drag halfway towards center
+        const scale = computeCornerResizeScale({
+          handle: "se",
+          initialRect,
+          initialScale: 1.0,
+          currentCanvasX: 250,
+          currentCanvasY: 175,
+        });
+        expect(scale).toBeCloseTo(0.5, 2);
+      });
+
+      it("scales symmetrically when dragging nw handle outward", () => {
+        // nw initial position: (100, 100), center (200, 150), radial vector (-100, -50)
+        // Drag up and left away from center
+        const scale = computeCornerResizeScale({
+          handle: "nw",
+          initialRect,
+          initialScale: 1.0,
+          currentCanvasX: 80,
+          currentCanvasY: 90,
+        });
+        expect(scale).toBeCloseTo(1.2, 2);
+      });
+
+      it("clamps scale to provided minScale and maxScale bounds", () => {
+        // Drag very far outward
+        const maxClamped = computeCornerResizeScale({
+          handle: "se",
+          initialRect,
+          initialScale: 1.0,
+          currentCanvasX: 1000,
+          currentCanvasY: 800,
+          minScale: 0.4,
+          maxScale: 2.5,
+        });
+        expect(maxClamped).toBe(2.5);
+
+        // Drag past center to other quadrant
+        const minClamped = computeCornerResizeScale({
+          handle: "se",
+          initialRect,
+          initialScale: 1.0,
+          currentCanvasX: 50,
+          currentCanvasY: 50,
+          minScale: 0.4,
+          maxScale: 2.5,
+        });
+        expect(minClamped).toBe(0.4);
+      });
     });
   });
 

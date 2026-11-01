@@ -10,6 +10,10 @@ import {
   pointerToCanvasPoint,
   ThumbnailRects,
   ThumbnailElementId,
+  ElementRect,
+  ResizeHandleId,
+  hitTestResizeHandle,
+  computeCornerResizeScale,
 } from "../../utils/thumbnailGenerator";
 import {
   buildSnapLabel,
@@ -28,6 +32,7 @@ import {
   buildConfigRestorePatch,
   isEditableKeyboardTarget,
 } from "../../hooks/useThumbnailHistory";
+import ThumbnailCanvasToolbar from "./ThumbnailCanvasToolbar";
 
 export interface ThumbnailCanvasEditorProps {
   readonly config: Partial<TagThumbnailConfig>;
@@ -41,6 +46,13 @@ export interface ThumbnailCanvasEditorProps {
   readonly onConfigChange: (patch: Partial<TagThumbnailConfig>) => void;
   readonly onRenderRects?: (rects: ThumbnailRects) => void;
   readonly historyResetKey?: string | number;
+}
+
+interface ActiveResizeState {
+  readonly element: ThumbnailElementId;
+  readonly handle: ResizeHandleId;
+  readonly initialRect: ElementRect;
+  readonly initialScale: number;
 }
 
 export default function ThumbnailCanvasEditor({
@@ -59,6 +71,9 @@ export default function ThumbnailCanvasEditor({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectsRef = useRef<ThumbnailRects>({});
   const [activeDrag, setActiveDrag] = useState<ThumbnailElementId | "image" | null>(null);
+  const [activeResize, setActiveResize] = useState<ActiveResizeState | null>(null);
+  const [hoveredHandle, setHoveredHandle] = useState<ResizeHandleId | null>(null);
+  const [hoveredElement, setHoveredElement] = useState<ThumbnailElementId | null>(null);
   const dragStartRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const rawFramingRef = useRef<ImageFraming>(
     config.image_framing || DEFAULT_FRAMING
@@ -93,8 +108,10 @@ export default function ThumbnailCanvasEditor({
   useEffect(() => {
     if (selectedElement === "logo" && !config.logo?.enabled) {
       setSelectedElement(null);
+      setActiveResize(null);
     } else if (selectedElement === "title" && !config.title?.enabled) {
       setSelectedElement(null);
+      setActiveResize(null);
     }
   }, [config.logo?.enabled, config.title?.enabled, selectedElement]);
 
@@ -150,6 +167,36 @@ export default function ThumbnailCanvasEditor({
     });
   };
 
+  const applyElementScale = useCallback(
+    (target: ThumbnailElementId, newScale: number, isInteractiveBatch = false) => {
+      let patch: Partial<TagThumbnailConfig> | null = null;
+      if (target === "logo" && config.logo) {
+        patch = { logo: { ...config.logo, scale: newScale } };
+      } else if (target === "title" && config.title) {
+        patch = { title: { ...config.title, scale: newScale } };
+      } else if (target === "episode") {
+        const cur = config.episode_layout || {
+          x: rectsRef.current.episode
+            ? (rectsRef.current.episode.x + rectsRef.current.episode.w / 2) / (canvasRef.current?.width || 1280)
+            : 0.85,
+          y: rectsRef.current.episode
+            ? (rectsRef.current.episode.y + rectsRef.current.episode.h / 2) / (canvasRef.current?.height || 720)
+            : 0.85,
+          scale: 1,
+        };
+        patch = { episode_layout: { ...cur, scale: newScale } };
+      }
+      if (!patch) return;
+      if (isInteractiveBatch) {
+        history.updateBatchPreview({ ...config, ...patch });
+      } else {
+        history.pushState({ ...config, ...patch });
+      }
+      onConfigChange(patch);
+    },
+    [config, history, onConfigChange]
+  );
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -184,18 +231,21 @@ export default function ThumbnailCanvasEditor({
       showGrid ||
       showSafeZone ||
       activeDrag !== null ||
+      activeResize !== null ||
       quickAlignedElement !== null ||
       selectedElement !== null;
     if (ctx && shouldRenderGuides) {
       const activeTarget =
-        activeDrag && activeDrag !== "image"
+        activeResize !== null
+          ? activeResize.element
+          : activeDrag && activeDrag !== "image"
           ? activeDrag
           : (quickAlignedElement ?? selectedElement);
       const targetRect =
         activeTarget ? renderedRects[activeTarget] : undefined;
       renderAlignmentGuides(ctx, canvas.width || 1280, canvas.height || 720, {
         showBaseGrid: showGrid,
-        autoFade: activeDrag !== null && !showGrid,
+        autoFade: (activeDrag !== null || activeResize !== null) && !showGrid,
         lockState: snapLockRef.current,
         activeRect: targetRect,
         selectedRect: targetRect,
@@ -220,6 +270,7 @@ export default function ThumbnailCanvasEditor({
     showSafeZone,
     selectedElement,
     activeDrag,
+    activeResize,
     quickAlignedElement,
     onRenderRects,
   ]);
@@ -342,12 +393,44 @@ export default function ThumbnailCanvasEditor({
       canvas.height || 720
     );
 
-    const hit = hitTestElements(rectsRef.current, canvasPoint.x, canvasPoint.y);
-
     if (nudgeTimerRef.current) {
       clearTimeout(nudgeTimerRef.current);
       nudgeTimerRef.current = null;
     }
+
+    // 1. Check if clicking on a resize corner handle of the selected element first
+    if (selectedElement && rectsRef.current[selectedElement]) {
+      const selectedRect = rectsRef.current[selectedElement]!;
+      const handleHit = hitTestResizeHandle(selectedRect, canvasPoint.x, canvasPoint.y);
+      if (handleHit) {
+        const currentScale =
+          selectedElement === "logo"
+            ? config.logo?.scale ?? 1
+            : selectedElement === "title"
+            ? config.title?.scale ?? 1
+            : config.episode_layout?.scale ?? 1;
+
+        history.beginBatch();
+        setActiveResize({
+          element: selectedElement,
+          handle: handleHit,
+          initialRect: { ...selectedRect },
+          initialScale: currentScale,
+        });
+        snapLockRef.current = { lockedX: null, lockedY: null };
+        smartGuidesRef.current = [];
+        setActiveSnapLabel(`Scale: ${Math.round(currentScale * 100)}%`);
+        dragStartRef.current = { clientX: e.clientX, clientY: e.clientY };
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // ignore
+        }
+        return;
+      }
+    }
+
+    const hit = hitTestElements(rectsRef.current, canvasPoint.x, canvasPoint.y);
 
     if (hit) {
       history.beginBatch();
@@ -401,15 +484,65 @@ export default function ThumbnailCanvasEditor({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!activeDrag || !dragStartRef.current || !canvasRef.current) return;
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const canvasW = canvas.width || 1280;
+    const canvasH = canvas.height || 720;
+    const rect = canvas.getBoundingClientRect();
+    const canvasPoint = pointerToCanvasPoint(
+      e.clientX,
+      e.clientY,
+      rect,
+      canvasW,
+      canvasH
+    );
+
+    // Active corner resize dragging
+    if (activeResize) {
+      const minScale = activeResize.element === "episode" ? 0.5 : 0.4;
+      const maxScale = activeResize.element === "episode" ? 2.0 : 2.5;
+
+      const newScale = computeCornerResizeScale({
+        handle: activeResize.handle,
+        initialRect: activeResize.initialRect,
+        initialScale: activeResize.initialScale,
+        currentCanvasX: canvasPoint.x,
+        currentCanvasY: canvasPoint.y,
+        minScale,
+        maxScale,
+      });
+
+      setActiveSnapLabel(`Scale: ${Math.round(newScale * 100)}%`);
+      applyElementScale(activeResize.element, newScale, true);
+      return;
+    }
+
+    // Hover hit-testing when not dragging or resizing
+    if (!activeDrag || !dragStartRef.current) {
+      if (selectedElement && rectsRef.current[selectedElement]) {
+        const handleHit = hitTestResizeHandle(
+          rectsRef.current[selectedElement]!,
+          canvasPoint.x,
+          canvasPoint.y
+        );
+        setHoveredHandle(handleHit);
+        if (handleHit) {
+          setHoveredElement(null);
+          return;
+        }
+      } else if (hoveredHandle !== null) {
+        setHoveredHandle(null);
+      }
+
+      const elemHit = hitTestElements(rectsRef.current, canvasPoint.x, canvasPoint.y);
+      setHoveredElement(elemHit);
+      return;
+    }
 
     const dx = e.clientX - dragStartRef.current.clientX;
     const dy = e.clientY - dragStartRef.current.clientY;
     dragStartRef.current = { clientX: e.clientX, clientY: e.clientY };
 
-    const canvasW = canvasRef.current.width || 1280;
-    const canvasH = canvasRef.current.height || 720;
-    const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasW / (rect.width || 1);
     const scaleY = canvasH / (rect.height || 1);
 
@@ -521,6 +654,21 @@ export default function ThumbnailCanvasEditor({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activeResize) {
+      history.commitBatch();
+      setActiveResize(null);
+      dragStartRef.current = null;
+      snapLockRef.current = { lockedX: null, lockedY: null };
+      smartGuidesRef.current = [];
+      setActiveSnapLabel(null);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     if (!activeDrag) return;
     history.commitBatch();
     setActiveDrag(null);
@@ -538,6 +686,7 @@ export default function ThumbnailCanvasEditor({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
     if (e.key === "Escape") {
       setSelectedElement(null);
+      setActiveResize(null);
       snapLockRef.current = { lockedX: null, lockedY: null };
       smartGuidesRef.current = [];
       setActiveSnapLabel(null);
@@ -547,6 +696,38 @@ export default function ThumbnailCanvasEditor({
       }
       e.preventDefault();
       return;
+    }
+
+    const scaleKeys = ["+", "=", "-", "_"];
+    if (scaleKeys.includes(e.key)) {
+      const target =
+        selectedElement ||
+        (config.logo?.enabled ? "logo" : config.title?.enabled ? "title" : "episode");
+      if (target) {
+        if (selectedElement !== target) {
+          setSelectedElement(target);
+        }
+        const delta = e.key === "+" || e.key === "=" ? 0.05 : -0.05;
+        const curScale =
+          target === "logo"
+            ? config.logo?.scale ?? 1
+            : target === "title"
+            ? config.title?.scale ?? 1
+            : config.episode_layout?.scale ?? 1;
+        const minScale = target === "episode" ? 0.5 : 0.4;
+        const maxScale = target === "episode" ? 2.0 : 2.5;
+        const newScale = Math.max(
+          minScale,
+          Math.min(maxScale, Math.round((curScale + delta) * 100) / 100)
+        );
+
+        applyElementScale(target, newScale, false);
+        setActiveSnapLabel(`Scale: ${Math.round(newScale * 100)}%`);
+        if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = setTimeout(() => setActiveSnapLabel(null), 1500);
+        e.preventDefault();
+        return;
+      }
     }
 
     const arrowKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
@@ -703,12 +884,32 @@ export default function ThumbnailCanvasEditor({
     };
   }, [handleUndo, handleRedo]);
 
+  const getCanvasCursorClass = () => {
+    if (activeResize) {
+      return activeResize.handle === "nw" || activeResize.handle === "se"
+        ? "cursor-nwse-resize"
+        : "cursor-nesw-resize";
+    }
+    if (activeDrag) {
+      return "cursor-grabbing";
+    }
+    if (hoveredHandle) {
+      return hoveredHandle === "nw" || hoveredHandle === "se"
+        ? "cursor-nwse-resize"
+        : "cursor-nesw-resize";
+    }
+    if (hoveredElement) {
+      return "cursor-grab";
+    }
+    return baseImage ? "cursor-grab" : "cursor-default";
+  };
+
   return (
     <div className={`flex flex-col gap-2 w-full ${className}`}>
       {/* 16:9 Canvas Frame */}
       <div
         className={`aspect-video w-full rounded-lg overflow-hidden bg-black/60 relative select-none shadow-xs transition-colors duration-150 ${
-          activeDrag !== null || quickAlignedElement !== null
+          activeDrag !== null || activeResize !== null || quickAlignedElement !== null
             ? "border-2 border-accent"
             : "border border-border-subtle"
         }`}
@@ -729,17 +930,17 @@ export default function ThumbnailCanvasEditor({
           height={720}
           tabIndex={0}
           aria-label="Thumbnail canvas preview with interactive elements"
-          className={`w-full h-full object-cover touch-none outline-none ${
-            activeDrag
-              ? "cursor-grabbing"
-              : baseImage
-              ? "cursor-grab"
-              : "cursor-default"
-          }`}
+          className={`w-full h-full object-cover touch-none outline-none ${getCanvasCursorClass()}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onPointerLeave={() => {
+            if (!activeDrag && !activeResize) {
+              setHoveredHandle(null);
+              setHoveredElement(null);
+            }
+          }}
           onKeyDown={handleKeyDown}
         />
 
@@ -756,127 +957,20 @@ export default function ThumbnailCanvasEditor({
         )}
       </div>
 
-      {/* Canvas Tooling Controls (Underneath the preview) */}
-      <div className="flex items-center justify-between gap-1.5 text-xs select-none flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            aria-label="Center artwork"
-            title="Center the background artwork (offset 50%, 50%)"
-            disabled={!baseImage}
-            onClick={handleCenterArtwork}
-            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="22" y1="12" x2="18" y2="12" />
-              <line x1="6" y1="12" x2="2" y2="12" />
-              <line x1="12" y1="6" x2="12" y2="2" />
-              <line x1="12" y1="22" x2="12" y2="18" />
-            </svg>
-            <span>Center art</span>
-          </button>
-
-          <button
-            type="button"
-            aria-label="Undo"
-            title="Undo (Ctrl+Z)"
-            disabled={!history.canUndo}
-            onClick={handleUndo}
-            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="1 4 1 10 7 10" />
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-            </svg>
-            <span>Undo</span>
-          </button>
-
-          <button
-            type="button"
-            aria-label="Redo"
-            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
-            disabled={!history.canRedo}
-            onClick={handleRedo}
-            className="btn btn-secondary btn-xs text-[11px] font-medium flex items-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-            <span>Redo</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            aria-label="Toggle magnetic grid snap"
-            title="Toggle magnetic grid snap (or hold Alt while dragging)"
-            onClick={() => setSnapEnabled((prev) => !prev)}
-            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
-              snapEnabled
-                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
-                : "btn-secondary text-text-muted hover:text-white"
-            }`}
-          >
-            Snap: {snapEnabled ? "On" : "Off"}
-          </button>
-          <button
-            type="button"
-            aria-label="Show or hide 3x3 alignment grid"
-            title="Show or hide 3x3 alignment grid"
-            onClick={() => setShowGrid((prev) => !prev)}
-            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
-              showGrid
-                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
-                : "btn-secondary text-text-muted hover:text-white"
-            }`}
-          >
-            Grid: {showGrid ? "On" : "Off"}
-          </button>
-          <button
-            type="button"
-            aria-label="Toggle YouTube timestamp safe zone overlay"
-            title="Toggle YouTube timestamp safe zone (bottom-right 14% area)"
-            onClick={() => setShowSafeZone((prev) => !prev)}
-            className={`btn btn-xs text-[11px] font-medium transition-colors cursor-pointer ${
-              showSafeZone
-                ? "btn-secondary text-accent border border-accent/40 bg-accent/15"
-                : "btn-secondary text-text-muted hover:text-white"
-            }`}
-          >
-            Safe zone: {showSafeZone ? "On" : "Off"}
-          </button>
-        </div>
-      </div>
+      <ThumbnailCanvasToolbar
+        hasBaseImage={Boolean(baseImage)}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+        snapEnabled={snapEnabled}
+        showGrid={showGrid}
+        showSafeZone={showSafeZone}
+        onCenterArtwork={handleCenterArtwork}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onToggleSnap={() => setSnapEnabled((prev) => !prev)}
+        onToggleGrid={() => setShowGrid((prev) => !prev)}
+        onToggleSafeZone={() => setShowSafeZone((prev) => !prev)}
+      />
     </div>
   );
 }

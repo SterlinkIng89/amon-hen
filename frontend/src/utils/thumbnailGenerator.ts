@@ -145,6 +145,74 @@ export function hitTestElements(
   return null;
 }
 
+export type ResizeHandleId = "nw" | "ne" | "sw" | "se";
+
+export function hitTestResizeHandle(
+  rect: ElementRect,
+  canvasX: number,
+  canvasY: number,
+  tolerancePx = 16
+): ResizeHandleId | null {
+  const { x, y, w, h } = rect;
+  const handles: readonly { readonly id: ResizeHandleId; readonly hx: number; readonly hy: number }[] = [
+    { id: "nw", hx: x, hy: y },
+    { id: "ne", hx: x + w, hy: y },
+    { id: "sw", hx: x, hy: y + h },
+    { id: "se", hx: x + w, hy: y + h },
+  ];
+
+  for (const { id, hx, hy } of handles) {
+    if (Math.hypot(canvasX - hx, canvasY - hy) <= tolerancePx) {
+      return id;
+    }
+  }
+  return null;
+}
+
+export interface CornerResizeCalculationParams {
+  readonly handle: ResizeHandleId;
+  readonly initialRect: ElementRect;
+  readonly initialScale: number;
+  readonly currentCanvasX: number;
+  readonly currentCanvasY: number;
+  readonly minScale?: number;
+  readonly maxScale?: number;
+}
+
+export function computeCornerResizeScale({
+  handle,
+  initialRect,
+  initialScale,
+  currentCanvasX,
+  currentCanvasY,
+  minScale = 0.4,
+  maxScale = 2.5,
+}: CornerResizeCalculationParams): number {
+  const centerX = initialRect.x + initialRect.w / 2;
+  const centerY = initialRect.y + initialRect.h / 2;
+
+  const cornerX = handle === "ne" || handle === "se" ? initialRect.x + initialRect.w : initialRect.x;
+  const cornerY = handle === "sw" || handle === "se" ? initialRect.y + initialRect.h : initialRect.y;
+
+  const v0X = cornerX - centerX;
+  const v0Y = cornerY - centerY;
+  const initialDist = Math.hypot(v0X, v0Y);
+  if (initialDist === 0) return initialScale;
+
+  const uX = v0X / initialDist;
+  const uY = v0Y / initialDist;
+
+  const vX = currentCanvasX - centerX;
+  const vY = currentCanvasY - centerY;
+
+  const projDist = vX * uX + vY * uY;
+  const scaleRatio = projDist / initialDist;
+  const unroundedScale = initialScale * scaleRatio;
+
+  const rounded = Math.round(unroundedScale * 100) / 100;
+  return Math.max(minScale, Math.min(maxScale, rounded));
+}
+
 export interface ThumbnailGeneratorOptions {
   width?: number; // default 1280
   height?: number; // default 720

@@ -186,6 +186,22 @@ function renderElementCrosshairsAndSelection(
   ctx.lineTo(x + w, y + h - cornerLen);
   ctx.stroke();
 
+  // Render corner handle grips for interactive resize affordance
+  const handleSize = 6;
+  const halfHandle = handleSize / 2;
+  const cornerCoords = [
+    { cx: x, cy: y },
+    { cx: x + w, cy: y },
+    { cx: x, cy: y + h },
+    { cx: x + w, cy: y + h },
+  ];
+  for (const pt of cornerCoords) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fillRect(pt.cx - halfHandle - 0.75, pt.cy - halfHandle - 0.75, handleSize + 1.5, handleSize + 1.5);
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(pt.cx - halfHandle, pt.cy - halfHandle, handleSize, handleSize);
+  }
+
   ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
   ctx.beginPath();
   ctx.arc(cx, cy, 5, 0, Math.PI * 2);
