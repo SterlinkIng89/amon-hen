@@ -488,6 +488,184 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.draft?.tag).toBe("GameOneUpdated");
     expect(result.current.editedEpisodes["v-2"]).toBe(2);
   });
+
+  it("does not silently fall back unassigned episodes to 1 and blocks canApply", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-zero",
+      title: "Zero Episodes",
+      tag: "zero",
+      videos: [
+        { videoId: "v-unassigned-1", title: "Video Unassigned 1", episode: 0, existingEpisode: 0 },
+        { videoId: "v-unassigned-2", title: "Video Unassigned 2", episode: 0, existingEpisode: 0 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-zero");
+    });
+
+    expect(result.current.editedEpisodes["v-unassigned-1"]).toBe(0);
+    expect(result.current.editedEpisodes["v-unassigned-2"]).toBe(0);
+    expect(result.current.hasConflicts).toBe(true);
+    expect(result.current.canApply).toBe(false);
+  });
+
+  it("synchronizes single video from parsed titleEpisode and updates mismatchCount", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-sync-single",
+      title: "Sync Single",
+      tag: "sync",
+      videos: [
+        { videoId: "v-1", title: "Game Ep 05", episode: 0, existingEpisode: 0, titleEpisode: 5 },
+        { videoId: "v-2", title: "Game Ep 06", episode: 0, existingEpisode: 0, titleEpisode: 6 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-sync-single");
+    });
+
+    expect(result.current.mismatchCount).toBe(2);
+
+    act(() => {
+      result.current.syncVideoFromTitle("v-1");
+    });
+
+    expect(result.current.editedEpisodes["v-1"]).toBe(5);
+    expect(result.current.editedEpisodes["v-2"]).toBe(0);
+    expect(result.current.mismatchCount).toBe(1);
+  });
+
+  it("bulk synchronizes all videos with titleEpisode > 0 via syncAllFromTitle", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-sync-all",
+      title: "Sync All",
+      tag: "sync",
+      videos: [
+        { videoId: "v-1", title: "Game Ep 10", episode: 1, existingEpisode: 1, titleEpisode: 10 },
+        { videoId: "v-2", title: "Game Ep 11", episode: 2, existingEpisode: 2, titleEpisode: 11 },
+        { videoId: "v-no-ep", title: "Game Special Stream", episode: 99, existingEpisode: 99, titleEpisode: 0 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-sync-all");
+    });
+
+    expect(result.current.mismatchCount).toBe(2);
+
+    act(() => {
+      result.current.syncAllFromTitle();
+    });
+
+    expect(result.current.editedEpisodes["v-1"]).toBe(10);
+    expect(result.current.editedEpisodes["v-2"]).toBe(11);
+    expect(result.current.editedEpisodes["v-no-ep"]).toBe(99);
+    expect(result.current.mismatchCount).toBe(0);
+  });
+
+  it("reactively detects chronology inversions, populates chronologyIssueIds, and blocks canApply", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-chrono",
+      title: "Chrono Test",
+      tag: "chrono",
+      videos: [
+        { videoId: "v-1", title: "Part 1", publishedAt: "2026-01-01T10:00:00Z", position: 0, episode: 3 },
+        { videoId: "v-2", title: "Part 2", publishedAt: "2026-01-02T10:00:00Z", position: 1, episode: 2 },
+        { videoId: "v-3", title: "Part 3", publishedAt: "2026-01-03T10:00:00Z", position: 2, episode: 1 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-chrono");
+    });
+
+    expect(result.current.hasConflicts).toBe(false);
+    expect(result.current.hasChronologyErrors).toBe(true);
+    expect(result.current.chronologyIssueIds.has("v-1")).toBe(true);
+    expect(result.current.chronologyIssueIds.has("v-2")).toBe(true);
+    expect(result.current.chronologyIssueIds.has("v-3")).toBe(true);
+    expect(result.current.canApply).toBe(false);
+
+    // Fix chronology inversion
+    act(() => {
+      result.current.setEpisode("v-1", 1);
+      result.current.setEpisode("v-2", 2);
+      result.current.setEpisode("v-3", 3);
+    });
+
+    expect(result.current.hasChronologyErrors).toBe(false);
+    expect(result.current.chronologyIssueIds.size).toBe(0);
+    expect(result.current.canApply).toBe(true);
+  });
+
+  it("autoNumberByDate orders by sortDate prefix over publishedAt", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-sort-date",
+      title: "Sort Date Test",
+      tag: "sortdate",
+      videos: [
+        {
+          videoId: "v-late-upload",
+          title: "Stream 2026-01-01",
+          publishedAt: "2026-05-01T00:00:00Z",
+          sortDate: "2026-01-01",
+          position: 0,
+          episode: 0,
+        },
+        {
+          videoId: "v-early-upload",
+          title: "Stream 2026-02-01",
+          publishedAt: "2026-02-01T00:00:00Z",
+          sortDate: "2026-02-01",
+          position: 1,
+          episode: 0,
+        },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-sort-date");
+    });
+
+    act(() => {
+      result.current.autoNumberByDate();
+    });
+
+    expect(result.current.editedEpisodes["v-late-upload"]).toBe(1);
+    expect(result.current.editedEpisodes["v-early-upload"]).toBe(2);
+    expect(result.current.hasChronologyErrors).toBe(false);
+  });
 });
 
 

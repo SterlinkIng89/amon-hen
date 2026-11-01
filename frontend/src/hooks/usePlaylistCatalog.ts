@@ -65,7 +65,7 @@ export function usePlaylistCatalog() {
       const episodeMap: Record<string, number> = {};
       if (result.videos) {
         for (const vid of result.videos) {
-          episodeMap[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode || 1);
+          episodeMap[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode > 0 ? vid.existingEpisode : 0);
         }
       }
       setEditedEpisodes(episodeMap);
@@ -97,7 +97,7 @@ export function usePlaylistCatalog() {
             const next = { ...prev };
             for (const vid of refreshed.videos) {
               if (next[vid.videoId] === undefined) {
-                next[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode || 1);
+                next[vid.videoId] = vid.episode > 0 ? vid.episode : (vid.existingEpisode > 0 ? vid.existingEpisode : 0);
               }
             }
             return next;
@@ -167,6 +167,36 @@ export function usePlaylistCatalog() {
     }));
   }, []);
 
+  const syncVideoFromTitle = useCallback((videoId: string) => {
+    if (!draft?.videos) return;
+    const target = draft.videos.find((v) => v.videoId === videoId);
+    if (!target || !target.titleEpisode || target.titleEpisode <= 0) return;
+    setEditedEpisodes((prev) => {
+      if (prev[videoId] === target.titleEpisode) return prev;
+      return {
+        ...prev,
+        [videoId]: target.titleEpisode,
+      };
+    });
+  }, [draft?.videos]);
+
+  const syncAllFromTitle = useCallback(() => {
+    if (!draft?.videos?.length) return;
+    setEditedEpisodes((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const vid of draft.videos) {
+        if (vid.titleEpisode && vid.titleEpisode > 0) {
+          if (next[vid.videoId] !== vid.titleEpisode) {
+            next[vid.videoId] = vid.titleEpisode;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [draft?.videos]);
+
   // Check conflicts in editedEpisodes
   const hasConflicts = useMemo(() => {
     const seen = new Set<number>();
@@ -178,31 +208,74 @@ export function usePlaylistCatalog() {
     return false;
   }, [editedEpisodes]);
 
+  const mismatchCount = useMemo(() => {
+    if (!draft?.videos?.length) return 0;
+    let count = 0;
+    for (const vid of draft.videos) {
+      if (vid.titleEpisode && vid.titleEpisode > 0) {
+        const currentEp = editedEpisodes[vid.videoId] ?? 0;
+        if (currentEp !== vid.titleEpisode) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [draft?.videos, editedEpisodes]);
+
+  const chronologyIssueIds = useMemo<ReadonlySet<string>>(() => {
+    if (!draft?.videos || draft.videos.length < 2) {
+      return new Set<string>();
+    }
+
+    const assigned = draft.videos.filter((v) => (editedEpisodes[v.videoId] ?? 0) > 0);
+    if (assigned.length < 2) {
+      return new Set<string>();
+    }
+
+    const sorted = [...assigned].sort(compareVideoChronology);
+    const n = sorted.length;
+    const prefixMax: number[] = new Array(n);
+    prefixMax[0] = editedEpisodes[sorted[0].videoId] ?? 0;
+    for (let i = 1; i < n; i++) {
+      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
+      prefixMax[i] = ep > prefixMax[i - 1] ? ep : prefixMax[i - 1];
+    }
+
+    const suffixMin: number[] = new Array(n);
+    suffixMin[n - 1] = editedEpisodes[sorted[n - 1].videoId] ?? 0;
+    for (let i = n - 2; i >= 0; i--) {
+      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
+      suffixMin[i] = ep < suffixMin[i + 1] ? ep : suffixMin[i + 1];
+    }
+
+    const issues = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
+      if ((i > 0 && ep <= prefixMax[i - 1]) || (i < n - 1 && ep >= suffixMin[i + 1])) {
+        issues.add(sorted[i].videoId);
+      }
+    }
+
+    return issues;
+  }, [draft?.videos, editedEpisodes]);
+
+  const hasChronologyErrors = useMemo(() => {
+    return chronologyIssueIds.size > 0;
+  }, [chronologyIssueIds]);
+
   const canApply = useMemo(() => {
     return (
       !isApplying &&
       editedTag.trim().length > 0 &&
       !hasConflicts &&
+      !hasChronologyErrors &&
       (draft?.videos?.length ?? 0) > 0
     );
-  }, [isApplying, editedTag, hasConflicts, draft?.videos?.length]);
-
-function buildSequentialEpisodeMap(
-  videos: readonly backend.CatalogVideoDraft[]
-): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (let i = 0; i < videos.length; i++) {
-    map[videos[i].videoId] = i + 1;
-  }
-  return map;
-}
+  }, [isApplying, editedTag, hasConflicts, hasChronologyErrors, draft?.videos?.length]);
 
   const autoNumberByDate = useCallback(() => {
     if (!draft?.videos?.length) return;
-    const sorted = [...draft.videos].sort((a, b) => {
-      const diff = new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
-      return diff !== 0 ? diff : a.position - b.position;
-    });
+    const sorted = [...draft.videos].sort(compareVideoChronology);
     setEditedEpisodes(buildSequentialEpisodeMap(sorted));
   }, [draft?.videos]);
 
@@ -216,7 +289,7 @@ function buildSequentialEpisodeMap(
     if (!draft?.videos?.length) return;
     const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
     const reversed = sorted
-      .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode || 1)))
+      .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode > 0 ? v.existingEpisode : 0)))
       .reverse();
 
     const nextMap: Record<string, number> = { ...editedEpisodes };
@@ -278,6 +351,11 @@ function buildSequentialEpisodeMap(
     setEditedTag,
     editedEpisodes,
     setEpisode,
+    syncVideoFromTitle,
+    syncAllFromTitle,
+    mismatchCount,
+    chronologyIssueIds,
+    hasChronologyErrors,
     autoNumberByDate,
     autoNumberByOrder,
     reverseEpisodes,
@@ -288,4 +366,38 @@ function buildSequentialEpisodeMap(
     applySuccess,
     applyCatalog,
   };
+}
+
+export function compareVideoChronology(
+  a: backend.CatalogVideoDraft,
+  b: backend.CatalogVideoDraft
+): number {
+  const dateA = a.sortDate || a.publishedAt || "";
+  const dateB = b.sortDate || b.publishedAt || "";
+  const prefixA = dateA.length >= 10 ? dateA.slice(0, 10) : dateA;
+  const prefixB = dateB.length >= 10 ? dateB.slice(0, 10) : dateB;
+
+  if (prefixA !== prefixB) {
+    return prefixA < prefixB ? -1 : 1;
+  }
+  if (a.publishedAt !== b.publishedAt) {
+    return a.publishedAt < b.publishedAt ? -1 : 1;
+  }
+  if (a.position !== b.position) {
+    return a.position - b.position;
+  }
+  if (a.videoId !== b.videoId) {
+    return a.videoId < b.videoId ? -1 : 1;
+  }
+  return 0;
+}
+
+function buildSequentialEpisodeMap(
+  videos: readonly backend.CatalogVideoDraft[]
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (let i = 0; i < videos.length; i++) {
+    map[videos[i].videoId] = i + 1;
+  }
+  return map;
 }
