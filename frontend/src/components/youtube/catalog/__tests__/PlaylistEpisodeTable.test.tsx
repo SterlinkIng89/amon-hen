@@ -409,5 +409,109 @@ describe("PlaylistEpisodeTable", () => {
     expect(screen.queryByText("Duplicate")).not.toBeInTheDocument();
     expect(screen.getAllByText("Invalid")).toHaveLength(2);
   });
+
+  it("marks thumbnail as stale Needs thumb with tooltip when assigned episode differs from thumbnailEpisode", () => {
+    const videoWithStaleThumb: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Control - Episode 1",
+        thumbnailUrl: "https://example.com/yt-1.jpg",
+        existingEpisode: 0,
+        episode: 1,
+        thumbnailUpdatedAt: 1700000000,
+        thumbnailEpisode: 1,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    // Assigned episode is changed to 2 (differs from thumbnailEpisode 1)
+    const { container } = render(
+      <PlaylistEpisodeTable
+        videos={videoWithStaleThumb}
+        episodes={{ "yt-1": 2 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    const needsThumbBadge = screen.getByText("Needs thumb");
+    expect(needsThumbBadge).toBeInTheDocument();
+    expect(needsThumbBadge).toHaveAttribute(
+      "title",
+      "Thumbnail has old episode number (1)"
+    );
+
+    const tbody = container.querySelector("tbody");
+    expect(tbody?.textContent).not.toContain("Synced");
+  });
+
+  it("gracefully falls back to No thumb placeholder when image onError triggers", () => {
+    const videoWithBrokenThumb: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-broken",
+        title: "Broken Thumbnail Video",
+        thumbnailUrl: "https://example.com/broken.jpg",
+        existingEpisode: 1,
+        episode: 1,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const { container } = render(
+      <PlaylistEpisodeTable
+        videos={videoWithBrokenThumb}
+        episodes={{ "yt-broken": 1 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    const img = container.querySelector("img");
+    expect(img).toBeInTheDocument();
+    expect(screen.queryByText("No thumb")).not.toBeInTheDocument();
+
+    fireEvent.error(img!);
+
+    expect(screen.getByText("No thumb")).toBeInTheDocument();
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("detects low-resolution YouTube placeholder and displays Processing indicator instead of Synced", () => {
+    const videoWithThumb: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-proc",
+        title: "Processing Thumbnail Video",
+        thumbnailUrl: "https://example.com/proc.jpg",
+        existingEpisode: 1,
+        episode: 1,
+        thumbnailUpdatedAt: 1700000000,
+        thumbnailEpisode: 1,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const { container } = render(
+      <PlaylistEpisodeTable
+        videos={videoWithThumb}
+        episodes={{ "yt-proc": 1 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    const tbody = container.querySelector("tbody");
+    expect(tbody?.textContent).toContain("Synced");
+
+    const img = container.querySelector("img");
+    expect(img).toBeInTheDocument();
+
+    Object.defineProperty(img!, "naturalWidth", { value: 120, configurable: true });
+    fireEvent.load(img!);
+
+    // Once 120px placeholder is detected, shows Processing instead of Synced in tbody
+    expect(screen.getByText("Processing")).toBeInTheDocument();
+    expect(tbody?.textContent).not.toContain("Synced");
+
+    // When high-res thumbnail loads (e.g. naturalWidth 1280), reverts to Synced
+    Object.defineProperty(img!, "naturalWidth", { value: 1280, configurable: true });
+    fireEvent.load(img!);
+
+    expect(tbody?.textContent).toContain("Synced");
+    expect(screen.queryByText("Processing")).not.toBeInTheDocument();
+  });
 });
 

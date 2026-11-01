@@ -110,7 +110,12 @@ export function usePlaylistCatalog() {
   }, [selectedPlaylistId]);
 
   const updateVideoThumbnail = useCallback(
-    (videoId: string, thumbnailUrl: string, updatedAt?: number) => {
+    (
+      videoId: string,
+      thumbnailUrl: string,
+      updatedAt?: number,
+      thumbnailEpisode?: number
+    ) => {
       setDraft((prev) => {
         if (!prev || !prev.videos) return prev;
         const ts = updatedAt ?? Math.floor(Date.now() / 1000);
@@ -122,6 +127,7 @@ export function usePlaylistCatalog() {
                   ...v,
                   thumbnailUrl,
                   thumbnailUpdatedAt: ts,
+                  ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
                 })
               : v
           ),

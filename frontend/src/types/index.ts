@@ -166,6 +166,7 @@ export interface BatchItem {
   readonly cacheKey: string;
   readonly localFile?: string;
   readonly thumbnailUpdatedAt?: number;
+  readonly thumbnailEpisode?: number;
   readonly status: BatchItemStatus;
   readonly error?: string;
 }

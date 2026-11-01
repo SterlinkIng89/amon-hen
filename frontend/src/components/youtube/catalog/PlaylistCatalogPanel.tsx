@@ -250,6 +250,7 @@ export const PlaylistCatalogPanel: FC = () => {
         cacheKey: `${vid.videoId}_${ep}`,
         localFile: vid.localFile,
         thumbnailUpdatedAt: vid.thumbnailUpdatedAt,
+        thumbnailEpisode: vid.thumbnailEpisode,
       };
     });
   }, [draft?.videos, editedEpisodes]);
@@ -269,8 +270,8 @@ export const PlaylistCatalogPanel: FC = () => {
     tag: editedTag.trim(),
     config: thumbConfig,
     items: batchItems,
-    onVideoUpdated: (videoId, newThumbUrl) => {
-      updateVideoThumbnail(videoId, newThumbUrl);
+    onVideoUpdated: (videoId, newThumbUrl, episode) => {
+      updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
     },
     onCompleted: () => {
       void loadPlaylists();

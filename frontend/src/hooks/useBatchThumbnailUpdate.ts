@@ -5,7 +5,7 @@ import { renderTagThumbnailDataUrl } from "../utils/thumbnailRender";
 import {
   SaveCustomThumbnail,
   GetCustomThumbnail,
-  UpdateYouTubeThumbnail,
+  UpdateYouTubeThumbnailForEpisode,
 } from "../../wailsjs/go/backend/App";
 import { notifyCustomThumbChanged } from "./useThumbnailQueue";
 
@@ -15,13 +15,14 @@ export interface BatchThumbnailInputItem {
   readonly cacheKey: string;
   readonly localFile?: string;
   readonly thumbnailUpdatedAt?: number;
+  readonly thumbnailEpisode?: number;
 }
 
 export interface UseBatchThumbnailUpdateArgs {
   readonly tag: string;
   readonly config?: TagThumbnailConfig;
   readonly items: readonly BatchThumbnailInputItem[];
-  readonly onVideoUpdated?: (videoId: string, newThumbUrl: string) => void;
+  readonly onVideoUpdated?: (videoId: string, newThumbUrl: string, thumbnailEpisode?: number) => void;
   readonly onCompleted?: () => void;
 }
 
@@ -73,6 +74,7 @@ export function useBatchThumbnailUpdate({
       cacheKey: item.cacheKey,
       localFile: item.localFile,
       thumbnailUpdatedAt: item.thumbnailUpdatedAt,
+      thumbnailEpisode: item.thumbnailEpisode,
       status: "pending",
     }))
   );
@@ -99,6 +101,7 @@ export function useBatchThumbnailUpdate({
           cacheKey: item.cacheKey,
           localFile: item.localFile,
           thumbnailUpdatedAt: item.thumbnailUpdatedAt,
+          thumbnailEpisode: item.thumbnailEpisode,
           status: "pending",
         }))
       );
@@ -115,6 +118,7 @@ export function useBatchThumbnailUpdate({
           const inputTs = item.thumbnailUpdatedAt ?? 0;
           const existingTs = existing?.thumbnailUpdatedAt ?? 0;
           const latestUpdatedAt = Math.max(inputTs, existingTs);
+          const thumbnailEpisode = item.thumbnailEpisode ?? existing?.thumbnailEpisode;
 
           const status = existing ? existing.status : "pending";
           return {
@@ -124,6 +128,7 @@ export function useBatchThumbnailUpdate({
             cacheKey: item.cacheKey,
             localFile: item.localFile,
             thumbnailUpdatedAt: latestUpdatedAt > 0 ? latestUpdatedAt : undefined,
+            thumbnailEpisode,
             status,
           };
         });
@@ -142,7 +147,8 @@ export function useBatchThumbnailUpdate({
     index: number,
     status: BatchItemStatus,
     error?: string,
-    thumbnailUpdatedAt?: number
+    thumbnailUpdatedAt?: number,
+    thumbnailEpisode?: number
   ) => {
     setBatchItems((prev) => {
       const next = [...prev];
@@ -151,6 +157,7 @@ export function useBatchThumbnailUpdate({
         status,
         error,
         ...(thumbnailUpdatedAt !== undefined ? { thumbnailUpdatedAt } : {}),
+        ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
       };
       return next;
     });
@@ -198,15 +205,20 @@ export function useBatchThumbnailUpdate({
             await persistAndNotifyThumbnail(ytKey, dataUrl).catch(() => {});
           }
 
-          const newThumbUrl = await UpdateYouTubeThumbnail(item.videoId, savedPath);
+          const newThumbUrl = await UpdateYouTubeThumbnailForEpisode(
+            item.videoId,
+            savedPath,
+            item.episode
+          );
 
           updateItemStatus(
             itemIdx,
             "done",
             undefined,
-            Math.floor(Date.now() / 1000)
+            Math.floor(Date.now() / 1000),
+            item.episode
           );
-          onVideoUpdated?.(item.videoId, newThumbUrl);
+          onVideoUpdated?.(item.videoId, newThumbUrl, item.episode);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           updateItemStatus(itemIdx, "failed", msg);

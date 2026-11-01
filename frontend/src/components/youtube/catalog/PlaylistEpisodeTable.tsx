@@ -31,10 +31,18 @@ const SOURCE_BADGES: Record<string, { readonly label: string; readonly className
   order: { label: "Order", className: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
 };
 
-function isVideoThumbnailSynced(
+export function isVideoThumbnailSynced(
   video: backend.CatalogVideoDraft,
+  assignedEpisode?: number,
   batchItem?: BatchItem
 ): boolean {
+  const currentAssigned = assignedEpisode ?? (video.episode > 0 ? video.episode : 0);
+  const recordedEpisode = batchItem?.thumbnailEpisode ?? video.thumbnailEpisode ?? 0;
+
+  if (recordedEpisode > 0 && currentAssigned > 0 && recordedEpisode !== currentAssigned) {
+    return false;
+  }
+
   return (
     (batchItem?.thumbnailUpdatedAt ?? video.thumbnailUpdatedAt ?? 0) > 0 ||
     batchItem?.status === "done"
@@ -45,6 +53,9 @@ interface StatusBadgeProps {
   readonly isDuplicate: boolean;
   readonly isInvalid: boolean;
   readonly isSynced: boolean;
+  readonly isProcessing?: boolean;
+  readonly isStale?: boolean;
+  readonly staleEpisode?: number;
   readonly batchItem?: BatchItem;
 }
 
@@ -52,6 +63,9 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
   isDuplicate,
   isInvalid,
   isSynced,
+  isProcessing,
+  isStale,
+  staleEpisode,
   batchItem,
 }) => {
   if (isDuplicate) {
@@ -98,6 +112,17 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
   }
 
   if (isSynced) {
+    if (isProcessing) {
+      return (
+        <span
+          className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse whitespace-nowrap"
+          title="YouTube is still processing the custom thumbnail"
+        >
+          Processing
+        </span>
+      );
+    }
+
     return (
       <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
         Synced
@@ -106,7 +131,16 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
   }
 
   return (
-    <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
+    <span
+      className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap"
+      title={
+        isStale
+          ? staleEpisode
+            ? `Thumbnail has old episode number (${staleEpisode})`
+            : "Thumbnail has old episode number"
+          : undefined
+      }
+    >
       Needs thumb
     </span>
   );
@@ -132,6 +166,8 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   chronologyIssueIds,
 }) => {
   const [filter, setFilter] = useState<VideoFilter>("all");
+  const [brokenThumbUrls, setBrokenThumbUrls] = useState<Readonly<Record<string, string>>>({});
+  const [processingThumbUrls, setProcessingThumbUrls] = useState<Readonly<Record<string, string>>>({});
 
   const batchItemMap = useMemo(() => {
     const map = new Map<string, BatchItem>();
@@ -168,12 +204,13 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   const { syncedCount, unsyncedCount } = useMemo(() => {
     let synced = 0;
     for (const vid of videos) {
-      if (isVideoThumbnailSynced(vid, batchItemMap.get(vid.videoId))) {
+      const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+      if (isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId))) {
         synced++;
       }
     }
     return { syncedCount: synced, unsyncedCount: videos.length - synced };
-  }, [videos, batchItemMap]);
+  }, [videos, episodes, batchItemMap]);
 
   const filteredVideos = useMemo(() => {
     if (filter === "all") return videos;
@@ -186,7 +223,8 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       });
     }
     return videos.filter((vid) => {
-      const isSynced = isVideoThumbnailSynced(vid, batchItemMap.get(vid.videoId));
+      const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+      const isSynced = isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId));
       return filter === "synced" ? isSynced : !isSynced;
     });
   }, [videos, filter, batchItemMap, episodes]);
@@ -226,7 +264,8 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     if (!onSelectionChange) return;
     const next = new Set<string>();
     for (const vid of videos) {
-      if (!isVideoThumbnailSynced(vid, batchItemMap.get(vid.videoId))) {
+      const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+      if (!isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId))) {
         next.add(vid.videoId);
       }
     }
@@ -238,7 +277,8 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     const next = new Set(selectedVideoIds ? Array.from(selectedVideoIds) : []);
     let added = 0;
     for (const vid of videos) {
-      if (!isVideoThumbnailSynced(vid, batchItemMap.get(vid.videoId)) && !next.has(vid.videoId)) {
+      const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+      if (!isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId)) && !next.has(vid.videoId)) {
         next.add(vid.videoId);
         added++;
         if (added >= 50) break;
@@ -453,7 +493,15 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 const isMismatch = titleEp > 0 && assigned !== titleEp;
 
                 const bItem = batchItemMap.get(vid.videoId);
-                const isSynced = isVideoThumbnailSynced(vid, bItem);
+                const isSynced = isVideoThumbnailSynced(vid, assigned, bItem);
+                const thumbEp = bItem?.thumbnailEpisode ?? vid.thumbnailEpisode ?? 0;
+                const isStale =
+                  thumbEp > 0 &&
+                  assigned > 0 &&
+                  thumbEp !== assigned &&
+                  ((bItem?.thumbnailUpdatedAt ?? vid.thumbnailUpdatedAt ?? 0) > 0 || bItem?.status === "done");
+                const isBroken = Boolean(vid.thumbnailUrl && brokenThumbUrls[vid.videoId] === vid.thumbnailUrl);
+                const isProcessing = Boolean(vid.thumbnailUrl && processingThumbUrls[vid.videoId] === vid.thumbnailUrl);
                 const sourceBadge = vid.source ? SOURCE_BADGES[vid.source] : undefined;
 
                 return (
@@ -498,12 +546,36 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                         }`}
                         title="Click to preview episode in thumbnail studio"
                       >
-                        {vid.thumbnailUrl ? (
+                        {vid.thumbnailUrl && !isBroken ? (
                           <img
                             src={cleanThumbnailUrl(vid.thumbnailUrl)}
                             alt=""
                             className="w-full h-full object-cover"
                             loading="lazy"
+                            onLoad={(e) => {
+                              const img = e.currentTarget;
+                              if (img.naturalWidth > 0 && img.naturalWidth <= 120) {
+                                setProcessingThumbUrls((prev) =>
+                                  prev[vid.videoId] === vid.thumbnailUrl
+                                    ? prev
+                                    : { ...prev, [vid.videoId]: vid.thumbnailUrl }
+                                );
+                              } else if (img.naturalWidth > 120) {
+                                setProcessingThumbUrls((prev) => {
+                                  if (!prev[vid.videoId]) return prev;
+                                  const next = { ...prev };
+                                  delete next[vid.videoId];
+                                  return next;
+                                });
+                              }
+                            }}
+                            onError={() => {
+                              setBrokenThumbUrls((prev) =>
+                                prev[vid.videoId] === vid.thumbnailUrl
+                                  ? prev
+                                  : { ...prev, [vid.videoId]: vid.thumbnailUrl }
+                              );
+                            }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[9px] text-text-muted font-mono">
@@ -623,6 +695,9 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                           isDuplicate={isDuplicate}
                           isInvalid={isInvalid}
                           isSynced={isSynced}
+                          isProcessing={isProcessing}
+                          isStale={isStale}
+                          staleEpisode={thumbEp}
                           batchItem={bItem}
                         />
                       </div>
