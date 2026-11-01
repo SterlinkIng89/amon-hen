@@ -106,8 +106,8 @@ func friendlyThumbnailError(err error) error {
 	return err
 }
 
-// persistThumbnailURL updates the cached thumbnail_url and custom_thumb_updated_at for the given video ID in the local SQLite database.
-func (a *App) persistThumbnailURL(videoID string, url string, updatedAt int64) error {
+// persistThumbnailURLForEpisode updates the cached thumbnail_url, custom_thumb_updated_at, and custom_thumb_episode for the given video ID in the local SQLite database.
+func (a *App) persistThumbnailURLForEpisode(videoID string, url string, updatedAt int64, episode int) error {
 	if a.db == nil || videoID == "" {
 		return nil
 	}
@@ -115,8 +115,13 @@ func (a *App) persistThumbnailURL(videoID string, url string, updatedAt int64) e
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
-	_, err := a.db.conn.Exec("UPDATE yt_videos SET thumbnail_url = ?, custom_thumb_updated_at = ? WHERE id = ?", url, updatedAt, videoID)
+	_, err := a.db.conn.Exec("UPDATE yt_videos SET thumbnail_url = ?, custom_thumb_updated_at = ?, custom_thumb_episode = ? WHERE id = ?", url, updatedAt, episode, videoID)
 	return err
+}
+
+// persistThumbnailURL updates the cached thumbnail_url and custom_thumb_updated_at for the given video ID in the local SQLite database.
+func (a *App) persistThumbnailURL(videoID string, url string, updatedAt int64) error {
+	return a.persistThumbnailURLForEpisode(videoID, url, updatedAt, 0)
 }
 
 // queryResourceTitle retrieves the title of a video or playlist from SQLite, returning fallback if unavailable.
@@ -183,8 +188,15 @@ func (a *App) setYouTubeThumbnailInternal(videoID string, imagePath string) (str
 
 // UpdateYouTubeThumbnail sets a custom thumbnail for an existing YouTube video,
 // updates the local database cache with a cache-busting timestamp, copies the file to yt_thumbs local cache,
-// and returns the thumbnail URL.
+// and returns the thumbnail URL. It delegates to UpdateYouTubeThumbnailForEpisode with episode 0.
 func (a *App) UpdateYouTubeThumbnail(videoID string, imagePath string) (string, error) {
+	return a.UpdateYouTubeThumbnailForEpisode(videoID, imagePath, 0)
+}
+
+// UpdateYouTubeThumbnailForEpisode sets a custom thumbnail for an existing YouTube video,
+// associating it with an episode number, updates the local database cache with a cache-busting timestamp,
+// copies the file to yt_thumbs local cache, and returns the thumbnail URL.
+func (a *App) UpdateYouTubeThumbnailForEpisode(videoID string, imagePath string, episode int) (string, error) {
 	thumbURL, err := a.setYouTubeThumbnailInternal(videoID, imagePath)
 	if err != nil {
 		return "", err
@@ -217,7 +229,7 @@ func (a *App) UpdateYouTubeThumbnail(videoID string, imagePath string) (string, 
 	}
 
 	if finalURL != "" {
-		if pErr := a.persistThumbnailURL(videoID, finalURL, now); pErr != nil {
+		if pErr := a.persistThumbnailURLForEpisode(videoID, finalURL, now, episode); pErr != nil {
 			appLog("[YouTube] Warning: failed to persist thumbnail_url in local DB for %s: %v", videoID, pErr)
 		}
 	}

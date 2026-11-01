@@ -22,6 +22,7 @@ type CatalogVideoDraft struct {
 	Source             string `json:"source"` // "db" | "title" | "order" | "none"
 	Conflict           bool   `json:"conflict"`
 	ThumbnailUpdatedAt int64  `json:"thumbnailUpdatedAt"`
+	ThumbnailEpisode   int    `json:"thumbnailEpisode"`
 	TitleEpisode       int    `json:"titleEpisode"`
 	SortDate           string `json:"sortDate"`
 	Mismatch           bool   `json:"mismatch"`
@@ -71,7 +72,7 @@ func (a *App) resolvePlaylistThumbnailCandidate(currentThumb, tag, fallbackCusto
 	return currentThumb
 }
 
-func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode *int, currentThumb string) string {
+func (a *App) resolveVideoThumbnailCandidateWithInfo(videoID, localFile string, episode *int, currentThumb string) (string, int64, int) {
 	if a.cacheDir != "" {
 		ytThumbsDir := filepath.Join(a.cacheDir, "yt_thumbs")
 		// 1. Check yt:<videoID>
@@ -79,7 +80,7 @@ func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode 
 			key := customThumbKey("yt:" + videoID)
 			filePath := filepath.Join(ytThumbsDir, key+".jpg")
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), 0
 			}
 		}
 		// 2. Check <videoID>_<episode>
@@ -87,7 +88,7 @@ func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode 
 			key := customThumbKey(fmt.Sprintf("%s_%d", videoID, *episode))
 			filePath := filepath.Join(ytThumbsDir, key+".jpg")
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), *episode
 			}
 		}
 		// 3. Check localFile
@@ -95,15 +96,20 @@ func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode 
 			key := customThumbKey(localFile)
 			filePath := filepath.Join(ytThumbsDir, key+".jpg")
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), 0
 			}
 		}
 	}
 	// Fallback: strip query parameters from i.ytimg.com URLs to prevent 404
 	if strings.Contains(currentThumb, "i.ytimg.com") && strings.Contains(currentThumb, "?") {
-		return strings.Split(currentThumb, "?")[0]
+		return strings.Split(currentThumb, "?")[0], 0, 0
 	}
-	return currentThumb
+	return currentThumb, 0, 0
+}
+
+func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode *int, currentThumb string) string {
+	url, _, _ := a.resolveVideoThumbnailCandidateWithInfo(videoID, localFile, episode, currentThumb)
+	return url
 }
 
 type PlaylistCatalogDraft struct {
@@ -460,7 +466,8 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	// Fetch videos linked in this playlist
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''),
-		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0)
+		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0),
+		       COALESCE(v.custom_thumb_episode, 0)
 		FROM yt_playlist_items pi
 		JOIN yt_videos v ON pi.video_id = v.id
 		WHERE pi.playlist_id = ?
@@ -476,9 +483,16 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	for rows.Next() {
 		var vd CatalogVideoDraft
 		var localFile string
-		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt); err == nil {
+		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode); err == nil {
 			vd.LocalFile = localFile
-			vd.ThumbnailUrl = a.resolveVideoThumbnailCandidate(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
+			resolvedThumb, modTime, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
+			vd.ThumbnailUrl = resolvedThumb
+			if vd.ThumbnailUpdatedAt <= 0 && modTime > 0 {
+				vd.ThumbnailUpdatedAt = modTime
+			}
+			if vd.ThumbnailEpisode <= 0 && matchedEpisode > 0 {
+				vd.ThumbnailEpisode = matchedEpisode
+			}
 			vids = append(vids, vd)
 		}
 	}

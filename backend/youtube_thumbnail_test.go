@@ -212,6 +212,45 @@ func TestPersistThumbnailURL(t *testing.T) {
 	}
 }
 
+func TestPersistThumbnailURLForEpisode(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	// Seed video row
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, thumbnail_url)
+		VALUES ('vid-test-ep', 'Test Video Episode', '')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert video row: %v", err)
+	}
+
+	targetURL := "https://example.com/thumb_ep.jpg?v=99999"
+	updatedAt := int64(99999)
+	targetEp := 7
+	err = app.persistThumbnailURLForEpisode("vid-test-ep", targetURL, updatedAt, targetEp)
+	if err != nil {
+		t.Fatalf("persistThumbnailURLForEpisode failed: %v", err)
+	}
+
+	var savedURL string
+	var savedUpdatedAt int64
+	var savedEpisode int
+	err = app.db.conn.QueryRow("SELECT thumbnail_url, custom_thumb_updated_at, custom_thumb_episode FROM yt_videos WHERE id = 'vid-test-ep'").Scan(&savedURL, &savedUpdatedAt, &savedEpisode)
+	if err != nil {
+		t.Fatalf("failed to query thumbnail fields: %v", err)
+	}
+	if savedURL != targetURL {
+		t.Errorf("expected %s, got %s", targetURL, savedURL)
+	}
+	if savedUpdatedAt != updatedAt {
+		t.Errorf("expected updated_at %d, got %d", updatedAt, savedUpdatedAt)
+	}
+	if savedEpisode != targetEp {
+		t.Errorf("expected custom_thumb_episode %d, got %d", targetEp, savedEpisode)
+	}
+}
+
 func TestUpdateYouTubeThumbnail_RejectsEmptyArgs(t *testing.T) {
 	app := setupTestDB(t)
 	defer app.db.conn.Close()
@@ -222,6 +261,21 @@ func TestUpdateYouTubeThumbnail_RejectsEmptyArgs(t *testing.T) {
 	}
 
 	_, err = app.UpdateYouTubeThumbnail("vid-1", "")
+	if err == nil || !strings.Contains(err.Error(), "imagePath cannot be empty") {
+		t.Errorf("expected error for empty imagePath, got: %v", err)
+	}
+}
+
+func TestUpdateYouTubeThumbnailForEpisode_RejectsEmptyArgs(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.UpdateYouTubeThumbnailForEpisode("", "some/path.jpg", 3)
+	if err == nil || !strings.Contains(err.Error(), "videoID cannot be empty") {
+		t.Errorf("expected error for empty videoID, got: %v", err)
+	}
+
+	_, err = app.UpdateYouTubeThumbnailForEpisode("vid-1", "", 3)
 	if err == nil || !strings.Contains(err.Error(), "imagePath cannot be empty") {
 		t.Errorf("expected error for empty imagePath, got: %v", err)
 	}

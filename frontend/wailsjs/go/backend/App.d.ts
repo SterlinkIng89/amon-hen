@@ -231,6 +231,8 @@ export function UpdateVideoMonetizationStatus(arg1:string,arg2:string,arg3:strin
 
 export function UpdateYouTubeThumbnail(arg1:string,arg2:string):Promise<string>;
 
+export function UpdateYouTubeThumbnailForEpisode(arg1:string,arg2:string,arg3:number):Promise<string>;
+
 export function UpdateYouTubeVideoGameMeta(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

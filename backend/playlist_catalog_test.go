@@ -677,4 +677,109 @@ func TestResolveVideoThumbnailCandidate(t *testing.T) {
 	}
 }
 
+func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpCache := t.TempDir()
+	app.cacheDir = tmpCache
+	ytThumbsDir := filepath.Join(tmpCache, "yt_thumbs")
+	if err := os.MkdirAll(ytThumbsDir, 0755); err != nil {
+		t.Fatalf("failed to create yt_thumbs dir: %v", err)
+	}
+
+	// File 1: yt:vid-cache-backfill
+	k1 := customThumbKey("yt:vid-cache-backfill")
+	f1 := filepath.Join(ytThumbsDir, k1+".jpg")
+	if err := os.WriteFile(f1, []byte("fake-jpg-1"), 0644); err != nil {
+		t.Fatalf("failed to write f1: %v", err)
+	}
+
+	// File 3: vid-ep-backfill_3
+	k3 := customThumbKey("vid-ep-backfill_3")
+	f3 := filepath.Join(ytThumbsDir, k3+".jpg")
+	if err := os.WriteFile(f3, []byte("fake-jpg-3"), 0644); err != nil {
+		t.Fatalf("failed to write f3: %v", err)
+	}
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, published_at)
+		VALUES ('pl-backfill', 'Backfill Playlist', 3, '2026-01-01T00:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert playlist: %v", err)
+	}
+
+	// Video 1: 0 timestamp and 0 custom_thumb_episode in DB, but has file on disk
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-cache-backfill', 'Vid 1', '2026-01-01T00:00:00Z', 'https://example.com/v1.jpg', 0, 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 1: %v", err)
+	}
+
+	// Video 2: Explicitly persisted timestamp and episode in DB
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-db-persisted', 'Vid 2', '2026-01-02T00:00:00Z', 'https://example.com/v2.jpg', 1888999000, 5)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 2: %v", err)
+	}
+
+	// Video 3: 0 timestamp and 0 custom_thumb_episode in DB, but has episode cache file (<vid>_3)
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, episode, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-ep-backfill', 'Vid 3', '2026-01-03T00:00:00Z', 'https://example.com/v3.jpg', 3, 0, 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 3: %v", err)
+	}
+
+	// Playlist items
+	for i, vid := range []string{"vid-cache-backfill", "vid-db-persisted", "vid-ep-backfill"} {
+		_, err = app.db.conn.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES ('pl-backfill', ?, ?)`, vid, i)
+		if err != nil {
+			t.Fatalf("failed to insert item %d: %v", i, err)
+		}
+	}
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-backfill")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if len(draft.Videos) != 3 {
+		t.Fatalf("expected 3 videos, got %d", len(draft.Videos))
+	}
+
+	// Check Video 1: backfilled ThumbnailUpdatedAt from disk
+	v1 := draft.Videos[0]
+	if v1.ThumbnailUpdatedAt <= 0 {
+		t.Errorf("expected v1.ThumbnailUpdatedAt > 0 backfilled from disk, got %d", v1.ThumbnailUpdatedAt)
+	}
+	if !strings.HasPrefix(v1.ThumbnailUrl, "/cache/yt_thumbs/"+k1+".jpg?v=") {
+		t.Errorf("expected v1.ThumbnailUrl to use cached file, got %q", v1.ThumbnailUrl)
+	}
+
+	// Check Video 2: keeps DB custom_thumb_updated_at and custom_thumb_episode
+	v2 := draft.Videos[1]
+	if v2.ThumbnailUpdatedAt != 1888999000 {
+		t.Errorf("expected v2.ThumbnailUpdatedAt 1888999000, got %d", v2.ThumbnailUpdatedAt)
+	}
+	if v2.ThumbnailEpisode != 5 {
+		t.Errorf("expected v2.ThumbnailEpisode 5, got %d", v2.ThumbnailEpisode)
+	}
+
+	// Check Video 3: backfilled ThumbnailUpdatedAt and ThumbnailEpisode from episode cache file
+	v3 := draft.Videos[2]
+	if v3.ThumbnailUpdatedAt <= 0 {
+		t.Errorf("expected v3.ThumbnailUpdatedAt > 0 backfilled from disk, got %d", v3.ThumbnailUpdatedAt)
+	}
+	if v3.ThumbnailEpisode != 3 {
+		t.Errorf("expected v3.ThumbnailEpisode 3 backfilled from matched episode cache file, got %d", v3.ThumbnailEpisode)
+	}
+}
+
 

@@ -121,6 +121,7 @@ export namespace backend {
 	    source: string;
 	    conflict: boolean;
 	    thumbnailUpdatedAt: number;
+	    thumbnailEpisode: number;
 	    titleEpisode: number;
 	    sortDate: string;
 	    mismatch: boolean;
@@ -143,6 +144,7 @@ export namespace backend {
 	        this.source = source["source"];
 	        this.conflict = source["conflict"];
 	        this.thumbnailUpdatedAt = source["thumbnailUpdatedAt"];
+	        this.thumbnailEpisode = source["thumbnailEpisode"];
 	        this.titleEpisode = source["titleEpisode"];
 	        this.sortDate = source["sortDate"];
 	        this.mismatch = source["mismatch"];
