@@ -513,5 +513,132 @@ describe("PlaylistEpisodeTable", () => {
     expect(tbody?.textContent).toContain("Synced");
     expect(screen.queryByText("Processing")).not.toBeInTheDocument();
   });
+
+  it("sorts rows by episode column when clicking header without modifying episodes", () => {
+    const multiVideos: backend.CatalogVideoDraft[] = [
+      { videoId: "v-1", title: "Video One", position: 0, episode: 10 } as backend.CatalogVideoDraft,
+      { videoId: "v-2", title: "Video Two", position: 1, episode: 2 } as backend.CatalogVideoDraft,
+      { videoId: "v-3", title: "Video Three", position: 2, episode: 5 } as backend.CatalogVideoDraft,
+    ];
+    const onEpisodeChange = vi.fn();
+
+    const { container } = render(
+      <PlaylistEpisodeTable
+        videos={multiVideos}
+        episodes={{ "v-1": 10, "v-2": 2, "v-3": 5 }}
+        onEpisodeChange={onEpisodeChange}
+      />
+    );
+
+    const getRowTitles = () =>
+      Array.from(container.querySelectorAll("tbody tr td:nth-child(2) div[title]")).map(
+        (el) => el.textContent
+      );
+
+    // Default order is playlist position: v-1, v-2, v-3
+    expect(getRowTitles()).toEqual(["Video One", "Video Two", "Video Three"]);
+
+    // Find Episode header
+    const episodeHeader = screen.getByRole("columnheader", { name: /episode/i });
+    expect(episodeHeader).toHaveAttribute("aria-sort", "none");
+
+    // Click 1: Ascending (2, 5, 10 -> Video Two, Video Three, Video One)
+    fireEvent.click(episodeHeader);
+    expect(episodeHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(getRowTitles()).toEqual(["Video Two", "Video Three", "Video One"]);
+    expect(onEpisodeChange).not.toHaveBeenCalled();
+
+    // Click 2: Descending (10, 5, 2 -> Video One, Video Three, Video Two)
+    fireEvent.click(episodeHeader);
+    expect(episodeHeader).toHaveAttribute("aria-sort", "descending");
+    expect(getRowTitles()).toEqual(["Video One", "Video Three", "Video Two"]);
+    expect(onEpisodeChange).not.toHaveBeenCalled();
+
+    // Click 3: Back to default position
+    fireEvent.click(episodeHeader);
+    expect(episodeHeader).toHaveAttribute("aria-sort", "none");
+    expect(getRowTitles()).toEqual(["Video One", "Video Two", "Video Three"]);
+  });
+
+  it("renders direction hint notice when isReverseChronological is true", () => {
+    render(
+      <PlaylistEpisodeTable
+        videos={sampleVideos}
+        episodes={{ "yt-1": 1 }}
+        onEpisodeChange={vi.fn()}
+        isReverseChronological={true}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /playlist runs newest-first \(reverse chronological\)/i
+    );
+  });
+
+  it("guards auto-numbering with confirmation banner when confirmed episodes are affected", () => {
+    const onAutoNumberByDate = vi.fn();
+    const mockImpact = {
+      affectedCount: 3,
+      affectedVideoIds: ["yt-1", "yt-2", "yt-3"],
+      reason: "title_match" as const,
+    };
+    const getNumberingImpact = vi.fn().mockReturnValue(mockImpact);
+
+    render(
+      <PlaylistEpisodeTable
+        videos={sampleVideos}
+        episodes={{ "yt-1": 1 }}
+        onEpisodeChange={vi.fn()}
+        onAutoNumberByDate={onAutoNumberByDate}
+        getNumberingImpact={getNumberingImpact}
+      />
+    );
+
+    const button = screen.getByRole("button", { name: "1..N by date" });
+    fireEvent.click(button);
+
+    // Call was guarded: callback not invoked yet, confirmation alert displayed
+    expect(onAutoNumberByDate).not.toHaveBeenCalled();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/will overwrite 3 videos whose episode currently matches the video title/i);
+
+    // Cancel dismisses banner without executing
+    const cancelButton = screen.getByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelButton);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onAutoNumberByDate).not.toHaveBeenCalled();
+
+    // Trigger again and confirm
+    fireEvent.click(button);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    const confirmButton = screen.getByRole("button", { name: /overwrite & apply/i });
+    fireEvent.click(confirmButton);
+
+    expect(onAutoNumberByDate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("applies auto-numbering immediately without confirmation if affectedCount is 0", () => {
+    const onAutoNumberByOrder = vi.fn();
+    const getNumberingImpact = vi.fn().mockReturnValue({
+      affectedCount: 0,
+      affectedVideoIds: [],
+      reason: "none" as const,
+    });
+
+    render(
+      <PlaylistEpisodeTable
+        videos={sampleVideos}
+        episodes={{ "yt-1": 1 }}
+        onEpisodeChange={vi.fn()}
+        onAutoNumberByOrder={onAutoNumberByOrder}
+        getNumberingImpact={getNumberingImpact}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "1..N by order" }));
+    expect(onAutoNumberByOrder).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
 

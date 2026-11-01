@@ -1,9 +1,18 @@
 import { FC, useMemo, useState } from "react";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem } from "../../../types";
-import { cleanThumbnailUrl } from "../../../utils/thumbnailGenerator";
+import { OverwriteImpact } from "../../../hooks/usePlaylistCatalog";
+import { PlaylistEpisodeRow } from "./PlaylistEpisodeRow";
 
 export type VideoFilter = "all" | "mismatch" | "needs-thumb" | "synced";
+
+export type SortColumn = "video" | "source" | "episode" | "order" | "status";
+export type SortDirection = "asc" | "desc";
+
+export interface ColumnSortState {
+  readonly column: SortColumn;
+  readonly direction: SortDirection;
+}
 
 export interface PlaylistEpisodeTableProps {
   readonly videos: readonly backend.CatalogVideoDraft[];
@@ -23,13 +32,9 @@ export interface PlaylistEpisodeTableProps {
   readonly onSyncVideoFromTitle?: (videoId: string) => void;
   readonly onSyncAllFromTitle?: () => void;
   readonly chronologyIssueIds?: ReadonlySet<string>;
+  readonly isReverseChronological?: boolean;
+  readonly getNumberingImpact?: (mode: "date" | "order" | "reverse") => OverwriteImpact;
 }
-
-const SOURCE_BADGES: Record<string, { readonly label: string; readonly className: string }> = {
-  db: { label: "DB", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  title: { label: "Title", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  order: { label: "Order", className: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-};
 
 export function isVideoThumbnailSynced(
   video: backend.CatalogVideoDraft,
@@ -49,100 +54,44 @@ export function isVideoThumbnailSynced(
   );
 }
 
-interface StatusBadgeProps {
-  readonly isDuplicate: boolean;
-  readonly isInvalid: boolean;
-  readonly isSynced: boolean;
-  readonly isProcessing?: boolean;
-  readonly isStale?: boolean;
-  readonly staleEpisode?: number;
-  readonly batchItem?: BatchItem;
+interface SortableHeaderProps {
+  readonly column: SortColumn;
+  readonly label: string;
+  readonly activeColumn?: SortColumn;
+  readonly direction?: SortDirection;
+  readonly className?: string;
+  readonly onSort: (col: SortColumn) => void;
 }
 
-const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
-  isDuplicate,
-  isInvalid,
-  isSynced,
-  isProcessing,
-  isStale,
-  staleEpisode,
-  batchItem,
+const SortableHeader: FC<SortableHeaderProps> = ({
+  column,
+  label,
+  activeColumn,
+  direction,
+  className = "",
+  onSort,
 }) => {
-  if (isDuplicate) {
-    return (
-      <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire whitespace-nowrap">
-        Duplicate
-      </span>
-    );
-  }
-
-  if (isInvalid) {
-    return (
-      <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire whitespace-nowrap">
-        Invalid
-      </span>
-    );
-  }
-
-  if (batchItem?.status === "rendering") {
-    return (
-      <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse whitespace-nowrap">
-        Rendering...
-      </span>
-    );
-  }
-
-  if (batchItem?.status === "uploading") {
-    return (
-      <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 animate-pulse whitespace-nowrap">
-        Uploading...
-      </span>
-    );
-  }
-
-  if (batchItem?.status === "failed") {
-    return (
-      <span
-        className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-fire-dim text-red-400 border border-border-fire whitespace-nowrap"
-        title={batchItem.error || "Thumbnail upload failed"}
-      >
-        Failed
-      </span>
-    );
-  }
-
-  if (isSynced) {
-    if (isProcessing) {
-      return (
-        <span
-          className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse whitespace-nowrap"
-          title="YouTube is still processing the custom thumbnail"
-        >
-          Processing
-        </span>
-      );
-    }
-
-    return (
-      <span className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-        Synced
-      </span>
-    );
-  }
-
+  const isActive = activeColumn === column;
   return (
-    <span
-      className="inline-flex items-center justify-center min-w-[84px] px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap"
-      title={
-        isStale
-          ? staleEpisode
-            ? `Thumbnail has old episode number (${staleEpisode})`
-            : "Thumbnail has old episode number"
-          : undefined
-      }
+    <th
+      scope="col"
+      aria-sort={isActive ? (direction === "asc" ? "ascending" : "descending") : "none"}
+      onClick={() => onSort(column)}
+      className={`py-2.5 px-3 font-semibold text-[11px] cursor-pointer select-none hover:text-text-primary transition-colors ${className}`}
     >
-      Needs thumb
-    </span>
+      <div className="inline-flex items-center justify-center gap-1 w-full">
+        <span>{label}</span>
+        {isActive ? (
+          <span className="text-accent text-[10px]" aria-hidden="true">
+            {direction === "asc" ? "▲" : "▼"}
+          </span>
+        ) : (
+          <span className="text-text-muted/40 text-[10px]" aria-hidden="true">
+            ↕
+          </span>
+        )}
+      </div>
+    </th>
   );
 };
 
@@ -164,10 +113,15 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   onSyncVideoFromTitle,
   onSyncAllFromTitle,
   chronologyIssueIds,
+  isReverseChronological = false,
+  getNumberingImpact,
 }) => {
   const [filter, setFilter] = useState<VideoFilter>("all");
-  const [brokenThumbUrls, setBrokenThumbUrls] = useState<Readonly<Record<string, string>>>({});
-  const [processingThumbUrls, setProcessingThumbUrls] = useState<Readonly<Record<string, string>>>({});
+  const [sortState, setSortState] = useState<ColumnSortState | null>(null);
+  const [pendingNumbering, setPendingNumbering] = useState<{
+    readonly mode: "date" | "order" | "reverse";
+    readonly impact: OverwriteImpact;
+  } | null>(null);
 
   const batchItemMap = useMemo(() => {
     const map = new Map<string, BatchItem>();
@@ -229,20 +183,109 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     });
   }, [videos, filter, batchItemMap, episodes]);
 
+  const sortedVideos = useMemo(() => {
+    if (!sortState) return filteredVideos;
+
+    const { column, direction } = sortState;
+    const mult = direction === "asc" ? 1 : -1;
+
+    return [...filteredVideos].sort((a, b) => {
+      if (column === "video") {
+        const cmp = a.title.localeCompare(b.title);
+        return cmp !== 0 ? cmp * mult : a.position - b.position;
+      }
+      if (column === "source") {
+        const srcA = a.source || "";
+        const srcB = b.source || "";
+        const cmp = srcA.localeCompare(srcB);
+        return cmp !== 0 ? cmp * mult : a.position - b.position;
+      }
+      if (column === "episode") {
+        const epA = episodes[a.videoId] ?? (a.episode > 0 ? a.episode : 0);
+        const epB = episodes[b.videoId] ?? (b.episode > 0 ? b.episode : 0);
+        if (epA !== epB) {
+          return (epA - epB) * mult;
+        }
+        return a.position - b.position;
+      }
+      if (column === "order") {
+        return (a.position - b.position) * mult;
+      }
+      if (column === "status") {
+        const getStatusPriority = (vid: backend.CatalogVideoDraft): number => {
+          const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+          const isDuplicate = assigned > 0 && (episodeCounts[assigned] || 0) > 1;
+          const isInvalid = assigned <= 0;
+          if (isDuplicate || isInvalid) return 1;
+          if (chronologyIssueIds?.has(vid.videoId)) return 2;
+          const isSynced = isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId));
+          if (!isSynced) return 3;
+          return 4;
+        };
+        const pA = getStatusPriority(a);
+        const pB = getStatusPriority(b);
+        return pA !== pB ? (pA - pB) * mult : a.position - b.position;
+      }
+      return 0;
+    });
+  }, [filteredVideos, sortState, episodes, episodeCounts, chronologyIssueIds, batchItemMap]);
+
+  const handleToggleSort = (column: SortColumn) => {
+    setSortState((prev) => {
+      if (prev?.column === column) {
+        if (prev.direction === "asc") {
+          return { column, direction: "desc" };
+        }
+        return null;
+      }
+      return { column, direction: "asc" };
+    });
+  };
+
+  const executeNumbering = (mode: "date" | "order" | "reverse") => {
+    if (mode === "date") onAutoNumberByDate?.();
+    else if (mode === "order") onAutoNumberByOrder?.();
+    else if (mode === "reverse") onReverseEpisodes?.();
+  };
+
+  const handleRequestNumbering = (mode: "date" | "order" | "reverse") => {
+    if (isBatchRunning) return;
+    const impact = getNumberingImpact
+      ? getNumberingImpact(mode)
+      : { affectedCount: 0, affectedVideoIds: [], reason: "none" as const };
+
+    if (impact.affectedCount > 0) {
+      setPendingNumbering({ mode, impact });
+    } else {
+      executeNumbering(mode);
+    }
+  };
+
+  const handleConfirmNumbering = () => {
+    if (pendingNumbering) {
+      executeNumbering(pendingNumbering.mode);
+      setPendingNumbering(null);
+    }
+  };
+
+  const handleCancelNumbering = () => {
+    setPendingNumbering(null);
+  };
+
   const allFilteredSelected = useMemo(() => {
-    if (!selectedVideoIds || filteredVideos.length === 0) return false;
-    return filteredVideos.every((vid) => selectedVideoIds.has(vid.videoId));
-  }, [filteredVideos, selectedVideoIds]);
+    if (!selectedVideoIds || sortedVideos.length === 0) return false;
+    return sortedVideos.every((vid) => selectedVideoIds.has(vid.videoId));
+  }, [sortedVideos, selectedVideoIds]);
 
   const handleToggleAllFiltered = () => {
     if (!onSelectionChange) return;
     const next = new Set(selectedVideoIds ? Array.from(selectedVideoIds) : []);
     if (allFilteredSelected) {
-      for (const vid of filteredVideos) {
+      for (const vid of sortedVideos) {
         next.delete(vid.videoId);
       }
     } else {
-      for (const vid of filteredVideos) {
+      for (const vid of sortedVideos) {
         next.add(vid.videoId);
       }
     }
@@ -406,7 +449,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 {onAutoNumberByDate && (
                   <button
                     type="button"
-                    onClick={onAutoNumberByDate}
+                    onClick={() => handleRequestNumbering("date")}
                     disabled={isBatchRunning}
                     className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title="Assign episodes 1..N sorted chronologically by upload date"
@@ -417,7 +460,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 {onAutoNumberByOrder && (
                   <button
                     type="button"
-                    onClick={onAutoNumberByOrder}
+                    onClick={() => handleRequestNumbering("order")}
                     disabled={isBatchRunning}
                     className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title="Assign episodes 1..N matching playlist position"
@@ -428,7 +471,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 {onReverseEpisodes && (
                   <button
                     type="button"
-                    onClick={onReverseEpisodes}
+                    onClick={() => handleRequestNumbering("reverse")}
                     disabled={isBatchRunning}
                     className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title="Invert current episode numbering order"
@@ -442,6 +485,53 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
         )}
       </div>
 
+      {/* Confirmation Guard for Numbering Overwrites */}
+      {pendingNumbering && (
+        <div
+          role="alert"
+          className="px-3.5 py-2.5 bg-fire-dim/30 border-b border-border-fire text-xs flex flex-wrap items-center justify-between gap-3 text-red-200"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-red-400">Notice:</span>
+            <span>
+              Assigning {pendingNumbering.mode === "date" ? "1..N by date" : pendingNumbering.mode === "order" ? "1..N by order" : "reverse order"} will overwrite{" "}
+              <strong className="font-semibold text-white">{pendingNumbering.impact.affectedCount}</strong> video{pendingNumbering.impact.affectedCount > 1 ? "s" : ""} whose episode currently matches {pendingNumbering.impact.reason === "title_match" ? "the video title" : pendingNumbering.impact.reason === "db_match" ? "the database" : "title or database records"}.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleConfirmNumbering}
+              className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-medium text-[11px] transition-colors"
+            >
+              Overwrite & apply
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelNumbering}
+              className="px-2.5 py-1 rounded bg-elevated hover:bg-elevated/80 border border-border-subtle text-text-secondary hover:text-text-primary text-[11px] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Direction Hint for Reverse-Chronological Playlists */}
+      {isReverseChronological && !pendingNumbering && (
+        <div
+          role="status"
+          className="px-3.5 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-300 flex items-center justify-between gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-amber-400">Direction hint:</span>
+            <span>
+              Playlist runs newest-first (reverse chronological). Numbering by order will invert chronology; consider using <strong>1..N by date</strong>.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Table Container */}
       <div className="overflow-x-auto max-h-[480px] 2xl:max-h-[640px] overflow-y-auto custom-scrollbar">
         <table className="w-full text-left text-xs min-w-[1080px] table-fixed">
@@ -454,22 +544,57 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     aria-label="Select all filtered videos"
                     checked={allFilteredSelected}
                     onChange={handleToggleAllFiltered}
-                    disabled={filteredVideos.length === 0 || isBatchRunning}
+                    disabled={sortedVideos.length === 0 || isBatchRunning}
                     className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated cursor-pointer"
                   />
                 </th>
               )}
               <th className="py-2.5 px-3 font-semibold text-[11px] w-20 min-w-20">Preview</th>
-              <th className="py-2.5 px-4 font-semibold text-[11px] min-w-[240px]">Video</th>
-              <th className="py-2.5 px-3 font-semibold text-[11px] w-28 min-w-28 text-center">Source</th>
-              <th className="py-2.5 px-3 font-semibold text-[11px] w-64 min-w-64 text-center">Episode</th>
-              <th className="py-2.5 px-3 font-semibold text-[11px] w-36 min-w-36 text-center">Order</th>
-              <th className="py-2.5 px-3 font-semibold text-[11px] w-36 min-w-36 text-center">Status</th>
+              <SortableHeader
+                column="video"
+                label="Video"
+                activeColumn={sortState?.column}
+                direction={sortState?.direction}
+                className="px-4 min-w-[240px] text-left"
+                onSort={handleToggleSort}
+              />
+              <SortableHeader
+                column="source"
+                label="Source"
+                activeColumn={sortState?.column}
+                direction={sortState?.direction}
+                className="w-28 min-w-28 text-center"
+                onSort={handleToggleSort}
+              />
+              <SortableHeader
+                column="episode"
+                label="Episode"
+                activeColumn={sortState?.column}
+                direction={sortState?.direction}
+                className="w-64 min-w-64 text-center"
+                onSort={handleToggleSort}
+              />
+              <SortableHeader
+                column="order"
+                label="Order"
+                activeColumn={sortState?.column}
+                direction={sortState?.direction}
+                className="w-36 min-w-36 text-center"
+                onSort={handleToggleSort}
+              />
+              <SortableHeader
+                column="status"
+                label="Status"
+                activeColumn={sortState?.column}
+                direction={sortState?.direction}
+                className="w-36 min-w-36 text-center"
+                onSort={handleToggleSort}
+              />
               <th className="py-2.5 px-3 font-semibold text-[11px] w-24 min-w-24 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle/50">
-            {filteredVideos.length === 0 ? (
+            {sortedVideos.length === 0 ? (
               <tr>
                 <td
                   colSpan={onSelectionChange ? 8 : 7}
@@ -479,7 +604,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 </td>
               </tr>
             ) : (
-              filteredVideos.map((vid) => {
+              sortedVideos.map((vid) => {
                 const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
                 const isDuplicate = assigned > 0 && (episodeCounts[assigned] || 0) > 1;
                 const isInvalid = assigned <= 0;
@@ -488,239 +613,27 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 const isChronologyIssue = Boolean(
                   chronologyIssueIds ? chronologyIssueIds.has(vid.videoId) : vid.chronologyIssue
                 );
-
-                const titleEp = vid.titleEpisode ?? 0;
-                const isMismatch = titleEp > 0 && assigned !== titleEp;
-
                 const bItem = batchItemMap.get(vid.videoId);
-                const isSynced = isVideoThumbnailSynced(vid, assigned, bItem);
-                const thumbEp = bItem?.thumbnailEpisode ?? vid.thumbnailEpisode ?? 0;
-                const isStale =
-                  thumbEp > 0 &&
-                  assigned > 0 &&
-                  thumbEp !== assigned &&
-                  ((bItem?.thumbnailUpdatedAt ?? vid.thumbnailUpdatedAt ?? 0) > 0 || bItem?.status === "done");
-                const isBroken = Boolean(vid.thumbnailUrl && brokenThumbUrls[vid.videoId] === vid.thumbnailUrl);
-                const isProcessing = Boolean(vid.thumbnailUrl && processingThumbUrls[vid.videoId] === vid.thumbnailUrl);
-                const sourceBadge = vid.source ? SOURCE_BADGES[vid.source] : undefined;
 
                 return (
-                  <tr
+                  <PlaylistEpisodeRow
                     key={vid.videoId}
-                    className={`hover:bg-elevated/30 transition-colors h-14 ${
-                      isDuplicate || isInvalid
-                        ? "bg-fire-dim/20"
-                        : isChronologyIssue
-                        ? "bg-amber-500/5"
-                        : isPreviewActive
-                        ? "bg-accent/5"
-                        : isSelected
-                        ? "bg-elevated/20"
-                        : ""
-                    }`}
-                  >
-                    {/* Selection Checkbox */}
-                    {onSelectionChange && (
-                      <td className="py-2.5 px-3 w-10 min-w-10 max-w-10 text-center">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${vid.title}`}
-                          checked={isSelected}
-                          onChange={() => handleToggleVideo(vid.videoId)}
-                          disabled={isBatchRunning}
-                          className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated cursor-pointer"
-                        />
-                      </td>
-                    )}
-
-                    {/* Thumbnail Preview */}
-                    <td className="py-2.5 px-3 w-20 min-w-20">
-                      <button
-                        type="button"
-                        onClick={() => onSelectPreviewVideo?.(vid.videoId)}
-                        aria-label={`Preview ${vid.title} in thumbnail studio`}
-                        className={`relative w-16 aspect-video rounded overflow-hidden border bg-black/40 shrink-0 block transition-all group ${
-                          isPreviewActive
-                            ? "border-accent ring-1 ring-accent"
-                            : "border-border-subtle hover:border-border-active"
-                        }`}
-                        title="Click to preview episode in thumbnail studio"
-                      >
-                        {vid.thumbnailUrl && !isBroken ? (
-                          <img
-                            src={cleanThumbnailUrl(vid.thumbnailUrl)}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onLoad={(e) => {
-                              const img = e.currentTarget;
-                              if (img.naturalWidth > 0 && img.naturalWidth <= 120) {
-                                setProcessingThumbUrls((prev) =>
-                                  prev[vid.videoId] === vid.thumbnailUrl
-                                    ? prev
-                                    : { ...prev, [vid.videoId]: vid.thumbnailUrl }
-                                );
-                              } else if (img.naturalWidth > 120) {
-                                setProcessingThumbUrls((prev) => {
-                                  if (!prev[vid.videoId]) return prev;
-                                  const next = { ...prev };
-                                  delete next[vid.videoId];
-                                  return next;
-                                });
-                              }
-                            }}
-                            onError={() => {
-                              setBrokenThumbUrls((prev) =>
-                                prev[vid.videoId] === vid.thumbnailUrl
-                                  ? prev
-                                  : { ...prev, [vid.videoId]: vid.thumbnailUrl }
-                              );
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[9px] text-text-muted font-mono">
-                            No thumb
-                          </div>
-                        )}
-                        <span className="absolute inset-0 bg-accent/0 group-hover:bg-accent/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <span className="text-[8px] font-semibold text-text-primary px-1 rounded bg-black/75">
-                            View
-                          </span>
-                        </span>
-                      </button>
-                    </td>
-
-                    {/* Video Title & Local File Indicator */}
-                    <td className="py-2.5 px-4 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className="font-medium text-text-primary truncate" title={vid.title}>
-                          {vid.title}
-                        </div>
-                        {vid.localFile && (
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20 shrink-0"
-                            title={`Matched local file: ${vid.localFile}`}
-                          >
-                            Local
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-text-muted font-mono mt-0.5 truncate">{vid.videoId}</div>
-                    </td>
-
-                    {/* Inferred Source Badge */}
-                    <td className="py-2.5 px-3 w-28 min-w-28 text-center">
-                      <div className="flex items-center justify-center">
-                        {sourceBadge ? (
-                          <span
-                            className={`inline-flex items-center justify-center min-w-[56px] px-2 py-0.5 rounded text-[10px] font-mono border ${sourceBadge.className}`}
-                          >
-                            {sourceBadge.label}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-text-muted font-mono">
-                            {vid.episode > 0 ? `Ep ${vid.episode}` : "—"}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Episode Number Input & Title Suggestion */}
-                    <td className="py-2.5 px-3 w-64 min-w-64 text-center">
-                      <div className="flex items-center justify-center gap-3">
-                        <input
-                          type="number"
-                          min="1"
-                          value={assigned}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            onEpisodeChange(vid.videoId, isNaN(val) ? 0 : val);
-                          }}
-                          className={`w-14 h-7 text-center rounded-lg bg-elevated border text-text-primary text-xs font-mono outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors ${
-                            isDuplicate || isInvalid
-                              ? "border-fire text-red-400 bg-fire-dim/30"
-                              : "border-border-subtle"
-                          }`}
-                        />
-                        <div className="w-36 h-7 flex items-center justify-start gap-1.5 shrink-0">
-                          {isMismatch ? (
-                            <>
-                              <span
-                                className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap"
-                                title={`Parsed episode from title is ${titleEp}`}
-                              >
-                                Title: {titleEp}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (onSyncVideoFromTitle) {
-                                    onSyncVideoFromTitle(vid.videoId);
-                                  } else {
-                                    onEpisodeChange(vid.videoId, titleEp);
-                                  }
-                                }}
-                                disabled={isBatchRunning}
-                                className="px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 border border-accent/20 text-[10px] font-medium text-accent transition-colors disabled:opacity-40 whitespace-nowrap hover:border-accent/40 cursor-pointer"
-                                title={`Set episode to ${titleEp} from video title`}
-                              >
-                                Use {titleEp}
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Chronology Order Badge */}
-                    <td className="py-2.5 px-3 w-36 min-w-36 text-center">
-                      <div className="flex items-center justify-center">
-                        {isChronologyIssue ? (
-                          <span
-                            className="inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap min-w-[84px]"
-                            title="Video violates chronological release order relative to its assigned episode"
-                          >
-                            Out of order
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-text-muted/40 font-mono">—</span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Thumbnail Status Badge */}
-                    <td className="py-2.5 px-3 w-36 min-w-36 text-center">
-                      <div className="flex items-center justify-center">
-                        <EpisodeStatusBadge
-                          isDuplicate={isDuplicate}
-                          isInvalid={isInvalid}
-                          isSynced={isSynced}
-                          isProcessing={isProcessing}
-                          isStale={isStale}
-                          staleEpisode={thumbEp}
-                          batchItem={bItem}
-                        />
-                      </div>
-                    </td>
-
-                    {/* Single Video Update Action */}
-                    <td className="py-2.5 px-3 w-24 min-w-24 text-right">
-                      <div className="flex items-center justify-end">
-                        {onUpdateSingleVideo && (
-                          <button
-                            type="button"
-                            onClick={() => onUpdateSingleVideo(vid.videoId)}
-                            disabled={isBatchRunning || isAssetsReady === false}
-                            aria-label={`Update thumbnail for ${vid.title}`}
-                            className="px-2.5 py-1 rounded bg-elevated hover:bg-elevated/80 border border-border-subtle text-[10px] font-medium text-text-secondary hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                            title="Generate and upload custom thumbnail for this video (50 units)"
-                          >
-                            Update
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    video={vid}
+                    assignedEpisode={assigned}
+                    isDuplicate={isDuplicate}
+                    isInvalid={isInvalid}
+                    isSelected={isSelected}
+                    isPreviewActive={isPreviewActive}
+                    isChronologyIssue={isChronologyIssue}
+                    isBatchRunning={isBatchRunning}
+                    isAssetsReady={isAssetsReady}
+                    batchItem={bItem}
+                    onToggleSelect={onSelectionChange ? handleToggleVideo : undefined}
+                    onSelectPreview={onSelectPreviewVideo}
+                    onEpisodeChange={onEpisodeChange}
+                    onSyncVideoFromTitle={onSyncVideoFromTitle}
+                    onUpdateSingleVideo={onUpdateSingleVideo}
+                  />
                 );
               })
             )}

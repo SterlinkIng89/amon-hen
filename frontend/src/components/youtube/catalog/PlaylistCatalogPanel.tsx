@@ -54,6 +54,8 @@ export const PlaylistCatalogPanel: FC = () => {
     autoNumberByDate,
     autoNumberByOrder,
     reverseEpisodes,
+    isReverseChronological,
+    getNumberingImpact,
   } = usePlaylistCatalog();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -537,6 +539,8 @@ export const PlaylistCatalogPanel: FC = () => {
                     onSyncVideoFromTitle={syncVideoFromTitle}
                     onSyncAllFromTitle={syncAllFromTitle}
                     chronologyIssueIds={chronologyIssueIds}
+                    isReverseChronological={isReverseChronological}
+                    getNumberingImpact={getNumberingImpact}
                   />
                 </div>
 

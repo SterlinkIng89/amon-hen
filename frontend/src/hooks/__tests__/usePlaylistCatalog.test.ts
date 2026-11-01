@@ -666,6 +666,67 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.editedEpisodes["v-early-upload"]).toBe(2);
     expect(result.current.hasChronologyErrors).toBe(false);
   });
+
+  it("detects reverse-chronological playlist ordering", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-reverse",
+      title: "Reverse Playlist",
+      tag: "reverse",
+      videos: [
+        {
+          videoId: "v-newest",
+          title: "Episode 3",
+          publishedAt: "2026-03-01T00:00:00Z",
+          sortDate: "2026-03-01",
+          position: 0,
+          episode: 3,
+          titleEpisode: 3,
+        },
+        {
+          videoId: "v-middle",
+          title: "Episode 2",
+          publishedAt: "2026-02-01T00:00:00Z",
+          sortDate: "2026-02-01",
+          position: 1,
+          episode: 2,
+          titleEpisode: 2,
+        },
+        {
+          videoId: "v-oldest",
+          title: "Episode 1",
+          publishedAt: "2026-01-01T00:00:00Z",
+          sortDate: "2026-01-01",
+          position: 2,
+          episode: 1,
+          titleEpisode: 1,
+        },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-reverse");
+    });
+
+    expect(result.current.isReverseChronological).toBe(true);
+
+    // Numbering by order on this reverse playlist would assign v-newest=1, v-middle=2, v-oldest=3.
+    // That changes v-newest (was 3, matching title 3) and v-oldest (was 1, matching title 1).
+    const impact = result.current.getNumberingImpact("order");
+    expect(impact.affectedCount).toBe(2);
+    expect(impact.affectedVideoIds).toContain("v-newest");
+    expect(impact.affectedVideoIds).toContain("v-oldest");
+    expect(impact.reason).toBe("title_match");
+
+    // Numbering by date keeps v-oldest=1, v-middle=2, v-newest=3, which matches existing, so affectedCount = 0.
+    const dateImpact = result.current.getNumberingImpact("date");
+    expect(dateImpact.affectedCount).toBe(0);
+  });
 });
 
 

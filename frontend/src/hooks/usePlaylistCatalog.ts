@@ -305,6 +305,76 @@ export function usePlaylistCatalog() {
     setEditedEpisodes(nextMap);
   }, [draft?.videos, editedEpisodes]);
 
+  const isReverseChronological = useMemo(() => {
+    if (!draft?.videos) return false;
+    return isPlaylistReverseChronological(draft.videos);
+  }, [draft?.videos]);
+
+  const getNumberingImpact = useCallback(
+    (mode: "date" | "order" | "reverse"): OverwriteImpact => {
+      if (!draft?.videos?.length) {
+        return { affectedCount: 0, affectedVideoIds: [], reason: "none" };
+      }
+
+      let nextMap: Record<string, number> = {};
+      if (mode === "date") {
+        const sorted = [...draft.videos].sort(compareVideoChronology);
+        nextMap = buildSequentialEpisodeMap(sorted);
+      } else if (mode === "order") {
+        const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
+        nextMap = buildSequentialEpisodeMap(sorted);
+      } else if (mode === "reverse") {
+        const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
+        const reversed = sorted
+          .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode > 0 ? v.existingEpisode : 0)))
+          .reverse();
+        for (let i = 0; i < sorted.length; i++) {
+          nextMap[sorted[i].videoId] = reversed[i];
+        }
+      }
+
+      const affectedVideoIds: string[] = [];
+      let hasTitleMatch = false;
+      let hasDbMatch = false;
+
+      for (const vid of draft.videos) {
+        const currentEp =
+          editedEpisodes[vid.videoId] ??
+          (vid.episode > 0 ? vid.episode : (vid.existingEpisode > 0 ? vid.existingEpisode : 0));
+        const targetEp = nextMap[vid.videoId] ?? 0;
+
+        if (currentEp > 0 && currentEp !== targetEp) {
+          const matchesTitle =
+            vid.titleEpisode !== undefined && vid.titleEpisode > 0 && currentEp === vid.titleEpisode;
+          const matchesDb =
+            vid.existingEpisode !== undefined && vid.existingEpisode > 0 && currentEp === vid.existingEpisode;
+
+          if (matchesTitle || matchesDb) {
+            affectedVideoIds.push(vid.videoId);
+            if (matchesTitle) hasTitleMatch = true;
+            if (matchesDb) hasDbMatch = true;
+          }
+        }
+      }
+
+      const reason: "title_match" | "db_match" | "both" | "none" =
+        affectedVideoIds.length === 0
+          ? "none"
+          : hasTitleMatch && hasDbMatch
+          ? "both"
+          : hasTitleMatch
+          ? "title_match"
+          : "db_match";
+
+      return {
+        affectedCount: affectedVideoIds.length,
+        affectedVideoIds,
+        reason,
+      };
+    },
+    [draft?.videos, editedEpisodes]
+  );
+
   const applyCatalog = useCallback(
     async (updateLocal = true): Promise<boolean> => {
       if (!selectedPlaylistId || !canApply) return false;
@@ -366,12 +436,35 @@ export function usePlaylistCatalog() {
     autoNumberByOrder,
     reverseEpisodes,
     hasConflicts,
+    isReverseChronological,
+    getNumberingImpact,
     canApply,
     isApplying,
     applyError,
     applySuccess,
     applyCatalog,
   };
+}
+
+export interface OverwriteImpact {
+  readonly affectedCount: number;
+  readonly affectedVideoIds: readonly string[];
+  readonly reason: "title_match" | "db_match" | "both" | "none";
+}
+
+export function isPlaylistReverseChronological(
+  videos: readonly backend.CatalogVideoDraft[]
+): boolean {
+  if (videos.length < 2) return false;
+  const posOrdered = [...videos].sort((a, b) => a.position - b.position);
+  let inversions = 0;
+  let comparisons = 0;
+  for (let i = 0; i < posOrdered.length - 1; i++) {
+    const cmp = compareVideoChronology(posOrdered[i], posOrdered[i + 1]);
+    if (cmp > 0) inversions++;
+    if (cmp !== 0) comparisons++;
+  }
+  return comparisons > 0 && inversions / comparisons >= 0.6;
 }
 
 export function compareVideoChronology(
