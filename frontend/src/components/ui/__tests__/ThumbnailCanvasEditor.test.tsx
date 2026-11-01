@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ThumbnailCanvasEditor from "../ThumbnailCanvasEditor";
 import { TagThumbnailConfig } from "../../../types";
@@ -971,6 +971,43 @@ describe("ThumbnailCanvasEditor", () => {
           logo: expect.objectContaining({ scale: 0.95 }),
         })
       );
+    });
+
+    it("renders shortcut hint bar when an element is selected and calls onSelectElement", () => {
+      const onSelectElement = vi.fn();
+      const testLogoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+      };
+      vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 100, h: 100 },
+      });
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={testLogoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={vi.fn()}
+          onSelectElement={onSelectElement}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      expect(onSelectElement).toHaveBeenCalledWith("logo");
+      expect(screen.getByText("Steam logo")).toBeInTheDocument();
+      expect(screen.getByText(/Drag corners or \+\/- to scale/i)).toBeInTheDocument();
+
+      fireEvent.keyDown(canvas, { key: "Escape" });
+      expect(onSelectElement).toHaveBeenCalledWith(null);
+      expect(screen.queryByText("Steam logo")).not.toBeInTheDocument();
     });
   });
 });

@@ -8,7 +8,7 @@ import {
   getPresetCoordinates,
   ElementHalfDimensions,
 } from "../../utils/thumbnailSnap";
-import { ThumbnailRects } from "../../utils/thumbnailGenerator";
+import { ThumbnailRects, ThumbnailElementId } from "../../utils/thumbnailGenerator";
 
 interface QuickAlignmentControlProps {
   readonly label: string;
@@ -146,6 +146,8 @@ export interface ThumbnailElementControlsProps {
   readonly defaultTitle: string;
   readonly onChange: (patch: Partial<TagThumbnailConfig>) => void;
   readonly elementRects?: ThumbnailRects;
+  readonly selectedElement?: ThumbnailElementId | null;
+  readonly onSelectElement?: (element: ThumbnailElementId | null) => void;
 }
 
 export default function ThumbnailElementControls({
@@ -154,6 +156,8 @@ export default function ThumbnailElementControls({
   defaultTitle,
   onChange,
   elementRects,
+  selectedElement,
+  onSelectElement,
 }: ThumbnailElementControlsProps) {
   const logo = config.logo;
   const title = config.title;
@@ -240,7 +244,18 @@ export default function ThumbnailElementControls({
       </div>
 
       {/* Steam Game Logo Toggle & Scale */}
-      <div className="flex flex-col gap-1.5 p-2 rounded bg-surface border border-border-subtle">
+      <div
+        onClick={() => {
+          if (logo?.enabled && onSelectElement && selectedElement !== "logo") {
+            onSelectElement("logo");
+          }
+        }}
+        className={`flex flex-col gap-1.5 p-2 rounded bg-surface border transition-colors ${
+          selectedElement === "logo"
+            ? "border-accent/60 bg-accent/5 ring-1 ring-accent/30"
+            : "border-border-subtle"
+        }`}
+      >
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-text-secondary flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -300,7 +315,18 @@ export default function ThumbnailElementControls({
       </div>
 
       {/* Game Title Text Toggle, Override & Scale */}
-      <div className="flex flex-col gap-2 p-2 rounded bg-surface border border-border-subtle">
+      <div
+        onClick={() => {
+          if (title?.enabled && onSelectElement && selectedElement !== "title") {
+            onSelectElement("title");
+          }
+        }}
+        className={`flex flex-col gap-2 p-2 rounded bg-surface border transition-colors ${
+          selectedElement === "title"
+            ? "border-accent/60 bg-accent/5 ring-1 ring-accent/30"
+            : "border-border-subtle"
+        }`}
+      >
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-text-secondary flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -380,7 +406,18 @@ export default function ThumbnailElementControls({
 
       {/* Episode scale slider & alignment if free positioning is active */}
       {episodeLayout && (
-        <div className="flex flex-col gap-2 p-2 rounded bg-surface border border-border-subtle">
+        <div
+          onClick={() => {
+            if (onSelectElement && selectedElement !== "episode") {
+              onSelectElement("episode");
+            }
+          }}
+          className={`flex flex-col gap-2 p-2 rounded bg-surface border transition-colors ${
+            selectedElement === "episode"
+              ? "border-accent/60 bg-accent/5 ring-1 ring-accent/30"
+              : "border-border-subtle"
+          }`}
+        >
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] text-text-secondary font-medium">
               Episode badge size

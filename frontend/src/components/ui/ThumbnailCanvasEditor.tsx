@@ -46,6 +46,8 @@ export interface ThumbnailCanvasEditorProps {
   readonly onConfigChange: (patch: Partial<TagThumbnailConfig>) => void;
   readonly onRenderRects?: (rects: ThumbnailRects) => void;
   readonly historyResetKey?: string | number;
+  readonly selectedElement?: ThumbnailElementId | null;
+  readonly onSelectElement?: (element: ThumbnailElementId | null) => void;
 }
 
 interface ActiveResizeState {
@@ -67,6 +69,8 @@ export default function ThumbnailCanvasEditor({
   onConfigChange,
   onRenderRects,
   historyResetKey,
+  selectedElement: controlledSelectedElement,
+  onSelectElement,
 }: ThumbnailCanvasEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectsRef = useRef<ThumbnailRects>({});
@@ -86,7 +90,15 @@ export default function ThumbnailCanvasEditor({
   const [snapEnabled, setSnapEnabled] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [showSafeZone, setShowSafeZone] = useState<boolean>(false);
-  const [selectedElement, setSelectedElement] = useState<ThumbnailElementId | null>(null);
+  const [internalSelectedElement, setInternalSelectedElement] = useState<ThumbnailElementId | null>(null);
+  const selectedElement = controlledSelectedElement !== undefined ? controlledSelectedElement : internalSelectedElement;
+  const setSelectedElement = useCallback(
+    (target: ThumbnailElementId | null) => {
+      setInternalSelectedElement(target);
+      onSelectElement?.(target);
+    },
+    [onSelectElement]
+  );
   const [activeSnapLabel, setActiveSnapLabel] = useState<string | null>(null);
   const [quickAlignedElement, setQuickAlignedElement] = useState<ThumbnailElementId | null>(null);
   const quickAlignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,36 +125,18 @@ export default function ThumbnailCanvasEditor({
       setSelectedElement(null);
       setActiveResize(null);
     }
-  }, [config.logo?.enabled, config.title?.enabled, selectedElement]);
+  }, [config.logo?.enabled, config.title?.enabled, selectedElement, setSelectedElement]);
 
   const getSiblingElements = useCallback(
     (currentDrag: ThumbnailElementId): readonly SiblingElementSnapTarget[] => {
-      const siblings: SiblingElementSnapTarget[] = [];
-      const rects = rectsRef.current;
-
-      if (currentDrag !== "logo" && rects.logo && rects.logo.w > 0 && rects.logo.h > 0) {
-        siblings.push({
-          id: "logo",
-          label: "Steam Game Logo",
-          rect: rects.logo,
-        });
-      }
-      if (currentDrag !== "title" && rects.title && rects.title.w > 0 && rects.title.h > 0) {
-        siblings.push({
-          id: "title",
-          label: "Game Title",
-          rect: rects.title,
-        });
-      }
-      if (currentDrag !== "episode" && rects.episode && rects.episode.w > 0 && rects.episode.h > 0) {
-        siblings.push({
-          id: "episode",
-          label: "Episode Badge",
-          rect: rects.episode,
-        });
-      }
-
-      return siblings;
+      const items: Array<{ id: ThumbnailElementId; label: string }> = [
+        { id: "logo", label: "Steam Game Logo" },
+        { id: "title", label: "Game Title" },
+        { id: "episode", label: "Episode Badge" },
+      ];
+      return items
+        .filter((item) => item.id !== currentDrag && (rectsRef.current[item.id]?.w ?? 0) > 0)
+        .map((item) => ({ id: item.id, label: item.label, rect: rectsRef.current[item.id]! }));
     },
     []
   );
@@ -954,6 +948,22 @@ export default function ThumbnailCanvasEditor({
           <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80 pointer-events-none z-10">
             {emptyMessage || "No artwork loaded"}
           </span>
+        )}
+
+        {/* Selection Shortcut Hint Bar */}
+        {selectedElement && !activeDrag && !activeResize && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none z-10 max-w-[90%]">
+            <span className="bg-black/85 backdrop-blur-xs text-text-muted border border-border-subtle rounded-md px-2.5 py-1 text-[11px] font-medium shadow-xs flex items-center gap-1.5 whitespace-nowrap select-none">
+              <span className="text-text-primary font-semibold">
+                {selectedElement === "logo"
+                  ? "Steam logo"
+                  : selectedElement === "title"
+                  ? "Title overlay"
+                  : "Episode badge"}
+              </span>
+              <span className="text-text-muted">• Drag corners or +/- to scale • Arrows to nudge • Esc to deselect</span>
+            </span>
+          </div>
         )}
       </div>
 

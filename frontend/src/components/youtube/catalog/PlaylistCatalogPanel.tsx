@@ -21,7 +21,7 @@ import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
 import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
-import { ThumbnailRects } from "../../../utils/thumbnailGenerator";
+import { ThumbnailRects, ThumbnailElementId } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
 
 export const PlaylistCatalogPanel: FC = () => {
@@ -99,6 +99,7 @@ export const PlaylistCatalogPanel: FC = () => {
   const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
   const [editorRects, setEditorRects] = useState<ThumbnailRects>({});
+  const [studioSelectedElement, setStudioSelectedElement] = useState<ThumbnailElementId | null>(null);
 
   // Check Steam App ID when editedTag changes
   useEffect(() => {
@@ -601,6 +602,8 @@ export const PlaylistCatalogPanel: FC = () => {
                     }
                     onRenderRects={setEditorRects}
                     historyResetKey={editedTag.trim()}
+                    selectedElement={studioSelectedElement}
+                    onSelectElement={setStudioSelectedElement}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -679,6 +682,8 @@ export const PlaylistCatalogPanel: FC = () => {
                         }}
                         hidePreviewCanvas={true}
                         elementRects={editorRects}
+                        selectedElement={studioSelectedElement}
+                        onSelectElement={setStudioSelectedElement}
                       />
                     </div>
                   )}

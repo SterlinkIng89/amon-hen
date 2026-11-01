@@ -143,4 +143,54 @@ describe("ThumbnailElementControls", () => {
       })
     );
   });
+
+  it("applies active accent ring when selectedElement matches card", () => {
+    const { rerender } = render(
+      <ThumbnailElementControls
+        config={baseConfig}
+        hasLogo={true}
+        defaultTitle="Control"
+        onChange={vi.fn()}
+        selectedElement="logo"
+      />
+    );
+
+    const logoCheckbox = screen.getByRole("checkbox", { name: /Steam game logo/i });
+    const logoCard = logoCheckbox.closest(".bg-surface");
+    expect(logoCard?.className).toContain("border-accent/60");
+
+    rerender(
+      <ThumbnailElementControls
+        config={baseConfig}
+        hasLogo={true}
+        defaultTitle="Control"
+        onChange={vi.fn()}
+        selectedElement="title"
+      />
+    );
+
+    const titleCheckbox = screen.getByRole("checkbox", { name: /Game title overlay/i });
+    const titleCard = titleCheckbox.closest(".bg-surface");
+    expect(titleCard?.className).toContain("border-accent/60");
+  });
+
+  it("calls onSelectElement when clicking card", () => {
+    const onSelectElement = vi.fn();
+    render(
+      <ThumbnailElementControls
+        config={baseConfig}
+        hasLogo={true}
+        defaultTitle="Control"
+        onChange={vi.fn()}
+        onSelectElement={onSelectElement}
+      />
+    );
+
+    const titleCheckbox = screen.getByRole("checkbox", { name: /Game title overlay/i });
+    const titleCard = titleCheckbox.closest(".bg-surface");
+    if (titleCard) {
+      fireEvent.click(titleCard);
+      expect(onSelectElement).toHaveBeenCalledWith("title");
+    }
+  });
 });

@@ -16,7 +16,7 @@ import ThumbnailCanvasEditor from "../ui/ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "../ui/ThumbnailFramingControls";
 import ThumbnailElementControls from "../ui/ThumbnailElementControls";
 import { renderTagThumbnailDataUrl } from "../../utils/thumbnailRender";
-import { ThumbnailRects } from "../../utils/thumbnailGenerator";
+import { ThumbnailRects, ThumbnailElementId } from "../../utils/thumbnailGenerator";
 import {
   notifyCustomThumbChanged,
   setCachedCustomThumb,
@@ -74,6 +74,7 @@ export default function YouTubeThumbnailPicker({
     | { status: "error"; message: string };
 
   const [pushState, setPushState] = useState<PushState>({ status: "idle" });
+  const [selectedElement, setSelectedElement] = useState<ThumbnailElementId | null>(null);
 
   // Local overrides if user customizes specifically for this video
   const [localConfig, setLocalConfig] = useState<TagThumbnailConfig>(() =>
@@ -329,6 +330,8 @@ export default function YouTubeThumbnailPicker({
                 }
                 onRenderRects={setCanvasRects}
                 historyResetKey={`${gameTag}_${episodeNumber || 1}`}
+                selectedElement={selectedElement}
+                onSelectElement={setSelectedElement}
               />
             </div>
 
@@ -408,6 +411,8 @@ export default function YouTubeThumbnailPicker({
                   setLocalConfig((prev) => ({ ...prev, ...patch }))
                 }
                 elementRects={canvasRects}
+                selectedElement={selectedElement}
+                onSelectElement={setSelectedElement}
               />
 
               <div className="flex items-center justify-between">
