@@ -121,6 +121,10 @@ export namespace backend {
 	    source: string;
 	    conflict: boolean;
 	    thumbnailUpdatedAt: number;
+	    titleEpisode: number;
+	    sortDate: string;
+	    mismatch: boolean;
+	    chronologyIssue: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogVideoDraft(source);
@@ -139,6 +143,10 @@ export namespace backend {
 	        this.source = source["source"];
 	        this.conflict = source["conflict"];
 	        this.thumbnailUpdatedAt = source["thumbnailUpdatedAt"];
+	        this.titleEpisode = source["titleEpisode"];
+	        this.sortDate = source["sortDate"];
+	        this.mismatch = source["mismatch"];
+	        this.chronologyIssue = source["chronologyIssue"];
 	    }
 	}
 	export class HistoricalVideo {

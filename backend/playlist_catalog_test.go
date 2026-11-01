@@ -103,6 +103,161 @@ func TestInferEpisodes(t *testing.T) {
 	}
 }
 
+func TestInferEpisodes_TitleEpisodeAndMismatch(t *testing.T) {
+	// Case 1: DB episode differs from title episode -> Mismatch = true, Episode remains DB
+	vids := []CatalogVideoDraft{
+		{
+			VideoID:         "v1",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 33,
+		},
+	}
+	res := inferEpisodes(vids, " - ")
+	if res[0].Episode != 33 {
+		t.Errorf("expected Episode to remain 33 (db), got %d", res[0].Episode)
+	}
+	if res[0].Source != "db" {
+		t.Errorf("expected Source 'db', got %q", res[0].Source)
+	}
+	if res[0].TitleEpisode != 4 {
+		t.Errorf("expected TitleEpisode 4, got %d", res[0].TitleEpisode)
+	}
+	if !res[0].Mismatch {
+		t.Errorf("expected Mismatch to be true when DB (33) != Title (4)")
+	}
+	if res[0].SortDate != "2026-07-21" {
+		t.Errorf("expected SortDate '2026-07-21', got %q", res[0].SortDate)
+	}
+
+	// Case 2: DB episode matches title episode -> Mismatch = false
+	vids2 := []CatalogVideoDraft{
+		{
+			VideoID:         "v2",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 4,
+		},
+	}
+	res2 := inferEpisodes(vids2, " - ")
+	if res2[0].Episode != 4 || res2[0].TitleEpisode != 4 || res2[0].Mismatch {
+		t.Errorf("expected Episode 4, TitleEpisode 4, Mismatch false; got %+v", res2[0])
+	}
+
+	// Case 3: No DB episode -> Episode takes TitleEpisode, Mismatch = false
+	vids3 := []CatalogVideoDraft{
+		{
+			VideoID:         "v3",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 0,
+		},
+	}
+	res3 := inferEpisodes(vids3, " - ")
+	if res3[0].Episode != 4 || res3[0].Source != "title" || res3[0].TitleEpisode != 4 || res3[0].Mismatch {
+		t.Errorf("expected Episode 4 (title), TitleEpisode 4, Mismatch false; got %+v", res3[0])
+	}
+
+	// Case 4: DB episode exists but title has no episode -> Mismatch = false
+	vids4 := []CatalogVideoDraft{
+		{
+			VideoID:         "v4",
+			Title:           "Persona 3 Reload Gameplay Only",
+			ExistingEpisode: 2,
+			PublishedAt:     "2026-07-20T12:00:00Z",
+		},
+	}
+	res4 := inferEpisodes(vids4, " - ")
+	if res4[0].Episode != 2 || res4[0].TitleEpisode != 0 || res4[0].Mismatch {
+		t.Errorf("expected Episode 2, TitleEpisode 0, Mismatch false; got %+v", res4[0])
+	}
+	if res4[0].SortDate != "2026-07-20T12:00:00Z" {
+		t.Errorf("expected SortDate fallback to publishedAt, got %q", res4[0].SortDate)
+	}
+}
+
+func TestInferEpisodes_ChronologyIssues(t *testing.T) {
+	// 1. Strictly ascending sequence -> no chronology issues
+	vidsClean := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 3"},
+	}
+	resClean := inferEpisodes(vidsClean, " - ")
+	for i, v := range resClean {
+		if v.ChronologyIssue {
+			t.Errorf("expected no chronology issue for v%d, got true", i+1)
+		}
+	}
+
+	// 2. Non-consecutive ascending sequence (gaps) -> no chronology issues
+	vidsGaps := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 4"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 7"},
+	}
+	resGaps := inferEpisodes(vidsGaps, " - ")
+	for i, v := range resGaps {
+		if v.ChronologyIssue {
+			t.Errorf("expected gaps to be valid chronology for v%d, got true", i+1)
+		}
+	}
+
+	// 3. Inverted pair -> both flagged
+	vidsInverted := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 4"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+	}
+	resInverted := inferEpisodes(vidsInverted, " - ")
+	if !resInverted[0].ChronologyIssue || !resInverted[1].ChronologyIssue {
+		t.Errorf("expected both videos in inverted pair to have ChronologyIssue=true; got %v, %v",
+			resInverted[0].ChronologyIssue, resInverted[1].ChronologyIssue)
+	}
+
+	// 4. Stale DB episode causing chronology inversion
+	vidsStaleDB := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1", ExistingEpisode: 33},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 3"},
+	}
+	resStaleDB := inferEpisodes(vidsStaleDB, " - ")
+	if !resStaleDB[0].Mismatch {
+		t.Errorf("expected v1 to have Mismatch=true")
+	}
+	if !resStaleDB[0].ChronologyIssue {
+		t.Errorf("expected v1 (ep 33 on day 1) to have ChronologyIssue=true")
+	}
+	if !resStaleDB[1].ChronologyIssue || !resStaleDB[2].ChronologyIssue {
+		t.Errorf("expected v2 and v3 to be flagged due to preceding ep 33; got v2=%v, v3=%v",
+			resStaleDB[1].ChronologyIssue, resStaleDB[2].ChronologyIssue)
+	}
+
+	// 5. Zero episode (unassigned) -> never has ChronologyIssue
+	vidsWithZero := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - Special Highlight", ExistingEpisode: 0},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 2"},
+	}
+	resZero := inferEpisodes(vidsWithZero, " - ")
+	if resZero[1].Episode != 0 {
+		t.Errorf("expected v2 Episode 0, got %d", resZero[1].Episode)
+	}
+	if resZero[1].ChronologyIssue {
+		t.Errorf("expected unassigned Episode 0 to have ChronologyIssue=false")
+	}
+	if resZero[0].ChronologyIssue || resZero[2].ChronologyIssue {
+		t.Errorf("expected v1 and v3 to have ChronologyIssue=false; got v1=%v, v3=%v",
+			resZero[0].ChronologyIssue, resZero[2].ChronologyIssue)
+	}
+
+	// 6. Same day videos ordered by PublishedAt time
+	vidsSameDay := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring Ep 2", PublishedAt: "2026-05-01T10:00:00Z"},
+		{VideoID: "v2", Title: "Elden Ring Ep 1", PublishedAt: "2026-05-01T15:00:00Z"},
+	}
+	resSameDay := inferEpisodes(vidsSameDay, " - ")
+	if !resSameDay[0].ChronologyIssue || !resSameDay[1].ChronologyIssue {
+		t.Errorf("expected same-day inverted PublishedAt time to flag ChronologyIssue=true")
+	}
+}
+
 func TestApplyPlaylistCatalog(t *testing.T) {
 	app := setupTestDB(t)
 	defer app.db.conn.Close()

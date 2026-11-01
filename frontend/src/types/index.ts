@@ -146,6 +146,10 @@ export interface CatalogVideoDraft {
   readonly source: "db" | "title" | "order" | "none";
   readonly conflict: boolean;
   readonly thumbnailUpdatedAt?: number;
+  readonly titleEpisode?: number;
+  readonly sortDate?: string;
+  readonly mismatch?: boolean;
+  readonly chronologyIssue?: boolean;
 }
 
 export type BatchItemStatus =

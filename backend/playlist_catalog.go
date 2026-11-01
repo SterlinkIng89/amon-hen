@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -23,6 +22,10 @@ type CatalogVideoDraft struct {
 	Source             string `json:"source"` // "db" | "title" | "order" | "none"
 	Conflict           bool   `json:"conflict"`
 	ThumbnailUpdatedAt int64  `json:"thumbnailUpdatedAt"`
+	TitleEpisode       int    `json:"titleEpisode"`
+	SortDate           string `json:"sortDate"`
+	Mismatch           bool   `json:"mismatch"`
+	ChronologyIssue    bool   `json:"chronologyIssue"`
 }
 
 type CatalogPlaylistSummary struct {
@@ -157,6 +160,48 @@ var (
 	epRegex2 = regexp.MustCompile(`#(\d+)\s*$`)
 )
 
+func resolveSortDate(title, publishedAt string) string {
+	if d := extractTitleDate(title); d != "" {
+		return d
+	}
+	return publishedAt
+}
+
+// compareVideoChronology returns true if a should appear strictly before b in chronological order.
+func compareVideoChronology(a, b CatalogVideoDraft) bool {
+	dateA := a.SortDate
+	if dateA == "" {
+		dateA = a.PublishedAt
+	}
+	dateB := b.SortDate
+	if dateB == "" {
+		dateB = b.PublishedAt
+	}
+
+	prefixA := dateA
+	if len(prefixA) >= 10 {
+		prefixA = prefixA[:10]
+	}
+	prefixB := dateB
+	if len(prefixB) >= 10 {
+		prefixB = prefixB[:10]
+	}
+
+	if prefixA != prefixB {
+		return prefixA < prefixB
+	}
+
+	if a.PublishedAt != b.PublishedAt {
+		return a.PublishedAt < b.PublishedAt
+	}
+
+	if a.Position != b.Position {
+		return a.Position < b.Position
+	}
+
+	return a.VideoID < b.VideoID
+}
+
 // inferEpisodes deduces episode numbers for a list of video drafts using DB state, titles, or publication order.
 func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 	result := make([]CatalogVideoDraft, len(videos))
@@ -166,46 +211,29 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 
 	// Pass 1: DB or Title parsing
 	for i := range result {
+		result[i].SortDate = resolveSortDate(result[i].Title, result[i].PublishedAt)
+		ep, _ := parseEpisodeFromTitle(result[i].Title, sep)
+		result[i].TitleEpisode = ep
+
 		if result[i].ExistingEpisode > 0 {
 			result[i].Episode = result[i].ExistingEpisode
 			result[i].Source = "db"
+			result[i].Mismatch = result[i].TitleEpisode > 0 && result[i].ExistingEpisode != result[i].TitleEpisode
 			hasAnyInferred = true
 			continue
 		}
 
-		// Try separator-based suffix e.g. "Game - 12/04/26 - 4"
-		if sep != "" && strings.Contains(result[i].Title, sep) {
-			parts := strings.Split(result[i].Title, sep)
-			lastPart := strings.TrimSpace(parts[len(parts)-1])
-			if n, err := strconv.Atoi(lastPart); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
-		}
-
-		// Regex fallbacks: Ep 7, Part 8, etc.
-		if m := epRegex1.FindStringSubmatch(result[i].Title); len(m) > 1 {
-			if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
-		}
-
-		if m := epRegex2.FindStringSubmatch(result[i].Title); len(m) > 1 {
-			if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
+		if result[i].TitleEpisode > 0 {
+			result[i].Episode = result[i].TitleEpisode
+			result[i].Source = "title"
+			result[i].Mismatch = false
+			hasAnyInferred = true
+			continue
 		}
 
 		result[i].Episode = 0
 		result[i].Source = "none"
+		result[i].Mismatch = false
 	}
 
 	// Pass 2: Fallback to order if NO videos had any number detected
@@ -244,6 +272,47 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 			result[i].Conflict = true
 		} else {
 			result[i].Conflict = false
+		}
+	}
+
+	// Pass 4: Chronology inversion detection (non-zero episodes in strictly ascending order over timeline)
+	var chronoIndices []int
+	for i := range result {
+		result[i].ChronologyIssue = false
+		if result[i].Episode > 0 {
+			chronoIndices = append(chronoIndices, i)
+		}
+	}
+
+	if len(chronoIndices) > 1 {
+		sort.SliceStable(chronoIndices, func(i, j int) bool {
+			return compareVideoChronology(result[chronoIndices[i]], result[chronoIndices[j]])
+		})
+
+		n := len(chronoIndices)
+		prefixMax := make([]int, n)
+		prefixMax[0] = result[chronoIndices[0]].Episode
+		for i := 1; i < n; i++ {
+			prefixMax[i] = prefixMax[i-1]
+			if ep := result[chronoIndices[i]].Episode; ep > prefixMax[i] {
+				prefixMax[i] = ep
+			}
+		}
+
+		suffixMin := make([]int, n)
+		suffixMin[n-1] = result[chronoIndices[n-1]].Episode
+		for i := n - 2; i >= 0; i-- {
+			suffixMin[i] = suffixMin[i+1]
+			if ep := result[chronoIndices[i]].Episode; ep < suffixMin[i] {
+				suffixMin[i] = ep
+			}
+		}
+
+		for i := 0; i < n; i++ {
+			ep := result[chronoIndices[i]].Episode
+			if (i > 0 && ep <= prefixMax[i-1]) || (i < n-1 && ep >= suffixMin[i+1]) {
+				result[chronoIndices[i]].ChronologyIssue = true
+			}
 		}
 	}
 
@@ -452,6 +521,11 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 			vids[i].Episode = 0
 			vids[i].Source = "none"
 			vids[i].Conflict = false
+			vids[i].Mismatch = false
+			vids[i].ChronologyIssue = false
+			ep, _ := parseEpisodeFromTitle(vids[i].Title, a.titleSep())
+			vids[i].TitleEpisode = ep
+			vids[i].SortDate = resolveSortDate(vids[i].Title, vids[i].PublishedAt)
 		}
 		draft.Videos = vids
 	}
