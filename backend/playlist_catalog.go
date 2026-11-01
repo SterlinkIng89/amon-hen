@@ -208,6 +208,32 @@ func compareVideoChronology(a, b CatalogVideoDraft) bool {
 	return a.VideoID < b.VideoID
 }
 
+// validateChronology verifies that drafts with positive episodes are in strictly ascending order when sorted chronologically.
+func validateChronology(drafts []CatalogVideoDraft) error {
+	var positiveDrafts []CatalogVideoDraft
+	for _, d := range drafts {
+		if d.Episode > 0 {
+			positiveDrafts = append(positiveDrafts, d)
+		}
+	}
+	if len(positiveDrafts) <= 1 {
+		return nil
+	}
+
+	sort.SliceStable(positiveDrafts, func(i, j int) bool {
+		return compareVideoChronology(positiveDrafts[i], positiveDrafts[j])
+	})
+
+	for i := 0; i < len(positiveDrafts)-1; i++ {
+		if positiveDrafts[i].Episode >= positiveDrafts[i+1].Episode {
+			return fmt.Errorf("chronological inversion detected: video %s (episode %d) cannot precede video %s (episode %d)",
+				positiveDrafts[i].VideoID, positiveDrafts[i].Episode,
+				positiveDrafts[i+1].VideoID, positiveDrafts[i+1].Episode)
+		}
+	}
+	return nil
+}
+
 // inferEpisodes deduces episode numbers for a list of video drafts using DB state, titles, or publication order.
 func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 	result := make([]CatalogVideoDraft, len(videos))
@@ -563,6 +589,80 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	return draft, nil
 }
 
+// validateVodAssignments checks for duplicate positive episode numbers and chronological inversions before applying VOD catalog.
+func (a *App) validateVodAssignments(playlistID string, assignments []CatalogAssignment) error {
+	seenEp := make(map[int]string)
+	var positiveAssignedIDs []string
+	for _, asgn := range assignments {
+		if asgn.VideoID == "" || asgn.Episode <= 0 {
+			continue
+		}
+		if prevID, exists := seenEp[asgn.Episode]; exists {
+			return fmt.Errorf("duplicate episode number %d assigned to multiple videos (%s, %s)", asgn.Episode, prevID, asgn.VideoID)
+		}
+		seenEp[asgn.Episode] = asgn.VideoID
+		positiveAssignedIDs = append(positiveAssignedIDs, asgn.VideoID)
+	}
+
+	if len(positiveAssignedIDs) <= 1 {
+		return nil
+	}
+
+	placeholders := make([]string, len(positiveAssignedIDs))
+	args := make([]interface{}, 0, len(positiveAssignedIDs)+1)
+	args = append(args, playlistID)
+	for i, id := range positiveAssignedIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	rows, err := a.db.conn.Query(fmt.Sprintf(`
+		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(pi.position, 0)
+		FROM yt_videos v
+		LEFT JOIN yt_playlist_items pi ON pi.video_id = v.id AND pi.playlist_id = ?
+		WHERE v.id IN (%s)
+	`, strings.Join(placeholders, ",")), args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type vidMeta struct {
+		title       string
+		publishedAt string
+		position    int
+	}
+	metaMap := make(map[string]vidMeta)
+	for rows.Next() {
+		var id, title, publishedAt string
+		var position int
+		if err := rows.Scan(&id, &title, &publishedAt, &position); err == nil {
+			metaMap[id] = vidMeta{
+				title:       title,
+				publishedAt: publishedAt,
+				position:    position,
+			}
+		}
+	}
+
+	var drafts []CatalogVideoDraft
+	for _, asgn := range assignments {
+		if asgn.Episode > 0 && asgn.VideoID != "" {
+			m := metaMap[asgn.VideoID]
+			drafts = append(drafts, CatalogVideoDraft{
+				VideoID:     asgn.VideoID,
+				Title:       m.title,
+				PublishedAt: m.publishedAt,
+				SortDate:    resolveSortDate(m.title, m.publishedAt),
+				Position:    m.position,
+				Episode:     asgn.Episode,
+			})
+		}
+	}
+
+	return validateChronology(drafts)
+}
+
 // ApplyPlaylistCatalog updates local database game tags, episodes, and TagPlaylistConfigs.
 func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	if a.db == nil {
@@ -575,6 +675,13 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	tag := strings.TrimSpace(req.Tag)
 
 	a.db.mu.Lock()
+	if req.Kind == "vod" {
+		if err := a.validateVodAssignments(req.PlaylistID, req.Assignments); err != nil {
+			a.db.mu.Unlock()
+			return err
+		}
+	}
+
 	tx, err := a.db.conn.Begin()
 	if err != nil {
 		a.db.mu.Unlock()
