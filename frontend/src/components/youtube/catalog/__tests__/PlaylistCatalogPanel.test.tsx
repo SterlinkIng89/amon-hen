@@ -217,6 +217,113 @@ describe("PlaylistCatalogPanel", () => {
 
     expect(await screen.findByText("Template saved!")).toBeInTheDocument();
   });
+
+  it("displays sync from title button and synchronizes episodes on click", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "Control Walkthrough", videoCount: 2, linked: false, tag: "control" },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-1",
+      title: "Control Walkthrough",
+      videoCount: 2,
+      kind: "vod",
+      tag: "control",
+      tagConfidence: "high",
+      linked: false,
+      videos: [
+        {
+          videoId: "yt-1",
+          title: "Control - Episode 10 - End Game",
+          existingEpisode: 1,
+          episode: 1,
+          titleEpisode: 10,
+          source: "db",
+          conflict: false,
+        },
+        {
+          videoId: "yt-2",
+          title: "Control - Episode 2 - Investigation",
+          existingEpisode: 2,
+          episode: 2,
+          titleEpisode: 2,
+          source: "title",
+          conflict: false,
+        },
+      ],
+    } as any);
+
+    render(<PlaylistCatalogPanel />);
+
+    const rowBtn = await screen.findByText("Control Walkthrough");
+    fireEvent.click(rowBtn);
+
+    // Mismatched row should show Title: 10 and Use 10 button
+    expect(await screen.findByText("Title: 10")).toBeInTheDocument();
+    const useBtn = screen.getByRole("button", { name: /Use 10/i });
+    expect(useBtn).toBeInTheDocument();
+
+    // Toolbar shows Sync all from title (1)
+    const syncAllBtn = screen.getByRole("button", { name: /Sync all from title/i });
+    expect(syncAllBtn).toHaveTextContent("1");
+
+    // Click Use 10 button
+    fireEvent.click(useBtn);
+
+    // Episode input should be updated to 10
+    const inputs = screen.getAllByRole("spinbutton");
+    expect((inputs[0] as HTMLInputElement).value).toBe("10");
+
+    // Mismatch pill should now be gone
+    expect(screen.queryByText("Title: 10")).not.toBeInTheDocument();
+    expect(syncAllBtn).toBeDisabled();
+  });
+
+  it("displays Out of order badge and disables save when episodes violate chronology", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "Control Walkthrough", videoCount: 2, linked: false, tag: "control" },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-1",
+      title: "Control Walkthrough",
+      videoCount: 2,
+      kind: "vod",
+      tag: "control",
+      tagConfidence: "high",
+      linked: false,
+      videos: [
+        {
+          videoId: "yt-1",
+          title: "Control - Part 2",
+          publishedAt: "2024-01-01T12:00:00Z",
+          sortDate: "2024-01-01",
+          existingEpisode: 2,
+          episode: 2,
+          position: 1,
+        },
+        {
+          videoId: "yt-2",
+          title: "Control - Part 1",
+          publishedAt: "2024-01-02T12:00:00Z",
+          sortDate: "2024-01-02",
+          existingEpisode: 1,
+          episode: 1,
+          position: 2,
+        },
+      ],
+    } as any);
+
+    render(<PlaylistCatalogPanel />);
+
+    const rowBtn = await screen.findByText("Control Walkthrough");
+    fireEvent.click(rowBtn);
+
+    // Both videos violate chronological order (ep 2 before ep 1)
+    expect(await screen.findAllByText("Out of order")).not.toHaveLength(0);
+
+    // Save & link playlist button must be disabled due to chronology errors
+    const saveBtn = screen.getByRole("button", { name: /save & link playlist/i });
+    expect(saveBtn).toBeDisabled();
+  });
 });
 
 

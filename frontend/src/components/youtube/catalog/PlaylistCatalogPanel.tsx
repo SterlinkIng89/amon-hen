@@ -48,6 +48,9 @@ export const PlaylistCatalogPanel: FC = () => {
     applyError,
     applySuccess,
     applyCatalog,
+    syncVideoFromTitle,
+    syncAllFromTitle,
+    chronologyIssueIds,
     autoNumberByDate,
     autoNumberByOrder,
     reverseEpisodes,
@@ -240,7 +243,7 @@ export const PlaylistCatalogPanel: FC = () => {
   const batchItems: BatchThumbnailInputItem[] = useMemo(() => {
     if (!draft?.videos) return [];
     return draft.videos.map((vid) => {
-      const ep = editedEpisodes[vid.videoId] ?? vid.episode ?? 1;
+      const ep = editedEpisodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
       return {
         videoId: vid.videoId,
         episode: ep,
@@ -530,6 +533,9 @@ export const PlaylistCatalogPanel: FC = () => {
                     onAutoNumberByDate={autoNumberByDate}
                     onAutoNumberByOrder={autoNumberByOrder}
                     onReverseEpisodes={reverseEpisodes}
+                    onSyncVideoFromTitle={syncVideoFromTitle}
+                    onSyncAllFromTitle={syncAllFromTitle}
+                    chronologyIssueIds={chronologyIssueIds}
                   />
                 </div>
 

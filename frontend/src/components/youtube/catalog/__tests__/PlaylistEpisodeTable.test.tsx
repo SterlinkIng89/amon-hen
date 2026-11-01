@@ -209,4 +209,205 @@ describe("PlaylistEpisodeTable", () => {
     expect(screen.getByText("Rendering...")).toBeInTheDocument();
     expect(screen.getByText("Uploading...")).toBeInTheDocument();
   });
+
+  it("renders Title pill and Use button for mismatched rows and triggers sync callback", () => {
+    const mismatchedVideos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Control - Episode 5 - Oldest House",
+        thumbnailUrl: "https://example.com/yt-1.jpg",
+        existingEpisode: 1,
+        episode: 1,
+        titleEpisode: 5,
+        source: "db",
+        conflict: false,
+        mismatch: true,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "yt-2",
+        title: "Control - Episode 2 - Unknown Caller",
+        thumbnailUrl: "https://example.com/yt-2.jpg",
+        existingEpisode: 2,
+        episode: 2,
+        titleEpisode: 2,
+        source: "title",
+        conflict: false,
+        mismatch: false,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const onSyncVideoFromTitle = vi.fn();
+    const onEpisodeChange = vi.fn();
+
+    const { rerender } = render(
+      <PlaylistEpisodeTable
+        videos={mismatchedVideos}
+        episodes={{ "yt-1": 1, "yt-2": 2 }}
+        onEpisodeChange={onEpisodeChange}
+        onSyncVideoFromTitle={onSyncVideoFromTitle}
+      />
+    );
+
+    expect(screen.getByText("Title: 5")).toBeInTheDocument();
+    const useBtn = screen.getByRole("button", { name: /Use 5/i });
+    expect(useBtn).toBeInTheDocument();
+
+    fireEvent.click(useBtn);
+    expect(onSyncVideoFromTitle).toHaveBeenCalledWith("yt-1");
+
+    // When onSyncVideoFromTitle is omitted, fallback calls onEpisodeChange
+    rerender(
+      <PlaylistEpisodeTable
+        videos={mismatchedVideos}
+        episodes={{ "yt-1": 1, "yt-2": 2 }}
+        onEpisodeChange={onEpisodeChange}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Use 5/i }));
+    expect(onEpisodeChange).toHaveBeenCalledWith("yt-1", 5);
+  });
+
+  it("renders Sync all from title toolbar button with count and handles click and disabled states", () => {
+    const mismatchedVideos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Control - Episode 4",
+        existingEpisode: 1,
+        episode: 1,
+        titleEpisode: 4,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "yt-2",
+        title: "Control - Episode 8",
+        existingEpisode: 2,
+        episode: 2,
+        titleEpisode: 8,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const onSyncAllFromTitle = vi.fn();
+
+    const { rerender } = render(
+      <PlaylistEpisodeTable
+        videos={mismatchedVideos}
+        episodes={{ "yt-1": 1, "yt-2": 2 }}
+        onEpisodeChange={vi.fn()}
+        onSyncAllFromTitle={onSyncAllFromTitle}
+      />
+    );
+
+    const syncAllBtn = screen.getByRole("button", { name: /Sync all from title/i });
+    expect(syncAllBtn).toBeInTheDocument();
+    expect(syncAllBtn).not.toBeDisabled();
+    expect(syncAllBtn).toHaveTextContent("2");
+
+    fireEvent.click(syncAllBtn);
+    expect(onSyncAllFromTitle).toHaveBeenCalledTimes(1);
+
+    // When episodes match title episodes, mismatchCount is 0 and button is disabled
+    rerender(
+      <PlaylistEpisodeTable
+        videos={mismatchedVideos}
+        episodes={{ "yt-1": 4, "yt-2": 8 }}
+        onEpisodeChange={vi.fn()}
+        onSyncAllFromTitle={onSyncAllFromTitle}
+      />
+    );
+    expect(screen.getByRole("button", { name: /Sync all from title/i })).toBeDisabled();
+  });
+
+  it("filters videos by Mismatch tab", () => {
+    const videos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Control - Episode 3",
+        existingEpisode: 1,
+        episode: 1,
+        titleEpisode: 3,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "yt-2",
+        title: "Control - Episode 2",
+        existingEpisode: 2,
+        episode: 2,
+        titleEpisode: 2,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    render(
+      <PlaylistEpisodeTable
+        videos={videos}
+        episodes={{ "yt-1": 1, "yt-2": 2 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Control - Episode 3")).toBeInTheDocument();
+    expect(screen.getByText("Control - Episode 2")).toBeInTheDocument();
+
+    const mismatchFilterBtn = screen.getByRole("button", { name: /Mismatch/i });
+    expect(mismatchFilterBtn).toHaveTextContent("1");
+    fireEvent.click(mismatchFilterBtn);
+
+    expect(screen.getByText("Control - Episode 3")).toBeInTheDocument();
+    expect(screen.queryByText("Control - Episode 2")).not.toBeInTheDocument();
+  });
+
+  it("displays Out of order badge on videos in chronologyIssueIds", () => {
+    const videos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Control - Episode 2",
+        existingEpisode: 2,
+        episode: 2,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "yt-2",
+        title: "Control - Episode 1",
+        existingEpisode: 1,
+        episode: 1,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    render(
+      <PlaylistEpisodeTable
+        videos={videos}
+        episodes={{ "yt-1": 2, "yt-2": 1 }}
+        onEpisodeChange={vi.fn()}
+        chronologyIssueIds={new Set(["yt-2"])}
+      />
+    );
+
+    const outOfOrderBadges = screen.getAllByText("Out of order");
+    expect(outOfOrderBadges).toHaveLength(1);
+  });
+
+  it("does not spuriously flag unassigned videos (0) as duplicate conflict", () => {
+    const unassignedVideos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-1",
+        title: "Bonus Video 1",
+        existingEpisode: 0,
+        episode: 0,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "yt-2",
+        title: "Bonus Video 2",
+        existingEpisode: 0,
+        episode: 0,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    render(
+      <PlaylistEpisodeTable
+        videos={unassignedVideos}
+        episodes={{ "yt-1": 0, "yt-2": 0 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Duplicate")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Invalid")).toHaveLength(2);
+  });
 });
+
