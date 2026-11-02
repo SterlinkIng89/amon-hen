@@ -31,6 +31,56 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+/**
+ * Parses and formats a raw duration string or number (ISO 8601 like PT1H23M45S,
+ * raw seconds "3600", or formatted "1:23:45") into a readable duration string.
+ */
+export function formatVideoDuration(raw?: string | number | null): string {
+  if (raw === undefined || raw === null || raw === "") return "";
+  if (typeof raw === "number") {
+    if (isNaN(raw) || raw < 0) return "";
+    return formatDuration(raw);
+  }
+  const str = raw.trim();
+  if (!str) return "";
+
+  // ISO 8601 duration: PT#H#M#S
+  const isoMatch = str.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+  if (isoMatch && (isoMatch[1] || isoMatch[2] || isoMatch[3])) {
+    const h = parseInt(isoMatch[1] || "0", 10);
+    const m = parseInt(isoMatch[2] || "0", 10);
+    const s = parseInt(isoMatch[3] || "0", 10);
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    }
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  // Already formatted string like "1:23:45" or "12:34"
+  if (/^\d+:\d{2}(:\d{2})?$/.test(str)) {
+    return str;
+  }
+
+  // Numeric seconds string like "3600" or "120.5"
+  const sec = parseFloat(str);
+  if (!isNaN(sec) && sec >= 0) {
+    return formatDuration(sec);
+  }
+
+  return "";
+}
+
+/**
+ * Extracts a concise display time (e.g. "14:30") from an ISO 8601 timestamp string.
+ */
+export function formatPublishedTime(isoDate?: string | null): string {
+  if (!isoDate) return "";
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+
 export function formatTimeWithSubseconds(sec: number): string {
   const clamped = Math.max(0, sec);
   const totalTenths = Math.round(clamped * 10);

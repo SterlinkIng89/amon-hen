@@ -2,7 +2,12 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { PlaylistEpisodeTable } from "../PlaylistEpisodeTable";
 import { backend } from "../../../../../wailsjs/go/models";
+import { BrowserOpenURL } from "../../../../../wailsjs/runtime/runtime";
 import { BatchItem } from "../../../../types";
+
+vi.mock("../../../../../wailsjs/runtime/runtime", () => ({
+  BrowserOpenURL: vi.fn(),
+}));
 
 describe("PlaylistEpisodeTable", () => {
   const sampleVideos: backend.CatalogVideoDraft[] = [
@@ -140,32 +145,6 @@ describe("PlaylistEpisodeTable", () => {
     expect(screen.queryByText(/Unknown Caller/i)).not.toBeInTheDocument();
   });
 
-  it("invokes numbering tool callbacks", () => {
-    const onAutoNumberByDate = vi.fn();
-    const onAutoNumberByOrder = vi.fn();
-    const onReverseEpisodes = vi.fn();
-
-    render(
-      <PlaylistEpisodeTable
-        videos={sampleVideos}
-        episodes={{ "yt-1": 1, "yt-2": 2 }}
-        onEpisodeChange={vi.fn()}
-        onAutoNumberByDate={onAutoNumberByDate}
-        onAutoNumberByOrder={onAutoNumberByOrder}
-        onReverseEpisodes={onReverseEpisodes}
-      />
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /1..N by date/i }));
-    expect(onAutoNumberByDate).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole("button", { name: /1..N by order/i }));
-    expect(onAutoNumberByOrder).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole("button", { name: /Reverse/i }));
-    expect(onReverseEpisodes).toHaveBeenCalledTimes(1);
-  });
-
   it("invokes onSelectPreviewVideo and onUpdateSingleVideo", () => {
     const onSelectPreviewVideo = vi.fn();
     const onUpdateSingleVideo = vi.fn();
@@ -185,7 +164,7 @@ describe("PlaylistEpisodeTable", () => {
     fireEvent.click(previewButtons[0]);
     expect(onSelectPreviewVideo).toHaveBeenCalledWith("yt-1");
 
-    const updateButtons = screen.getAllByRole("button", { name: /Update thumbnail for/i });
+    const updateButtons = screen.getAllByRole("button", { name: /Upload thumbnail for/i });
     expect(updateButtons).toHaveLength(2);
     fireEvent.click(updateButtons[1]);
     expect(onUpdateSingleVideo).toHaveBeenCalledWith("yt-2");
@@ -560,85 +539,25 @@ describe("PlaylistEpisodeTable", () => {
     expect(getRowTitles()).toEqual(["Video One", "Video Two", "Video Three"]);
   });
 
-  it("renders direction hint notice when isReverseChronological is true", () => {
+  it("opens video on YouTube when clicking watch button", () => {
     render(
       <PlaylistEpisodeTable
         videos={sampleVideos}
-        episodes={{ "yt-1": 1 }}
+        episodes={{ "yt-1": 1, "yt-2": 2 }}
         onEpisodeChange={vi.fn()}
-        isReverseChronological={true}
       />
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      /playlist runs newest-first \(reverse chronological\)/i
-    );
-  });
-
-  it("guards auto-numbering with confirmation banner when confirmed episodes are affected", () => {
-    const onAutoNumberByDate = vi.fn();
-    const mockImpact = {
-      affectedCount: 3,
-      affectedVideoIds: ["yt-1", "yt-2", "yt-3"],
-      reason: "title_match" as const,
-    };
-    const getNumberingImpact = vi.fn().mockReturnValue(mockImpact);
-
-    render(
-      <PlaylistEpisodeTable
-        videos={sampleVideos}
-        episodes={{ "yt-1": 1 }}
-        onEpisodeChange={vi.fn()}
-        onAutoNumberByDate={onAutoNumberByDate}
-        getNumberingImpact={getNumberingImpact}
-      />
-    );
-
-    const button = screen.getByRole("button", { name: "1..N by date" });
-    fireEvent.click(button);
-
-    // Call was guarded: callback not invoked yet, confirmation alert displayed
-    expect(onAutoNumberByDate).not.toHaveBeenCalled();
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(/will overwrite 3 videos whose episode currently matches the video title/i);
-
-    // Cancel dismisses banner without executing
-    const cancelButton = screen.getByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelButton);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(onAutoNumberByDate).not.toHaveBeenCalled();
-
-    // Trigger again and confirm
-    fireEvent.click(button);
-    expect(screen.getByRole("alert")).toBeInTheDocument();
-    const confirmButton = screen.getByRole("button", { name: /overwrite & apply/i });
-    fireEvent.click(confirmButton);
-
-    expect(onAutoNumberByDate).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("applies auto-numbering immediately without confirmation if affectedCount is 0", () => {
-    const onAutoNumberByOrder = vi.fn();
-    const getNumberingImpact = vi.fn().mockReturnValue({
-      affectedCount: 0,
-      affectedVideoIds: [],
-      reason: "none" as const,
+    const watchBtn = screen.getByRole("button", {
+      name: `Watch ${sampleVideos[0].title} on YouTube`,
     });
+    expect(watchBtn).toBeInTheDocument();
 
-    render(
-      <PlaylistEpisodeTable
-        videos={sampleVideos}
-        episodes={{ "yt-1": 1 }}
-        onEpisodeChange={vi.fn()}
-        onAutoNumberByOrder={onAutoNumberByOrder}
-        getNumberingImpact={getNumberingImpact}
-      />
+    fireEvent.click(watchBtn);
+
+    expect(BrowserOpenURL).toHaveBeenCalledWith(
+      `https://www.youtube.com/watch?v=${sampleVideos[0].videoId}`
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "1..N by order" }));
-    expect(onAutoNumberByOrder).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 

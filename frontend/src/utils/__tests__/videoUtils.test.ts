@@ -13,6 +13,8 @@ import {
   groupVideos,
   extractGamePrefixFromTitle,
   groupVideosYT,
+  formatVideoDuration,
+  formatPublishedTime,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -839,6 +841,48 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       const res = groupVideosYT([v2, v1], "playlist", "recent");
       expect(res[0].videos[0].id).toBe("second");
       expect(res[0].videos[1].id).toBe("first");
+    });
+  });
+
+  describe("formatVideoDuration", () => {
+    it("handles ISO 8601 durations", () => {
+      expect(formatVideoDuration("PT1H23M45S")).toBe("1:23:45");
+      expect(formatVideoDuration("PT45M12S")).toBe("45:12");
+      expect(formatVideoDuration("PT30S")).toBe("0:30");
+      expect(formatVideoDuration("PT1H")).toBe("1:00:00");
+      expect(formatVideoDuration("PT5M")).toBe("5:00");
+    });
+
+    it("handles numeric seconds", () => {
+      expect(formatVideoDuration(3600)).toBe("1:00:00");
+      expect(formatVideoDuration("3665")).toBe("1:01:05");
+      expect(formatVideoDuration(125)).toBe("2:05");
+    });
+
+    it("handles pre-formatted strings", () => {
+      expect(formatVideoDuration("1:23:45")).toBe("1:23:45");
+      expect(formatVideoDuration("45:12")).toBe("45:12");
+    });
+
+    it("returns empty string on empty or invalid inputs", () => {
+      expect(formatVideoDuration("")).toBe("");
+      expect(formatVideoDuration(undefined)).toBe("");
+      expect(formatVideoDuration(null)).toBe("");
+      expect(formatVideoDuration("invalid")).toBe("");
+      expect(formatVideoDuration(-10)).toBe("");
+    });
+  });
+
+  describe("formatPublishedTime", () => {
+    it("extracts HH:MM time from ISO timestamp", () => {
+      const res = formatPublishedTime("2024-03-15T18:30:00Z");
+      expect(res).toMatch(/^\d{2}:\d{2}$/);
+    });
+
+    it("returns empty string on invalid dates", () => {
+      expect(formatPublishedTime("")).toBe("");
+      expect(formatPublishedTime(undefined)).toBe("");
+      expect(formatPublishedTime("not-a-date")).toBe("");
     });
   });
 });

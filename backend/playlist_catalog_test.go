@@ -247,14 +247,15 @@ func TestInferEpisodes_ChronologyIssues(t *testing.T) {
 			resZero[0].ChronologyIssue, resZero[2].ChronologyIssue)
 	}
 
-	// 6. Same day videos ordered by PublishedAt time
+	// 6. Same day videos (upload order is ignored and does NOT flag ChronologyIssue)
 	vidsSameDay := []CatalogVideoDraft{
 		{VideoID: "v1", Title: "Elden Ring Ep 2", PublishedAt: "2026-05-01T10:00:00Z"},
 		{VideoID: "v2", Title: "Elden Ring Ep 1", PublishedAt: "2026-05-01T15:00:00Z"},
 	}
 	resSameDay := inferEpisodes(vidsSameDay, " - ")
-	if !resSameDay[0].ChronologyIssue || !resSameDay[1].ChronologyIssue {
-		t.Errorf("expected same-day inverted PublishedAt time to flag ChronologyIssue=true")
+	if resSameDay[0].ChronologyIssue || resSameDay[1].ChronologyIssue {
+		t.Errorf("expected same-day videos to NOT flag ChronologyIssue; got v1=%v, v2=%v",
+			resSameDay[0].ChronologyIssue, resSameDay[1].ChronologyIssue)
 	}
 }
 
@@ -416,8 +417,8 @@ func TestGetPlaylistCatalogDraft_ThumbnailAndTagPrecedence(t *testing.T) {
 	}
 
 	_, err = app.db.conn.Exec(`
-		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at)
-		VALUES ('v-thumb-1', 'Episode 1', '2026-01-02T00:00:00Z', 'https://example.com/yt_v1.jpg?v=1777888999', 1777888999)
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, duration)
+		VALUES ('v-thumb-1', 'Episode 1', '2026-01-02T00:00:00Z', 'https://example.com/yt_v1.jpg?v=1777888999', 1777888999, 'PT1H12M34S')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert video: %v", err)
@@ -456,6 +457,9 @@ func TestGetPlaylistCatalogDraft_ThumbnailAndTagPrecedence(t *testing.T) {
 	}
 	if draft.Videos[0].ThumbnailUpdatedAt != 1777888999 {
 		t.Errorf("expected video ThumbnailUpdatedAt 1777888999, got %d", draft.Videos[0].ThumbnailUpdatedAt)
+	}
+	if draft.Videos[0].Duration != "PT1H12M34S" {
+		t.Errorf("expected video Duration 'PT1H12M34S', got %s", draft.Videos[0].Duration)
 	}
 }
 
@@ -781,5 +785,54 @@ func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing
 		t.Errorf("expected v3.ThumbnailEpisode 3 backfilled from matched episode cache file, got %d", v3.ThumbnailEpisode)
 	}
 }
+
+func TestPreviewCatalogTitleUpdates(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.config.TitleSeparator = " - "
+
+	// Insert test video records
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, episode, published_at)
+		VALUES 
+			('vid-p3r-26', 'Persona 3 Reload - 10/08/26 - 26', 26, '2026-08-10T12:00:00Z'),
+			('vid-p3r-27', 'Persona 3 Reload - 11/08/26 - 27', 27, '2026-08-11T12:00:00Z'),
+			('vid-no-ep', 'Persona 3 Reload Special Stream', 0, '2026-08-12T12:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	assignments := []CatalogAssignment{
+		{VideoID: "vid-p3r-26", Episode: 27}, // needs title update from 26 -> 27
+		{VideoID: "vid-p3r-27", Episode: 27}, // already matches title episode 27 -> skipped
+		{VideoID: "vid-no-ep", Episode: 28},  // cannot parse/rewrite episode -> skipped
+	}
+
+	changes, err := app.PreviewCatalogTitleUpdates(assignments)
+	if err != nil {
+		t.Fatalf("PreviewCatalogTitleUpdates failed: %v", err)
+	}
+
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(changes))
+	}
+
+	ch := changes[0]
+	if ch.VideoID != "vid-p3r-26" {
+		t.Errorf("expected videoId 'vid-p3r-26', got %q", ch.VideoID)
+	}
+	if ch.OldTitle != "Persona 3 Reload - 10/08/26 - 26" {
+		t.Errorf("expected OldTitle 'Persona 3 Reload - 10/08/26 - 26', got %q", ch.OldTitle)
+	}
+	if ch.NewTitle != "Persona 3 Reload - 10/08/26 - 27" {
+		t.Errorf("expected NewTitle 'Persona 3 Reload - 10/08/26 - 27', got %q", ch.NewTitle)
+	}
+	if ch.OldEpisode != 26 || ch.NewEpisode != 27 {
+		t.Errorf("expected episodes 26 -> 27, got %d -> %d", ch.OldEpisode, ch.NewEpisode)
+	}
+}
+
 
 

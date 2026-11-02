@@ -15,6 +15,7 @@ type CatalogVideoDraft struct {
 	Title              string `json:"title"`
 	PublishedAt        string `json:"publishedAt"`
 	ThumbnailUrl       string `json:"thumbnailUrl"`
+	Duration           string `json:"duration,omitempty"`
 	LocalFile          string `json:"localFile,omitempty"`
 	Position           int    `json:"position"`
 	ExistingEpisode    int    `json:"existingEpisode"`
@@ -173,34 +174,44 @@ func resolveSortDate(title, publishedAt string) string {
 	return publishedAt
 }
 
+func extractCalendarDate(draft CatalogVideoDraft) string {
+	d := draft.SortDate
+	if d == "" {
+		d = extractTitleDate(draft.Title)
+	}
+	if d == "" && len(draft.PublishedAt) >= 10 {
+		d = draft.PublishedAt[:10]
+	}
+	if len(d) >= 10 {
+		return d[:10]
+	}
+	return d
+}
+
 // compareVideoChronology returns true if a should appear strictly before b in chronological order.
 func compareVideoChronology(a, b CatalogVideoDraft) bool {
-	dateA := a.SortDate
-	if dateA == "" {
-		dateA = a.PublishedAt
-	}
-	dateB := b.SortDate
-	if dateB == "" {
-		dateB = b.PublishedAt
+	dateA := extractCalendarDate(a)
+	dateB := extractCalendarDate(b)
+
+	if dateA != dateB {
+		if dateA != "" && dateB != "" {
+			return dateA < dateB
+		}
+		if dateA != "" {
+			return true
+		}
+		if dateB != "" {
+			return false
+		}
 	}
 
-	prefixA := dateA
-	if len(prefixA) >= 10 {
-		prefixA = prefixA[:10]
-	}
-	prefixB := dateB
-	if len(prefixB) >= 10 {
-		prefixB = prefixB[:10]
+	// Same calendar day: do NOT use PublishedAt time (upload order can be inverted).
+	// Tie-break by TitleEpisode if both have it
+	if a.TitleEpisode > 0 && b.TitleEpisode > 0 && a.TitleEpisode != b.TitleEpisode {
+		return a.TitleEpisode < b.TitleEpisode
 	}
 
-	if prefixA != prefixB {
-		return prefixA < prefixB
-	}
-
-	if a.PublishedAt != b.PublishedAt {
-		return a.PublishedAt < b.PublishedAt
-	}
-
+	// Tie-break by Position in playlist
 	if a.Position != b.Position {
 		return a.Position < b.Position
 	}
@@ -208,27 +219,67 @@ func compareVideoChronology(a, b CatalogVideoDraft) bool {
 	return a.VideoID < b.VideoID
 }
 
-// validateChronology verifies that drafts with positive episodes are in strictly ascending order when sorted chronologically.
+// validateChronology verifies that drafts with positive episodes on earlier calendar dates strictly precede those on later calendar dates.
 func validateChronology(drafts []CatalogVideoDraft) error {
-	var positiveDrafts []CatalogVideoDraft
+	type dayStat struct {
+		minEp int
+		maxEp int
+	}
+	dayMap := make(map[string]*dayStat)
+	var dates []string
+
 	for _, d := range drafts {
-		if d.Episode > 0 {
-			positiveDrafts = append(positiveDrafts, d)
+		if d.Episode <= 0 {
+			continue
+		}
+		date := extractCalendarDate(d)
+		if date == "" {
+			continue
+		}
+		if stat, exists := dayMap[date]; exists {
+			if d.Episode < stat.minEp {
+				stat.minEp = d.Episode
+			}
+			if d.Episode > stat.maxEp {
+				stat.maxEp = d.Episode
+			}
+		} else {
+			dayMap[date] = &dayStat{
+				minEp: d.Episode,
+				maxEp: d.Episode,
+			}
+			dates = append(dates, date)
 		}
 	}
-	if len(positiveDrafts) <= 1 {
+
+	if len(dates) <= 1 {
 		return nil
 	}
 
-	sort.SliceStable(positiveDrafts, func(i, j int) bool {
-		return compareVideoChronology(positiveDrafts[i], positiveDrafts[j])
-	})
+	sort.Strings(dates)
+	k := len(dates)
+	prefixMax := make([]int, k)
+	prefixMax[0] = dayMap[dates[0]].maxEp
+	for i := 1; i < k; i++ {
+		prefixMax[i] = prefixMax[i-1]
+		if ep := dayMap[dates[i]].maxEp; ep > prefixMax[i] {
+			prefixMax[i] = ep
+		}
+	}
 
-	for i := 0; i < len(positiveDrafts)-1; i++ {
-		if positiveDrafts[i].Episode >= positiveDrafts[i+1].Episode {
-			return fmt.Errorf("chronological inversion detected: video %s (episode %d) cannot precede video %s (episode %d)",
-				positiveDrafts[i].VideoID, positiveDrafts[i].Episode,
-				positiveDrafts[i+1].VideoID, positiveDrafts[i+1].Episode)
+	suffixMin := make([]int, k)
+	suffixMin[k-1] = dayMap[dates[k-1]].minEp
+	for i := k - 2; i >= 0; i-- {
+		suffixMin[i] = suffixMin[i+1]
+		if ep := dayMap[dates[i]].minEp; ep < suffixMin[i] {
+			suffixMin[i] = ep
+		}
+	}
+
+	for i := 0; i < k-1; i++ {
+		if prefixMax[i] >= suffixMin[i+1] {
+			return fmt.Errorf("chronological inversion detected: day %s has episode %d which cannot precede day %s with episode %d",
+				dates[i], prefixMax[i], dates[i+1], suffixMin[i+1])
 		}
 	}
 	return nil
@@ -307,43 +358,69 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 		}
 	}
 
-	// Pass 4: Chronology inversion detection (non-zero episodes in strictly ascending order over timeline)
-	var chronoIndices []int
+	// Pass 4: Chronology inversion detection (cross-day calendar date ordering)
+	type dayStat struct {
+		minEp   int
+		maxEp   int
+		indices []int
+	}
+	dayMap := make(map[string]*dayStat)
+	var dates []string
+
 	for i := range result {
 		result[i].ChronologyIssue = false
-		if result[i].Episode > 0 {
-			chronoIndices = append(chronoIndices, i)
+		if result[i].Episode <= 0 {
+			continue
+		}
+		date := extractCalendarDate(result[i])
+		if date == "" {
+			continue
+		}
+		if stat, exists := dayMap[date]; exists {
+			if result[i].Episode < stat.minEp {
+				stat.minEp = result[i].Episode
+			}
+			if result[i].Episode > stat.maxEp {
+				stat.maxEp = result[i].Episode
+			}
+			stat.indices = append(stat.indices, i)
+		} else {
+			dayMap[date] = &dayStat{
+				minEp:   result[i].Episode,
+				maxEp:   result[i].Episode,
+				indices: []int{i},
+			}
+			dates = append(dates, date)
 		}
 	}
 
-	if len(chronoIndices) > 1 {
-		sort.SliceStable(chronoIndices, func(i, j int) bool {
-			return compareVideoChronology(result[chronoIndices[i]], result[chronoIndices[j]])
-		})
-
-		n := len(chronoIndices)
-		prefixMax := make([]int, n)
-		prefixMax[0] = result[chronoIndices[0]].Episode
-		for i := 1; i < n; i++ {
+	if len(dates) > 1 {
+		sort.Strings(dates)
+		k := len(dates)
+		prefixMax := make([]int, k)
+		prefixMax[0] = dayMap[dates[0]].maxEp
+		for i := 1; i < k; i++ {
 			prefixMax[i] = prefixMax[i-1]
-			if ep := result[chronoIndices[i]].Episode; ep > prefixMax[i] {
+			if ep := dayMap[dates[i]].maxEp; ep > prefixMax[i] {
 				prefixMax[i] = ep
 			}
 		}
 
-		suffixMin := make([]int, n)
-		suffixMin[n-1] = result[chronoIndices[n-1]].Episode
-		for i := n - 2; i >= 0; i-- {
+		suffixMin := make([]int, k)
+		suffixMin[k-1] = dayMap[dates[k-1]].minEp
+		for i := k - 2; i >= 0; i-- {
 			suffixMin[i] = suffixMin[i+1]
-			if ep := result[chronoIndices[i]].Episode; ep < suffixMin[i] {
+			if ep := dayMap[dates[i]].minEp; ep < suffixMin[i] {
 				suffixMin[i] = ep
 			}
 		}
 
-		for i := 0; i < n; i++ {
-			ep := result[chronoIndices[i]].Episode
-			if (i > 0 && ep <= prefixMax[i-1]) || (i < n-1 && ep >= suffixMin[i+1]) {
-				result[chronoIndices[i]].ChronologyIssue = true
+		for i := 0; i < k; i++ {
+			for _, idx := range dayMap[dates[i]].indices {
+				ep := result[idx].Episode
+				if (i > 0 && ep <= prefixMax[i-1]) || (i < k-1 && ep >= suffixMin[i+1]) {
+					result[idx].ChronologyIssue = true
+				}
 			}
 		}
 	}
@@ -493,7 +570,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''),
 		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0),
-		       COALESCE(v.custom_thumb_episode, 0)
+		       COALESCE(v.custom_thumb_episode, 0), COALESCE(v.duration, '')
 		FROM yt_playlist_items pi
 		JOIN yt_videos v ON pi.video_id = v.id
 		WHERE pi.playlist_id = ?
@@ -509,7 +586,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	for rows.Next() {
 		var vd CatalogVideoDraft
 		var localFile string
-		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode); err == nil {
+		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode, &vd.Duration); err == nil {
 			vd.LocalFile = localFile
 			resolvedThumb, modTime, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
 			vd.ThumbnailUrl = resolvedThumb
@@ -790,3 +867,5 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	appLog("[Catalog] Applied catalog for tag %q (%s) to playlist %s with %d assignments (local updated: %d)", tag, req.Kind, req.PlaylistID, len(req.Assignments), len(localSyncList))
 	return nil
 }
+
+

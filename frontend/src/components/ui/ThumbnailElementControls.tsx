@@ -52,7 +52,7 @@ function QuickAlignmentControl({
 
       <div className="flex items-center gap-3">
         {/* 3x3 Anchor Matrix */}
-        <div className="grid grid-cols-3 gap-1 p-1 bg-black/40 rounded border border-border-subtle/80 shrink-0">
+        <div className="grid grid-cols-3 gap-1 p-1 bg-black/40 rounded shrink-0">
           {PRESET_MATRIX.map(({ id, shortLabel }) => {
             const isCorner = ["top-left", "top-right", "bottom-left", "bottom-right"].includes(id);
             if (cornersOnly && !isCorner && id !== "center") {

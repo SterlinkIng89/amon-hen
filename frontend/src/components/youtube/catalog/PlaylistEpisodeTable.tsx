@@ -1,7 +1,6 @@
 import { FC, useMemo, useState } from "react";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem } from "../../../types";
-import { OverwriteImpact } from "../../../hooks/usePlaylistCatalog";
 import { PlaylistEpisodeRow } from "./PlaylistEpisodeRow";
 
 export type VideoFilter = "all" | "mismatch" | "needs-thumb" | "synced";
@@ -26,14 +25,10 @@ export interface PlaylistEpisodeTableProps {
   readonly onUpdateSingleVideo?: (videoId: string) => void;
   readonly isBatchRunning?: boolean;
   readonly isAssetsReady?: boolean;
-  readonly onAutoNumberByDate?: () => void;
-  readonly onAutoNumberByOrder?: () => void;
-  readonly onReverseEpisodes?: () => void;
   readonly onSyncVideoFromTitle?: (videoId: string) => void;
   readonly onSyncAllFromTitle?: () => void;
   readonly chronologyIssueIds?: ReadonlySet<string>;
-  readonly isReverseChronological?: boolean;
-  readonly getNumberingImpact?: (mode: "date" | "order" | "reverse") => OverwriteImpact;
+  readonly onResolveDuplicate?: (episode: number) => void;
 }
 
 export function isVideoThumbnailSynced(
@@ -107,21 +102,13 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   onUpdateSingleVideo,
   isBatchRunning = false,
   isAssetsReady = true,
-  onAutoNumberByDate,
-  onAutoNumberByOrder,
-  onReverseEpisodes,
   onSyncVideoFromTitle,
   onSyncAllFromTitle,
   chronologyIssueIds,
-  isReverseChronological = false,
-  getNumberingImpact,
+  onResolveDuplicate,
 }) => {
   const [filter, setFilter] = useState<VideoFilter>("all");
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
-  const [pendingNumbering, setPendingNumbering] = useState<{
-    readonly mode: "date" | "order" | "reverse";
-    readonly impact: OverwriteImpact;
-  } | null>(null);
 
   const batchItemMap = useMemo(() => {
     const map = new Map<string, BatchItem>();
@@ -242,36 +229,6 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     });
   };
 
-  const executeNumbering = (mode: "date" | "order" | "reverse") => {
-    if (mode === "date") onAutoNumberByDate?.();
-    else if (mode === "order") onAutoNumberByOrder?.();
-    else if (mode === "reverse") onReverseEpisodes?.();
-  };
-
-  const handleRequestNumbering = (mode: "date" | "order" | "reverse") => {
-    if (isBatchRunning) return;
-    const impact = getNumberingImpact
-      ? getNumberingImpact(mode)
-      : { affectedCount: 0, affectedVideoIds: [], reason: "none" as const };
-
-    if (impact.affectedCount > 0) {
-      setPendingNumbering({ mode, impact });
-    } else {
-      executeNumbering(mode);
-    }
-  };
-
-  const handleConfirmNumbering = () => {
-    if (pendingNumbering) {
-      executeNumbering(pendingNumbering.mode);
-      setPendingNumbering(null);
-    }
-  };
-
-  const handleCancelNumbering = () => {
-    setPendingNumbering(null);
-  };
-
   const allFilteredSelected = useMemo(() => {
     if (!selectedVideoIds || sortedVideos.length === 0) return false;
     return sortedVideos.every((vid) => selectedVideoIds.has(vid.videoId));
@@ -333,10 +290,6 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   const handleClearSelection = () => {
     onSelectionChange?.(new Set());
   };
-
-  const hasNumberingTools = Boolean(
-    onAutoNumberByDate || onAutoNumberByOrder || onReverseEpisodes
-  );
 
   return (
     <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface">
@@ -428,109 +381,21 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
           )}
         </div>
 
-        {/* Episode Actions & Numbering Tools */}
-        {(hasNumberingTools || Boolean(onSyncAllFromTitle)) && (
+        {/* Episode Actions */}
+        {onSyncAllFromTitle && (
           <div className="flex items-center gap-2">
-            {onSyncAllFromTitle && (
-              <button
-                type="button"
-                onClick={onSyncAllFromTitle}
-                disabled={mismatchCount === 0 || isBatchRunning}
-                className="px-2 py-1 rounded-md bg-accent/10 hover:bg-accent/20 border border-accent/30 text-[11px] font-medium text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Synchronize all edited episodes with parsed title episode numbers"
-              >
-                Sync all from title <span className="font-mono tabular-nums">({mismatchCount})</span>
-              </button>
-            )}
-
-            {hasNumberingTools && (
-              <div className="flex items-center gap-1.5 border-l border-border-subtle pl-2">
-                <span className="text-[11px] text-text-muted mr-1">Numbering:</span>
-                {onAutoNumberByDate && (
-                  <button
-                    type="button"
-                    onClick={() => handleRequestNumbering("date")}
-                    disabled={isBatchRunning}
-                    className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Assign episodes 1..N sorted chronologically by upload date"
-                  >
-                    1..N by date
-                  </button>
-                )}
-                {onAutoNumberByOrder && (
-                  <button
-                    type="button"
-                    onClick={() => handleRequestNumbering("order")}
-                    disabled={isBatchRunning}
-                    className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Assign episodes 1..N matching playlist position"
-                  >
-                    1..N by order
-                  </button>
-                )}
-                {onReverseEpisodes && (
-                  <button
-                    type="button"
-                    onClick={() => handleRequestNumbering("reverse")}
-                    disabled={isBatchRunning}
-                    className="px-2 py-1 rounded-md bg-elevated hover:bg-elevated/80 border border-border-subtle text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Invert current episode numbering order"
-                  >
-                    Reverse
-                  </button>
-                )}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={onSyncAllFromTitle}
+              disabled={mismatchCount === 0 || isBatchRunning}
+              className="px-2 py-1 rounded-md bg-accent/10 hover:bg-accent/20 border border-accent/30 text-[11px] font-medium text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Synchronize all edited episodes with parsed title episode numbers"
+            >
+              Sync all from title <span className="font-mono tabular-nums">({mismatchCount})</span>
+            </button>
           </div>
         )}
       </div>
-
-      {/* Confirmation Guard for Numbering Overwrites */}
-      {pendingNumbering && (
-        <div
-          role="alert"
-          className="px-3.5 py-2.5 bg-fire-dim/30 border-b border-border-fire text-xs flex flex-wrap items-center justify-between gap-3 text-red-200"
-        >
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-red-400">Notice:</span>
-            <span>
-              Assigning {pendingNumbering.mode === "date" ? "1..N by date" : pendingNumbering.mode === "order" ? "1..N by order" : "reverse order"} will overwrite{" "}
-              <strong className="font-semibold text-white">{pendingNumbering.impact.affectedCount}</strong> video{pendingNumbering.impact.affectedCount > 1 ? "s" : ""} whose episode currently matches {pendingNumbering.impact.reason === "title_match" ? "the video title" : pendingNumbering.impact.reason === "db_match" ? "the database" : "title or database records"}.
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleConfirmNumbering}
-              className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-medium text-[11px] transition-colors"
-            >
-              Overwrite & apply
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelNumbering}
-              className="px-2.5 py-1 rounded bg-elevated hover:bg-elevated/80 border border-border-subtle text-text-secondary hover:text-text-primary text-[11px] transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Direction Hint for Reverse-Chronological Playlists */}
-      {isReverseChronological && !pendingNumbering && (
-        <div
-          role="status"
-          className="px-3.5 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-300 flex items-center justify-between gap-2"
-        >
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-amber-400">Direction hint:</span>
-            <span>
-              Playlist runs newest-first (reverse chronological). Numbering by order will invert chronology; consider using <strong>1..N by date</strong>.
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Table Container */}
       <div className="overflow-x-auto max-h-[480px] 2xl:max-h-[640px] overflow-y-auto custom-scrollbar">
@@ -590,7 +455,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 className="w-36 min-w-36 text-center"
                 onSort={handleToggleSort}
               />
-              <th className="py-2.5 px-3 font-semibold text-[11px] w-24 min-w-24 text-right">Action</th>
+              <th className="py-2.5 px-3 font-semibold text-[11px] w-28 min-w-28 text-right">Thumbnail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle/50">
@@ -633,6 +498,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     onEpisodeChange={onEpisodeChange}
                     onSyncVideoFromTitle={onSyncVideoFromTitle}
                     onUpdateSingleVideo={onUpdateSingleVideo}
+                    onResolveDuplicate={onResolveDuplicate}
                   />
                 );
               })

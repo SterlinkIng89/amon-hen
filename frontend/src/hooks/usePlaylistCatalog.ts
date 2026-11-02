@@ -3,8 +3,11 @@ import {
   ListCatalogPlaylists,
   GetPlaylistCatalogDraft,
   ApplyPlaylistCatalog,
+  PreviewCatalogTitleUpdates,
+  ApplyCatalogTitleUpdates,
 } from "../../wailsjs/go/backend/App";
 import { backend } from "../../wailsjs/go/models";
+import { renumberAfterReorder } from "../utils/episodeRenumber";
 
 export function usePlaylistCatalog() {
   const [playlists, setPlaylists] = useState<backend.CatalogPlaylistSummary[]>([]);
@@ -173,6 +176,15 @@ export function usePlaylistCatalog() {
     }));
   }, []);
 
+  const reorderDuplicate = useCallback(
+    (duplicateEpisode: number, orderedVideoIds: readonly string[]) => {
+      setEditedEpisodes((prev) =>
+        renumberAfterReorder(prev, duplicateEpisode, orderedVideoIds)
+      );
+    },
+    []
+  );
+
   const syncVideoFromTitle = useCallback((videoId: string) => {
     if (!draft?.videos) return;
     const target = draft.videos.find((v) => v.videoId === videoId);
@@ -238,27 +250,53 @@ export function usePlaylistCatalog() {
       return new Set<string>();
     }
 
-    const sorted = [...assigned].sort(compareVideoChronology);
-    const n = sorted.length;
-    const prefixMax: number[] = new Array(n);
-    prefixMax[0] = editedEpisodes[sorted[0].videoId] ?? 0;
-    for (let i = 1; i < n; i++) {
-      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
-      prefixMax[i] = ep > prefixMax[i - 1] ? ep : prefixMax[i - 1];
+    type DayStat = { minEp: number; maxEp: number; videos: backend.CatalogVideoDraft[] };
+    const dayMap = new Map<string, DayStat>();
+
+    for (const v of assigned) {
+      const date = getVideoCalendarDate(v);
+      if (!date) continue;
+      const ep = editedEpisodes[v.videoId] ?? 0;
+      if (ep <= 0) continue;
+
+      const stat = dayMap.get(date);
+      if (stat) {
+        if (ep < stat.minEp) stat.minEp = ep;
+        if (ep > stat.maxEp) stat.maxEp = ep;
+        stat.videos.push(v);
+      } else {
+        dayMap.set(date, { minEp: ep, maxEp: ep, videos: [v] });
+      }
     }
 
-    const suffixMin: number[] = new Array(n);
-    suffixMin[n - 1] = editedEpisodes[sorted[n - 1].videoId] ?? 0;
-    for (let i = n - 2; i >= 0; i--) {
-      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
-      suffixMin[i] = ep < suffixMin[i + 1] ? ep : suffixMin[i + 1];
+    if (dayMap.size < 2) {
+      return new Set<string>();
+    }
+
+    const sortedDates = Array.from(dayMap.keys()).sort();
+    const k = sortedDates.length;
+    const prefixMax = new Array<number>(k);
+    prefixMax[0] = dayMap.get(sortedDates[0])!.maxEp;
+    for (let i = 1; i < k; i++) {
+      const maxEp = dayMap.get(sortedDates[i])!.maxEp;
+      prefixMax[i] = maxEp > prefixMax[i - 1] ? maxEp : prefixMax[i - 1];
+    }
+
+    const suffixMin = new Array<number>(k);
+    suffixMin[k - 1] = dayMap.get(sortedDates[k - 1])!.minEp;
+    for (let i = k - 2; i >= 0; i--) {
+      const minEp = dayMap.get(sortedDates[i])!.minEp;
+      suffixMin[i] = minEp < suffixMin[i + 1] ? minEp : suffixMin[i + 1];
     }
 
     const issues = new Set<string>();
-    for (let i = 0; i < n; i++) {
-      const ep = editedEpisodes[sorted[i].videoId] ?? 0;
-      if ((i > 0 && ep <= prefixMax[i - 1]) || (i < n - 1 && ep >= suffixMin[i + 1])) {
-        issues.add(sorted[i].videoId);
+    for (let i = 0; i < k; i++) {
+      const { videos } = dayMap.get(sortedDates[i])!;
+      for (const v of videos) {
+        const ep = editedEpisodes[v.videoId] ?? 0;
+        if ((i > 0 && ep <= prefixMax[i - 1]) || (i < k - 1 && ep >= suffixMin[i + 1])) {
+          issues.add(v.videoId);
+        }
       }
     }
 
@@ -284,96 +322,6 @@ export function usePlaylistCatalog() {
     const sorted = [...draft.videos].sort(compareVideoChronology);
     setEditedEpisodes(buildSequentialEpisodeMap(sorted));
   }, [draft?.videos]);
-
-  const autoNumberByOrder = useCallback(() => {
-    if (!draft?.videos?.length) return;
-    const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
-    setEditedEpisodes(buildSequentialEpisodeMap(sorted));
-  }, [draft?.videos]);
-
-  const reverseEpisodes = useCallback(() => {
-    if (!draft?.videos?.length) return;
-    const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
-    const reversed = sorted
-      .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode > 0 ? v.existingEpisode : 0)))
-      .reverse();
-
-    const nextMap: Record<string, number> = { ...editedEpisodes };
-    for (let i = 0; i < sorted.length; i++) {
-      nextMap[sorted[i].videoId] = reversed[i];
-    }
-    setEditedEpisodes(nextMap);
-  }, [draft?.videos, editedEpisodes]);
-
-  const isReverseChronological = useMemo(() => {
-    if (!draft?.videos) return false;
-    return isPlaylistReverseChronological(draft.videos);
-  }, [draft?.videos]);
-
-  const getNumberingImpact = useCallback(
-    (mode: "date" | "order" | "reverse"): OverwriteImpact => {
-      if (!draft?.videos?.length) {
-        return { affectedCount: 0, affectedVideoIds: [], reason: "none" };
-      }
-
-      let nextMap: Record<string, number> = {};
-      if (mode === "date") {
-        const sorted = [...draft.videos].sort(compareVideoChronology);
-        nextMap = buildSequentialEpisodeMap(sorted);
-      } else if (mode === "order") {
-        const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
-        nextMap = buildSequentialEpisodeMap(sorted);
-      } else if (mode === "reverse") {
-        const sorted = [...draft.videos].sort((a, b) => a.position - b.position);
-        const reversed = sorted
-          .map((v) => editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : (v.existingEpisode > 0 ? v.existingEpisode : 0)))
-          .reverse();
-        for (let i = 0; i < sorted.length; i++) {
-          nextMap[sorted[i].videoId] = reversed[i];
-        }
-      }
-
-      const affectedVideoIds: string[] = [];
-      let hasTitleMatch = false;
-      let hasDbMatch = false;
-
-      for (const vid of draft.videos) {
-        const currentEp =
-          editedEpisodes[vid.videoId] ??
-          (vid.episode > 0 ? vid.episode : (vid.existingEpisode > 0 ? vid.existingEpisode : 0));
-        const targetEp = nextMap[vid.videoId] ?? 0;
-
-        if (currentEp > 0 && currentEp !== targetEp) {
-          const matchesTitle =
-            vid.titleEpisode !== undefined && vid.titleEpisode > 0 && currentEp === vid.titleEpisode;
-          const matchesDb =
-            vid.existingEpisode !== undefined && vid.existingEpisode > 0 && currentEp === vid.existingEpisode;
-
-          if (matchesTitle || matchesDb) {
-            affectedVideoIds.push(vid.videoId);
-            if (matchesTitle) hasTitleMatch = true;
-            if (matchesDb) hasDbMatch = true;
-          }
-        }
-      }
-
-      const reason: "title_match" | "db_match" | "both" | "none" =
-        affectedVideoIds.length === 0
-          ? "none"
-          : hasTitleMatch && hasDbMatch
-          ? "both"
-          : hasTitleMatch
-          ? "title_match"
-          : "db_match";
-
-      return {
-        affectedCount: affectedVideoIds.length,
-        affectedVideoIds,
-        reason,
-      };
-    },
-    [draft?.videos, editedEpisodes]
-  );
 
   const applyCatalog = useCallback(
     async (updateLocal = true): Promise<boolean> => {
@@ -410,6 +358,43 @@ export function usePlaylistCatalog() {
     [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists, reloadDraft]
   );
 
+  const [isUpdatingTitles, setIsUpdatingTitles] = useState(false);
+  const [titleUpdateError, setTitleUpdateError] = useState<string | null>(null);
+
+  const previewTitleUpdates = useCallback(async (): Promise<backend.CatalogTitleChange[]> => {
+    if (!draft?.videos?.length) return [];
+    try {
+      const assignments = Object.entries(editedEpisodes).map(([videoId, episode]) =>
+        backend.CatalogAssignment.createFrom({ videoId, episode })
+      );
+      return await PreviewCatalogTitleUpdates(assignments);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTitleUpdateError(message);
+      return [];
+    }
+  }, [draft?.videos, editedEpisodes]);
+
+  const applyTitleUpdates = useCallback(async (): Promise<backend.CatalogTitleUpdateResult | null> => {
+    if (!draft?.videos?.length) return null;
+    setIsUpdatingTitles(true);
+    setTitleUpdateError(null);
+    try {
+      const assignments = Object.entries(editedEpisodes).map(([videoId, episode]) =>
+        backend.CatalogAssignment.createFrom({ videoId, episode })
+      );
+      const res = await ApplyCatalogTitleUpdates(assignments);
+      await reloadDraft();
+      return res;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTitleUpdateError(message);
+      return null;
+    } finally {
+      setIsUpdatingTitles(false);
+    }
+  }, [draft?.videos, editedEpisodes, reloadDraft]);
+
   return {
     playlists,
     isLoadingPlaylists,
@@ -427,67 +412,61 @@ export function usePlaylistCatalog() {
     setEditedTag,
     editedEpisodes,
     setEpisode,
+    reorderDuplicate,
     syncVideoFromTitle,
     syncAllFromTitle,
     mismatchCount,
     chronologyIssueIds,
     hasChronologyErrors,
     autoNumberByDate,
-    autoNumberByOrder,
-    reverseEpisodes,
     hasConflicts,
-    isReverseChronological,
-    getNumberingImpact,
     canApply,
     isApplying,
     applyError,
     applySuccess,
     applyCatalog,
+    isUpdatingTitles,
+    titleUpdateError,
+    previewTitleUpdates,
+    applyTitleUpdates,
   };
 }
 
-export interface OverwriteImpact {
-  readonly affectedCount: number;
-  readonly affectedVideoIds: readonly string[];
-  readonly reason: "title_match" | "db_match" | "both" | "none";
-}
-
-export function isPlaylistReverseChronological(
-  videos: readonly backend.CatalogVideoDraft[]
-): boolean {
-  if (videos.length < 2) return false;
-  const posOrdered = [...videos].sort((a, b) => a.position - b.position);
-  let inversions = 0;
-  let comparisons = 0;
-  for (let i = 0; i < posOrdered.length - 1; i++) {
-    const cmp = compareVideoChronology(posOrdered[i], posOrdered[i + 1]);
-    if (cmp > 0) inversions++;
-    if (cmp !== 0) comparisons++;
-  }
-  return comparisons > 0 && inversions / comparisons >= 0.6;
+export function getVideoCalendarDate(v: backend.CatalogVideoDraft): string {
+  const d = v.sortDate || v.publishedAt || "";
+  return d.length >= 10 ? d.slice(0, 10) : d;
 }
 
 export function compareVideoChronology(
   a: backend.CatalogVideoDraft,
   b: backend.CatalogVideoDraft
 ): number {
-  const dateA = a.sortDate || a.publishedAt || "";
-  const dateB = b.sortDate || b.publishedAt || "";
-  const prefixA = dateA.length >= 10 ? dateA.slice(0, 10) : dateA;
-  const prefixB = dateB.length >= 10 ? dateB.slice(0, 10) : dateB;
+  const dateA = getVideoCalendarDate(a);
+  const dateB = getVideoCalendarDate(b);
 
-  if (prefixA !== prefixB) {
-    return prefixA < prefixB ? -1 : 1;
+  if (dateA !== dateB) {
+    if (dateA && dateB) {
+      return dateA < dateB ? -1 : 1;
+    }
+    if (dateA) return -1;
+    if (dateB) return 1;
   }
-  if (a.publishedAt !== b.publishedAt) {
-    return a.publishedAt < b.publishedAt ? -1 : 1;
+
+  // Same calendar date: do NOT use publishedAt upload time.
+  const titleEpA = a.titleEpisode ?? 0;
+  const titleEpB = b.titleEpisode ?? 0;
+  if (titleEpA > 0 && titleEpB > 0 && titleEpA !== titleEpB) {
+    return titleEpA - titleEpB;
   }
+
   if (a.position !== b.position) {
     return a.position - b.position;
   }
+
   if (a.videoId !== b.videoId) {
     return a.videoId < b.videoId ? -1 : 1;
   }
+
   return 0;
 }
 

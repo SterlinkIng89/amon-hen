@@ -230,54 +230,6 @@ describe("usePlaylistCatalog", () => {
     });
   });
 
-  it("numbers episodes by playlist order and supports reverseEpisodes", async () => {
-    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValueOnce([]);
-    const mockDraft = {
-      playlistId: "pl-3",
-      title: "Reversed Series",
-      videoCount: 3,
-      kind: "vod",
-      tag: "series",
-      tagConfidence: "high",
-      linked: false,
-      steamAppId: "",
-      needsSync: false,
-      videos: [
-        { videoId: "v-first", title: "Ep A", position: 0, episode: 10, existingEpisode: 0, conflict: false },
-        { videoId: "v-second", title: "Ep B", position: 1, episode: 20, existingEpisode: 0, conflict: false },
-        { videoId: "v-third", title: "Ep C", position: 2, episode: 30, existingEpisode: 0, conflict: false },
-      ],
-    };
-    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(mockDraft as any);
-
-    const { result } = renderHook(() => usePlaylistCatalog());
-
-    await act(async () => {
-      await result.current.selectPlaylist("pl-3");
-    });
-
-    act(() => {
-      result.current.autoNumberByOrder();
-    });
-
-    expect(result.current.editedEpisodes).toEqual({
-      "v-first": 1,
-      "v-second": 2,
-      "v-third": 3,
-    });
-
-    // Reverse the sequence
-    act(() => {
-      result.current.reverseEpisodes();
-    });
-
-    expect(result.current.editedEpisodes).toEqual({
-      "v-first": 3,
-      "v-second": 2,
-      "v-third": 1,
-    });
-  });
-
   it("updates video thumbnail in draft and reloads draft from backend", async () => {
     vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValueOnce([]);
     const initialDraft = {
@@ -623,6 +575,39 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.canApply).toBe(true);
   });
 
+  it("does not flag chronology errors for multiple episodes on the same calendar day", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-same-day",
+      title: "Same Day Episodes Test",
+      tag: "sameday",
+      videos: [
+        { videoId: "v-4", title: "Death Stranding 26/10/26 - 4", publishedAt: "2026-10-27T22:44:32Z", sortDate: "2026-10-26", position: 0, episode: 4 },
+        { videoId: "v-2", title: "Death Stranding 26/10/26 - 2", publishedAt: "2026-10-28T05:47:57Z", sortDate: "2026-10-26", position: 1, episode: 2 },
+        { videoId: "v-3", title: "Death Stranding 26/10/26 - 3", publishedAt: "2026-10-28T02:07:27Z", sortDate: "2026-10-26", position: 2, episode: 3 },
+        { videoId: "v-1", title: "Death Stranding 26/10/26 - 1", publishedAt: "2026-10-28T05:47:58Z", sortDate: "2026-10-26", position: 3, episode: 1 },
+        { videoId: "v-5", title: "Death Stranding 26/10/26 - 5", publishedAt: "2026-10-28T04:18:41Z", sortDate: "2026-10-26", position: 4, episode: 5 },
+        { videoId: "v-6", title: "Death Stranding 27/10/26 - 6", publishedAt: "2026-10-28T22:19:49Z", sortDate: "2026-10-27", position: 5, episode: 6 },
+        { videoId: "v-8", title: "Death Stranding 28/10/26 - 8", publishedAt: "2026-10-29T03:53:04Z", sortDate: "2026-10-28", position: 6, episode: 8 },
+        { videoId: "v-7", title: "Death Stranding 28/10/26 - 7", publishedAt: "2026-10-29T03:56:39Z", sortDate: "2026-10-28", position: 7, episode: 7 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-same-day");
+    });
+
+    // Zero chronology errors because all episodes across different days ascend (1..5 on day 1 < 6 on day 2 < 7..8 on day 3)
+    expect(result.current.hasChronologyErrors).toBe(false);
+    expect(result.current.chronologyIssueIds.size).toBe(0);
+    expect(result.current.canApply).toBe(true);
+  });
+
   it("autoNumberByDate orders by sortDate prefix over publishedAt", async () => {
     vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
     const mockDraft = {
@@ -667,40 +652,18 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.hasChronologyErrors).toBe(false);
   });
 
-  it("detects reverse-chronological playlist ordering", async () => {
+  it("reorderDuplicate resolves duplicate episodes and shifts subsequent episodes", async () => {
     vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
     const mockDraft = {
-      playlistId: "pl-reverse",
-      title: "Reverse Playlist",
-      tag: "reverse",
+      playlistId: "pl-p3r",
+      title: "Persona 3 Reload",
+      tag: "p3r",
       videos: [
-        {
-          videoId: "v-newest",
-          title: "Episode 3",
-          publishedAt: "2026-03-01T00:00:00Z",
-          sortDate: "2026-03-01",
-          position: 0,
-          episode: 3,
-          titleEpisode: 3,
-        },
-        {
-          videoId: "v-middle",
-          title: "Episode 2",
-          publishedAt: "2026-02-01T00:00:00Z",
-          sortDate: "2026-02-01",
-          position: 1,
-          episode: 2,
-          titleEpisode: 2,
-        },
-        {
-          videoId: "v-oldest",
-          title: "Episode 1",
-          publishedAt: "2026-01-01T00:00:00Z",
-          sortDate: "2026-01-01",
-          position: 2,
-          episode: 1,
-          titleEpisode: 1,
-        },
+        { videoId: "v25", title: "P3R - 25", sortDate: "2026-08-09", episode: 25 },
+        { videoId: "v26a", title: "P3R - 26 A", sortDate: "2026-08-10", episode: 26 },
+        { videoId: "v26b", title: "P3R - 26 B", sortDate: "2026-08-11", episode: 26 },
+        { videoId: "v27", title: "P3R - 27", sortDate: "2026-08-12", episode: 27 },
+        { videoId: "v28", title: "P3R - 28", sortDate: "2026-08-13", episode: 28 },
       ],
     };
     vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
@@ -710,23 +673,26 @@ describe("usePlaylistCatalog", () => {
     const { result } = renderHook(() => usePlaylistCatalog());
 
     await act(async () => {
-      await result.current.selectPlaylist("pl-reverse");
+      await result.current.selectPlaylist("pl-p3r");
     });
 
-    expect(result.current.isReverseChronological).toBe(true);
+    expect(result.current.hasConflicts).toBe(true);
 
-    // Numbering by order on this reverse playlist would assign v-newest=1, v-middle=2, v-oldest=3.
-    // That changes v-newest (was 3, matching title 3) and v-oldest (was 1, matching title 1).
-    const impact = result.current.getNumberingImpact("order");
-    expect(impact.affectedCount).toBe(2);
-    expect(impact.affectedVideoIds).toContain("v-newest");
-    expect(impact.affectedVideoIds).toContain("v-oldest");
-    expect(impact.reason).toBe("title_match");
+    act(() => {
+      result.current.reorderDuplicate(26, ["v26a", "v26b"]);
+    });
 
-    // Numbering by date keeps v-oldest=1, v-middle=2, v-newest=3, which matches existing, so affectedCount = 0.
-    const dateImpact = result.current.getNumberingImpact("date");
-    expect(dateImpact.affectedCount).toBe(0);
+    expect(result.current.editedEpisodes).toEqual({
+      v25: 25,
+      v26a: 26,
+      v26b: 27,
+      v27: 28,
+      v28: 29,
+    });
+    expect(result.current.hasConflicts).toBe(false);
+    expect(result.current.canApply).toBe(true);
   });
 });
+
 
 

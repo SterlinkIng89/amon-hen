@@ -46,6 +46,21 @@ func TestValidateChronology(t *testing.T) {
 	if err := validateChronology(draftsZero); err != nil {
 		t.Errorf("expected zero episodes to be ignored, got: %v", err)
 	}
+
+	// 5. Multiple episodes on the same day (regardless of upload order) are valid
+	draftsSameDay := []CatalogVideoDraft{
+		{VideoID: "v1", PublishedAt: "2026-10-27T22:44:32Z", SortDate: "2026-10-26", Episode: 4},
+		{VideoID: "v2", PublishedAt: "2026-10-28T05:47:57Z", SortDate: "2026-10-26", Episode: 2},
+		{VideoID: "v3", PublishedAt: "2026-10-28T02:07:27Z", SortDate: "2026-10-26", Episode: 3},
+		{VideoID: "v4", PublishedAt: "2026-10-28T05:47:58Z", SortDate: "2026-10-26", Episode: 1},
+		{VideoID: "v5", PublishedAt: "2026-10-28T04:18:41Z", SortDate: "2026-10-26", Episode: 5},
+		{VideoID: "v6", PublishedAt: "2026-10-28T22:19:49Z", SortDate: "2026-10-27", Episode: 6},
+		{VideoID: "v7", PublishedAt: "2026-10-29T03:53:04Z", SortDate: "2026-10-28", Episode: 8},
+		{VideoID: "v8", PublishedAt: "2026-10-29T03:56:39Z", SortDate: "2026-10-28", Episode: 7},
+	}
+	if err := validateChronology(draftsSameDay); err != nil {
+		t.Errorf("expected same-day multiple episodes across ascending calendar days to pass, got: %v", err)
+	}
 }
 
 func TestApplyPlaylistCatalog_RejectsDuplicateEpisodes(t *testing.T) {
