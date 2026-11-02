@@ -106,7 +106,43 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
-	        this.hasCustomTemplate = Boolean(source["hasCustomTemplate"]);
+	        this.hasCustomTemplate = source["hasCustomTemplate"];
+	    }
+	}
+	export class CatalogTitleChange {
+	    videoId: string;
+	    oldTitle: string;
+	    newTitle: string;
+	    oldEpisode: number;
+	    newEpisode: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogTitleChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.oldTitle = source["oldTitle"];
+	        this.newTitle = source["newTitle"];
+	        this.oldEpisode = source["oldEpisode"];
+	        this.newEpisode = source["newEpisode"];
+	    }
+	}
+	export class CatalogTitleUpdateResult {
+	    updated: string[];
+	    failed: Record<string, string>;
+	    skipped: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogTitleUpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.updated = source["updated"];
+	        this.failed = source["failed"];
+	        this.skipped = source["skipped"];
 	    }
 	}
 	export class CatalogVideoDraft {
@@ -114,6 +150,7 @@ export namespace backend {
 	    title: string;
 	    publishedAt: string;
 	    thumbnailUrl: string;
+	    duration?: string;
 	    localFile?: string;
 	    position: number;
 	    existingEpisode: number;
@@ -137,6 +174,7 @@ export namespace backend {
 	        this.title = source["title"];
 	        this.publishedAt = source["publishedAt"];
 	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.duration = source["duration"];
 	        this.localFile = source["localFile"];
 	        this.position = source["position"];
 	        this.existingEpisode = source["existingEpisode"];
@@ -670,7 +708,7 @@ export namespace backend {
 	    tag: string;
 	    tagConfidence: string;
 	    linked: boolean;
-	    hasCustomTemplate?: boolean;
+	    hasCustomTemplate: boolean;
 	    steamAppId: string;
 	    needsSync: boolean;
 	    thumbnailConfig?: TagThumbnailConfig;
@@ -690,7 +728,7 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
-	        this.hasCustomTemplate = Boolean(source["hasCustomTemplate"]);
+	        this.hasCustomTemplate = source["hasCustomTemplate"];
 	        this.steamAppId = source["steamAppId"];
 	        this.needsSync = source["needsSync"];
 	        this.thumbnailConfig = this.convertValues(source["thumbnailConfig"], TagThumbnailConfig);
@@ -771,6 +809,22 @@ export namespace backend {
 	        this.posterUrl = source["posterUrl"];
 	        this.headerUrl = source["headerUrl"];
 	        this.logoUrl = source["logoUrl"];
+	    }
+	}
+	export class SteamSearchResult {
+	    appId: string;
+	    name: string;
+	    headerUrl?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SteamSearchResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.name = source["name"];
+	        this.headerUrl = source["headerUrl"];
 	    }
 	}
 	export class SteamGameItem {

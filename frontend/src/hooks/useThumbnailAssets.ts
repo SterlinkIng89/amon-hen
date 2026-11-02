@@ -16,7 +16,8 @@ export interface ThumbnailAssetsResult {
 
 export function useThumbnailAssets(
   tag: string,
-  config?: TagThumbnailConfig
+  config?: TagThumbnailConfig,
+  steamAppIdOverride?: string | null
 ): ThumbnailAssetsResult {
   const [steamAssets, setSteamAssets] = useState<SteamGameArtwork | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
@@ -24,7 +25,7 @@ export function useThumbnailAssets(
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
   const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
 
-  // Fetch Steam assets whenever tag changes
+  // Fetch Steam assets whenever tag or steamAppIdOverride changes
   useEffect(() => {
     if (!tag) {
       setSteamAssets(null);
@@ -38,10 +39,17 @@ export function useThumbnailAssets(
     setBaseImage(null);
     setLogoImage(null);
 
-    GetSteamAppID(tag)
+    const resolveAppId = async (): Promise<string | null> => {
+      if (steamAppIdOverride !== undefined) {
+        return steamAppIdOverride;
+      }
+      return GetSteamAppID(tag);
+    };
+
+    resolveAppId()
       .then((appId) => {
         if (isCancelled) return null;
-        if (appId && appId !== "NOT_FOUND") {
+        if (appId && appId !== "NOT_FOUND" && appId !== "0" && appId !== "") {
           return GetSteamGameAssets(appId);
         }
         return null;
@@ -49,6 +57,8 @@ export function useThumbnailAssets(
       .then((assets) => {
         if (!isCancelled && assets) {
           setSteamAssets(assets);
+        } else if (!isCancelled) {
+          setSteamAssets(null);
         }
       })
       .catch((err) => {
@@ -64,7 +74,7 @@ export function useThumbnailAssets(
     return () => {
       isCancelled = true;
     };
-  }, [tag]);
+  }, [tag, steamAppIdOverride]);
 
   const resolvedImageUrl = useMemo(() => {
     return resolveThumbnailImageUrl(

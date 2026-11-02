@@ -10,6 +10,10 @@ export function AddVideoToPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['AddVideoToPlaylist'](arg1, arg2);
 }
 
+export function ApplyCatalogTitleUpdates(arg1) {
+  return window['go']['backend']['App']['ApplyCatalogTitleUpdates'](arg1);
+}
+
 export function ApplyPlaylistCatalog(arg1) {
   return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
 }
@@ -278,6 +282,10 @@ export function OpenFolderInExplorer(arg1) {
   return window['go']['backend']['App']['OpenFolderInExplorer'](arg1);
 }
 
+export function PreviewCatalogTitleUpdates(arg1) {
+  return window['go']['backend']['App']['PreviewCatalogTitleUpdates'](arg1);
+}
+
 export function PurgePlaylistDuplicates(arg1) {
   return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
 }
@@ -356,6 +364,14 @@ export function SetAutoLaunch(arg1) {
 
 export function SetDefaultExportFolder(arg1) {
   return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
+}
+
+export function SearchSteamGames(arg1) {
+  return window['go']['backend']['App']['SearchSteamGames'](arg1);
+}
+
+export function SetSteamAppID(arg1, arg2) {
+  return window['go']['backend']['App']['SetSteamAppID'](arg1, arg2);
 }
 
 export function SetTagPlaylist(arg1, arg2) {

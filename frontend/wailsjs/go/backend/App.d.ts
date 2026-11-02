@@ -9,6 +9,8 @@ export function AddFolder():Promise<string>;
 
 export function AddVideoToPlaylist(arg1:string,arg2:string):Promise<void>;
 
+export function ApplyCatalogTitleUpdates(arg1:Array<backend.CatalogAssignment>):Promise<backend.CatalogTitleUpdateResult>;
+
 export function ApplyPlaylistCatalog(arg1:backend.CatalogApplyRequest):Promise<void>;
 
 export function CacheHandler():Promise<http.Handler>;
@@ -143,6 +145,8 @@ export function OpenFolderDialog():Promise<string>;
 
 export function OpenFolderInExplorer(arg1:string):Promise<void>;
 
+export function PreviewCatalogTitleUpdates(arg1:Array<backend.CatalogAssignment>):Promise<Array<backend.CatalogTitleChange>>;
+
 export function PurgePlaylistDuplicates(arg1:string):Promise<number>;
 
 export function RegenerateThumbnail(arg1:string):Promise<string>;
@@ -182,6 +186,10 @@ export function SelectExportFolder():Promise<string>;
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetDefaultExportFolder(arg1:string):Promise<void>;
+
+export function SearchSteamGames(arg1:string):Promise<Array<backend.SteamSearchResult>>;
+
+export function SetSteamAppID(arg1:string,arg2:string):Promise<void>;
 
 export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
 

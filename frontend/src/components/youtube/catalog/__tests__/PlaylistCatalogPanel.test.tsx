@@ -320,10 +320,142 @@ describe("PlaylistCatalogPanel", () => {
     // Both videos violate chronological order (ep 2 before ep 1)
     expect(await screen.findAllByText("Out of order")).not.toHaveLength(0);
 
-    // Save & link playlist button must be disabled due to chronology errors
+    // Save & link playlist button must be disabled due to chronology errors with explanatory feedback
     const saveBtn = screen.getByRole("button", { name: /save & link playlist/i });
     expect(saveBtn).toBeDisabled();
+    expect(screen.getByText("Resolve chronological order violations to save")).toBeInTheDocument();
+  });
+
+  it("displays conflict banner with direct title sync action to resolve duplicates", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "P3R Playthrough", videoCount: 2, linked: false, tag: "p3r" },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-1",
+      title: "P3R Playthrough",
+      videoCount: 2,
+      kind: "vod",
+      tag: "p3r",
+      tagConfidence: "high",
+      linked: false,
+      videos: [
+        {
+          videoId: "yt-1",
+          title: "Persona 3 Reload - 20/07/26 - 2",
+          publishedAt: "2026-07-20T12:00:00Z",
+          titleEpisode: 2,
+          existingEpisode: 31,
+          episode: 31,
+          position: 1,
+        },
+        {
+          videoId: "yt-2",
+          title: "Persona 3 Reload - 14/08/26 - 31",
+          publishedAt: "2026-08-14T12:00:00Z",
+          titleEpisode: 31,
+          existingEpisode: 31,
+          episode: 31,
+          position: 2,
+        },
+      ],
+    } as any);
+
+    render(<PlaylistCatalogPanel />);
+
+    const rowBtn = await screen.findByText("P3R Playthrough");
+    fireEvent.click(rowBtn);
+
+    // Conflict banner is shown due to duplicate episode 31
+    expect(
+      await screen.findByText(/Please resolve duplicate or invalid episode numbers before saving to database/i)
+    ).toBeInTheDocument();
+
+    // Explanatory reason next to disabled save button
+    expect(screen.getByText("Resolve duplicate or invalid episode numbers to save")).toBeInTheDocument();
+    const saveBtn = screen.getByRole("button", { name: /save & link playlist/i });
+    expect(saveBtn).toBeDisabled();
+
+    // Resolution action via table toolbar button
+    const syncAllBtn = screen.getByRole("button", { name: /Sync all from title/i });
+    expect(syncAllBtn).toBeInTheDocument();
+    expect(syncAllBtn).toHaveTextContent("1");
+
+    // Clicking it applies title episode 2 to yt-1, eliminating duplicate 31
+    fireEvent.click(syncAllBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/Please resolve duplicate or invalid episode numbers before saving to database/i)
+      ).not.toBeInTheDocument();
+      expect(saveBtn).not.toBeDisabled();
+    });
+  });
+
+  it("opens DuplicateEpisodeDialog when clicking resolve and reorders episodes", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-p3r", title: "P3R", videoCount: 3, linked: false, tag: "p3r" },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-p3r",
+      title: "P3R",
+      videoCount: 3,
+      kind: "vod",
+      tag: "p3r",
+      videos: [
+        {
+          videoId: "yt-26a",
+          title: "Persona 3 Reload - 10/08/26 - 26",
+          publishedAt: "2026-08-10T12:00:00Z",
+          sortDate: "2026-08-10",
+          episode: 26,
+          position: 1,
+        },
+        {
+          videoId: "yt-26b",
+          title: "Persona 3 Reload - 11/08/26 - 26",
+          publishedAt: "2026-08-11T12:00:00Z",
+          sortDate: "2026-08-11",
+          episode: 26,
+          position: 2,
+        },
+        {
+          videoId: "yt-27",
+          title: "Persona 3 Reload - 12/08/26 - 27",
+          publishedAt: "2026-08-12T12:00:00Z",
+          sortDate: "2026-08-12",
+          episode: 27,
+          position: 3,
+        },
+      ],
+    } as any);
+
+    render(<PlaylistCatalogPanel />);
+
+    const rowBtn = await screen.findByText("P3R");
+    fireEvent.click(rowBtn);
+
+    // Look for Resolve duplicates button in banner
+    const resolveBannerBtn = await screen.findByRole("button", { name: /resolve duplicates/i });
+    expect(resolveBannerBtn).toBeInTheDocument();
+
+    fireEvent.click(resolveBannerBtn);
+
+    // Dialog appears
+    expect(await screen.findByText("Resolve duplicate episode 26")).toBeInTheDocument();
+
+    // Confirm dialog
+    const applyBtn = screen.getByRole("button", { name: /apply sequence/i });
+    fireEvent.click(applyBtn);
+
+    // Dialog closes and duplicate warning disappears
+    await waitFor(() => {
+      expect(screen.queryByText("Resolve duplicate episode 26")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Please resolve duplicate or invalid episode numbers before saving to database/i)
+      ).not.toBeInTheDocument();
+    });
   });
 });
+
 
 
