@@ -11,7 +11,7 @@ import {
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
 // Types & Utils
-import { VideoFile, ViewMode, GameProfile, SortMode } from "../types";
+import { VideoFile, ViewMode, GameProfile, SortMode, PlaylistPrivacy } from "../types";
 import {
   groupVideos,
   resolveDisplayTitle,
@@ -624,7 +624,9 @@ export default function Dashboard() {
       size: video.size,
       title: resolveDisplayTitle(video, gameProfiles, titleSeparator),
       description: video.description || "",
-      privacy: (video.privacy as "public" | "unlisted" | "private") || "unlisted",
+      privacy:
+        (video.privacy as PlaylistPrivacy) ||
+        useAppStore.getState().defaultVideoPrivacy,
       status: "pending",
       progress: 0,
       playlistId: resolvedPlaylistId,

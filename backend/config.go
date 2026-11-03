@@ -59,8 +59,9 @@ type VideoMeta struct {
 	Game          string            `json:"game"`
 	YouTubeTitle  string            `json:"youtubeTitle"`
 	Description   string            `json:"description"`
-	Privacy       string            `json:"privacy"`
-	YouTubeID     string            `json:"youtubeId,omitempty"`
+	Privacy         string            `json:"privacy"`
+	PrivacyOverride bool              `json:"privacy_override,omitempty"`
+	YouTubeID       string            `json:"youtubeId,omitempty"`
 	PlaylistID    string            `json:"playlistId,omitempty"`
 	PlaylistTitle string            `json:"playlistTitle,omitempty"`
 	Episode       int               `json:"episode"`
@@ -148,6 +149,8 @@ func (a *App) initConfig() {
 			}
 		}
 	}
+
+	a.migrateLegacyPrivacy()
 
 	// Hardcode default profile and modes for League of Legends
 	if lol, ok := a.config.GameProfiles["League of Legends"]; ok {
@@ -626,6 +629,20 @@ func (a *App) GetAllGameTags() ([]string, error) {
 	return result, nil
 }
 
+// migrateLegacyPrivacy clears legacy implicit "unlisted" privacy on unuploaded videos
+// so they dynamically inherit the user's active defaultVideoPrivacy.
+func (a *App) migrateLegacyPrivacy() {
+	if a.config.VideoMetadata == nil {
+		return
+	}
+	for p, meta := range a.config.VideoMetadata {
+		if meta.YouTubeID == "" && !meta.PrivacyOverride && meta.Privacy == "unlisted" {
+			meta.Privacy = ""
+			a.config.VideoMetadata[p] = meta
+		}
+	}
+}
+
 // SaveVideoMetadata updates all metadata for a specific video and saves the config
 func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc string, privacy string, playlistId string, episode int, event string, gameMode string, customVars map[string]string) error {
 	a.configMu.Lock()
@@ -652,18 +669,24 @@ func (a *App) SaveVideoMetadata(path string, game string, ytTitle string, desc s
 		}
 	}
 
+	override := prevMeta.PrivacyOverride
+	if prevMeta.YouTubeID == "" {
+		override = (privacy != "")
+	}
+
 	a.config.VideoMetadata[path] = VideoMeta{
-		Game:         game,
-		YouTubeTitle: ytTitle,
-		Description:  desc,
-		Privacy:      privacy,
-		PlaylistID:   playlistId,
-		Episode:      episode,
-		DurationSecs: prevMeta.DurationSecs,
-		Event:        event,
-		GameMode:     gameMode,
-		CustomVars:   customVars,
-		ContentType:  prevMeta.ContentType,
+		Game:            game,
+		YouTubeTitle:    ytTitle,
+		Description:     desc,
+		Privacy:         privacy,
+		PrivacyOverride: override,
+		PlaylistID:      playlistId,
+		Episode:         episode,
+		DurationSecs:    prevMeta.DurationSecs,
+		Event:           event,
+		GameMode:        gameMode,
+		CustomVars:      customVars,
+		ContentType:     prevMeta.ContentType,
 	}
 	// Copy YouTubeID from prevMeta so we don't lose it
 	meta := a.config.VideoMetadata[path]

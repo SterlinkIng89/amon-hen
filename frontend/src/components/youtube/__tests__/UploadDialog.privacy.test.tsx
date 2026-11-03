@@ -53,6 +53,54 @@ describe("UploadDialog Privacy Isolation", () => {
     expect(privateBtn).toHaveClass("bg-accent");
   });
 
+  it("initializes privacy to public when defaultVideoPrivacy is public and unuploaded video has empty privacy", () => {
+    useAppStore.setState({ defaultVideoPrivacy: "public" });
+
+    render(
+      <UploadDialog
+        video={{ ...mockVideoWithoutPrivacy, privacy: "" }}
+        onClose={vi.fn()}
+        onUploadNow={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />
+    );
+
+    const publicBtn = screen.getByRole("button", { name: /public/i });
+    expect(publicBtn).toHaveClass("bg-accent");
+  });
+
+  it("respects explicit video privacy override when defaultVideoPrivacy is different", () => {
+    useAppStore.setState({ defaultVideoPrivacy: "public" });
+
+    render(
+      <UploadDialog
+        video={{ ...mockVideoWithoutPrivacy, privacy: "private" }}
+        onClose={vi.fn()}
+        onUploadNow={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />
+    );
+
+    const privateBtn = screen.getByRole("button", { name: /private/i });
+    expect(privateBtn).toHaveClass("bg-accent");
+  });
+
+  it("respects explicit unlisted override when defaultVideoPrivacy is public", () => {
+    useAppStore.setState({ defaultVideoPrivacy: "public" });
+
+    render(
+      <UploadDialog
+        video={{ ...mockVideoWithoutPrivacy, privacy: "unlisted" }}
+        onClose={vi.fn()}
+        onUploadNow={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />
+    );
+
+    const unlistedBtn = screen.getByRole("button", { name: /unlisted/i });
+    expect(unlistedBtn).toHaveClass("bg-accent");
+  });
+
   it("changing video privacy in UploadDialog does not mutate global defaultPlaylistPrivacy or defaultVideoPrivacy", () => {
     render(
       <UploadDialog

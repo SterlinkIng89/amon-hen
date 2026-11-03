@@ -350,6 +350,8 @@ export default function InlinePlayer({
     (video.privacy as PlaylistPrivacy) ||
       useAppStore.getState().defaultVideoPrivacy,
   );
+  const [hasExplicitPrivacyOverride, setHasExplicitPrivacyOverride] =
+    useState<boolean>(() => Boolean(video.privacy));
   const [playlistId, setPlaylistId] = useState(video.playlistId || "");
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
@@ -490,6 +492,7 @@ export default function InlinePlayer({
       (video.privacy as PlaylistPrivacy) ||
         useAppStore.getState().defaultVideoPrivacy,
     );
+    setHasExplicitPrivacyOverride(Boolean(video.privacy));
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
     setInfoSaved(false);
@@ -593,6 +596,8 @@ export default function InlinePlayer({
     privacy,
     playlistId,
     selectedContentType,
+    hasExplicitPrivacyOverride,
+    youtubeId: video.youtubeId,
   });
   formSnapshotRef.current = {
     tagInput,
@@ -605,6 +610,8 @@ export default function InlinePlayer({
     privacy,
     playlistId,
     selectedContentType,
+    hasExplicitPrivacyOverride,
+    youtubeId: video.youtubeId,
   };
 
   // Tracks the path this snapshot belongs to. Effect body runs AFTER cleanup,
@@ -619,12 +626,14 @@ export default function InlinePlayer({
       if (!ep && !(gameProfiles[s.tagInput]?.type === "multiplayer")) {
         ep = extractEpisodeFromTitle(s.ytTitle);
       }
+      const privacyToSave =
+        s.youtubeId || s.hasExplicitPrivacyOverride ? s.privacy : "";
       SaveVideoMetadata(
         path,
         s.tagInput,
         s.ytTitle,
         s.description,
-        s.privacy,
+        privacyToSave,
         s.playlistId,
         ep,
         s.eventInput,
@@ -890,13 +899,15 @@ export default function InlinePlayer({
           ? selectedPaths
           : [video.path];
 
+      const privacyToSave =
+        video.youtubeId || hasExplicitPrivacyOverride ? privacy : "";
       for (const p of pathsToSave) {
         await SaveVideoMetadata(
           p,
           tagInput,
           titleToSave,
           description,
-          privacy,
+          privacyToSave,
           playlistId,
           resolvedEpisode,
           eventInput,
@@ -1152,8 +1163,11 @@ export default function InlinePlayer({
           effectiveContentType,
         )) ||
     description !== (video.description || "") ||
-    privacy !==
-      (video.privacy || useAppStore.getState().defaultVideoPrivacy) ||
+    (Boolean(video.youtubeId)
+      ? privacy !== (video.privacy || useAppStore.getState().defaultVideoPrivacy)
+      : hasExplicitPrivacyOverride
+        ? privacy !== (video.privacy || "")
+        : false) ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
 
   const renderMetadataForm = () => (
@@ -1401,6 +1415,7 @@ export default function InlinePlayer({
               className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
               onClick={() => {
                 setPrivacy(p);
+                setHasExplicitPrivacyOverride(true);
               }}
             >
               {p.charAt(0).toUpperCase() + p.slice(1)}

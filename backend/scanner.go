@@ -251,6 +251,12 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				}
 			}
 
+			resolvedPrivacy := meta.Privacy
+			isUploaded := meta.YouTubeID != "" || pathMap[path] != "" || linkedFiles[d.Name()] != ""
+			if !isUploaded && !meta.PrivacyOverride && meta.Privacy == "unlisted" {
+				resolvedPrivacy = ""
+			}
+
 			videos = append(videos, VideoFile{
 				Name:         d.Name(),
 				Path:         path,
@@ -260,7 +266,7 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				Game:         meta.Game,
 				YouTubeTitle: meta.YouTubeTitle,
 				Description:  meta.Description,
-				Privacy:      meta.Privacy,
+				Privacy:      resolvedPrivacy,
 				YouTubeID:    meta.YouTubeID,
 				PlaylistID:   resolvedPlId,
 				PlaylistTitle: func() string {
