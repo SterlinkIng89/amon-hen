@@ -5,9 +5,11 @@ import {
   ApplyPlaylistCatalog,
   PreviewCatalogTitleUpdates,
   ApplyCatalogTitleUpdates,
+  ApplySingleVideoTitleUpdate,
 } from "../../wailsjs/go/backend/App";
 import { backend } from "../../wailsjs/go/models";
 import { renumberAfterReorder } from "../utils/episodeRenumber";
+import { titlesMatch } from "../utils/videoUtils";
 
 export function usePlaylistCatalog() {
   const [playlists, setPlaylists] = useState<backend.CatalogPlaylistSummary[]>([]);
@@ -230,11 +232,16 @@ export function usePlaylistCatalog() {
     if (!draft?.videos?.length) return 0;
     let count = 0;
     for (const vid of draft.videos) {
-      if (vid.titleEpisode && vid.titleEpisode > 0) {
-        const currentEp = editedEpisodes[vid.videoId] ?? 0;
-        if (currentEp !== vid.titleEpisode) {
-          count++;
-        }
+      const isEpMismatch = Boolean(
+        vid.titleEpisode &&
+          vid.titleEpisode > 0 &&
+          (editedEpisodes[vid.videoId] ?? 0) !== vid.titleEpisode
+      );
+      const isTitleMismatch = Boolean(
+        vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
+      );
+      if (isEpMismatch || isTitleMismatch) {
+        count++;
       }
     }
     return count;
@@ -395,6 +402,32 @@ export function usePlaylistCatalog() {
     }
   }, [draft?.videos, editedEpisodes, reloadDraft]);
 
+  const applySingleTitleUpdate = useCallback(
+    async (
+      videoId: string,
+      newTitle: string
+    ): Promise<backend.CatalogTitleUpdateResult | null> => {
+      setIsUpdatingTitles(true);
+      setTitleUpdateError(null);
+      try {
+        await ApplySingleVideoTitleUpdate(videoId, newTitle);
+        await reloadDraft();
+        return backend.CatalogTitleUpdateResult.createFrom({
+          updated: [videoId],
+          failed: {},
+          skipped: [],
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setTitleUpdateError(message);
+        return null;
+      } finally {
+        setIsUpdatingTitles(false);
+      }
+    },
+    [reloadDraft]
+  );
+
   return {
     playlists,
     isLoadingPlaylists,
@@ -429,6 +462,7 @@ export function usePlaylistCatalog() {
     titleUpdateError,
     previewTitleUpdates,
     applyTitleUpdates,
+    applySingleTitleUpdate,
   };
 }
 

@@ -251,6 +251,50 @@ export function resolveDisplayTitle(
   );
 }
 
+export function computeExpectedLocalTitle(
+  video: VideoFile,
+  profiles?: Record<string, GameProfile>,
+  titleSeparator?: string,
+): string {
+  const profile = video.game && profiles ? profiles[video.game] : undefined;
+  const contentType = resolveVideoContentType(
+    video.durationSecs,
+    video.contentType,
+  );
+  return generateYouTubeTitle(
+    video.name,
+    video.game,
+    video.episode,
+    profile,
+    video.event,
+    video.gameMode,
+    video.customVars,
+    video.modTime,
+    titleSeparator,
+    contentType,
+  );
+}
+
+export function normalizeTitleForComparison(title?: string): string {
+  if (!title) return "";
+  return title
+    .trim()
+    .replace(/\s*[—–\-|]\s*/g, " - ");
+}
+
+export function titlesMatch(a?: string, b?: string): boolean {
+  return normalizeTitleForComparison(a) === normalizeTitleForComparison(b);
+}
+
+export function isVideoTitleMismatched(
+  video: VideoFile,
+  profiles?: Record<string, GameProfile>,
+): boolean {
+  if (!video.youtubeId || !video.remoteYouTubeTitle) return false;
+  const expected = computeExpectedLocalTitle(video, profiles);
+  return Boolean(expected && !titlesMatch(video.remoteYouTubeTitle, expected));
+}
+
 export function toLocalDateKey(ms: number) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

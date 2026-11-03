@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInferTagFromPlaylistTitle(t *testing.T) {
@@ -833,6 +834,110 @@ func TestPreviewCatalogTitleUpdates(t *testing.T) {
 		t.Errorf("expected episodes 26 -> 27, got %d -> %d", ch.OldEpisode, ch.NewEpisode)
 	}
 }
+
+func TestGetPlaylistCatalogDraft_TitleMismatch(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tempDir := t.TempDir()
+	localFile1 := filepath.Join(tempDir, "aram_clip_1.mp4")
+	_ = os.WriteFile(localFile1, []byte("clip content 1"), 0644)
+	recDate := time.Date(2026, time.April, 8, 14, 0, 0, 0, time.Local)
+	_ = os.Chtimes(localFile1, recDate, recDate)
+
+	localFileNonExistent := filepath.Join(tempDir, "deleted_clip.mp4")
+
+	localFile3 := filepath.Join(tempDir, "aram_clip_3.mp4")
+	_ = os.WriteFile(localFile3, []byte("clip content 3"), 0644)
+	_ = os.Chtimes(localFile3, recDate, recDate)
+
+	app.config.TitleSeparator = " — "
+	app.config.GameProfiles = map[string]GameProfile{
+		"League of Legends": {
+			Type:          "multiplayer",
+			TitleTemplate: "{game} — {date} — {event}",
+		},
+	}
+	app.config.VideoMetadata = map[string]VideoMeta{
+		localFile1: {
+			Game:  "League of Legends",
+			Event: "Pentakill",
+		},
+		localFile3: {
+			Game:  "League of Legends",
+			Event: "Baron Steal",
+		},
+	}
+
+	localFileSep := filepath.Join(tempDir, "sep_variant.mp4")
+	_ = os.WriteFile(localFileSep, []byte("fake video content"), 0644)
+	_ = os.Chtimes(localFileSep, recDate, recDate)
+	app.config.VideoMetadata[localFileSep] = VideoMeta{
+		Game:        "League of Legends",
+		ContentType: "clip",
+		Event:       "Baron Steal",
+	}
+
+	_, _ = app.db.conn.Exec(`INSERT INTO yt_playlists (id, title) VALUES ('pl-lol', 'League of Legends')`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, local_file) VALUES 
+		('vid-mismatch', 'League of Legends — 2/11/26 — Pentakill', ?),
+		('vid-no-local', 'League of Legends — 2/11/26 — Old Clip', ?),
+		('vid-match', 'League of Legends — 8/04/26 — Baron Steal', ?),
+		('vid-sep-variant', 'League of Legends - 8/04/26 - Baron Steal', ?)
+	`, localFile1, localFileNonExistent, localFile3, localFileSep)
+
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES 
+		('pl-lol', 'vid-mismatch', 1),
+		('pl-lol', 'vid-no-local', 2),
+		('pl-lol', 'vid-match', 3),
+		('pl-lol', 'vid-sep-variant', 4)
+	`)
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-lol")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if len(draft.Videos) != 4 {
+		t.Fatalf("expected 4 videos, got %d", len(draft.Videos))
+	}
+
+	var vMismatch, vNoLocal, vMatch, vSepVariant *CatalogVideoDraft
+	for i := range draft.Videos {
+		v := &draft.Videos[i]
+		if v.VideoID == "vid-mismatch" {
+			vMismatch = v
+		} else if v.VideoID == "vid-no-local" {
+			vNoLocal = v
+		} else if v.VideoID == "vid-match" {
+			vMatch = v
+		} else if v.VideoID == "vid-sep-variant" {
+			vSepVariant = v
+		}
+	}
+
+	if vMismatch == nil || !vMismatch.TitleMismatch || !vMismatch.Mismatch {
+		t.Errorf("expected vid-mismatch to have TitleMismatch=true and Mismatch=true, got %+v", vMismatch)
+	}
+	if vMismatch.LocalTitle != "League of Legends — 8/04/26 — Pentakill" {
+		t.Errorf("expected LocalTitle 'League of Legends — 8/04/26 — Pentakill', got %q", vMismatch.LocalTitle)
+	}
+
+	if vNoLocal == nil || vNoLocal.TitleMismatch {
+		t.Errorf("expected vid-no-local to NOT have TitleMismatch, got %+v", vNoLocal)
+	}
+
+	if vMatch == nil || vMatch.TitleMismatch {
+		t.Errorf("expected vid-match to NOT have TitleMismatch, got %+v", vMatch)
+	}
+
+	if vSepVariant == nil || vSepVariant.TitleMismatch {
+		t.Errorf("expected vid-sep-variant to NOT have TitleMismatch despite dash vs em-dash separator differences, got %+v", vSepVariant)
+	}
+}
+
 
 
 

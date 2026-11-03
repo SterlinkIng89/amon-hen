@@ -28,6 +28,8 @@ type CatalogVideoDraft struct {
 	SortDate           string `json:"sortDate"`
 	Mismatch           bool   `json:"mismatch"`
 	ChronologyIssue    bool   `json:"chronologyIssue"`
+	LocalTitle         string `json:"localTitle,omitempty"`
+	TitleMismatch      bool   `json:"titleMismatch,omitempty"`
 }
 
 type CatalogPlaylistSummary struct {
@@ -645,6 +647,40 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 			vids[i].SortDate = resolveSortDate(vids[i].Title, vids[i].PublishedAt)
 		}
 		draft.Videos = vids
+	}
+
+	for i := range draft.Videos {
+		v := &draft.Videos[i]
+		if v.LocalFile != "" {
+			info, err := os.Stat(v.LocalFile)
+			if err == nil && !info.IsDir() {
+				a.configMu.RLock()
+				meta := a.config.VideoMetadata[v.LocalFile]
+				a.configMu.RUnlock()
+
+				vFile := VideoFile{
+					Name:        filepath.Base(v.LocalFile),
+					Path:        v.LocalFile,
+					Size:        info.Size(),
+					ModTime:     info.ModTime().UnixMilli(),
+					Game:        meta.Game,
+					Episode:     v.Episode,
+					Event:       meta.Event,
+					GameMode:    meta.GameMode,
+					CustomVars:  meta.CustomVars,
+					ContentType: a.resolveContentType(meta, v.LocalFile),
+				}
+				if vFile.Game == "" && draft.Tag != "" {
+					vFile.Game = draft.Tag
+				}
+				generated := a.generateYouTubeTitle(vFile)
+				v.LocalTitle = generated
+				if generated != "" && !titlesMatch(generated, v.Title) {
+					v.TitleMismatch = true
+					v.Mismatch = true
+				}
+			}
+		}
 	}
 
 	// Thumbnail config for tag

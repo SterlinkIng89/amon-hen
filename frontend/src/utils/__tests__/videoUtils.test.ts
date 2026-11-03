@@ -15,6 +15,9 @@ import {
   groupVideosYT,
   formatVideoDuration,
   formatPublishedTime,
+  computeExpectedLocalTitle,
+  isVideoTitleMismatched,
+  titlesMatch,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -142,6 +145,88 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "clip",
       );
       expect(title).toBe("Valorant - 26/08/26 - Insane_Flick");
+    });
+
+    it("generates date from modTime when filename does not have a date prefix", () => {
+      const modTime = new Date(2026, 3, 8, 12, 0, 0).getTime();
+      const title = generateYouTubeTitle(
+        "League of Legends ARAM Highlight.mp4",
+        "League of Legends",
+        0,
+        multiplayerProfile,
+        "ARAM",
+        "Howling Abyss",
+        undefined,
+        modTime,
+        " — ",
+      );
+      expect(title).toBe("League of Legends - ARAM - Howling Abyss - 8/04/26");
+    });
+
+    it("computes expected title using computeExpectedLocalTitle", () => {
+      const modTime = new Date(2026, 7, 4, 12, 0, 0).getTime();
+      const video: VideoFile = {
+        name: "clip.mp4",
+        path: "/videos/clip.mp4",
+        size: 1024,
+        modTime,
+        folder: "/videos",
+        game: "League of Legends",
+        episode: 2,
+      };
+      const title = computeExpectedLocalTitle(video);
+      expect(title).toBe("League of Legends — 4/08/26 — 2");
+    });
+
+    it("detects title mismatch with isVideoTitleMismatched", () => {
+      const modTime = new Date(2026, 7, 4, 12, 0, 0).getTime();
+      const video: VideoFile = {
+        name: "clip.mp4",
+        path: "/videos/clip.mp4",
+        size: 1024,
+        modTime,
+        folder: "/videos",
+        game: "League of Legends",
+        episode: 2,
+        youtubeId: "yt-1",
+        remoteYouTubeTitle: "Wrong YouTube Title",
+      };
+
+      expect(isVideoTitleMismatched(video)).toBe(true);
+
+      const matchingVideo: VideoFile = {
+        ...video,
+        remoteYouTubeTitle: "League of Legends — 4/08/26 — 2",
+      };
+      expect(isVideoTitleMismatched(matchingVideo)).toBe(false);
+
+      // Dash variant (" - " instead of " — ") must also NOT be flagged as mismatch
+      const dashVariantVideo: VideoFile = {
+        ...video,
+        remoteYouTubeTitle: "League of Legends - 4/08/26 - 2",
+      };
+      expect(isVideoTitleMismatched(dashVariantVideo)).toBe(false);
+
+      const unuploadedVideo: VideoFile = {
+        ...video,
+        youtubeId: undefined,
+      };
+      expect(isVideoTitleMismatched(unuploadedVideo)).toBe(false);
+    });
+
+    it("verifies titlesMatch treats separator variants as matching", () => {
+      expect(
+        titlesMatch(
+          "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+          "DEATH STRANDING DIRECTOR'S CUT — 30/10/26 — 11"
+        )
+      ).toBe(true);
+      expect(
+        titlesMatch(
+          "League of Legends - 02/11/26 - Pentakill",
+          "League of Legends - 28/10/26 - Pentakill"
+        )
+      ).toBe(false);
     });
   });
 

@@ -437,3 +437,77 @@ func TestParseEpisodeFromTitle(t *testing.T) {
 		})
 	}
 }
+
+func TestTitlesMatch(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{
+			name: "identical strings match",
+			a:    "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+			b:    "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+			want: true,
+		},
+		{
+			name: "hyphen vs em-dash separator matches",
+			a:    "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+			b:    "DEATH STRANDING DIRECTOR'S CUT — 30/10/26 — 11",
+			want: true,
+		},
+		{
+			name: "en-dash vs em-dash separator matches",
+			a:    "DEATH STRANDING DIRECTOR'S CUT – 30/10/26 – 11",
+			b:    "DEATH STRANDING DIRECTOR'S CUT — 30/10/26 — 11",
+			want: true,
+		},
+		{
+			name: "pipe vs hyphen matches",
+			a:    "Game | 30/10/26 | 1",
+			b:    "Game - 30/10/26 - 1",
+			want: true,
+		},
+		{
+			name: "different dates do not match",
+			a:    "League of Legends - 02/11/26 - Pentakill",
+			b:    "League of Legends - 28/10/26 - Pentakill",
+			want: false,
+		},
+		{
+			name: "different episodes do not match",
+			a:    "Game - 30/10/26 - 10",
+			b:    "Game - 30/10/26 - 11",
+			want: false,
+		},
+		{
+			name: "different games do not match",
+			a:    "Game A - 30/10/26 - 1",
+			b:    "Game B - 30/10/26 - 1",
+			want: false,
+		},
+		{
+			name: "both empty strings match",
+			a:    "",
+			b:    "",
+			want: true,
+		},
+		{
+			name: "one empty string does not match",
+			a:    "Game - 30/10/26",
+			b:    "",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := titlesMatch(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("titlesMatch(%q, %q) = %v; want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+

@@ -1,6 +1,7 @@
 import { FC, useMemo, useState } from "react";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem } from "../../../types";
+import { titlesMatch } from "../../../utils/videoUtils";
 import { PlaylistEpisodeRow } from "./PlaylistEpisodeRow";
 
 export type VideoFilter = "all" | "mismatch" | "needs-thumb" | "synced";
@@ -29,6 +30,7 @@ export interface PlaylistEpisodeTableProps {
   readonly onSyncAllFromTitle?: () => void;
   readonly chronologyIssueIds?: ReadonlySet<string>;
   readonly onResolveDuplicate?: (episode: number) => void;
+  readonly onFixTitleMismatch?: (video: backend.CatalogVideoDraft) => void;
 }
 
 export function isVideoThumbnailSynced(
@@ -106,6 +108,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   onSyncAllFromTitle,
   chronologyIssueIds,
   onResolveDuplicate,
+  onFixTitleMismatch,
 }) => {
   const [filter, setFilter] = useState<VideoFilter>("all");
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
@@ -132,11 +135,13 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     let count = 0;
     for (const vid of videos) {
       const titleEp = vid.titleEpisode ?? 0;
-      if (titleEp > 0) {
-        const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-        if (assigned !== titleEp) {
-          count++;
-        }
+      const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
+      const isEpMismatch = titleEp > 0 && assigned !== titleEp;
+      const isTitleMismatch = Boolean(
+        vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
+      );
+      if (isEpMismatch || isTitleMismatch) {
+        count++;
       }
     }
     return count;
@@ -158,9 +163,12 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     if (filter === "mismatch") {
       return videos.filter((vid) => {
         const titleEp = vid.titleEpisode ?? 0;
-        if (titleEp <= 0) return false;
         const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-        return assigned !== titleEp;
+        const isEpMismatch = titleEp > 0 && assigned !== titleEp;
+        const isTitleMismatch = Boolean(
+          vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
+        );
+        return isEpMismatch || isTitleMismatch;
       });
     }
     return videos.filter((vid) => {
@@ -499,6 +507,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     onSyncVideoFromTitle={onSyncVideoFromTitle}
                     onUpdateSingleVideo={onUpdateSingleVideo}
                     onResolveDuplicate={onResolveDuplicate}
+                    onFixTitleMismatch={onFixTitleMismatch}
                   />
                 );
               })

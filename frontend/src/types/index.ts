@@ -6,6 +6,7 @@ export interface VideoFile {
   folder: string;
   game: string;
   youtubeTitle?: string;
+  remoteYouTubeTitle?: string;
   description?: string;
   privacy?: string;
   youtubeId?: string;

@@ -3,6 +3,7 @@ import { backend } from "../../../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../../../wailsjs/runtime/runtime";
 import { BatchItem } from "../../../types";
 import { cleanThumbnailUrl } from "../../../utils/thumbnailGenerator";
+import { titlesMatch } from "../../../utils/videoUtils";
 import { isVideoThumbnailSynced } from "./PlaylistEpisodeTable";
 
 const SOURCE_BADGES: Record<string, { readonly label: string; readonly className: string }> = {
@@ -136,6 +137,7 @@ export interface PlaylistEpisodeRowProps {
   readonly onSyncVideoFromTitle?: (videoId: string) => void;
   readonly onUpdateSingleVideo?: (videoId: string) => void;
   readonly onResolveDuplicate?: (episode: number) => void;
+  readonly onFixTitleMismatch?: (video: backend.CatalogVideoDraft) => void;
 }
 
 export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
@@ -155,9 +157,14 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
   onSyncVideoFromTitle,
   onUpdateSingleVideo,
   onResolveDuplicate,
+  onFixTitleMismatch,
 }) => {
   const [isBrokenThumb, setIsBrokenThumb] = useState(false);
   const [isProcessingThumb, setIsProcessingThumb] = useState(false);
+
+  const isTitleMismatch = Boolean(
+    video.localFile && video.localTitle && !titlesMatch(video.title, video.localTitle)
+  );
 
   const titleEp = video.titleEpisode ?? 0;
   const isMismatch = titleEp > 0 && assignedEpisode !== titleEp;
@@ -289,6 +296,29 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
             >
               Local
             </span>
+          )}
+          {isTitleMismatch && (
+            <button
+              type="button"
+              onClick={() => onFixTitleMismatch?.(video)}
+              aria-label={`Fix title mismatch for ${video.title}`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-400 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer shrink-0"
+              title={`Recording date title differs: "${video.localTitle}". Click to review and update.`}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>Mismatch</span>
+            </button>
           )}
         </div>
         <div className="text-[10px] text-text-muted font-mono mt-0.5 truncate">{video.videoId}</div>

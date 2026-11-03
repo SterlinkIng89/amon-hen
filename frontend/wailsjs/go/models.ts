@@ -163,6 +163,8 @@ export namespace backend {
 	    sortDate: string;
 	    mismatch: boolean;
 	    chronologyIssue: boolean;
+	    localTitle?: string;
+	    titleMismatch?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogVideoDraft(source);
@@ -187,6 +189,8 @@ export namespace backend {
 	        this.sortDate = source["sortDate"];
 	        this.mismatch = source["mismatch"];
 	        this.chronologyIssue = source["chronologyIssue"];
+	        this.localTitle = source["localTitle"];
+	        this.titleMismatch = source["titleMismatch"];
 	    }
 	}
 	export class HistoricalVideo {
@@ -508,6 +512,7 @@ export namespace backend {
 	    youtubeTitle: string;
 	    description: string;
 	    privacy: string;
+	    privacy_override?: boolean;
 	    youtubeId?: string;
 	    playlistId?: string;
 	    playlistTitle?: string;
@@ -528,6 +533,7 @@ export namespace backend {
 	        this.youtubeTitle = source["youtubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
+	        this.privacy_override = source["privacy_override"];
 	        this.youtubeId = source["youtubeId"];
 	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
@@ -811,22 +817,6 @@ export namespace backend {
 	        this.logoUrl = source["logoUrl"];
 	    }
 	}
-	export class SteamSearchResult {
-	    appId: string;
-	    name: string;
-	    headerUrl?: string;
-
-	    static createFrom(source: any = {}) {
-	        return new SteamSearchResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.appId = source["appId"];
-	        this.name = source["name"];
-	        this.headerUrl = source["headerUrl"];
-	    }
-	}
 	export class SteamGameItem {
 	    appid: number;
 	    name: string;
@@ -903,6 +893,22 @@ export namespace backend {
 	        this.unlockedAchievements = source["unlockedAchievements"];
 	    }
 	}
+	export class SteamSearchResult {
+	    appId: string;
+	    name: string;
+	    headerUrl?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamSearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.name = source["name"];
+	        this.headerUrl = source["headerUrl"];
+	    }
+	}
 	export class SteamTagStats {
 	    tag: string;
 	    category: string;
@@ -973,6 +979,7 @@ export namespace backend {
 	    folder: string;
 	    game: string;
 	    youtubeTitle: string;
+	    remoteYouTubeTitle?: string;
 	    description: string;
 	    privacy: string;
 	    youtubeId?: string;
@@ -998,6 +1005,7 @@ export namespace backend {
 	        this.folder = source["folder"];
 	        this.game = source["game"];
 	        this.youtubeTitle = source["youtubeTitle"];
+	        this.remoteYouTubeTitle = source["remoteYouTubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
 	        this.youtubeId = source["youtubeId"];

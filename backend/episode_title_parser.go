@@ -100,3 +100,22 @@ func parseEpisodeFromTitle(title, sep string) (episode int, ok bool) {
 
 	return 0, false
 }
+
+var titleComparisonSepRegex = regexp.MustCompile(`\s*[\x{2014}\x{2013}\-|]\s*`)
+
+// normalizeTitleForComparison normalizes separators (em dash, en dash, hyphen, pipe)
+// and trims whitespace so titles differing only by separator style are considered equal.
+func normalizeTitleForComparison(title string) string {
+	trimmed := strings.TrimSpace(title)
+	if trimmed == "" {
+		return ""
+	}
+	normalized := titleComparisonSepRegex.ReplaceAllString(trimmed, " - ")
+	return strings.TrimSpace(normalized)
+}
+
+// titlesMatch returns true if two titles are identical after separator and whitespace normalization.
+func titlesMatch(a, b string) bool {
+	return normalizeTitleForComparison(a) == normalizeTitleForComparison(b)
+}
+

@@ -18,6 +18,10 @@ export function ApplyPlaylistCatalog(arg1) {
   return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
 }
 
+export function ApplySingleVideoTitleUpdate(arg1, arg2) {
+  return window['go']['backend']['App']['ApplySingleVideoTitleUpdate'](arg1, arg2);
+}
+
 export function CacheHandler() {
   return window['go']['backend']['App']['CacheHandler']();
 }
@@ -350,6 +354,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['backend']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }
 
+export function SearchSteamGames(arg1) {
+  return window['go']['backend']['App']['SearchSteamGames'](arg1);
+}
+
 export function SelectCustomThumbnailImage() {
   return window['go']['backend']['App']['SelectCustomThumbnailImage']();
 }
@@ -364,10 +372,6 @@ export function SetAutoLaunch(arg1) {
 
 export function SetDefaultExportFolder(arg1) {
   return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
-}
-
-export function SearchSteamGames(arg1) {
-  return window['go']['backend']['App']['SearchSteamGames'](arg1);
 }
 
 export function SetSteamAppID(arg1, arg2) {

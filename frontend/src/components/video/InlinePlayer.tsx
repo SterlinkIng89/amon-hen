@@ -60,6 +60,7 @@ interface InlinePlayerProps {
   onAddToQueue: (item: QueueItem) => void;
   onTagSaved?: () => void;
   onDelete?: () => void;
+  readonly onFixTitleMismatch?: () => void;
 }
 
 export default function InlinePlayer({
@@ -71,6 +72,7 @@ export default function InlinePlayer({
   onAddToQueue,
   onTagSaved,
   onDelete,
+  onFixTitleMismatch,
 }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
@@ -1170,6 +1172,25 @@ export default function InlinePlayer({
         : false) ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
 
+  const expectedTitle = generateYouTubeTitle(
+    video.name,
+    tagInput,
+    episodeInput !== "" ? Number(episodeInput) : video.episode,
+    activeProfile,
+    eventInput,
+    gameModeInput,
+    customVarsInput,
+    video.modTime,
+    undefined,
+    selectedContentType || autoResolvedType,
+  );
+  const isTitleMismatch = Boolean(
+    video.youtubeId &&
+      video.remoteYouTubeTitle &&
+      expectedTitle &&
+      video.remoteYouTubeTitle !== expectedTitle,
+  );
+
   const renderMetadataForm = () => (
     <>
       <div className="flex flex-wrap gap-3">
@@ -1361,9 +1382,36 @@ export default function InlinePlayer({
       <div className="flex gap-3">
         <div className="flex flex-col gap-2 flex-1">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-white/90">
-              YouTube Title
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-white/90">
+                YouTube Title
+              </label>
+              {isTitleMismatch && onFixTitleMismatch && (
+                <button
+                  type="button"
+                  onClick={onFixTitleMismatch}
+                  aria-label="Fix title mismatch"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer"
+                  title={`Remote YouTube title differs: "${video.remoteYouTubeTitle}". Click to review and update.`}
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>Mismatch</span>
+                </button>
+              )}
+            </div>
             <span
               className={`text-xs tabular-nums transition-colors ${
                 (ytTitle || "").length >= 100

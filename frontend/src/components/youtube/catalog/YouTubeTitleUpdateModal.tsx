@@ -13,25 +13,31 @@ export interface CatalogTitleProgress {
 export interface YouTubeTitleUpdateModalProps {
   readonly isOpen: boolean;
   readonly changes: readonly backend.CatalogTitleChange[];
-  readonly isLoadingPreview: boolean;
+  readonly isLoadingPreview?: boolean;
   readonly isApplying: boolean;
   readonly result: backend.CatalogTitleUpdateResult | null;
   readonly error?: string | null;
   readonly progress?: CatalogTitleProgress | null;
   readonly onConfirm: () => void;
   readonly onClose: () => void;
+  readonly title?: string;
+  readonly description?: string;
+  readonly confirmLabel?: string;
 }
 
 export const YouTubeTitleUpdateModal: FC<YouTubeTitleUpdateModalProps> = ({
   isOpen,
   changes,
-  isLoadingPreview,
+  isLoadingPreview = false,
   isApplying,
   result,
   error,
   progress: externalProgress,
   onConfirm,
   onClose,
+  title,
+  description,
+  confirmLabel,
 }) => {
   const [internalProgress, setInternalProgress] = useState<CatalogTitleProgress | null>(null);
 
@@ -83,10 +89,10 @@ export const YouTubeTitleUpdateModal: FC<YouTubeTitleUpdateModalProps> = ({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 id="title-update-modal-title" className="text-sm font-semibold text-text-primary">
-              Update YouTube video titles
+              {title || "Update YouTube video titles"}
             </h3>
             <p className="text-xs text-text-secondary mt-1">
-              Synchronize video titles on YouTube to match renumbered episode numbers.
+              {description || "Synchronize video titles on YouTube to match renumbered episode numbers."}
             </p>
           </div>
           {!isApplying && (
@@ -224,18 +230,35 @@ export const YouTubeTitleUpdateModal: FC<YouTubeTitleUpdateModalProps> = ({
                           ✕ Failed
                         </span>
                       )}
-                      <span className="text-red-400/80">Ep {ch.oldEpisode}</span>
-                      <span className="text-text-muted">→</span>
-                      <span className="text-emerald-400 font-semibold">Ep {ch.newEpisode}</span>
+                      {ch.oldEpisode !== ch.newEpisode &&
+                      ((ch.oldEpisode && ch.oldEpisode > 0) || (ch.newEpisode && ch.newEpisode > 0)) ? (
+                        <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono">
+                          <span className="text-red-400/80">Ep {ch.oldEpisode}</span>
+                          <span className="text-text-muted">→</span>
+                          <span className="text-emerald-400 font-semibold">Ep {ch.newEpisode}</span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="text-xs space-y-1">
-                    <p className="text-text-muted line-through truncate text-[11px]" title={ch.oldTitle}>
-                      {ch.oldTitle}
-                    </p>
-                    <p className="text-text-primary font-medium truncate" title={ch.newTitle}>
-                      {ch.newTitle}
-                    </p>
+                  <div className="text-xs space-y-1.5 mt-1">
+                    {ch.oldTitle && (
+                      <div className="flex items-start gap-2 text-[11px]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 shrink-0 border border-red-500/20">
+                          Current
+                        </span>
+                        <span className="text-text-muted line-through break-all" title={ch.oldTitle}>
+                          {ch.oldTitle}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-2 text-xs">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 shrink-0 border border-emerald-500/20">
+                        Corrected
+                      </span>
+                      <span className="text-text-primary font-medium break-all" title={ch.newTitle}>
+                        {ch.newTitle}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -264,7 +287,7 @@ export const YouTubeTitleUpdateModal: FC<YouTubeTitleUpdateModalProps> = ({
                 ? activeProgress
                   ? `Updating (${activeProgress.current}/${activeProgress.total})...`
                   : "Updating on YouTube..."
-                : `Update ${changes.length} titles`}
+                : confirmLabel || (changes.length === 1 ? "Update title" : `Update ${changes.length} titles`)}
             </button>
           )}
         </div>
@@ -272,3 +295,5 @@ export const YouTubeTitleUpdateModal: FC<YouTubeTitleUpdateModalProps> = ({
     </div>
   );
 };
+
+export default YouTubeTitleUpdateModal;

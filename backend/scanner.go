@@ -18,8 +18,9 @@ type VideoFile struct {
 	ModTime       int64  `json:"modTime"`
 	Folder        string `json:"folder"`
 	Game          string `json:"game"`
-	YouTubeTitle  string `json:"youtubeTitle"`
-	Description   string `json:"description"`
+	YouTubeTitle       string `json:"youtubeTitle"`
+	RemoteYouTubeTitle string `json:"remoteYouTubeTitle,omitempty"`
+	Description        string `json:"description"`
 	Privacy       string `json:"privacy"`
 	YouTubeID     string `json:"youtubeId,omitempty"`
 	PlaylistID    string `json:"playlistId,omitempty"`
@@ -51,6 +52,9 @@ func (a *App) generateYouTubeTitle(video VideoFile) string {
 		}
 		y := year[len(year)-2:]
 		dateStr = fmt.Sprintf("%s/%s/%s", d, month, y)
+	} else if video.ModTime > 0 {
+		t := time.UnixMilli(video.ModTime)
+		dateStr = fmt.Sprintf("%d/%02d/%s", t.Day(), t.Month(), t.Format("06"))
 	} else {
 		now := time.Now()
 		dateStr = fmt.Sprintf("%d/%02d/%s", now.Day(), now.Month(), now.Format("06"))
@@ -170,10 +174,11 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 		id      string
 		gameTag string
 		episode int
+		title   string
 	}
 	ytMetaMap := make(map[string]ytLinkedMeta)
 
-	vRows, err := a.db.conn.Query(`SELECT id, local_file, COALESCE(game_tag, ''), COALESCE(episode, 0) FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
+	vRows, err := a.db.conn.Query(`SELECT id, local_file, COALESCE(game_tag, ''), COALESCE(episode, 0), COALESCE(title, '') FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
 	if err == nil {
 		defer vRows.Close()
 		for vRows.Next() {
@@ -181,11 +186,12 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 			var lpath sql.NullString
 			var gTag string
 			var ep int
-			if err := vRows.Scan(&id, &lpath, &gTag, &ep); err == nil {
+			var title string
+			if err := vRows.Scan(&id, &lpath, &gTag, &ep, &title); err == nil {
 				if lpath.Valid && lpath.String != "" {
 					pathMap[lpath.String] = id
 					linkedFiles[filepath.Base(lpath.String)] = id
-					metaVal := ytLinkedMeta{id: id, gameTag: gTag, episode: ep}
+					metaVal := ytLinkedMeta{id: id, gameTag: gTag, episode: ep, title: title}
 					ytMetaMap[lpath.String] = metaVal
 					ytMetaMap[filepath.Base(lpath.String)] = metaVal
 				}
@@ -257,18 +263,33 @@ func (a *App) GetVideosFromFolders(folders []string) ([]VideoFile, error) {
 				resolvedPrivacy = ""
 			}
 
+			remoteTitle := ytMetaMap[path].title
+			if remoteTitle == "" {
+				remoteTitle = ytMetaMap[d.Name()].title
+			}
+
+			ytID := meta.YouTubeID
+			if ytID == "" {
+				if id := pathMap[path]; id != "" {
+					ytID = id
+				} else {
+					ytID = linkedFiles[d.Name()]
+				}
+			}
+
 			videos = append(videos, VideoFile{
-				Name:         d.Name(),
-				Path:         path,
-				Size:         info.Size(),
-				ModTime:      info.ModTime().UnixMilli(),
-				Folder:       dir,
-				Game:         meta.Game,
-				YouTubeTitle: meta.YouTubeTitle,
-				Description:  meta.Description,
-				Privacy:      resolvedPrivacy,
-				YouTubeID:    meta.YouTubeID,
-				PlaylistID:   resolvedPlId,
+				Name:               d.Name(),
+				Path:               path,
+				Size:               info.Size(),
+				ModTime:            info.ModTime().UnixMilli(),
+				Folder:             dir,
+				Game:               meta.Game,
+				YouTubeTitle:       meta.YouTubeTitle,
+				RemoteYouTubeTitle: remoteTitle,
+				Description:        meta.Description,
+				Privacy:            resolvedPrivacy,
+				YouTubeID:          ytID,
+				PlaylistID:         resolvedPlId,
 				PlaylistTitle: func() string {
 					if t := pTitleMap[meta.YouTubeID]; t != "" {
 						return t

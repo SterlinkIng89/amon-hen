@@ -64,7 +64,10 @@ describe("InlinePlayer layout & feature parity", () => {
     window.dispatchEvent(new Event("resize"));
   };
 
-  const renderPlayer = (videoOverrides?: Partial<VideoFile>) => {
+  const renderPlayer = (
+    videoOverrides?: Partial<VideoFile>,
+    extraProps?: { onFixTitleMismatch?: () => void }
+  ) => {
     const video = { ...baseMockVideo, ...videoOverrides };
     return render(
       <InlinePlayer
@@ -73,6 +76,7 @@ describe("InlinePlayer layout & feature parity", () => {
         onAddToQueue={vi.fn()}
         onPrev={vi.fn()}
         onNext={vi.fn()}
+        {...extraProps}
       />
     );
   };
@@ -153,5 +157,22 @@ describe("InlinePlayer layout & feature parity", () => {
 
     fireEvent.click(openFolderBtn);
     expect(OpenFolderInExplorer).toHaveBeenCalledWith(baseMockVideo.folder);
+  });
+
+  it("renders mismatch button next to YouTube Title when remote title differs and calls onFixTitleMismatch", () => {
+    setViewport(1920, 1080);
+    const onFixTitleMismatch = vi.fn();
+    renderPlayer(
+      {
+        youtubeId: "yt-123",
+        remoteYouTubeTitle: "Old Wrong Date Title",
+      },
+      { onFixTitleMismatch }
+    );
+
+    const mismatchBtn = screen.getByRole("button", { name: "Fix title mismatch" });
+    expect(mismatchBtn).toBeInTheDocument();
+    fireEvent.click(mismatchBtn);
+    expect(onFixTitleMismatch).toHaveBeenCalled();
   });
 });

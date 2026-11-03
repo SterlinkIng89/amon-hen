@@ -112,4 +112,73 @@ describe("YouTubeTitleUpdateModal", () => {
     expect(screen.getByText("Updating...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /updating \(1\/2\)\.\.\./i })).toBeInTheDocument();
   });
+
+  it("renders single title mismatch correction with custom title and without episode badges", () => {
+    const singleMismatch = [
+      backend.CatalogTitleChange.createFrom({
+        videoId: "v-lol-1",
+        oldTitle: "League of Legends — 2/11/26 — Pentakill",
+        newTitle: "League of Legends — 8/04/26 — Pentakill",
+        oldEpisode: 0,
+        newEpisode: 0,
+      }),
+    ];
+
+    render(
+      <YouTubeTitleUpdateModal
+        isOpen={true}
+        changes={singleMismatch}
+        isLoadingPreview={false}
+        isApplying={false}
+        result={null}
+        title="Correct video title"
+        description="Update video title on YouTube to match local recording date."
+        confirmLabel="Apply corrected title"
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Correct video title")).toBeInTheDocument();
+    expect(
+      screen.getByText("Update video title on YouTube to match local recording date.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("League of Legends — 2/11/26 — Pentakill")).toBeInTheDocument();
+    expect(screen.getByText("League of Legends — 8/04/26 — Pentakill")).toBeInTheDocument();
+    // Episode badges should NOT be rendered when oldEpisode and newEpisode are 0
+    expect(
+      screen.getByRole("button", { name: /apply corrected title/i })
+    ).toBeInTheDocument();
+  });
+
+  it("does not render episode change badge when oldEpisode equals newEpisode", () => {
+    const identicalEpisodes = [
+      backend.CatalogTitleChange.createFrom({
+        videoId: "v-ds-11",
+        oldTitle: "DEATH STRANDING DIRECTOR'S CUT - 2/11/26 - 11",
+        newTitle: "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+        oldEpisode: 11,
+        newEpisode: 11,
+      }),
+    ];
+
+    render(
+      <YouTubeTitleUpdateModal
+        isOpen={true}
+        changes={identicalEpisodes}
+        isLoadingPreview={false}
+        isApplying={false}
+        result={null}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Episode badge should NOT be rendered when oldEpisode === newEpisode
+    expect(screen.queryByText(/Ep 11/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Corrected")).toBeInTheDocument();
+    expect(screen.getByText("DEATH STRANDING DIRECTOR'S CUT - 2/11/26 - 11")).toBeInTheDocument();
+    expect(screen.getByText("DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11")).toBeInTheDocument();
+  });
 });

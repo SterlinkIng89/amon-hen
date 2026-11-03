@@ -61,6 +61,7 @@ export const PlaylistCatalogPanel: FC = () => {
     titleUpdateError,
     previewTitleUpdates,
     applyTitleUpdates,
+    applySingleTitleUpdate,
   } = usePlaylistCatalog();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,8 +107,10 @@ export const PlaylistCatalogPanel: FC = () => {
   const [titleChanges, setTitleChanges] = useState<backend.CatalogTitleChange[]>([]);
   const [isLoadingTitlePreview, setIsLoadingTitlePreview] = useState(false);
   const [titleUpdateResult, setTitleUpdateResult] = useState<backend.CatalogTitleUpdateResult | null>(null);
+  const [singleTitleTarget, setSingleTitleTarget] = useState<{ videoId: string; newTitle: string } | null>(null);
 
   const handleOpenTitleModal = async () => {
+    setSingleTitleTarget(null);
     setIsTitleModalOpen(true);
     setIsLoadingTitlePreview(true);
     setTitleUpdateResult(null);
@@ -116,7 +119,33 @@ export const PlaylistCatalogPanel: FC = () => {
     setIsLoadingTitlePreview(false);
   };
 
+  const handleFixTitleMismatch = (vid: backend.CatalogVideoDraft) => {
+    if (!vid.localTitle) return;
+    const change = backend.CatalogTitleChange.createFrom({
+      videoId: vid.videoId,
+      oldTitle: vid.title,
+      newTitle: vid.localTitle,
+      oldEpisode: vid.titleEpisode || 0,
+      newEpisode: vid.episode || 0,
+    });
+    setSingleTitleTarget({ videoId: vid.videoId, newTitle: vid.localTitle });
+    setTitleChanges([change]);
+    setTitleUpdateResult(null);
+    setIsLoadingTitlePreview(false);
+    setIsTitleModalOpen(true);
+  };
+
   const handleConfirmTitleUpdates = async () => {
+    if (singleTitleTarget) {
+      const res = await applySingleTitleUpdate(
+        singleTitleTarget.videoId,
+        singleTitleTarget.newTitle
+      );
+      if (res) {
+        setTitleUpdateResult(res);
+      }
+      return;
+    }
     const res = await applyTitleUpdates();
     if (res) {
       setTitleUpdateResult(res);
@@ -130,6 +159,7 @@ export const PlaylistCatalogPanel: FC = () => {
     setResolvingEpisode(null);
     setIsTitleModalOpen(false);
     setTitleUpdateResult(null);
+    setSingleTitleTarget(null);
   }, [selectedPlaylistId]);
 
   // Fetch known game tags for autocomplete
@@ -665,6 +695,7 @@ export const PlaylistCatalogPanel: FC = () => {
                     onSyncAllFromTitle={syncAllFromTitle}
                     chronologyIssueIds={chronologyIssueIds}
                     onResolveDuplicate={setResolvingEpisode}
+                    onFixTitleMismatch={handleFixTitleMismatch}
                   />
 
                   {resolvingEpisode !== null && (
@@ -745,10 +776,18 @@ export const PlaylistCatalogPanel: FC = () => {
                   isApplying={isUpdatingTitles}
                   result={titleUpdateResult}
                   error={titleUpdateError}
+                  title={singleTitleTarget ? "Correct video title" : undefined}
+                  description={
+                    singleTitleTarget
+                      ? "Update video title on YouTube to match local recording date."
+                      : undefined
+                  }
+                  confirmLabel={singleTitleTarget ? "Apply corrected title" : undefined}
                   onConfirm={() => void handleConfirmTitleUpdates()}
                   onClose={() => {
                     setIsTitleModalOpen(false);
                     setTitleUpdateResult(null);
+                    setSingleTitleTarget(null);
                   }}
                 />
               </div>

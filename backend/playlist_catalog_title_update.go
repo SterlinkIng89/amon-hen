@@ -146,3 +146,43 @@ func (a *App) ApplyCatalogTitleUpdates(assignments []CatalogAssignment) (Catalog
 	appLog("[Catalog] Applied %d title updates on YouTube (%d failed)", len(result.Updated), len(result.Failed))
 	return result, nil
 }
+
+// ApplySingleVideoTitleUpdate updates a single video's title on YouTube and syncs SQLite and local config.
+func (a *App) ApplySingleVideoTitleUpdate(videoID string, newTitle string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	cleanVideoID := strings.TrimSpace(videoID)
+	cleanNewTitle := strings.TrimSpace(newTitle)
+	if cleanVideoID == "" {
+		return fmt.Errorf("video ID is required")
+	}
+	if cleanNewTitle == "" {
+		return fmt.Errorf("title cannot be empty")
+	}
+
+	if err := a.UpdateYouTubeVideoMetadata(cleanVideoID, cleanNewTitle, "", ""); err != nil {
+		return err
+	}
+
+	a.db.mu.Lock()
+	var localFile sql.NullString
+	_ = a.db.conn.QueryRow("SELECT local_file FROM yt_videos WHERE id = ?", cleanVideoID).Scan(&localFile)
+	a.db.mu.Unlock()
+
+	if localFile.Valid && strings.TrimSpace(localFile.String) != "" {
+		lf := strings.TrimSpace(localFile.String)
+		a.configMu.Lock()
+		if a.config.VideoMetadata != nil {
+			if meta, exists := a.config.VideoMetadata[lf]; exists {
+				meta.YouTubeTitle = cleanNewTitle
+				a.config.VideoMetadata[lf] = meta
+			}
+		}
+		a.configMu.Unlock()
+		_ = a.saveConfig()
+	}
+
+	appLog("[ApplySingleVideoTitleUpdate] Updated title for %s to %q", cleanVideoID, cleanNewTitle)
+	return nil
+}

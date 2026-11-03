@@ -559,5 +559,71 @@ describe("PlaylistEpisodeTable", () => {
       `https://www.youtube.com/watch?v=${sampleVideos[0].videoId}`
     );
   });
+
+  it("renders mismatch button for title mismatch and calls onFixTitleMismatch", () => {
+    const onFixTitleMismatch = vi.fn();
+    const mismatchedVideo = {
+      videoId: "yt-mismatch",
+      title: "League of Legends — 2/11/26 — ARAM",
+      localTitle: "League of Legends — 8/04/26 — ARAM",
+      titleMismatch: true,
+      mismatch: true,
+      localFile: "video.mp4",
+      episode: 1,
+    } as backend.CatalogVideoDraft;
+
+    render(
+      <PlaylistEpisodeTable
+        videos={[mismatchedVideo]}
+        episodes={{ "yt-mismatch": 1 }}
+        onEpisodeChange={vi.fn()}
+        onFixTitleMismatch={onFixTitleMismatch}
+      />
+    );
+
+    const mismatchBtn = screen.getByRole("button", {
+      name: `Fix title mismatch for ${mismatchedVideo.title}`,
+    });
+    expect(mismatchBtn).toBeInTheDocument();
+    fireEvent.click(mismatchBtn);
+    expect(onFixTitleMismatch).toHaveBeenCalledWith(mismatchedVideo);
+  });
+
+  it("includes title mismatch rows when Mismatch filter tab is active", () => {
+    const matchingVideo = {
+      videoId: "yt-match",
+      title: "Game — 8/04/26",
+      localTitle: "Game — 8/04/26",
+      titleMismatch: false,
+      mismatch: false,
+      localFile: "match.mp4",
+      episode: 1,
+    } as backend.CatalogVideoDraft;
+
+    const mismatchedVideo = {
+      videoId: "yt-mismatch",
+      title: "Game — 2/11/26",
+      localTitle: "Game — 8/04/26",
+      titleMismatch: true,
+      mismatch: true,
+      localFile: "mismatch.mp4",
+      episode: 2,
+    } as backend.CatalogVideoDraft;
+
+    render(
+      <PlaylistEpisodeTable
+        videos={[matchingVideo, mismatchedVideo]}
+        episodes={{ "yt-match": 1, "yt-mismatch": 2 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    // Click Mismatch filter button
+    const mismatchTab = screen.getByRole("button", { name: /Mismatch \(\s*1\s*\)/i });
+    fireEvent.click(mismatchTab);
+
+    expect(screen.queryByText("Game — 8/04/26")).not.toBeInTheDocument();
+    expect(screen.getByText("Game — 2/11/26")).toBeInTheDocument();
+  });
 });
 

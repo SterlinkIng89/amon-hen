@@ -5,6 +5,8 @@ import {
   formatDuration,
   generateYouTubeTitle,
   getVideoTitleSegments,
+  computeExpectedLocalTitle,
+  isVideoTitleMismatched,
 } from "../../utils/videoUtils";
 import { getTagColor } from "../../utils/tagColors";
 import { useInView } from "../../hooks/useInView";
@@ -50,6 +52,7 @@ export interface VideoPillProps {
   readonly onQuickQueue?: () => void;
   readonly onOpenInExplorer?: () => void;
   readonly onEdit?: () => void;
+  readonly onFixTitleMismatch?: (video: VideoFile) => void;
 }
 
 function VideoPillComponent({
@@ -73,6 +76,7 @@ function VideoPillComponent({
   onQuickQueue,
   onOpenInExplorer,
   onEdit,
+  onFixTitleMismatch,
 }: VideoPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref);
@@ -93,6 +97,8 @@ function VideoPillComponent({
   onOpenInExplorerRef.current = onOpenInExplorer;
   const onEditRef = useRef(onEdit);
   onEditRef.current = onEdit;
+  const onFixTitleMismatchRef = useRef(onFixTitleMismatch);
+  onFixTitleMismatchRef.current = onFixTitleMismatch;
 
   // Helper: Is it a YouTube video or a Local file?
   const isYT = "id" in video && !("path" in video);
@@ -130,6 +136,13 @@ function VideoPillComponent({
   const activeProfile = isLocal
     ? gameProfiles[(video as VideoFile).game || ""]
     : undefined;
+  const isTitleMismatch = Boolean(
+    localFile && isVideoTitleMismatched(localFile, gameProfiles),
+  );
+  const expectedLocalTitle =
+    isTitleMismatch && localFile
+      ? computeExpectedLocalTitle(localFile, gameProfiles)
+      : "";
   const { fullTitle: title, segments: titleSegments } = getVideoTitleSegments(
     video,
     activeProfile,
@@ -673,6 +686,37 @@ function VideoPillComponent({
                     </svg>
                   </div>
                 )}
+                {isTitleMismatch && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (localFile) {
+                        onFixTitleMismatchRef.current?.(localFile);
+                      }
+                    }}
+                    aria-label={`Fix title mismatch for ${title}`}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-400 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer shrink-0"
+                    title={`Recording date title differs: "${expectedLocalTitle}". Click to review and update.`}
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>Mismatch</span>
+                  </button>
+                )}
                 {showQueuedBadge && (
                   <span
                     className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400"
@@ -748,6 +792,7 @@ export function areVideoPillPropsEqual(
         p.game !== n.game ||
         p.episode !== n.episode ||
         p.youtubeTitle !== n.youtubeTitle ||
+        p.remoteYouTubeTitle !== n.remoteYouTubeTitle ||
         p.name !== n.name ||
         p.contentType !== n.contentType
       ) {
@@ -783,7 +828,8 @@ export function areVideoPillPropsEqual(
     prev.readOnlyThumbnail === next.readOnlyThumbnail &&
     prev.gameProfiles === next.gameProfiles &&
     prev.isQueued === next.isQueued &&
-    Boolean(prev.onEdit) === Boolean(next.onEdit)
+    Boolean(prev.onEdit) === Boolean(next.onEdit) &&
+    Boolean(prev.onFixTitleMismatch) === Boolean(next.onFixTitleMismatch)
   );
 }
 

@@ -13,6 +13,8 @@ export function ApplyCatalogTitleUpdates(arg1:Array<backend.CatalogAssignment>):
 
 export function ApplyPlaylistCatalog(arg1:backend.CatalogApplyRequest):Promise<void>;
 
+export function ApplySingleVideoTitleUpdate(arg1:string,arg2:string):Promise<void>;
+
 export function CacheHandler():Promise<http.Handler>;
 
 export function CancelUpload(arg1:string):Promise<void>;
@@ -179,6 +181,8 @@ export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
+export function SearchSteamGames(arg1:string):Promise<Array<backend.SteamSearchResult>>;
+
 export function SelectCustomThumbnailImage():Promise<string>;
 
 export function SelectExportFolder():Promise<string>;
@@ -186,8 +190,6 @@ export function SelectExportFolder():Promise<string>;
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetDefaultExportFolder(arg1:string):Promise<void>;
-
-export function SearchSteamGames(arg1:string):Promise<Array<backend.SteamSearchResult>>;
 
 export function SetSteamAppID(arg1:string,arg2:string):Promise<void>;
 
