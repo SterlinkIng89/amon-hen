@@ -347,7 +347,12 @@ export default function InlinePlayer({
   const [customVarsInput, setCustomVarsInput] = useState<
     Record<string, string>
   >(video.customVars || {});
-  const [description, setDescription] = useState(video.description || "");
+  const { defaultVideoDescription } = useAppStore();
+  const [description, setDescription] = useState(
+    video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
+  );
+  const [hasExplicitDescriptionOverride, setHasExplicitDescriptionOverride] =
+    useState<boolean>(() => Boolean(video.description));
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
     (video.privacy as PlaylistPrivacy) ||
       useAppStore.getState().defaultVideoPrivacy,
@@ -489,7 +494,10 @@ export default function InlinePlayer({
     setEventInput(video.event || "");
     setGameModeInput(video.gameMode || "");
     setCustomVarsInput(video.customVars || {});
-    setDescription(video.description || "");
+    setDescription(
+      video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
+    );
+    setHasExplicitDescriptionOverride(Boolean(video.description));
     setPrivacy(
       (video.privacy as PlaylistPrivacy) ||
         useAppStore.getState().defaultVideoPrivacy,
@@ -599,6 +607,7 @@ export default function InlinePlayer({
     playlistId,
     selectedContentType,
     hasExplicitPrivacyOverride,
+    hasExplicitDescriptionOverride,
     youtubeId: video.youtubeId,
   });
   formSnapshotRef.current = {
@@ -613,6 +622,7 @@ export default function InlinePlayer({
     playlistId,
     selectedContentType,
     hasExplicitPrivacyOverride,
+    hasExplicitDescriptionOverride,
     youtubeId: video.youtubeId,
   };
 
@@ -630,11 +640,13 @@ export default function InlinePlayer({
       }
       const privacyToSave =
         s.youtubeId || s.hasExplicitPrivacyOverride ? s.privacy : "";
+      const descriptionToSave =
+        s.youtubeId || s.hasExplicitDescriptionOverride ? s.description : "";
       SaveVideoMetadata(
         path,
         s.tagInput,
         s.ytTitle,
-        s.description,
+        descriptionToSave,
         privacyToSave,
         s.playlistId,
         ep,
@@ -903,12 +915,16 @@ export default function InlinePlayer({
 
       const privacyToSave =
         video.youtubeId || hasExplicitPrivacyOverride ? privacy : "";
+      const descriptionToSave =
+        video.youtubeId || hasExplicitDescriptionOverride
+          ? description
+          : (video.description || "");
       for (const p of pathsToSave) {
         await SaveVideoMetadata(
           p,
           tagInput,
           titleToSave,
-          description,
+          descriptionToSave,
           privacyToSave,
           playlistId,
           resolvedEpisode,
@@ -1164,7 +1180,11 @@ export default function InlinePlayer({
           undefined,
           effectiveContentType,
         )) ||
-    description !== (video.description || "") ||
+    (Boolean(video.youtubeId)
+      ? description !== (video.description || "")
+      : hasExplicitDescriptionOverride
+        ? description !== (video.description || "")
+        : false) ||
     (Boolean(video.youtubeId)
       ? privacy !== (video.privacy || useAppStore.getState().defaultVideoPrivacy)
       : hasExplicitPrivacyOverride
@@ -1440,13 +1460,35 @@ export default function InlinePlayer({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">
-          Description
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-white/90">
+            Description
+          </label>
+          {defaultVideoDescription && !video.youtubeId && (
+            <button
+              type="button"
+              onClick={() => {
+                setDescription(defaultVideoDescription);
+                setHasExplicitDescriptionOverride(true);
+              }}
+              className="text-xs text-accent hover:underline cursor-pointer"
+            >
+              Apply default
+            </button>
+          )}
+        </div>
         <textarea
           className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card resize-y min-h-[68px]"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            setHasExplicitDescriptionOverride(true);
+          }}
+          placeholder={
+            defaultVideoDescription
+              ? "Enter description or apply default template..."
+              : "Optional description..."
+          }
           rows={2}
         />
       </div>

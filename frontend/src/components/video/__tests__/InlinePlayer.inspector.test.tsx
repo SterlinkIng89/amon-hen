@@ -3,6 +3,7 @@ import { render, fireEvent, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import InlinePlayer from "../InlinePlayer";
 import { VideoFile } from "../../../types";
+import { useAppStore } from "../../../store/useAppStore";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   UploadToYouTube: vi.fn().mockResolvedValue(undefined),
@@ -151,4 +152,40 @@ describe("InlinePlayer inspector controls and spacing (#140)", () => {
     expect(desc?.className).toContain("min-h-[68px]");
     expect(desc?.className).toContain("resize-y");
   });
+
+  it("prefills default description and renders Apply default button for local unuploaded video", () => {
+    useAppStore.setState({
+      defaultVideoDescription: "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090",
+    });
+
+    const { container } = setupPlayer();
+
+    const desc = container.querySelector("textarea") as HTMLTextAreaElement;
+    expect(desc.value).toBe("Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090");
+
+    const applyBtn = screen.getByRole("button", { name: /apply default/i });
+    expect(applyBtn).toBeInTheDocument();
+  });
+
+  it("preserves custom description on video and allows applying default via button", () => {
+    useAppStore.setState({
+      defaultVideoDescription: "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090",
+    });
+
+    const videoWithCustomDesc: VideoFile = {
+      ...baseMockVideo,
+      description: "Original custom description",
+    };
+
+    const { container } = setupPlayer({ video: videoWithCustomDesc });
+
+    const desc = container.querySelector("textarea") as HTMLTextAreaElement;
+    expect(desc.value).toBe("Original custom description");
+
+    const applyBtn = screen.getByRole("button", { name: /apply default/i });
+    fireEvent.click(applyBtn);
+
+    expect(desc.value).toBe("Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090");
+  });
 });
+

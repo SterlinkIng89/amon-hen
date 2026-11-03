@@ -64,7 +64,9 @@ export default function UploadDialog({
         video.modTime,
       ),
   );
-  const [description, setDescription] = useState(video.description || "");
+  const [description, setDescription] = useState(
+    video.description || useAppStore.getState().defaultVideoDescription || "",
+  );
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
     (video.privacy as PlaylistPrivacy) ||
       useAppStore.getState().defaultVideoPrivacy,

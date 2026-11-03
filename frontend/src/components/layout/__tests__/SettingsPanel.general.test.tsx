@@ -95,6 +95,22 @@ describe("SettingsPanel - General Tab (#155)", () => {
     expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith("/export/folder");
   });
 
+  it("renders default video description textarea and updates store on change", async () => {
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    const descInput = await screen.findByTestId("default-video-description-input");
+    expect(descInput).toBeInTheDocument();
+    expect(descInput).toHaveValue("");
+
+    fireEvent.change(descInput, {
+      target: { value: "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090" },
+    });
+
+    expect(useAppStore.getState().defaultVideoDescription).toBe(
+      "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090",
+    );
+  });
+
   it("does not render the legacy Tag Playlists section", async () => {
     render(<SettingsPanel open={true} onClose={() => {}} />);
 
@@ -102,3 +118,4 @@ describe("SettingsPanel - General Tab (#155)", () => {
     expect(screen.queryByText("Tag Playlists")).not.toBeInTheDocument();
   });
 });
+
