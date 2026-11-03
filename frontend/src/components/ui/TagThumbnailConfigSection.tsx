@@ -24,6 +24,7 @@ export interface TagThumbnailConfigSectionProps {
   readonly elementRects?: ThumbnailRects;
   readonly selectedElement?: ThumbnailElementId | null;
   readonly onSelectElement?: (element: ThumbnailElementId | null) => void;
+  readonly steamAppId?: string | null;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -56,6 +57,7 @@ export default function TagThumbnailConfigSection({
   elementRects,
   selectedElement: propsSelectedElement,
   onSelectElement,
+  steamAppId,
 }: TagThumbnailConfigSectionProps) {
   const [localRects, setLocalRects] = useState<ThumbnailRects>({});
   const [internalSelectedElement, setInternalSelectedElement] = useState<ThumbnailElementId | null>(null);
@@ -73,7 +75,7 @@ export default function TagThumbnailConfigSection({
   };
 
   const { steamAssets, loadingAssets, baseImage, logoImage, gameTitle } =
-    useThumbnailAssets(tag, config);
+    useThumbnailAssets(tag, config, steamAppId);
 
   const [uploadingPlaylist, setUploadingPlaylist] = useState<"vod" | "clip" | null>(null);
   const [coverStatus, setCoverStatus] = useState<{

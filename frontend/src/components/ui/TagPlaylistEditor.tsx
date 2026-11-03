@@ -12,8 +12,11 @@ import { YTPlaylist, PlaylistPrivacy, TagThumbnailConfig } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
 import { parseTagPlaylistConfig } from "../../utils/tagConfigParser";
 import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import { useSteamAppBinding } from "../../hooks/useSteamAppBinding";
 import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import TagThumbnailConfigSection from "./TagThumbnailConfigSection";
+import { SteamMatchBadge } from "./SteamMatchBadge";
+import { SteamGameSelectorModal } from "../youtube/catalog/SteamGameSelectorModal";
 
 export interface TagPlaylistEditorProps {
   readonly tag: string;
@@ -77,7 +80,17 @@ export default function TagPlaylistEditor({
     text: string;
   } | null>(null);
 
-  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(tag, thumbConfig);
+  const [showSteamSelector, setShowSteamSelector] = useState(false);
+  const {
+    appId: steamAppId,
+    isLoading: isSteamBindingLoading,
+    setBound: setSteamAppBound,
+  } = useSteamAppBinding(tag);
+  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(
+    tag,
+    thumbConfig,
+    isSteamBindingLoading ? undefined : steamAppId,
+  );
 
   useEffect(() => {
     setNewVodTitle(tag);
@@ -847,12 +860,20 @@ export default function TagPlaylistEditor({
           </button>
         </div>
 
+        <SteamMatchBadge
+          appId={steamAppId}
+          gameTitle={steamAppId ? gameTitle : undefined}
+          isLoading={isSteamBindingLoading}
+          onOpenSelector={() => setShowSteamSelector(true)}
+        />
+
         <TagThumbnailConfigSection
           tag={tag}
           value={thumbConfig}
           onChange={setThumbConfig}
           vodPlaylistId={vodPlaylistId}
           clipPlaylistId={clipPlaylistId}
+          steamAppId={isSteamBindingLoading ? undefined : steamAppId}
           onPlaylistCoverUpdated={(plId, newThumbUrl) => {
             setPlaylists((prev) =>
               prev.map((p) => (p.id === plId ? { ...p, thumbnailUrl: newThumbUrl } : p))
@@ -881,6 +902,15 @@ export default function TagPlaylistEditor({
           </button>
         </div>
       )}
+
+      <SteamGameSelectorModal
+        isOpen={showSteamSelector}
+        tag={tag}
+        currentAppId={steamAppId}
+        currentGameTitle={steamAppId ? gameTitle : undefined}
+        onSelectAppId={setSteamAppBound}
+        onClose={() => setShowSteamSelector(false)}
+      />
     </div>
   );
 }

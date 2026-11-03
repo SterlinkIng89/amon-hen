@@ -105,6 +105,10 @@ export const SteamGameSelectorModal: FC<SteamGameSelectorModalProps> = ({
   const handleApplyCustomAppId = async () => {
     const trimmed = customAppId.trim();
     if (!trimmed) return;
+    if (!/^\d+$/.test(trimmed)) {
+      setErrorMsg("AppID must contain digits only.");
+      return;
+    }
     await handleSelectGame(trimmed);
   };
 

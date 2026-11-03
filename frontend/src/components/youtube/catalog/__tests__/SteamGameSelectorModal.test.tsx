@@ -158,4 +158,32 @@ describe("SteamGameSelectorModal", () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  it("rejects a non-numeric custom AppID with an inline error", async () => {
+    vi.mocked(appBackend.SearchSteamGames).mockResolvedValue([]);
+
+    const onSelectAppId = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <SteamGameSelectorModal
+        isOpen={true}
+        tag="Psychonauts"
+        currentAppId={null}
+        onSelectAppId={onSelectAppId}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. 3830"), {
+      target: { value: "abc123" },
+    });
+    fireEvent.click(screen.getByText("Apply AppID"));
+
+    expect(await screen.findByText("AppID must contain digits only.")).toBeInTheDocument();
+    expect(appBackend.SetSteamAppID).not.toHaveBeenCalled();
+    expect(onSelectAppId).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
+
