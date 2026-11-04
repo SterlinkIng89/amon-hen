@@ -545,8 +545,13 @@ func (a *App) finalizeUpload(path, title, playlistID, gameTag string, episode in
 		}
 	}
 	if resolvedThumb != "" {
-		if _, err := a.UpdateYouTubeThumbnail(videoID, resolvedThumb); err != nil {
+		if _, err := a.UpdateYouTubeThumbnailForEpisode(videoID, resolvedThumb, episode); err != nil {
 			appLog("[Queue] Warning: Failed to set YouTube thumbnail for video %s: %v", videoID, err)
+			runtime.EventsEmit(a.ctx, "youtube:thumbnail-error", map[string]string{
+				"videoId": videoID,
+				"path":    path,
+				"message": err.Error(),
+			})
 		}
 	}
 

@@ -19,6 +19,7 @@ interface StatusBadgeProps {
   readonly isProcessing?: boolean;
   readonly isStale?: boolean;
   readonly staleEpisode?: number;
+  readonly hasLocalPreview?: boolean;
   readonly batchItem?: BatchItem;
   readonly onResolveDuplicate?: () => void;
 }
@@ -30,6 +31,7 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
   isProcessing,
   isStale,
   staleEpisode,
+  hasLocalPreview,
   batchItem,
   onResolveDuplicate,
 }) => {
@@ -112,7 +114,9 @@ const EpisodeStatusBadge: FC<StatusBadgeProps> = ({
           ? staleEpisode
             ? `Thumbnail has old episode number (${staleEpisode})`
             : "Thumbnail has old episode number"
-          : undefined
+          : hasLocalPreview
+            ? "Custom thumbnail exists locally but has not been uploaded to YouTube"
+            : undefined
       }
     >
       Needs thumb
@@ -175,6 +179,11 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
     assignedEpisode > 0 &&
     thumbEp !== assignedEpisode &&
     ((batchItem?.thumbnailUpdatedAt ?? video.thumbnailUpdatedAt ?? 0) > 0 || batchItem?.status === "done");
+  const hasLocalPreview = Boolean(
+    !isSynced &&
+    video.thumbnailUrl &&
+    video.thumbnailUrl.startsWith("/cache/yt_thumbs/")
+  );
   const sourceBadge = video.source ? SOURCE_BADGES[video.source] : undefined;
 
   const handleOpenYouTube = (e: React.MouseEvent) => {
@@ -414,6 +423,7 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
             isProcessing={isProcessingThumb}
             isStale={isStale}
             staleEpisode={thumbEp}
+            hasLocalPreview={hasLocalPreview}
             batchItem={batchItem}
             onResolveDuplicate={
               isDuplicate && onResolveDuplicate

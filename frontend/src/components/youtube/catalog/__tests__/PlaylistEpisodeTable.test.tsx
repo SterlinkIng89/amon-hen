@@ -422,6 +422,41 @@ describe("PlaylistEpisodeTable", () => {
     expect(tbody?.textContent).not.toContain("Synced");
   });
 
+  it("displays Needs thumb with local-only tooltip when thumbnail is cached on disk but un-uploaded to YouTube", () => {
+    const videoWithLocalThumb: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "yt-local-only",
+        title: "Death Stranding - Episode 9",
+        thumbnailUrl: "/cache/yt_thumbs/local_ds9.jpg?v=1777888999",
+        existingEpisode: 0,
+        episode: 9,
+        thumbnailUpdatedAt: 0,
+        thumbnailEpisode: 0,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const { container } = render(
+      <PlaylistEpisodeTable
+        videos={videoWithLocalThumb}
+        episodes={{ "yt-local-only": 9 }}
+        onEpisodeChange={vi.fn()}
+      />
+    );
+
+    const needsThumbBadge = screen.getByText("Needs thumb");
+    expect(needsThumbBadge).toBeInTheDocument();
+    expect(needsThumbBadge).toHaveAttribute(
+      "title",
+      "Custom thumbnail exists locally but has not been uploaded to YouTube"
+    );
+
+    const tbody = container.querySelector("tbody");
+    expect(tbody?.textContent).not.toContain("Synced");
+
+    expect(screen.getByRole("button", { name: /Needs thumbnail/i })).toHaveTextContent("(1)");
+    expect(screen.getByRole("button", { name: /^Synced/i })).toHaveTextContent("(0)");
+  });
+
   it("gracefully falls back to No thumb placeholder when image onError triggers", () => {
     const videoWithBrokenThumb: backend.CatalogVideoDraft[] = [
       {

@@ -590,11 +590,8 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 		var localFile string
 		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode, &vd.Duration); err == nil {
 			vd.LocalFile = localFile
-			resolvedThumb, modTime, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
+			resolvedThumb, _, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
 			vd.ThumbnailUrl = resolvedThumb
-			if vd.ThumbnailUpdatedAt <= 0 && modTime > 0 {
-				vd.ThumbnailUpdatedAt = modTime
-			}
 			if vd.ThumbnailEpisode <= 0 && matchedEpisode > 0 {
 				vd.ThumbnailEpisode = matchedEpisode
 			}

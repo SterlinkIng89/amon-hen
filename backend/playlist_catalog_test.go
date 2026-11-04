@@ -682,7 +682,7 @@ func TestResolveVideoThumbnailCandidate(t *testing.T) {
 	}
 }
 
-func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing.T) {
+func TestGetPlaylistCatalogDraft_ThumbnailSyncAndEpisodeTracking(t *testing.T) {
 	app := setupTestDB(t)
 	defer app.db.conn.Close()
 
@@ -715,7 +715,7 @@ func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing
 		t.Fatalf("failed to insert playlist: %v", err)
 	}
 
-	// Video 1: 0 timestamp and 0 custom_thumb_episode in DB, but has file on disk
+	// Video 1: 0 timestamp and 0 custom_thumb_episode in DB, but has file on disk (un-uploaded custom preview)
 	_, err = app.db.conn.Exec(`
 		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
 		VALUES ('vid-cache-backfill', 'Vid 1', '2026-01-01T00:00:00Z', 'https://example.com/v1.jpg', 0, 0)
@@ -724,7 +724,7 @@ func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing
 		t.Fatalf("failed to insert vid 1: %v", err)
 	}
 
-	// Video 2: Explicitly persisted timestamp and episode in DB
+	// Video 2: Explicitly persisted timestamp and episode in DB (uploaded to YouTube)
 	_, err = app.db.conn.Exec(`
 		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
 		VALUES ('vid-db-persisted', 'Vid 2', '2026-01-02T00:00:00Z', 'https://example.com/v2.jpg', 1888999000, 5)
@@ -759,13 +759,13 @@ func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing
 		t.Fatalf("expected 3 videos, got %d", len(draft.Videos))
 	}
 
-	// Check Video 1: backfilled ThumbnailUpdatedAt from disk
+	// Check Video 1: does NOT backfill ThumbnailUpdatedAt from disk cache (remains 0 because un-uploaded)
 	v1 := draft.Videos[0]
-	if v1.ThumbnailUpdatedAt <= 0 {
-		t.Errorf("expected v1.ThumbnailUpdatedAt > 0 backfilled from disk, got %d", v1.ThumbnailUpdatedAt)
+	if v1.ThumbnailUpdatedAt != 0 {
+		t.Errorf("expected v1.ThumbnailUpdatedAt == 0 (un-uploaded to YouTube), got %d", v1.ThumbnailUpdatedAt)
 	}
 	if !strings.HasPrefix(v1.ThumbnailUrl, "/cache/yt_thumbs/"+k1+".jpg?v=") {
-		t.Errorf("expected v1.ThumbnailUrl to use cached file, got %q", v1.ThumbnailUrl)
+		t.Errorf("expected v1.ThumbnailUrl to use cached file preview, got %q", v1.ThumbnailUrl)
 	}
 
 	// Check Video 2: keeps DB custom_thumb_updated_at and custom_thumb_episode
@@ -777,10 +777,10 @@ func TestGetPlaylistCatalogDraft_BackfillThumbnailUpdatedAtAndEpisode(t *testing
 		t.Errorf("expected v2.ThumbnailEpisode 5, got %d", v2.ThumbnailEpisode)
 	}
 
-	// Check Video 3: backfilled ThumbnailUpdatedAt and ThumbnailEpisode from episode cache file
+	// Check Video 3: does NOT backfill ThumbnailUpdatedAt, but tracks ThumbnailEpisode from episode cache file
 	v3 := draft.Videos[2]
-	if v3.ThumbnailUpdatedAt <= 0 {
-		t.Errorf("expected v3.ThumbnailUpdatedAt > 0 backfilled from disk, got %d", v3.ThumbnailUpdatedAt)
+	if v3.ThumbnailUpdatedAt != 0 {
+		t.Errorf("expected v3.ThumbnailUpdatedAt == 0 (un-uploaded to YouTube), got %d", v3.ThumbnailUpdatedAt)
 	}
 	if v3.ThumbnailEpisode != 3 {
 		t.Errorf("expected v3.ThumbnailEpisode 3 backfilled from matched episode cache file, got %d", v3.ThumbnailEpisode)
