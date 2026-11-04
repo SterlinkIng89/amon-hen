@@ -13,6 +13,8 @@ vi.mock("../../../../../wailsjs/go/backend/App", () => ({
   SaveCustomThumbnail: vi.fn(),
   GetSteamGameAssets: vi.fn(),
   UpdateYouTubeThumbnail: vi.fn(),
+  UpdateYouTubeThumbnailForEpisode: vi.fn(),
+  GetCustomThumbnail: vi.fn(),
   GetAllGameTags: vi.fn(),
 }));
 
@@ -455,7 +457,84 @@ describe("PlaylistCatalogPanel", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  it("switches playlists during active batch thumbnail update without crashing", async () => {
+    const pendingUpdates: Array<(val: string) => void> = [];
+    vi.mocked(AppBindings.UpdateYouTubeThumbnailForEpisode).mockImplementation(() => {
+      return new Promise<string>((resolve) => {
+        pendingUpdates.push(resolve);
+      });
+    });
+    vi.mocked(AppBindings.SaveCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/thumb.jpg");
+    vi.mocked(AppBindings.GetCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/thumb.jpg");
+
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "Dead Space 1", videoCount: 2, linked: false, tag: "dead_space" },
+      { playlistId: "pl-2", title: "Deadlock", videoCount: 1, linked: false, tag: "deadlock" },
+    ] as any);
+
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockImplementation(async (playlistId) => {
+      if (playlistId === "pl-1") {
+        return {
+          playlistId: "pl-1",
+          title: "Dead Space 1",
+          videoCount: 2,
+          kind: "vod",
+          tag: "dead_space",
+          tagConfidence: "high",
+          linked: false,
+          videos: [
+            { videoId: "ds-1", title: "Dead Space - Ep 1", episode: 1, thumbnailUpdatedAt: 0 },
+            { videoId: "ds-2", title: "Dead Space - Ep 2", episode: 2, thumbnailUpdatedAt: 0 },
+          ],
+        } as any;
+      }
+      return {
+        playlistId: "pl-2",
+        title: "Deadlock",
+        videoCount: 1,
+        kind: "vod",
+        tag: "deadlock",
+        tagConfidence: "high",
+        linked: false,
+        videos: [
+          { videoId: "dl-1", title: "Deadlock - Ep 1", episode: 1, thumbnailUpdatedAt: 0 },
+        ],
+      } as any;
+    });
+
+    render(<PlaylistCatalogPanel />);
+
+    // Select Playlist 1
+    const pl1Btn = await screen.findByText("Dead Space 1");
+    fireEvent.click(pl1Btn);
+
+    // Click Update Unsynced
+    const updateUnsyncedBtn = await screen.findByRole("button", { name: /update unsynced/i });
+    expect(updateUnsyncedBtn).toBeInTheDocument();
+    fireEvent.click(updateUnsyncedBtn);
+
+    // Cancel button should appear indicating batch is processing
+    expect(await screen.findByRole("button", { name: /cancel/i })).toBeInTheDocument();
+
+    // Now switch to Playlist 2 while batch is in progress
+    const pl2Btn = screen.getByText("Deadlock");
+    fireEvent.click(pl2Btn);
+
+    // Deadlock videos should render safely without ErrorBoundary crash
+    expect(await screen.findByText("Deadlock - Ep 1")).toBeInTheDocument();
+
+    // Resolve in-flight update from previous playlist
+    for (const resolve of pendingUpdates) {
+      resolve("https://yt.com/done.jpg");
+    }
+
+    // Verify view is still intact and not crashed
+    expect(screen.queryByText(/channel crashed/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Deadlock - Ep 1")).toBeInTheDocument();
+  });
 });
+
 
 
 

@@ -116,7 +116,9 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   const batchItemMap = useMemo(() => {
     const map = new Map<string, BatchItem>();
     for (const item of batchItems) {
-      map.set(item.videoId, item);
+      if (item && item.videoId) {
+        map.set(item.videoId, item);
+      }
     }
     return map;
   }, [batchItems]);

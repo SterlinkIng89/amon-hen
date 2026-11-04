@@ -359,5 +359,116 @@ describe("useBatchThumbnailUpdate", () => {
     expect(result.current.items[1].videoId).toBe("felvidek-2");
     expect(result.current.items[0].status).toBe("pending");
   });
+
+  it("does not create undefined items or sparse holes when playlist or items change during in-flight batch execution", async () => {
+    let resolveFirstUpdate: ((val: string) => void) | null = null;
+    let resolveSecondUpdate: ((val: string) => void) | null = null;
+
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation((videoId) => {
+      if (videoId === "p1-v1") {
+        return new Promise<string>((resolve) => {
+          resolveFirstUpdate = resolve;
+        });
+      }
+      if (videoId === "p1-v2") {
+        return new Promise<string>((resolve) => {
+          resolveSecondUpdate = resolve;
+        });
+      }
+      return Promise.resolve("https://yt.com/done.jpg");
+    });
+
+    const onCompleted = vi.fn();
+    const playlist1Items: BatchThumbnailInputItem[] = [
+      { videoId: "p1-v1", episode: 1, cacheKey: "yt:p1-v1" },
+      { videoId: "p1-v2", episode: 2, cacheKey: "yt:p1-v2" },
+      { videoId: "p1-v3", episode: 3, cacheKey: "yt:p1-v3" },
+    ];
+
+    const { result, rerender } = renderHook(
+      (props: { playlistId?: string; tag: string; items: BatchThumbnailInputItem[] }) =>
+        useBatchThumbnailUpdate({
+          playlistId: props.playlistId,
+          tag: props.tag,
+          config: mockConfig,
+          items: props.items,
+          onCompleted,
+        }),
+      { initialProps: { playlistId: "pl-1", tag: "Dead Space", items: playlist1Items } }
+    );
+
+    // Start batch on Playlist 1
+    let startPromise: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+
+    expect(result.current.running).toBe(true);
+    expect(result.current.items[0].status).toBe("uploading");
+
+    // Switch to Playlist 2 with fewer items while batch is running
+    const playlist2Items: BatchThumbnailInputItem[] = [
+      { videoId: "p2-v1", episode: 1, cacheKey: "yt:p2-v1" },
+    ];
+
+    act(() => {
+      rerender({ playlistId: "pl-2", tag: "Deadlock", items: playlist2Items });
+    });
+
+    // Now resolve in-flight updates from Playlist 1
+    await act(async () => {
+      resolveFirstUpdate?.("https://yt.com/first.jpg");
+      resolveSecondUpdate?.("https://yt.com/second.jpg");
+      await startPromise;
+    });
+
+    // State must belong to Playlist 2 without any sparse or undefined holes
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0]).toBeDefined();
+    expect(result.current.items[0].videoId).toBe("p2-v1");
+    expect(result.current.items[0].status).toBe("pending");
+    expect(result.current.items.some((i) => i === undefined || i.status === undefined)).toBe(false);
+    expect(result.current.running).toBe(false);
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
+
+  it("aborts safely when component unmounts during active batch execution", async () => {
+    let resolveUpdate: ((val: string) => void) | null = null;
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation(() => {
+      return new Promise<string>((resolve) => {
+        resolveUpdate = resolve;
+      });
+    });
+
+    const onCompleted = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useBatchThumbnailUpdate({
+        tag: "Hades",
+        config: mockConfig,
+        items: mockItems,
+        onCompleted,
+      })
+    );
+
+    let startPromise: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+
+    expect(result.current.running).toBe(true);
+
+    // Unmount while running
+    unmount();
+
+    // Resolve deferred backend operation
+    await act(async () => {
+      resolveUpdate?.("https://yt.com/done.jpg");
+      await startPromise;
+    });
+
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
 });
+
+
 

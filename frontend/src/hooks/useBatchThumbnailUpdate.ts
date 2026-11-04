@@ -19,6 +19,7 @@ export interface BatchThumbnailInputItem {
 }
 
 export interface UseBatchThumbnailUpdateArgs {
+  readonly playlistId?: string;
   readonly tag: string;
   readonly config?: TagThumbnailConfig;
   readonly items: readonly BatchThumbnailInputItem[];
@@ -58,7 +59,20 @@ async function persistAndNotifyThumbnail(key: string, dataUrl: string): Promise<
   return savedPath;
 }
 
+function toPendingBatchItem(item: BatchThumbnailInputItem): BatchItem {
+  return {
+    videoId: item.videoId,
+    episode: item.episode,
+    cacheKey: item.cacheKey,
+    localFile: item.localFile,
+    thumbnailUpdatedAt: item.thumbnailUpdatedAt,
+    thumbnailEpisode: item.thumbnailEpisode,
+    status: "pending",
+  };
+}
+
 export function useBatchThumbnailUpdate({
+  playlistId,
   tag,
   config,
   items: inputItems,
@@ -68,19 +82,12 @@ export function useBatchThumbnailUpdate({
   const effectiveConfig: TagThumbnailConfig = config ?? DEFAULT_BATCH_CONFIG;
 
   const [batchItems, setBatchItems] = useState<BatchItem[]>(() =>
-    inputItems.map((item) => ({
-      videoId: item.videoId,
-      episode: item.episode,
-      cacheKey: item.cacheKey,
-      localFile: item.localFile,
-      thumbnailUpdatedAt: item.thumbnailUpdatedAt,
-      thumbnailEpisode: item.thumbnailEpisode,
-      status: "pending",
-    }))
+    inputItems.map(toPendingBatchItem)
   );
 
   const [running, setRunning] = useState(false);
   const cancelRequestedRef = useRef(false);
+  const runIdRef = useRef(0);
 
   const batchItemsRef = useRef(batchItems);
   useEffect(() => {
@@ -88,25 +95,31 @@ export function useBatchThumbnailUpdate({
   }, [batchItems]);
 
   const prevTagRef = useRef(tag);
+  const prevPlaylistIdRef = useRef(playlistId);
+
   useEffect(() => {
-    if (prevTagRef.current !== tag) {
+    const tagChanged = prevTagRef.current !== tag;
+    const playlistChanged = prevPlaylistIdRef.current !== playlistId;
+
+    if (tagChanged || playlistChanged) {
       prevTagRef.current = tag;
-      if (running) {
-        cancelRequestedRef.current = true;
-      }
-      setBatchItems(
-        inputItems.map((item) => ({
-          videoId: item.videoId,
-          episode: item.episode,
-          cacheKey: item.cacheKey,
-          localFile: item.localFile,
-          thumbnailUpdatedAt: item.thumbnailUpdatedAt,
-          thumbnailEpisode: item.thumbnailEpisode,
-          status: "pending",
-        }))
-      );
+      prevPlaylistIdRef.current = playlistId;
+
+      runIdRef.current++;
+      cancelRequestedRef.current = true;
+      setRunning(false);
+
+      setBatchItems(inputItems.map(toPendingBatchItem));
     }
-  }, [tag, running, inputItems]);
+  }, [tag, playlistId, inputItems]);
+
+  // Clean up on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      runIdRef.current++;
+      cancelRequestedRef.current = true;
+    };
+  }, []);
 
   // Sync batchItems when inputItems change if not currently running
   useEffect(() => {
@@ -143,45 +156,59 @@ export function useBatchThumbnailUpdate({
 
   const isAssetsReady = !loadingAssets && Boolean(baseImage);
 
-  const updateItemStatus = (
-    index: number,
-    status: BatchItemStatus,
-    error?: string,
-    thumbnailUpdatedAt?: number,
-    thumbnailEpisode?: number
-  ) => {
-    setBatchItems((prev) => {
-      const next = [...prev];
-      next[index] = {
-        ...next[index],
-        status,
-        error,
-        ...(thumbnailUpdatedAt !== undefined ? { thumbnailUpdatedAt } : {}),
-        ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
-      };
-      return next;
-    });
-  };
+  const updateItemStatus = useCallback(
+    (
+      videoId: string,
+      status: BatchItemStatus,
+      error?: string,
+      thumbnailUpdatedAt?: number,
+      thumbnailEpisode?: number
+    ) => {
+      setBatchItems((prev) =>
+        prev.map((item) =>
+          item.videoId === videoId
+            ? {
+                ...item,
+                status,
+                error,
+                ...(thumbnailUpdatedAt !== undefined ? { thumbnailUpdatedAt } : {}),
+                ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
+              }
+            : item
+        )
+      );
+    },
+    []
+  );
 
   const processQueue = useCallback(
-    async (targetIndices: number[]) => {
-      if (running || !isAssetsReady || targetIndices.length === 0) return;
+    async (targetVideoIds: readonly string[]) => {
+      if (running || !isAssetsReady || targetVideoIds.length === 0) return;
 
+      const currentRunId = ++runIdRef.current;
       setRunning(true);
       cancelRequestedRef.current = false;
 
       let quotaExceeded = false;
 
-      for (let i = 0; i < targetIndices.length; i++) {
-        const itemIdx = targetIndices[i];
+      for (let i = 0; i < targetVideoIds.length; i++) {
+        const videoId = targetVideoIds[i];
+
+        if (runIdRef.current !== currentRunId) {
+          return;
+        }
 
         if (cancelRequestedRef.current || quotaExceeded) {
-          updateItemStatus(itemIdx, "skipped");
+          updateItemStatus(videoId, "skipped");
           continue;
         }
 
-        const item = batchItemsRef.current[itemIdx] ?? batchItems[itemIdx];
-        updateItemStatus(itemIdx, "rendering");
+        const item = batchItemsRef.current.find((b) => b.videoId === videoId);
+        if (!item) {
+          continue;
+        }
+
+        updateItemStatus(videoId, "rendering");
 
         try {
           const dataUrl = renderTagThumbnailDataUrl({
@@ -192,17 +219,30 @@ export function useBatchThumbnailUpdate({
             config: effectiveConfig,
           });
 
-          updateItemStatus(itemIdx, "uploading");
+          if (runIdRef.current !== currentRunId) {
+            return;
+          }
+
+          updateItemStatus(videoId, "uploading");
 
           const savedPath = await persistAndNotifyThumbnail(item.cacheKey, dataUrl);
+          if (runIdRef.current !== currentRunId) {
+            return;
+          }
 
           if (item.localFile) {
             await persistAndNotifyThumbnail(item.localFile, dataUrl).catch(() => {});
+            if (runIdRef.current !== currentRunId) {
+              return;
+            }
           }
 
           const ytKey = `yt:${item.videoId}`;
           if (item.cacheKey !== ytKey) {
             await persistAndNotifyThumbnail(ytKey, dataUrl).catch(() => {});
+            if (runIdRef.current !== currentRunId) {
+              return;
+            }
           }
 
           const newThumbUrl = await UpdateYouTubeThumbnailForEpisode(
@@ -210,9 +250,12 @@ export function useBatchThumbnailUpdate({
             savedPath,
             item.episode
           );
+          if (runIdRef.current !== currentRunId) {
+            return;
+          }
 
           updateItemStatus(
-            itemIdx,
+            videoId,
             "done",
             undefined,
             Math.floor(Date.now() / 1000),
@@ -220,8 +263,12 @@ export function useBatchThumbnailUpdate({
           );
           onVideoUpdated?.(item.videoId, newThumbUrl, item.episode);
         } catch (err: unknown) {
+          if (runIdRef.current !== currentRunId) {
+            return;
+          }
+
           const msg = err instanceof Error ? err.message : String(err);
-          updateItemStatus(itemIdx, "failed", msg);
+          updateItemStatus(videoId, "failed", msg);
 
           if (msg.toLowerCase().includes("quota")) {
             quotaExceeded = true;
@@ -229,60 +276,72 @@ export function useBatchThumbnailUpdate({
         }
       }
 
-      setRunning(false);
-      onCompleted?.();
+      if (runIdRef.current === currentRunId) {
+        setRunning(false);
+        onCompleted?.();
+      }
     },
-    [batchItems, baseImage, logoImage, gameTitle, effectiveConfig, isAssetsReady, onVideoUpdated, onCompleted, running]
+    [
+      running,
+      isAssetsReady,
+      updateItemStatus,
+      baseImage,
+      logoImage,
+      gameTitle,
+      effectiveConfig,
+      onVideoUpdated,
+      onCompleted,
+    ]
   );
 
   const start = useCallback(async () => {
-    const allIndices = batchItems.map((_, idx) => idx);
-    await processQueue(allIndices);
+    const allVideoIds = batchItems.map((item) => item.videoId);
+    await processQueue(allVideoIds);
   }, [batchItems, processQueue]);
 
   const startSelected = useCallback(
     async (videoIds: readonly string[]) => {
       const selectedSet = new Set(videoIds);
-      const selectedIndices = batchItems
-        .map((item, idx) => (selectedSet.has(item.videoId) ? idx : -1))
-        .filter((idx) => idx !== -1);
-      await processQueue(selectedIndices);
+      const targetVideoIds = batchItems
+        .filter((item) => selectedSet.has(item.videoId))
+        .map((item) => item.videoId);
+      await processQueue(targetVideoIds);
     },
     [batchItems, processQueue]
   );
 
   const startUnsynced = useCallback(
     async (maxCount?: number) => {
-      let unsyncedIndices = batchItems
-        .map((item, idx) =>
-          (!item.thumbnailUpdatedAt || item.thumbnailUpdatedAt <= 0) && item.status !== "done" ? idx : -1
-        )
-        .filter((idx) => idx !== -1);
+      let unsyncedItems = batchItems.filter(
+        (item) =>
+          (!item.thumbnailUpdatedAt || item.thumbnailUpdatedAt <= 0) &&
+          item.status !== "done"
+      );
 
       if (typeof maxCount === "number" && maxCount > 0) {
-        unsyncedIndices = unsyncedIndices.slice(0, maxCount);
+        unsyncedItems = unsyncedItems.slice(0, maxCount);
       }
 
-      await processQueue(unsyncedIndices);
+      await processQueue(unsyncedItems.map((item) => item.videoId));
     },
     [batchItems, processQueue]
   );
 
   const updateSingle = useCallback(
     async (videoId: string) => {
-      const targetIdx = batchItems.findIndex((item) => item.videoId === videoId);
-      if (targetIdx !== -1) {
-        await processQueue([targetIdx]);
+      const itemExists = batchItems.some((item) => item.videoId === videoId);
+      if (itemExists) {
+        await processQueue([videoId]);
       }
     },
     [batchItems, processQueue]
   );
 
   const retryFailed = useCallback(async () => {
-    const failedIndices = batchItems
-      .map((item, idx) => (item.status === "failed" ? idx : -1))
-      .filter((idx) => idx !== -1);
-    await processQueue(failedIndices);
+    const failedVideoIds = batchItems
+      .filter((item) => item.status === "failed")
+      .map((item) => item.videoId);
+    await processQueue(failedVideoIds);
   }, [batchItems, processQueue]);
 
   const cancel = useCallback(() => {
