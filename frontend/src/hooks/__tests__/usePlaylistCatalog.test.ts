@@ -277,6 +277,37 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.draft?.videos[0].thumbnailUpdatedAt).toBe(1750000100);
   });
 
+  it("updates video description in draft state", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValueOnce([]);
+    const initialDraft = {
+      playlistId: "pl-desc-sync",
+      title: "Sync Playlist",
+      videoCount: 1,
+      kind: "vod",
+      tag: "sync",
+      tagConfidence: "high",
+      linked: false,
+      videos: [
+        { videoId: "yt-desc-1", title: "Video 1", description: "Old description", episode: 1 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(initialDraft as any);
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-desc-sync");
+    });
+
+    expect(result.current.draft?.videos[0].description).toBe("Old description");
+
+    act(() => {
+      result.current.updateVideoDescription("yt-desc-1", "New description applied");
+    });
+
+    expect(result.current.draft?.videos[0].description).toBe("New description applied");
+  });
+
   it("updates playlist template preview and hasCustomTemplate in playlists and active draft", async () => {
     const mockPlaylists = [
       {

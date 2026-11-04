@@ -13,6 +13,7 @@ import (
 type CatalogVideoDraft struct {
 	VideoID            string `json:"videoId"`
 	Title              string `json:"title"`
+	Description        string `json:"description"`
 	PublishedAt        string `json:"publishedAt"`
 	ThumbnailUrl       string `json:"thumbnailUrl"`
 	Duration           string `json:"duration,omitempty"`
@@ -572,7 +573,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''),
 		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0),
-		       COALESCE(v.custom_thumb_episode, 0), COALESCE(v.duration, '')
+		       COALESCE(v.custom_thumb_episode, 0), COALESCE(v.duration, ''), COALESCE(v.description, '')
 		FROM yt_playlist_items pi
 		JOIN yt_videos v ON pi.video_id = v.id
 		WHERE pi.playlist_id = ?
@@ -588,7 +589,7 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	for rows.Next() {
 		var vd CatalogVideoDraft
 		var localFile string
-		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode, &vd.Duration); err == nil {
+		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode, &vd.Duration, &vd.Description); err == nil {
 			vd.LocalFile = localFile
 			resolvedThumb, _, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
 			vd.ThumbnailUrl = resolvedThumb

@@ -10,6 +10,7 @@ import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
 import { DuplicateEpisodeDialog } from "./DuplicateEpisodeDialog";
 import { YouTubeTitleUpdateModal } from "./YouTubeTitleUpdateModal";
 import { BatchThumbnailProgress } from "./BatchThumbnailProgress";
+import { BatchDescriptionProgress } from "./BatchDescriptionProgress";
 import { SteamGameSelectorModal } from "./SteamGameSelectorModal";
 import {
   GetAllGameTags,
@@ -40,6 +41,7 @@ export const PlaylistCatalogPanel: FC = () => {
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updateVideoDescription,
     updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
@@ -203,7 +205,7 @@ export const PlaylistCatalogPanel: FC = () => {
       setMatchedSteamAppId(null);
       return;
     }
-    void GetSteamAppID(editedTag.trim())
+    void Promise.resolve(GetSteamAppID(editedTag.trim()))
       .then((appId) => {
         if (active) {
           setMatchedSteamAppId(appId && appId !== "NOT_FOUND" && appId !== "0" && appId !== "" ? appId : null);
@@ -960,6 +962,13 @@ export const PlaylistCatalogPanel: FC = () => {
                   onStartUnsynced={(max) => void startUnsynced(max)}
                   onCancel={cancelBatch}
                   onRetryFailed={() => void retryFailed()}
+                />
+
+                <BatchDescriptionProgress
+                  playlistId={selectedPlaylistId ?? undefined}
+                  videos={draft.videos}
+                  selectedVideoIds={selectedVideoIds}
+                  onVideoUpdated={updateVideoDescription}
                 />
               </div>
             </div>

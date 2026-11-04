@@ -34,6 +34,7 @@ vi.mock("../../../../hooks/useThumbnailAssets", () => ({
 describe("PlaylistCatalogPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(AppBindings.GetSteamAppID).mockResolvedValue("" as any);
     vi.mocked(AppBindings.GetTagPlaylistConfig).mockResolvedValue({} as any);
     vi.mocked(AppBindings.GetSteamGameAssets).mockResolvedValue(null as any);
     vi.mocked(AppBindings.GetAllGameTags).mockResolvedValue(["control", "alan_wake", "cyberpunk"]);
@@ -509,8 +510,8 @@ describe("PlaylistCatalogPanel", () => {
     const pl1Btn = await screen.findByText("Dead Space 1");
     fireEvent.click(pl1Btn);
 
-    // Click Update Unsynced
-    const updateUnsyncedBtn = await screen.findByRole("button", { name: /update unsynced/i });
+    // Click Update Unsynced for thumbnails
+    const updateUnsyncedBtn = await screen.findByTitle(/Update thumbnails for/i);
     expect(updateUnsyncedBtn).toBeInTheDocument();
     fireEvent.click(updateUnsyncedBtn);
 
@@ -533,8 +534,30 @@ describe("PlaylistCatalogPanel", () => {
     expect(screen.queryByText(/channel crashed/i)).not.toBeInTheDocument();
     expect(screen.getByText("Deadlock - Ep 1")).toBeInTheDocument();
   });
+
+  it("renders YouTube Description Batch card when a playlist draft is selected", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-desc", title: "Desc Test Playlist", videoCount: 1, linked: false, tag: "hades" },
+    ] as any);
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValue({
+      playlistId: "pl-desc",
+      title: "Desc Test Playlist",
+      videoCount: 1,
+      kind: "vod",
+      tag: "hades",
+      tagConfidence: "high",
+      linked: false,
+      videos: [
+        { videoId: "h-1", title: "Hades 1", episode: 1, description: "Hello description" },
+      ],
+    } as any);
+
+    render(<PlaylistCatalogPanel />);
+
+    const plBtn = await screen.findByText("Desc Test Playlist");
+    fireEvent.click(plBtn);
+
+    expect(await screen.findByText("YouTube Description Batch")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Enter description template to apply/i)).toBeInTheDocument();
+  });
 });
-
-
-
-

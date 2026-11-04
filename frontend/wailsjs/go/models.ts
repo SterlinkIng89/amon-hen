@@ -148,6 +148,7 @@ export namespace backend {
 	export class CatalogVideoDraft {
 	    videoId: string;
 	    title: string;
+	    description: string;
 	    publishedAt: string;
 	    thumbnailUrl: string;
 	    duration?: string;
@@ -174,6 +175,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.videoId = source["videoId"];
 	        this.title = source["title"];
+	        this.description = source["description"];
 	        this.publishedAt = source["publishedAt"];
 	        this.thumbnailUrl = source["thumbnailUrl"];
 	        this.duration = source["duration"];

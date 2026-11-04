@@ -938,6 +938,35 @@ func TestGetPlaylistCatalogDraft_TitleMismatch(t *testing.T) {
 	}
 }
 
+func TestGetPlaylistCatalogDraft_Description(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
 
+	_, _ = app.db.conn.Exec(`INSERT INTO yt_playlists (id, title) VALUES ('pl-desc', 'Test Playlist')`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, description) VALUES 
+		('vid-with-desc', 'Episode 1', 'Standard description content here'),
+		('vid-empty-desc', 'Episode 2', NULL)
+	`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES 
+		('pl-desc', 'vid-with-desc', 1),
+		('pl-desc', 'vid-empty-desc', 2)
+	`)
 
+	draft, err := app.GetPlaylistCatalogDraft("pl-desc")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
 
+	if len(draft.Videos) != 2 {
+		t.Fatalf("expected 2 videos, got %d", len(draft.Videos))
+	}
+
+	if draft.Videos[0].Description != "Standard description content here" {
+		t.Errorf("expected draft.Videos[0].Description == %q, got %q", "Standard description content here", draft.Videos[0].Description)
+	}
+	if draft.Videos[1].Description != "" {
+		t.Errorf("expected draft.Videos[1].Description == %q, got %q", "", draft.Videos[1].Description)
+	}
+}

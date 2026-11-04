@@ -347,8 +347,8 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 	// Read current local data to build the full snippet without a network round-trip.
 	// CategoryId defaults to 22 (People & Blogs) if unknown — YouTube requires it in updates.
 	a.db.mu.Lock()
-	var localTitle, localDesc, localPrivacy sql.NullString
-	a.db.conn.QueryRow("SELECT title, description, privacy FROM yt_videos WHERE id = ?", videoID).Scan(&localTitle, &localDesc, &localPrivacy)
+	var localTitle, localDesc, localPrivacy, localFile sql.NullString
+	a.db.conn.QueryRow("SELECT title, description, privacy, local_file FROM yt_videos WHERE id = ?", videoID).Scan(&localTitle, &localDesc, &localPrivacy, &localFile)
 	a.db.mu.Unlock()
 
 	// Merge: use provided values, fall back to what we have locally
@@ -396,6 +396,20 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 		SET title = ?, description = ?, privacy = ? 
 		WHERE id = ?`,
 		finalTitle, finalDesc, finalPrivacy, videoID)
+	if err == nil && localFile.Valid && localFile.String != "" {
+		lf := localFile.String
+		if a.config.VideoMetadata == nil {
+			a.config.VideoMetadata = make(map[string]VideoMeta)
+		}
+		meta := a.config.VideoMetadata[lf]
+		if finalTitle != "" {
+			meta.YouTubeTitle = finalTitle
+		}
+		meta.Description = finalDesc
+		meta.Privacy = finalPrivacy
+		a.config.VideoMetadata[lf] = meta
+		_ = a.saveConfig()
+	}
 
 	return err
 }

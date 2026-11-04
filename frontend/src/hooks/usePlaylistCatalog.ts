@@ -142,6 +142,26 @@ export function usePlaylistCatalog() {
     []
   );
 
+  const updateVideoDescription = useCallback(
+    (videoId: string, description: string) => {
+      setDraft((prev) => {
+        if (!prev || !prev.videos) return prev;
+        return backend.PlaylistCatalogDraft.createFrom({
+          ...prev,
+          videos: prev.videos.map((v) =>
+            v.videoId === videoId
+              ? backend.CatalogVideoDraft.createFrom({
+                  ...v,
+                  description,
+                })
+              : v
+          ),
+        });
+      });
+    },
+    []
+  );
+
   const updatePlaylistTemplatePreview = useCallback(
     (tag: string, thumbnailUrl: string) => {
       const normalizedTag = tag.trim().toLowerCase();
@@ -440,6 +460,7 @@ export function usePlaylistCatalog() {
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updateVideoDescription,
     updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
