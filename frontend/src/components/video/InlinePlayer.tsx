@@ -60,6 +60,7 @@ interface InlinePlayerProps {
   onAddToQueue: (item: QueueItem) => void;
   onTagSaved?: () => void;
   onDelete?: () => void;
+  readonly onFixTitleMismatch?: () => void;
 }
 
 export default function InlinePlayer({
@@ -71,6 +72,7 @@ export default function InlinePlayer({
   onAddToQueue,
   onTagSaved,
   onDelete,
+  onFixTitleMismatch,
 }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
@@ -345,11 +347,18 @@ export default function InlinePlayer({
   const [customVarsInput, setCustomVarsInput] = useState<
     Record<string, string>
   >(video.customVars || {});
-  const [description, setDescription] = useState(video.description || "");
+  const { defaultVideoDescription } = useAppStore();
+  const [description, setDescription] = useState(
+    video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
+  );
+  const [hasExplicitDescriptionOverride, setHasExplicitDescriptionOverride] =
+    useState<boolean>(() => Boolean(video.description));
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(
     (video.privacy as PlaylistPrivacy) ||
       useAppStore.getState().defaultVideoPrivacy,
   );
+  const [hasExplicitPrivacyOverride, setHasExplicitPrivacyOverride] =
+    useState<boolean>(() => Boolean(video.privacy));
   const [playlistId, setPlaylistId] = useState(video.playlistId || "");
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
@@ -373,6 +382,7 @@ export default function InlinePlayer({
     null,
   );
   const pendingSaveAfterTagModalRef = useRef(false);
+  const tagSavedDuringModalRef = useRef(false);
 
   const effectiveDuration = video.durationSecs || 0;
   const autoResolvedType: "vod" | "clip" =
@@ -484,11 +494,15 @@ export default function InlinePlayer({
     setEventInput(video.event || "");
     setGameModeInput(video.gameMode || "");
     setCustomVarsInput(video.customVars || {});
-    setDescription(video.description || "");
+    setDescription(
+      video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
+    );
+    setHasExplicitDescriptionOverride(Boolean(video.description));
     setPrivacy(
       (video.privacy as PlaylistPrivacy) ||
         useAppStore.getState().defaultVideoPrivacy,
     );
+    setHasExplicitPrivacyOverride(Boolean(video.privacy));
     setPlaylistId(video.playlistId || "");
     setPlaylistSearch(video.playlistTitle || "");
     setInfoSaved(false);
@@ -592,6 +606,9 @@ export default function InlinePlayer({
     privacy,
     playlistId,
     selectedContentType,
+    hasExplicitPrivacyOverride,
+    hasExplicitDescriptionOverride,
+    youtubeId: video.youtubeId,
   });
   formSnapshotRef.current = {
     tagInput,
@@ -604,6 +621,9 @@ export default function InlinePlayer({
     privacy,
     playlistId,
     selectedContentType,
+    hasExplicitPrivacyOverride,
+    hasExplicitDescriptionOverride,
+    youtubeId: video.youtubeId,
   };
 
   // Tracks the path this snapshot belongs to. Effect body runs AFTER cleanup,
@@ -618,12 +638,16 @@ export default function InlinePlayer({
       if (!ep && !(gameProfiles[s.tagInput]?.type === "multiplayer")) {
         ep = extractEpisodeFromTitle(s.ytTitle);
       }
+      const privacyToSave =
+        s.youtubeId || s.hasExplicitPrivacyOverride ? s.privacy : "";
+      const descriptionToSave =
+        s.youtubeId || s.hasExplicitDescriptionOverride ? s.description : "";
       SaveVideoMetadata(
         path,
         s.tagInput,
         s.ytTitle,
-        s.description,
-        s.privacy,
+        descriptionToSave,
+        privacyToSave,
         s.playlistId,
         ep,
         s.eventInput,
@@ -854,6 +878,7 @@ export default function InlinePlayer({
     if (tagChanged && tagInput && tagPlaylists[tagInput] === undefined) {
       setSavingInfo(false);
       pendingSaveAfterTagModalRef.current = true;
+      tagSavedDuringModalRef.current = false;
       setPendingTagForModal(tagInput);
       return;
     }
@@ -888,13 +913,19 @@ export default function InlinePlayer({
           ? selectedPaths
           : [video.path];
 
+      const privacyToSave =
+        video.youtubeId || hasExplicitPrivacyOverride ? privacy : "";
+      const descriptionToSave =
+        video.youtubeId || hasExplicitDescriptionOverride
+          ? description
+          : (video.description || "");
       for (const p of pathsToSave) {
         await SaveVideoMetadata(
           p,
           tagInput,
           titleToSave,
-          description,
-          privacy,
+          descriptionToSave,
+          privacyToSave,
           playlistId,
           resolvedEpisode,
           eventInput,
@@ -1149,10 +1180,36 @@ export default function InlinePlayer({
           undefined,
           effectiveContentType,
         )) ||
-    description !== (video.description || "") ||
-    privacy !==
-      (video.privacy || useAppStore.getState().defaultVideoPrivacy) ||
+    (Boolean(video.youtubeId)
+      ? description !== (video.description || "")
+      : hasExplicitDescriptionOverride
+        ? description !== (video.description || "")
+        : false) ||
+    (Boolean(video.youtubeId)
+      ? privacy !== (video.privacy || useAppStore.getState().defaultVideoPrivacy)
+      : hasExplicitPrivacyOverride
+        ? privacy !== (video.privacy || "")
+        : false) ||
     (episodeInput !== "" && Number(episodeInput) !== (video.episode || 0));
+
+  const expectedTitle = generateYouTubeTitle(
+    video.name,
+    tagInput,
+    episodeInput !== "" ? Number(episodeInput) : video.episode,
+    activeProfile,
+    eventInput,
+    gameModeInput,
+    customVarsInput,
+    video.modTime,
+    undefined,
+    selectedContentType || autoResolvedType,
+  );
+  const isTitleMismatch = Boolean(
+    video.youtubeId &&
+      video.remoteYouTubeTitle &&
+      expectedTitle &&
+      video.remoteYouTubeTitle !== expectedTitle,
+  );
 
   const renderMetadataForm = () => (
     <>
@@ -1345,9 +1402,36 @@ export default function InlinePlayer({
       <div className="flex gap-3">
         <div className="flex flex-col gap-2 flex-1">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-white/90">
-              YouTube Title
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-white/90">
+                YouTube Title
+              </label>
+              {isTitleMismatch && onFixTitleMismatch && (
+                <button
+                  type="button"
+                  onClick={onFixTitleMismatch}
+                  aria-label="Fix title mismatch"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer"
+                  title={`Remote YouTube title differs: "${video.remoteYouTubeTitle}". Click to review and update.`}
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>Mismatch</span>
+                </button>
+              )}
+            </div>
             <span
               className={`text-xs tabular-nums transition-colors ${
                 (ytTitle || "").length >= 100
@@ -1376,13 +1460,35 @@ export default function InlinePlayer({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">
-          Description
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-white/90">
+            Description
+          </label>
+          {defaultVideoDescription && !video.youtubeId && (
+            <button
+              type="button"
+              onClick={() => {
+                setDescription(defaultVideoDescription);
+                setHasExplicitDescriptionOverride(true);
+              }}
+              className="text-xs text-accent hover:underline cursor-pointer"
+            >
+              Apply default
+            </button>
+          )}
+        </div>
         <textarea
           className="w-full bg-elevated border border-border-subtle rounded-sm px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent focus:bg-card resize-y min-h-[68px]"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            setHasExplicitDescriptionOverride(true);
+          }}
+          placeholder={
+            defaultVideoDescription
+              ? "Enter description or apply default template..."
+              : "Optional description..."
+          }
           rows={2}
         />
       </div>
@@ -1399,6 +1505,7 @@ export default function InlinePlayer({
               className={`flex-1 py-2 rounded-sm text-sm font-medium transition-colors border ${privacy === p ? "bg-card border-accent text-accent" : "bg-elevated border-border-subtle text-text-primary hover:border-border-medium hover:bg-card"}`}
               onClick={() => {
                 setPrivacy(p);
+                setHasExplicitPrivacyOverride(true);
               }}
             >
               {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -1593,6 +1700,7 @@ export default function InlinePlayer({
         onYouTubeUpdated={() => onTagSaved?.()}
         onOpenTagSettings={() => {
           pendingSaveAfterTagModalRef.current = false;
+          tagSavedDuringModalRef.current = false;
           setPendingTagForModal(tagInput);
         }}
       />
@@ -2333,9 +2441,19 @@ export default function InlinePlayer({
       {pendingTagForModal && (
         <TagPlaylistModal
           tag={pendingTagForModal}
-          onClose={() => setPendingTagForModal(null)}
-          onSaved={() => {
+          onClose={() => {
             setPendingTagForModal(null);
+            if (pendingSaveAfterTagModalRef.current) {
+              const shouldSave = tagSavedDuringModalRef.current;
+              pendingSaveAfterTagModalRef.current = false;
+              tagSavedDuringModalRef.current = false;
+              if (shouldSave) {
+                performSaveInfo(true);
+              }
+            }
+          }}
+          onSaved={() => {
+            tagSavedDuringModalRef.current = true;
             LoadConfig()
               .then((cfg) => {
                 setGameProfiles(cfg.game_profiles || {});
@@ -2348,10 +2466,6 @@ export default function InlinePlayer({
                 );
               })
               .catch(() => {});
-            if (pendingSaveAfterTagModalRef.current) {
-              pendingSaveAfterTagModalRef.current = false;
-              performSaveInfo(true);
-            }
           }}
         />
       )}

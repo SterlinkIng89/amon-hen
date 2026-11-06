@@ -865,7 +865,6 @@ export default function YouTubeInlinePlayer({
           tag={pendingTagForModal}
           onClose={() => setPendingTagForModal(null)}
           onSaved={() => {
-            setPendingTagForModal(null);
             LoadConfig()
               .then((cfg) => {
                 if (cfg) {

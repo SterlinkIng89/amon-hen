@@ -1,8 +1,11 @@
 package backend
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestInferTagFromPlaylistTitle(t *testing.T) {
@@ -98,6 +101,162 @@ func TestInferEpisodes(t *testing.T) {
 	res5 := inferEpisodes(vids5, " - ")
 	if !res5[0].Conflict || !res5[1].Conflict {
 		t.Errorf("expected conflict flag on duplicate episode 2")
+	}
+}
+
+func TestInferEpisodes_TitleEpisodeAndMismatch(t *testing.T) {
+	// Case 1: DB episode differs from title episode -> Mismatch = true, Episode remains DB
+	vids := []CatalogVideoDraft{
+		{
+			VideoID:         "v1",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 33,
+		},
+	}
+	res := inferEpisodes(vids, " - ")
+	if res[0].Episode != 33 {
+		t.Errorf("expected Episode to remain 33 (db), got %d", res[0].Episode)
+	}
+	if res[0].Source != "db" {
+		t.Errorf("expected Source 'db', got %q", res[0].Source)
+	}
+	if res[0].TitleEpisode != 4 {
+		t.Errorf("expected TitleEpisode 4, got %d", res[0].TitleEpisode)
+	}
+	if !res[0].Mismatch {
+		t.Errorf("expected Mismatch to be true when DB (33) != Title (4)")
+	}
+	if res[0].SortDate != "2026-07-21" {
+		t.Errorf("expected SortDate '2026-07-21', got %q", res[0].SortDate)
+	}
+
+	// Case 2: DB episode matches title episode -> Mismatch = false
+	vids2 := []CatalogVideoDraft{
+		{
+			VideoID:         "v2",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 4,
+		},
+	}
+	res2 := inferEpisodes(vids2, " - ")
+	if res2[0].Episode != 4 || res2[0].TitleEpisode != 4 || res2[0].Mismatch {
+		t.Errorf("expected Episode 4, TitleEpisode 4, Mismatch false; got %+v", res2[0])
+	}
+
+	// Case 3: No DB episode -> Episode takes TitleEpisode, Mismatch = false
+	vids3 := []CatalogVideoDraft{
+		{
+			VideoID:         "v3",
+			Title:           "Persona 3 Reload — 21/07/26 - 4",
+			ExistingEpisode: 0,
+		},
+	}
+	res3 := inferEpisodes(vids3, " - ")
+	if res3[0].Episode != 4 || res3[0].Source != "title" || res3[0].TitleEpisode != 4 || res3[0].Mismatch {
+		t.Errorf("expected Episode 4 (title), TitleEpisode 4, Mismatch false; got %+v", res3[0])
+	}
+
+	// Case 4: DB episode exists but title has no episode -> Mismatch = false
+	vids4 := []CatalogVideoDraft{
+		{
+			VideoID:         "v4",
+			Title:           "Persona 3 Reload Gameplay Only",
+			ExistingEpisode: 2,
+			PublishedAt:     "2026-07-20T12:00:00Z",
+		},
+	}
+	res4 := inferEpisodes(vids4, " - ")
+	if res4[0].Episode != 2 || res4[0].TitleEpisode != 0 || res4[0].Mismatch {
+		t.Errorf("expected Episode 2, TitleEpisode 0, Mismatch false; got %+v", res4[0])
+	}
+	if res4[0].SortDate != "2026-07-20T12:00:00Z" {
+		t.Errorf("expected SortDate fallback to publishedAt, got %q", res4[0].SortDate)
+	}
+}
+
+func TestInferEpisodes_ChronologyIssues(t *testing.T) {
+	// 1. Strictly ascending sequence -> no chronology issues
+	vidsClean := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 3"},
+	}
+	resClean := inferEpisodes(vidsClean, " - ")
+	for i, v := range resClean {
+		if v.ChronologyIssue {
+			t.Errorf("expected no chronology issue for v%d, got true", i+1)
+		}
+	}
+
+	// 2. Non-consecutive ascending sequence (gaps) -> no chronology issues
+	vidsGaps := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 4"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 7"},
+	}
+	resGaps := inferEpisodes(vidsGaps, " - ")
+	for i, v := range resGaps {
+		if v.ChronologyIssue {
+			t.Errorf("expected gaps to be valid chronology for v%d, got true", i+1)
+		}
+	}
+
+	// 3. Inverted pair -> both flagged
+	vidsInverted := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 4"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+	}
+	resInverted := inferEpisodes(vidsInverted, " - ")
+	if !resInverted[0].ChronologyIssue || !resInverted[1].ChronologyIssue {
+		t.Errorf("expected both videos in inverted pair to have ChronologyIssue=true; got %v, %v",
+			resInverted[0].ChronologyIssue, resInverted[1].ChronologyIssue)
+	}
+
+	// 4. Stale DB episode causing chronology inversion
+	vidsStaleDB := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1", ExistingEpisode: 33},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - 2"},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 3"},
+	}
+	resStaleDB := inferEpisodes(vidsStaleDB, " - ")
+	if !resStaleDB[0].Mismatch {
+		t.Errorf("expected v1 to have Mismatch=true")
+	}
+	if !resStaleDB[0].ChronologyIssue {
+		t.Errorf("expected v1 (ep 33 on day 1) to have ChronologyIssue=true")
+	}
+	if !resStaleDB[1].ChronologyIssue || !resStaleDB[2].ChronologyIssue {
+		t.Errorf("expected v2 and v3 to be flagged due to preceding ep 33; got v2=%v, v3=%v",
+			resStaleDB[1].ChronologyIssue, resStaleDB[2].ChronologyIssue)
+	}
+
+	// 5. Zero episode (unassigned) -> never has ChronologyIssue
+	vidsWithZero := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring - 1/05/26 - 1"},
+		{VideoID: "v2", Title: "Elden Ring - 2/05/26 - Special Highlight", ExistingEpisode: 0},
+		{VideoID: "v3", Title: "Elden Ring - 3/05/26 - 2"},
+	}
+	resZero := inferEpisodes(vidsWithZero, " - ")
+	if resZero[1].Episode != 0 {
+		t.Errorf("expected v2 Episode 0, got %d", resZero[1].Episode)
+	}
+	if resZero[1].ChronologyIssue {
+		t.Errorf("expected unassigned Episode 0 to have ChronologyIssue=false")
+	}
+	if resZero[0].ChronologyIssue || resZero[2].ChronologyIssue {
+		t.Errorf("expected v1 and v3 to have ChronologyIssue=false; got v1=%v, v3=%v",
+			resZero[0].ChronologyIssue, resZero[2].ChronologyIssue)
+	}
+
+	// 6. Same day videos (upload order is ignored and does NOT flag ChronologyIssue)
+	vidsSameDay := []CatalogVideoDraft{
+		{VideoID: "v1", Title: "Elden Ring Ep 2", PublishedAt: "2026-05-01T10:00:00Z"},
+		{VideoID: "v2", Title: "Elden Ring Ep 1", PublishedAt: "2026-05-01T15:00:00Z"},
+	}
+	resSameDay := inferEpisodes(vidsSameDay, " - ")
+	if resSameDay[0].ChronologyIssue || resSameDay[1].ChronologyIssue {
+		t.Errorf("expected same-day videos to NOT flag ChronologyIssue; got v1=%v, v2=%v",
+			resSameDay[0].ChronologyIssue, resSameDay[1].ChronologyIssue)
 	}
 }
 
@@ -259,8 +418,8 @@ func TestGetPlaylistCatalogDraft_ThumbnailAndTagPrecedence(t *testing.T) {
 	}
 
 	_, err = app.db.conn.Exec(`
-		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at)
-		VALUES ('v-thumb-1', 'Episode 1', '2026-01-02T00:00:00Z', 'https://example.com/yt_v1.jpg?v=1777888999', 1777888999)
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, duration)
+		VALUES ('v-thumb-1', 'Episode 1', '2026-01-02T00:00:00Z', 'https://example.com/yt_v1.jpg?v=1777888999', 1777888999, 'PT1H12M34S')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert video: %v", err)
@@ -299,6 +458,9 @@ func TestGetPlaylistCatalogDraft_ThumbnailAndTagPrecedence(t *testing.T) {
 	}
 	if draft.Videos[0].ThumbnailUpdatedAt != 1777888999 {
 		t.Errorf("expected video ThumbnailUpdatedAt 1777888999, got %d", draft.Videos[0].ThumbnailUpdatedAt)
+	}
+	if draft.Videos[0].Duration != "PT1H12M34S" {
+		t.Errorf("expected video Duration 'PT1H12M34S', got %s", draft.Videos[0].Duration)
 	}
 }
 
@@ -344,3 +506,467 @@ func TestApplyPlaylistCatalog_UpdateLocal(t *testing.T) {
 	}
 }
 
+func TestListCatalogPlaylists_CustomTemplateAndPreviewPrecedence(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	// 1. Setup cache dir and write a tag_template thumbnail for "Hades"
+	cacheDir := t.TempDir()
+	app.cacheDir = cacheDir
+	thumbDir := filepath.Join(cacheDir, "yt_thumbs")
+	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+		t.Fatalf("failed to create thumb dir: %v", err)
+	}
+	hadesKey := customThumbKey("tag_template_hades")
+	hadesThumbPath := filepath.Join(thumbDir, hadesKey+".jpg")
+	if err := os.WriteFile(hadesThumbPath, []byte("fake-hades-preview"), 0644); err != nil {
+		t.Fatalf("failed to write hades preview: %v", err)
+	}
+
+	// 2. Insert playlists
+	// pl-hades: default YT thumb, has tag template file & config
+	// pl-elden: default YT thumb, no template file, but has video with custom_thumb_updated_at > 0
+	// pl-explicit: already has explicit /cache/yt_thumbs/ cover, has tag template file
+	// pl-none: default YT thumb, no custom config, no custom video
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, thumbnail_url, published_at) VALUES
+		('pl-hades', 'Hades VODs', 2, 'https://i.ytimg.com/vi/default_hades.jpg', '2026-01-01T00:00:00Z'),
+		('pl-elden', 'Elden Ring VODs', 1, 'https://i.ytimg.com/vi/default_elden.jpg', '2026-01-02T00:00:00Z'),
+		('pl-explicit', 'Hades Clips', 1, '/cache/yt_thumbs/playlist_pl-explicit.jpg', '2026-01-03T00:00:00Z'),
+		('pl-none', 'Random Game', 1, 'https://i.ytimg.com/vi/default_none.jpg', '2026-01-04T00:00:00Z');
+
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at) VALUES
+		('v-elden-1', 'Elden Ep 1', '2026-01-02T01:00:00Z', 'https://custom.thumb/elden_1.jpg?v=177', 177),
+		('v-none-1', 'None Ep 1', '2026-01-04T01:00:00Z', 'https://i.ytimg.com/vi/none_1.jpg', 0);
+
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES
+		('pl-elden', 'v-elden-1', 0),
+		('pl-none', 'v-none-1', 0);
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert fixtures: %v", err)
+	}
+
+	app.configMu.Lock()
+	if app.config.TagPlaylistConfigs == nil {
+		app.config.TagPlaylistConfigs = make(map[string]TagPlaylistConfig)
+	}
+	app.config.TagPlaylistConfigs["Hades"] = TagPlaylistConfig{
+		VodPlaylistID: "pl-hades",
+		ThumbnailConfig: TagThumbnailConfig{
+			Enabled: true,
+		},
+	}
+	app.configMu.Unlock()
+
+	summaries, err := app.ListCatalogPlaylists()
+	if err != nil {
+		t.Fatalf("ListCatalogPlaylists failed: %v", err)
+	}
+
+	byID := make(map[string]CatalogPlaylistSummary)
+	for _, s := range summaries {
+		byID[s.PlaylistID] = s
+	}
+
+	// pl-hades: should have HasCustomTemplate = true, and ThumbnailUrl resolved to /cache/yt_thumbs/...
+	sHades, ok := byID["pl-hades"]
+	if !ok {
+		t.Fatalf("missing pl-hades in summaries")
+	}
+	if !sHades.HasCustomTemplate {
+		t.Errorf("expected pl-hades HasCustomTemplate to be true")
+	}
+	if !strings.HasPrefix(sHades.ThumbnailUrl, "/cache/yt_thumbs/"+hadesKey+".jpg") {
+		t.Errorf("expected pl-hades ThumbnailUrl to start with /cache/yt_thumbs/%s.jpg, got %s", hadesKey, sHades.ThumbnailUrl)
+	}
+
+	// pl-elden: should prefer video custom thumb over default YT thumbnail
+	sElden, ok := byID["pl-elden"]
+	if !ok {
+		t.Fatalf("missing pl-elden in summaries")
+	}
+	if sElden.ThumbnailUrl != "https://custom.thumb/elden_1.jpg?v=177" {
+		t.Errorf("expected pl-elden ThumbnailUrl to be video custom thumb, got %s", sElden.ThumbnailUrl)
+	}
+
+	// pl-explicit: should keep explicit /cache/yt_thumbs/ cover untouched
+	sExplicit, ok := byID["pl-explicit"]
+	if !ok {
+		t.Fatalf("missing pl-explicit in summaries")
+	}
+	if sExplicit.ThumbnailUrl != "/cache/yt_thumbs/playlist_pl-explicit.jpg" {
+		t.Errorf("expected pl-explicit ThumbnailUrl to be preserved, got %s", sExplicit.ThumbnailUrl)
+	}
+
+	// pl-none: HasCustomTemplate should be false, ThumbnailUrl should be default
+	sNone, ok := byID["pl-none"]
+	if !ok {
+		t.Fatalf("missing pl-none in summaries")
+	}
+	if sNone.HasCustomTemplate {
+		t.Errorf("expected pl-none HasCustomTemplate to be false")
+	}
+	if sNone.ThumbnailUrl != "https://i.ytimg.com/vi/default_none.jpg" {
+		t.Errorf("expected pl-none ThumbnailUrl to be default, got %s", sNone.ThumbnailUrl)
+	}
+
+	// Also verify GetPlaylistCatalogDraft
+	draftHades, err := app.GetPlaylistCatalogDraft("pl-hades")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft pl-hades failed: %v", err)
+	}
+	if !draftHades.HasCustomTemplate {
+		t.Errorf("expected draftHades.HasCustomTemplate to be true")
+	}
+	if !strings.HasPrefix(draftHades.ThumbnailUrl, "/cache/yt_thumbs/"+hadesKey+".jpg") {
+		t.Errorf("expected draftHades.ThumbnailUrl to start with /cache/yt_thumbs/%s.jpg, got %s", hadesKey, draftHades.ThumbnailUrl)
+	}
+}
+
+func TestResolveVideoThumbnailCandidate(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.cacheDir = t.TempDir()
+	ytThumbsDir := filepath.Join(app.cacheDir, "yt_thumbs")
+	if err := os.MkdirAll(ytThumbsDir, 0755); err != nil {
+		t.Fatalf("failed to create yt_thumbs dir: %v", err)
+	}
+
+	vidWithCache := "vid-with-local"
+	key := customThumbKey("yt:" + vidWithCache)
+	cacheFile := filepath.Join(ytThumbsDir, key+".jpg")
+	if err := os.WriteFile(cacheFile, []byte("fake-jpeg"), 0644); err != nil {
+		t.Fatalf("failed to write cache file: %v", err)
+	}
+
+	// 1. Video with local cache file (yt:<vid>) should return /cache/yt_thumbs/<key>.jpg?v=<modtime>
+	resolved := app.resolveVideoThumbnailCandidate(vidWithCache, "", nil, "https://i.ytimg.com/vi/vid-with-local/maxresdefault.jpg")
+	if !strings.HasPrefix(resolved, "/cache/yt_thumbs/"+key+".jpg?v=") {
+		t.Errorf("expected local cache preview URL, got %q", resolved)
+	}
+
+	// 2. Video with episode cache key (<vid>_<ep>)
+	epVid := "vid-ep-test"
+	epKey := customThumbKey(epVid + "_2")
+	epCacheFile := filepath.Join(ytThumbsDir, epKey+".jpg")
+	if err := os.WriteFile(epCacheFile, []byte("fake-jpeg-ep"), 0644); err != nil {
+		t.Fatalf("failed to write ep cache file: %v", err)
+	}
+	ep2 := 2
+	resolvedEp := app.resolveVideoThumbnailCandidate(epVid, "", &ep2, "https://i.ytimg.com/vi/vid-ep-test/maxresdefault.jpg")
+	if !strings.HasPrefix(resolvedEp, "/cache/yt_thumbs/"+epKey+".jpg?v=") {
+		t.Errorf("expected episode cache URL, got %q", resolvedEp)
+	}
+
+	// 3. Video with localFile key
+	localFilePath := "C:\\Videos\\Game_03.mp4"
+	localFileKey := customThumbKey(localFilePath)
+	localCacheFile := filepath.Join(ytThumbsDir, localFileKey+".jpg")
+	if err := os.WriteFile(localCacheFile, []byte("fake-jpeg-local"), 0644); err != nil {
+		t.Fatalf("failed to write local file cache: %v", err)
+	}
+	resolvedLocalFile := app.resolveVideoThumbnailCandidate("vid-other", localFilePath, nil, "https://i.ytimg.com/vi/vid-other/maxresdefault.jpg")
+	if !strings.HasPrefix(resolvedLocalFile, "/cache/yt_thumbs/"+localFileKey+".jpg?v=") {
+		t.Errorf("expected localFile cache URL, got %q", resolvedLocalFile)
+	}
+
+	// 4. Video without local cache should strip ?v= query params from i.ytimg.com
+	vidWithoutCache := "vid-no-local"
+	urlWithQuery := "https://i.ytimg.com/vi/vid-no-local/maxresdefault.jpg?v=1792994612"
+	resolvedNoCache := app.resolveVideoThumbnailCandidate(vidWithoutCache, "", nil, urlWithQuery)
+	expectedClean := "https://i.ytimg.com/vi/vid-no-local/maxresdefault.jpg"
+	if resolvedNoCache != expectedClean {
+		t.Errorf("expected clean URL %q, got %q", expectedClean, resolvedNoCache)
+	}
+}
+
+func TestGetPlaylistCatalogDraft_ThumbnailSyncAndEpisodeTracking(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpCache := t.TempDir()
+	app.cacheDir = tmpCache
+	ytThumbsDir := filepath.Join(tmpCache, "yt_thumbs")
+	if err := os.MkdirAll(ytThumbsDir, 0755); err != nil {
+		t.Fatalf("failed to create yt_thumbs dir: %v", err)
+	}
+
+	// File 1: yt:vid-cache-backfill
+	k1 := customThumbKey("yt:vid-cache-backfill")
+	f1 := filepath.Join(ytThumbsDir, k1+".jpg")
+	if err := os.WriteFile(f1, []byte("fake-jpg-1"), 0644); err != nil {
+		t.Fatalf("failed to write f1: %v", err)
+	}
+
+	// File 3: vid-ep-backfill_3
+	k3 := customThumbKey("vid-ep-backfill_3")
+	f3 := filepath.Join(ytThumbsDir, k3+".jpg")
+	if err := os.WriteFile(f3, []byte("fake-jpg-3"), 0644); err != nil {
+		t.Fatalf("failed to write f3: %v", err)
+	}
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title, video_count, published_at)
+		VALUES ('pl-backfill', 'Backfill Playlist', 3, '2026-01-01T00:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert playlist: %v", err)
+	}
+
+	// Video 1: 0 timestamp and 0 custom_thumb_episode in DB, but has file on disk (un-uploaded custom preview)
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-cache-backfill', 'Vid 1', '2026-01-01T00:00:00Z', 'https://example.com/v1.jpg', 0, 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 1: %v", err)
+	}
+
+	// Video 2: Explicitly persisted timestamp and episode in DB (uploaded to YouTube)
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-db-persisted', 'Vid 2', '2026-01-02T00:00:00Z', 'https://example.com/v2.jpg', 1888999000, 5)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 2: %v", err)
+	}
+
+	// Video 3: 0 timestamp and 0 custom_thumb_episode in DB, but has episode cache file (<vid>_3)
+	_, err = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, published_at, thumbnail_url, episode, custom_thumb_updated_at, custom_thumb_episode)
+		VALUES ('vid-ep-backfill', 'Vid 3', '2026-01-03T00:00:00Z', 'https://example.com/v3.jpg', 3, 0, 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert vid 3: %v", err)
+	}
+
+	// Playlist items
+	for i, vid := range []string{"vid-cache-backfill", "vid-db-persisted", "vid-ep-backfill"} {
+		_, err = app.db.conn.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES ('pl-backfill', ?, ?)`, vid, i)
+		if err != nil {
+			t.Fatalf("failed to insert item %d: %v", i, err)
+		}
+	}
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-backfill")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if len(draft.Videos) != 3 {
+		t.Fatalf("expected 3 videos, got %d", len(draft.Videos))
+	}
+
+	// Check Video 1: does NOT backfill ThumbnailUpdatedAt from disk cache (remains 0 because un-uploaded)
+	v1 := draft.Videos[0]
+	if v1.ThumbnailUpdatedAt != 0 {
+		t.Errorf("expected v1.ThumbnailUpdatedAt == 0 (un-uploaded to YouTube), got %d", v1.ThumbnailUpdatedAt)
+	}
+	if !strings.HasPrefix(v1.ThumbnailUrl, "/cache/yt_thumbs/"+k1+".jpg?v=") {
+		t.Errorf("expected v1.ThumbnailUrl to use cached file preview, got %q", v1.ThumbnailUrl)
+	}
+
+	// Check Video 2: keeps DB custom_thumb_updated_at and custom_thumb_episode
+	v2 := draft.Videos[1]
+	if v2.ThumbnailUpdatedAt != 1888999000 {
+		t.Errorf("expected v2.ThumbnailUpdatedAt 1888999000, got %d", v2.ThumbnailUpdatedAt)
+	}
+	if v2.ThumbnailEpisode != 5 {
+		t.Errorf("expected v2.ThumbnailEpisode 5, got %d", v2.ThumbnailEpisode)
+	}
+
+	// Check Video 3: does NOT backfill ThumbnailUpdatedAt, but tracks ThumbnailEpisode from episode cache file
+	v3 := draft.Videos[2]
+	if v3.ThumbnailUpdatedAt != 0 {
+		t.Errorf("expected v3.ThumbnailUpdatedAt == 0 (un-uploaded to YouTube), got %d", v3.ThumbnailUpdatedAt)
+	}
+	if v3.ThumbnailEpisode != 3 {
+		t.Errorf("expected v3.ThumbnailEpisode 3 backfilled from matched episode cache file, got %d", v3.ThumbnailEpisode)
+	}
+}
+
+func TestPreviewCatalogTitleUpdates(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.config.TitleSeparator = " - "
+
+	// Insert test video records
+	_, err := app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, episode, published_at)
+		VALUES 
+			('vid-p3r-26', 'Persona 3 Reload - 10/08/26 - 26', 26, '2026-08-10T12:00:00Z'),
+			('vid-p3r-27', 'Persona 3 Reload - 11/08/26 - 27', 27, '2026-08-11T12:00:00Z'),
+			('vid-no-ep', 'Persona 3 Reload Special Stream', 0, '2026-08-12T12:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	assignments := []CatalogAssignment{
+		{VideoID: "vid-p3r-26", Episode: 27}, // needs title update from 26 -> 27
+		{VideoID: "vid-p3r-27", Episode: 27}, // already matches title episode 27 -> skipped
+		{VideoID: "vid-no-ep", Episode: 28},  // cannot parse/rewrite episode -> skipped
+	}
+
+	changes, err := app.PreviewCatalogTitleUpdates(assignments)
+	if err != nil {
+		t.Fatalf("PreviewCatalogTitleUpdates failed: %v", err)
+	}
+
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(changes))
+	}
+
+	ch := changes[0]
+	if ch.VideoID != "vid-p3r-26" {
+		t.Errorf("expected videoId 'vid-p3r-26', got %q", ch.VideoID)
+	}
+	if ch.OldTitle != "Persona 3 Reload - 10/08/26 - 26" {
+		t.Errorf("expected OldTitle 'Persona 3 Reload - 10/08/26 - 26', got %q", ch.OldTitle)
+	}
+	if ch.NewTitle != "Persona 3 Reload - 10/08/26 - 27" {
+		t.Errorf("expected NewTitle 'Persona 3 Reload - 10/08/26 - 27', got %q", ch.NewTitle)
+	}
+	if ch.OldEpisode != 26 || ch.NewEpisode != 27 {
+		t.Errorf("expected episodes 26 -> 27, got %d -> %d", ch.OldEpisode, ch.NewEpisode)
+	}
+}
+
+func TestGetPlaylistCatalogDraft_TitleMismatch(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tempDir := t.TempDir()
+	localFile1 := filepath.Join(tempDir, "aram_clip_1.mp4")
+	_ = os.WriteFile(localFile1, []byte("clip content 1"), 0644)
+	recDate := time.Date(2026, time.April, 8, 14, 0, 0, 0, time.Local)
+	_ = os.Chtimes(localFile1, recDate, recDate)
+
+	localFileNonExistent := filepath.Join(tempDir, "deleted_clip.mp4")
+
+	localFile3 := filepath.Join(tempDir, "aram_clip_3.mp4")
+	_ = os.WriteFile(localFile3, []byte("clip content 3"), 0644)
+	_ = os.Chtimes(localFile3, recDate, recDate)
+
+	app.config.TitleSeparator = " — "
+	app.config.GameProfiles = map[string]GameProfile{
+		"League of Legends": {
+			Type:          "multiplayer",
+			TitleTemplate: "{game} — {date} — {event}",
+		},
+	}
+	app.config.VideoMetadata = map[string]VideoMeta{
+		localFile1: {
+			Game:  "League of Legends",
+			Event: "Pentakill",
+		},
+		localFile3: {
+			Game:  "League of Legends",
+			Event: "Baron Steal",
+		},
+	}
+
+	localFileSep := filepath.Join(tempDir, "sep_variant.mp4")
+	_ = os.WriteFile(localFileSep, []byte("fake video content"), 0644)
+	_ = os.Chtimes(localFileSep, recDate, recDate)
+	app.config.VideoMetadata[localFileSep] = VideoMeta{
+		Game:        "League of Legends",
+		ContentType: "clip",
+		Event:       "Baron Steal",
+	}
+
+	_, _ = app.db.conn.Exec(`INSERT INTO yt_playlists (id, title) VALUES ('pl-lol', 'League of Legends')`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, local_file) VALUES 
+		('vid-mismatch', 'League of Legends — 2/11/26 — Pentakill', ?),
+		('vid-no-local', 'League of Legends — 2/11/26 — Old Clip', ?),
+		('vid-match', 'League of Legends — 8/04/26 — Baron Steal', ?),
+		('vid-sep-variant', 'League of Legends - 8/04/26 - Baron Steal', ?)
+	`, localFile1, localFileNonExistent, localFile3, localFileSep)
+
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES 
+		('pl-lol', 'vid-mismatch', 1),
+		('pl-lol', 'vid-no-local', 2),
+		('pl-lol', 'vid-match', 3),
+		('pl-lol', 'vid-sep-variant', 4)
+	`)
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-lol")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if len(draft.Videos) != 4 {
+		t.Fatalf("expected 4 videos, got %d", len(draft.Videos))
+	}
+
+	var vMismatch, vNoLocal, vMatch, vSepVariant *CatalogVideoDraft
+	for i := range draft.Videos {
+		v := &draft.Videos[i]
+		if v.VideoID == "vid-mismatch" {
+			vMismatch = v
+		} else if v.VideoID == "vid-no-local" {
+			vNoLocal = v
+		} else if v.VideoID == "vid-match" {
+			vMatch = v
+		} else if v.VideoID == "vid-sep-variant" {
+			vSepVariant = v
+		}
+	}
+
+	if vMismatch == nil || !vMismatch.TitleMismatch || !vMismatch.Mismatch {
+		t.Errorf("expected vid-mismatch to have TitleMismatch=true and Mismatch=true, got %+v", vMismatch)
+	}
+	if vMismatch.LocalTitle != "League of Legends — 8/04/26 — Pentakill" {
+		t.Errorf("expected LocalTitle 'League of Legends — 8/04/26 — Pentakill', got %q", vMismatch.LocalTitle)
+	}
+
+	if vNoLocal == nil || vNoLocal.TitleMismatch {
+		t.Errorf("expected vid-no-local to NOT have TitleMismatch, got %+v", vNoLocal)
+	}
+
+	if vMatch == nil || vMatch.TitleMismatch {
+		t.Errorf("expected vid-match to NOT have TitleMismatch, got %+v", vMatch)
+	}
+
+	if vSepVariant == nil || vSepVariant.TitleMismatch {
+		t.Errorf("expected vid-sep-variant to NOT have TitleMismatch despite dash vs em-dash separator differences, got %+v", vSepVariant)
+	}
+}
+
+func TestGetPlaylistCatalogDraft_Description(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, _ = app.db.conn.Exec(`INSERT INTO yt_playlists (id, title) VALUES ('pl-desc', 'Test Playlist')`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_videos (id, title, description) VALUES 
+		('vid-with-desc', 'Episode 1', 'Standard description content here'),
+		('vid-empty-desc', 'Episode 2', NULL)
+	`)
+	_, _ = app.db.conn.Exec(`
+		INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES 
+		('pl-desc', 'vid-with-desc', 1),
+		('pl-desc', 'vid-empty-desc', 2)
+	`)
+
+	draft, err := app.GetPlaylistCatalogDraft("pl-desc")
+	if err != nil {
+		t.Fatalf("GetPlaylistCatalogDraft failed: %v", err)
+	}
+
+	if len(draft.Videos) != 2 {
+		t.Fatalf("expected 2 videos, got %d", len(draft.Videos))
+	}
+
+	if draft.Videos[0].Description != "Standard description content here" {
+		t.Errorf("expected draft.Videos[0].Description == %q, got %q", "Standard description content here", draft.Videos[0].Description)
+	}
+	if draft.Videos[1].Description != "" {
+		t.Errorf("expected draft.Videos[1].Description == %q, got %q", "", draft.Videos[1].Description)
+	}
+}

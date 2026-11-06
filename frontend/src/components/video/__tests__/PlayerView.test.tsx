@@ -8,6 +8,13 @@ import { useAppStore } from "../../../store/useAppStore";
 // Mock Wails backend
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   LoadConfig: vi.fn().mockResolvedValue({ game_profiles: {} }),
+  ApplySingleVideoTitleUpdate: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../../../wailsjs/runtime/runtime", () => ({
+  EventsOn: vi.fn().mockReturnValue(vi.fn()),
+  EventsOff: vi.fn(),
+  BrowserOpenURL: vi.fn(),
 }));
 
 // Mock VideoPill to inspect props passed to it
@@ -17,11 +24,13 @@ vi.mock("../VideoPill", () => ({
     selected,
     multiSelected,
     onClick,
+    onFixTitleMismatch,
   }: {
     video: VideoFile;
     selected: boolean;
     multiSelected: boolean;
     onClick: (e: React.MouseEvent) => void;
+    onFixTitleMismatch?: (video: VideoFile) => void;
   }) => (
     <div
       data-testid={`video-pill-${video.name}`}
@@ -30,6 +39,17 @@ vi.mock("../VideoPill", () => ({
       onClick={onClick}
     >
       <span>{video.name}</span>
+      {onFixTitleMismatch && (
+        <button
+          data-testid={`fix-mismatch-${video.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFixTitleMismatch(video);
+          }}
+        >
+          Fix Mismatch
+        </button>
+      )}
     </div>
   ),
 }));
@@ -128,6 +148,7 @@ describe("PlayerView Component", () => {
   };
 
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -250,5 +271,44 @@ describe("PlayerView Component", () => {
     const backBtn = screen.getByRole("button", { name: /back to grid/i });
     fireEvent.click(backBtn);
     expect(useAppStore.getState().view).toBe("grid");
+  });
+
+  it("opens title update modal when fix mismatch is clicked and applies update", async () => {
+    const onTagSaved = vi.fn();
+    const videoWithMismatch: VideoFile = {
+      path: "/videos/mismatch.mp4",
+      name: "mismatch.mp4",
+      size: 500,
+      modTime: 5000,
+      folder: "/outplayed",
+      game: "League of Legends",
+      youtubeId: "yt-mismatch-id",
+      remoteYouTubeTitle: "Old Wrong Title",
+    };
+
+    render(
+      <PlayerView
+        {...defaultProps}
+        sortedVideos={[videoWithMismatch]}
+        allVideos={[videoWithMismatch]}
+        onTagSaved={onTagSaved}
+      />
+    );
+
+    const fixBtn = screen.getByTestId("fix-mismatch-mismatch.mp4");
+    expect(fixBtn).toBeInTheDocument();
+    fireEvent.click(fixBtn);
+
+    // Modal should be open
+    expect(screen.getByText("Correct video title")).toBeInTheDocument();
+
+    // Confirm button
+    const confirmBtn = screen.getByRole("button", { name: "Apply corrected title" });
+    fireEvent.click(confirmBtn);
+
+    const { ApplySingleVideoTitleUpdate } = await import(
+      "../../../../wailsjs/go/backend/App"
+    );
+    expect(ApplySingleVideoTitleUpdate).toHaveBeenCalled();
   });
 });

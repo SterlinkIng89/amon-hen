@@ -3,17 +3,20 @@ package backend
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
 type CatalogVideoDraft struct {
 	VideoID            string `json:"videoId"`
 	Title              string `json:"title"`
+	Description        string `json:"description"`
 	PublishedAt        string `json:"publishedAt"`
 	ThumbnailUrl       string `json:"thumbnailUrl"`
+	Duration           string `json:"duration,omitempty"`
 	LocalFile          string `json:"localFile,omitempty"`
 	Position           int    `json:"position"`
 	ExistingEpisode    int    `json:"existingEpisode"`
@@ -21,17 +24,96 @@ type CatalogVideoDraft struct {
 	Source             string `json:"source"` // "db" | "title" | "order" | "none"
 	Conflict           bool   `json:"conflict"`
 	ThumbnailUpdatedAt int64  `json:"thumbnailUpdatedAt"`
+	ThumbnailEpisode   int    `json:"thumbnailEpisode"`
+	TitleEpisode       int    `json:"titleEpisode"`
+	SortDate           string `json:"sortDate"`
+	Mismatch           bool   `json:"mismatch"`
+	ChronologyIssue    bool   `json:"chronologyIssue"`
+	LocalTitle         string `json:"localTitle,omitempty"`
+	TitleMismatch      bool   `json:"titleMismatch,omitempty"`
 }
 
 type CatalogPlaylistSummary struct {
-	PlaylistID    string `json:"playlistId"`
-	Title         string `json:"title"`
-	ThumbnailUrl  string `json:"thumbnailUrl"`
-	VideoCount    int    `json:"videoCount"`
-	Kind          string `json:"kind"` // "vod" | "clip"
-	Tag           string `json:"tag"`
-	TagConfidence string `json:"tagConfidence"` // "known" | "guess"
-	Linked        bool   `json:"linked"`
+	PlaylistID        string `json:"playlistId"`
+	Title             string `json:"title"`
+	ThumbnailUrl      string `json:"thumbnailUrl"`
+	VideoCount        int    `json:"videoCount"`
+	Kind              string `json:"kind"` // "vod" | "clip"
+	Tag               string `json:"tag"`
+	TagConfidence     string `json:"tagConfidence"` // "known" | "guess"
+	Linked            bool   `json:"linked"`
+	HasCustomTemplate bool   `json:"hasCustomTemplate"`
+}
+
+func hasCustomThumbnailConfig(cfg TagThumbnailConfig) bool {
+	return cfg.Enabled || cfg.SourceType != "" || cfg.SteamAssetType != ""
+}
+
+func (a *App) resolveTagTemplatePreviewURL(tag string) string {
+	cleanTag := strings.ToLower(strings.TrimSpace(tag))
+	if cleanTag == "" || a.cacheDir == "" {
+		return ""
+	}
+	key := customThumbKey("tag_template_" + cleanTag)
+	filePath := filepath.Join(a.cacheDir, "yt_thumbs", key+".jpg")
+	info, err := os.Stat(filePath)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix())
+}
+
+func (a *App) resolvePlaylistThumbnailCandidate(currentThumb, tag, fallbackCustomVidThumb string) string {
+	if strings.HasPrefix(currentThumb, "/cache/yt_thumbs/") {
+		return currentThumb
+	}
+	if preview := a.resolveTagTemplatePreviewURL(tag); preview != "" {
+		return preview
+	}
+	if fallbackCustomVidThumb != "" {
+		return fallbackCustomVidThumb
+	}
+	return currentThumb
+}
+
+func (a *App) resolveVideoThumbnailCandidateWithInfo(videoID, localFile string, episode *int, currentThumb string) (string, int64, int) {
+	if a.cacheDir != "" {
+		ytThumbsDir := filepath.Join(a.cacheDir, "yt_thumbs")
+		// 1. Check yt:<videoID>
+		if videoID != "" {
+			key := customThumbKey("yt:" + videoID)
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), 0
+			}
+		}
+		// 2. Check <videoID>_<episode>
+		if videoID != "" && episode != nil && *episode > 0 {
+			key := customThumbKey(fmt.Sprintf("%s_%d", videoID, *episode))
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), *episode
+			}
+		}
+		// 3. Check localFile
+		if localFile != "" {
+			key := customThumbKey(localFile)
+			filePath := filepath.Join(ytThumbsDir, key+".jpg")
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return fmt.Sprintf("/cache/yt_thumbs/%s.jpg?v=%d", key, info.ModTime().Unix()), info.ModTime().Unix(), 0
+			}
+		}
+	}
+	// Fallback: strip query parameters from i.ytimg.com URLs to prevent 404
+	if strings.Contains(currentThumb, "i.ytimg.com") && strings.Contains(currentThumb, "?") {
+		return strings.Split(currentThumb, "?")[0], 0, 0
+	}
+	return currentThumb, 0, 0
+}
+
+func (a *App) resolveVideoThumbnailCandidate(videoID, localFile string, episode *int, currentThumb string) string {
+	url, _, _ := a.resolveVideoThumbnailCandidateWithInfo(videoID, localFile, episode, currentThumb)
+	return url
 }
 
 type PlaylistCatalogDraft struct {
@@ -88,6 +170,124 @@ var (
 	epRegex2 = regexp.MustCompile(`#(\d+)\s*$`)
 )
 
+func resolveSortDate(title, publishedAt string) string {
+	if d := extractTitleDate(title); d != "" {
+		return d
+	}
+	return publishedAt
+}
+
+func extractCalendarDate(draft CatalogVideoDraft) string {
+	d := draft.SortDate
+	if d == "" {
+		d = extractTitleDate(draft.Title)
+	}
+	if d == "" && len(draft.PublishedAt) >= 10 {
+		d = draft.PublishedAt[:10]
+	}
+	if len(d) >= 10 {
+		return d[:10]
+	}
+	return d
+}
+
+// compareVideoChronology returns true if a should appear strictly before b in chronological order.
+func compareVideoChronology(a, b CatalogVideoDraft) bool {
+	dateA := extractCalendarDate(a)
+	dateB := extractCalendarDate(b)
+
+	if dateA != dateB {
+		if dateA != "" && dateB != "" {
+			return dateA < dateB
+		}
+		if dateA != "" {
+			return true
+		}
+		if dateB != "" {
+			return false
+		}
+	}
+
+	// Same calendar day: do NOT use PublishedAt time (upload order can be inverted).
+	// Tie-break by TitleEpisode if both have it
+	if a.TitleEpisode > 0 && b.TitleEpisode > 0 && a.TitleEpisode != b.TitleEpisode {
+		return a.TitleEpisode < b.TitleEpisode
+	}
+
+	// Tie-break by Position in playlist
+	if a.Position != b.Position {
+		return a.Position < b.Position
+	}
+
+	return a.VideoID < b.VideoID
+}
+
+// validateChronology verifies that drafts with positive episodes on earlier calendar dates strictly precede those on later calendar dates.
+func validateChronology(drafts []CatalogVideoDraft) error {
+	type dayStat struct {
+		minEp int
+		maxEp int
+	}
+	dayMap := make(map[string]*dayStat)
+	var dates []string
+
+	for _, d := range drafts {
+		if d.Episode <= 0 {
+			continue
+		}
+		date := extractCalendarDate(d)
+		if date == "" {
+			continue
+		}
+		if stat, exists := dayMap[date]; exists {
+			if d.Episode < stat.minEp {
+				stat.minEp = d.Episode
+			}
+			if d.Episode > stat.maxEp {
+				stat.maxEp = d.Episode
+			}
+		} else {
+			dayMap[date] = &dayStat{
+				minEp: d.Episode,
+				maxEp: d.Episode,
+			}
+			dates = append(dates, date)
+		}
+	}
+
+	if len(dates) <= 1 {
+		return nil
+	}
+
+	sort.Strings(dates)
+	k := len(dates)
+	prefixMax := make([]int, k)
+	prefixMax[0] = dayMap[dates[0]].maxEp
+	for i := 1; i < k; i++ {
+		prefixMax[i] = prefixMax[i-1]
+		if ep := dayMap[dates[i]].maxEp; ep > prefixMax[i] {
+			prefixMax[i] = ep
+		}
+	}
+
+	suffixMin := make([]int, k)
+	suffixMin[k-1] = dayMap[dates[k-1]].minEp
+	for i := k - 2; i >= 0; i-- {
+		suffixMin[i] = suffixMin[i+1]
+		if ep := dayMap[dates[i]].minEp; ep < suffixMin[i] {
+			suffixMin[i] = ep
+		}
+	}
+
+	for i := 0; i < k-1; i++ {
+		if prefixMax[i] >= suffixMin[i+1] {
+			return fmt.Errorf("chronological inversion detected: day %s has episode %d which cannot precede day %s with episode %d",
+				dates[i], prefixMax[i], dates[i+1], suffixMin[i+1])
+		}
+	}
+	return nil
+}
+
 // inferEpisodes deduces episode numbers for a list of video drafts using DB state, titles, or publication order.
 func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 	result := make([]CatalogVideoDraft, len(videos))
@@ -97,46 +297,29 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 
 	// Pass 1: DB or Title parsing
 	for i := range result {
+		result[i].SortDate = resolveSortDate(result[i].Title, result[i].PublishedAt)
+		ep, _ := parseEpisodeFromTitle(result[i].Title, sep)
+		result[i].TitleEpisode = ep
+
 		if result[i].ExistingEpisode > 0 {
 			result[i].Episode = result[i].ExistingEpisode
 			result[i].Source = "db"
+			result[i].Mismatch = result[i].TitleEpisode > 0 && result[i].ExistingEpisode != result[i].TitleEpisode
 			hasAnyInferred = true
 			continue
 		}
 
-		// Try separator-based suffix e.g. "Game - 12/04/26 - 4"
-		if sep != "" && strings.Contains(result[i].Title, sep) {
-			parts := strings.Split(result[i].Title, sep)
-			lastPart := strings.TrimSpace(parts[len(parts)-1])
-			if n, err := strconv.Atoi(lastPart); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
-		}
-
-		// Regex fallbacks: Ep 7, Part 8, etc.
-		if m := epRegex1.FindStringSubmatch(result[i].Title); len(m) > 1 {
-			if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
-		}
-
-		if m := epRegex2.FindStringSubmatch(result[i].Title); len(m) > 1 {
-			if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
-				result[i].Episode = n
-				result[i].Source = "title"
-				hasAnyInferred = true
-				continue
-			}
+		if result[i].TitleEpisode > 0 {
+			result[i].Episode = result[i].TitleEpisode
+			result[i].Source = "title"
+			result[i].Mismatch = false
+			hasAnyInferred = true
+			continue
 		}
 
 		result[i].Episode = 0
 		result[i].Source = "none"
+		result[i].Mismatch = false
 	}
 
 	// Pass 2: Fallback to order if NO videos had any number detected
@@ -175,6 +358,73 @@ func inferEpisodes(videos []CatalogVideoDraft, sep string) []CatalogVideoDraft {
 			result[i].Conflict = true
 		} else {
 			result[i].Conflict = false
+		}
+	}
+
+	// Pass 4: Chronology inversion detection (cross-day calendar date ordering)
+	type dayStat struct {
+		minEp   int
+		maxEp   int
+		indices []int
+	}
+	dayMap := make(map[string]*dayStat)
+	var dates []string
+
+	for i := range result {
+		result[i].ChronologyIssue = false
+		if result[i].Episode <= 0 {
+			continue
+		}
+		date := extractCalendarDate(result[i])
+		if date == "" {
+			continue
+		}
+		if stat, exists := dayMap[date]; exists {
+			if result[i].Episode < stat.minEp {
+				stat.minEp = result[i].Episode
+			}
+			if result[i].Episode > stat.maxEp {
+				stat.maxEp = result[i].Episode
+			}
+			stat.indices = append(stat.indices, i)
+		} else {
+			dayMap[date] = &dayStat{
+				minEp:   result[i].Episode,
+				maxEp:   result[i].Episode,
+				indices: []int{i},
+			}
+			dates = append(dates, date)
+		}
+	}
+
+	if len(dates) > 1 {
+		sort.Strings(dates)
+		k := len(dates)
+		prefixMax := make([]int, k)
+		prefixMax[0] = dayMap[dates[0]].maxEp
+		for i := 1; i < k; i++ {
+			prefixMax[i] = prefixMax[i-1]
+			if ep := dayMap[dates[i]].maxEp; ep > prefixMax[i] {
+				prefixMax[i] = ep
+			}
+		}
+
+		suffixMin := make([]int, k)
+		suffixMin[k-1] = dayMap[dates[k-1]].minEp
+		for i := k - 2; i >= 0; i-- {
+			suffixMin[i] = suffixMin[i+1]
+			if ep := dayMap[dates[i]].minEp; ep < suffixMin[i] {
+				suffixMin[i] = ep
+			}
+		}
+
+		for i := 0; i < k; i++ {
+			for _, idx := range dayMap[dates[i]].indices {
+				ep := result[idx].Episode
+				if (i > 0 && ep <= prefixMax[i-1]) || (i < k-1 && ep >= suffixMin[i+1]) {
+					result[idx].ChronologyIssue = true
+				}
+			}
 		}
 	}
 
@@ -248,7 +498,15 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	defer a.db.mu.Unlock()
 
 	rows, err := a.db.conn.Query(`
-		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0), COALESCE(p.thumbnail_url, '')
+		SELECT p.id, COALESCE(p.title, ''), COALESCE(p.video_count, 0), COALESCE(p.thumbnail_url, ''),
+		       COALESCE((
+		           SELECT v.thumbnail_url
+		           FROM yt_playlist_items pi
+		           JOIN yt_videos v ON pi.video_id = v.id
+		           WHERE pi.playlist_id = p.id AND COALESCE(v.custom_thumb_updated_at, 0) > 0
+		           ORDER BY v.custom_thumb_updated_at DESC, pi.position ASC
+		           LIMIT 1
+		       ), '')
 		FROM yt_playlists p
 		ORDER BY COALESCE(
 			(SELECT MAX(v.published_at) FROM yt_videos v JOIN yt_playlist_items pi ON v.id = pi.video_id WHERE pi.playlist_id = p.id),
@@ -264,7 +522,8 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 	var summaries []CatalogPlaylistSummary
 	for rows.Next() {
 		var s CatalogPlaylistSummary
-		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount, &s.ThumbnailUrl); err != nil {
+		var customVidThumb string
+		if err := rows.Scan(&s.PlaylistID, &s.Title, &s.VideoCount, &s.ThumbnailUrl, &customVidThumb); err != nil {
 			continue
 		}
 
@@ -277,6 +536,10 @@ func (a *App) ListCatalogPlaylists() ([]CatalogPlaylistSummary, error) {
 			s.Tag, s.Kind, s.TagConfidence = inferTagFromPlaylistTitle(s.Title, knownTags)
 			s.Linked = false
 		}
+
+		tagCfg := a.GetTagPlaylistConfig(s.Tag)
+		s.HasCustomTemplate = hasCustomThumbnailConfig(tagCfg.ThumbnailConfig)
+		s.ThumbnailUrl = a.resolvePlaylistThumbnailCandidate(s.ThumbnailUrl, s.Tag, customVidThumb)
 
 		summaries = append(summaries, s)
 	}
@@ -309,7 +572,8 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	// Fetch videos linked in this playlist
 	rows, err := a.db.conn.Query(`
 		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(v.thumbnail_url, ''),
-		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0)
+		       COALESCE(v.local_file, ''), pi.position, COALESCE(v.episode, 0), COALESCE(v.custom_thumb_updated_at, 0),
+		       COALESCE(v.custom_thumb_episode, 0), COALESCE(v.duration, ''), COALESCE(v.description, '')
 		FROM yt_playlist_items pi
 		JOIN yt_videos v ON pi.video_id = v.id
 		WHERE pi.playlist_id = ?
@@ -325,8 +589,13 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 	for rows.Next() {
 		var vd CatalogVideoDraft
 		var localFile string
-		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt); err == nil {
+		if err := rows.Scan(&vd.VideoID, &vd.Title, &vd.PublishedAt, &vd.ThumbnailUrl, &localFile, &vd.Position, &vd.ExistingEpisode, &vd.ThumbnailUpdatedAt, &vd.ThumbnailEpisode, &vd.Duration, &vd.Description); err == nil {
 			vd.LocalFile = localFile
+			resolvedThumb, _, matchedEpisode := a.resolveVideoThumbnailCandidateWithInfo(vd.VideoID, vd.LocalFile, &vd.ExistingEpisode, vd.ThumbnailUrl)
+			vd.ThumbnailUrl = resolvedThumb
+			if vd.ThumbnailEpisode <= 0 && matchedEpisode > 0 {
+				vd.ThumbnailEpisode = matchedEpisode
+			}
 			vids = append(vids, vd)
 		}
 	}
@@ -369,17 +638,140 @@ func (a *App) GetPlaylistCatalogDraft(playlistID string) (PlaylistCatalogDraft, 
 			vids[i].Episode = 0
 			vids[i].Source = "none"
 			vids[i].Conflict = false
+			vids[i].Mismatch = false
+			vids[i].ChronologyIssue = false
+			ep, _ := parseEpisodeFromTitle(vids[i].Title, a.titleSep())
+			vids[i].TitleEpisode = ep
+			vids[i].SortDate = resolveSortDate(vids[i].Title, vids[i].PublishedAt)
 		}
 		draft.Videos = vids
 	}
 
-	// Thumbnail config for tag
-	tagCfg := a.GetTagPlaylistConfig(tag)
-	if tagCfg.ThumbnailConfig.SourceType != "" || tagCfg.ThumbnailConfig.SteamAssetType != "" || tagCfg.ThumbnailConfig.Enabled {
-		draft.ThumbnailConfig = &tagCfg.ThumbnailConfig
+	for i := range draft.Videos {
+		v := &draft.Videos[i]
+		if v.LocalFile != "" {
+			info, err := os.Stat(v.LocalFile)
+			if err == nil && !info.IsDir() {
+				a.configMu.RLock()
+				meta := a.config.VideoMetadata[v.LocalFile]
+				a.configMu.RUnlock()
+
+				vFile := VideoFile{
+					Name:        filepath.Base(v.LocalFile),
+					Path:        v.LocalFile,
+					Size:        info.Size(),
+					ModTime:     info.ModTime().UnixMilli(),
+					Game:        meta.Game,
+					Episode:     v.Episode,
+					Event:       meta.Event,
+					GameMode:    meta.GameMode,
+					CustomVars:  meta.CustomVars,
+					ContentType: a.resolveContentType(meta, v.LocalFile),
+				}
+				if vFile.Game == "" && draft.Tag != "" {
+					vFile.Game = draft.Tag
+				}
+				generated := a.generateYouTubeTitle(vFile)
+				v.LocalTitle = generated
+				if generated != "" && !titlesMatch(generated, v.Title) {
+					v.TitleMismatch = true
+					v.Mismatch = true
+				}
+			}
+		}
 	}
 
+	// Thumbnail config for tag
+	tagCfg := a.GetTagPlaylistConfig(tag)
+	if hasCustomThumbnailConfig(tagCfg.ThumbnailConfig) {
+		draft.ThumbnailConfig = &tagCfg.ThumbnailConfig
+	}
+	draft.HasCustomTemplate = hasCustomThumbnailConfig(tagCfg.ThumbnailConfig)
+
+	var customVidThumb string
+	for _, vid := range vids {
+		if vid.ThumbnailUpdatedAt > 0 && vid.ThumbnailUrl != "" {
+			customVidThumb = vid.ThumbnailUrl
+			break
+		}
+	}
+	draft.ThumbnailUrl = a.resolvePlaylistThumbnailCandidate(draft.ThumbnailUrl, tag, customVidThumb)
+
 	return draft, nil
+}
+
+// validateVodAssignments checks for duplicate positive episode numbers and chronological inversions before applying VOD catalog.
+func (a *App) validateVodAssignments(playlistID string, assignments []CatalogAssignment) error {
+	seenEp := make(map[int]string)
+	var positiveAssignedIDs []string
+	for _, asgn := range assignments {
+		if asgn.VideoID == "" || asgn.Episode <= 0 {
+			continue
+		}
+		if prevID, exists := seenEp[asgn.Episode]; exists {
+			return fmt.Errorf("duplicate episode number %d assigned to multiple videos (%s, %s)", asgn.Episode, prevID, asgn.VideoID)
+		}
+		seenEp[asgn.Episode] = asgn.VideoID
+		positiveAssignedIDs = append(positiveAssignedIDs, asgn.VideoID)
+	}
+
+	if len(positiveAssignedIDs) <= 1 {
+		return nil
+	}
+
+	placeholders := make([]string, len(positiveAssignedIDs))
+	args := make([]interface{}, 0, len(positiveAssignedIDs)+1)
+	args = append(args, playlistID)
+	for i, id := range positiveAssignedIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	rows, err := a.db.conn.Query(fmt.Sprintf(`
+		SELECT v.id, COALESCE(v.title, ''), COALESCE(v.published_at, ''), COALESCE(pi.position, 0)
+		FROM yt_videos v
+		LEFT JOIN yt_playlist_items pi ON pi.video_id = v.id AND pi.playlist_id = ?
+		WHERE v.id IN (%s)
+	`, strings.Join(placeholders, ",")), args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type vidMeta struct {
+		title       string
+		publishedAt string
+		position    int
+	}
+	metaMap := make(map[string]vidMeta)
+	for rows.Next() {
+		var id, title, publishedAt string
+		var position int
+		if err := rows.Scan(&id, &title, &publishedAt, &position); err == nil {
+			metaMap[id] = vidMeta{
+				title:       title,
+				publishedAt: publishedAt,
+				position:    position,
+			}
+		}
+	}
+
+	var drafts []CatalogVideoDraft
+	for _, asgn := range assignments {
+		if asgn.Episode > 0 && asgn.VideoID != "" {
+			m := metaMap[asgn.VideoID]
+			drafts = append(drafts, CatalogVideoDraft{
+				VideoID:     asgn.VideoID,
+				Title:       m.title,
+				PublishedAt: m.publishedAt,
+				SortDate:    resolveSortDate(m.title, m.publishedAt),
+				Position:    m.position,
+				Episode:     asgn.Episode,
+			})
+		}
+	}
+
+	return validateChronology(drafts)
 }
 
 // ApplyPlaylistCatalog updates local database game tags, episodes, and TagPlaylistConfigs.
@@ -394,6 +786,13 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	tag := strings.TrimSpace(req.Tag)
 
 	a.db.mu.Lock()
+	if req.Kind == "vod" {
+		if err := a.validateVodAssignments(req.PlaylistID, req.Assignments); err != nil {
+			a.db.mu.Unlock()
+			return err
+		}
+	}
+
 	tx, err := a.db.conn.Begin()
 	if err != nil {
 		a.db.mu.Unlock()
@@ -502,3 +901,5 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	appLog("[Catalog] Applied catalog for tag %q (%s) to playlist %s with %d assignments (local updated: %d)", tag, req.Kind, req.PlaylistID, len(req.Assignments), len(localSyncList))
 	return nil
 }
+
+

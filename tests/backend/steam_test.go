@@ -256,3 +256,111 @@ func TestGetSteamGameAssets_DefaultAndHashed(t *testing.T) {
 	}
 }
 
+func TestGetSteamAppID_FranchisePrequelOverSequel(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "test.db")
+	if err := app.InitTestDB(dbPath); err != nil {
+		t.Fatalf("Failed to init test DB: %v", err)
+	}
+
+	db := app.GetDB()
+	// Insert both Psychonauts 1 and Psychonauts 2 into owned library
+	_, err := db.Exec(`
+		INSERT INTO steam_games (appid, name, playtime_forever, playtime_2weeks, header_url)
+		VALUES 
+			(3830, 'Psychonauts', 500, 0, 'https://example.com/p1.jpg'),
+			(607080, 'Psychonauts 2', 1200, 0, 'https://example.com/p2.jpg')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test games: %v", err)
+	}
+
+	// 1. Tag "Psychonauts" must resolve to 3830 (Psychonauts 1), NOT 607080 (Psychonauts 2)
+	id1 := app.GetSteamAppID("Psychonauts")
+	if id1 != "3830" {
+		t.Fatalf("Expected AppID '3830' for 'Psychonauts', got %q", id1)
+	}
+
+	// 2. Tag "Psychonauts 2" must resolve to 607080
+	id2 := app.GetSteamAppID("Psychonauts 2")
+	if id2 != "607080" {
+		t.Fatalf("Expected AppID '607080' for 'Psychonauts 2', got %q", id2)
+	}
+}
+
+func TestGetSteamAppID_HealsPoisonedCacheWithSequel(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "test.db")
+	if err := app.InitTestDB(dbPath); err != nil {
+		t.Fatalf("Failed to init test DB: %v", err)
+	}
+
+	db := app.GetDB()
+
+	// Seed poisoned cache: "Psychonauts" was mapped to sequel "607080"
+	_, err := db.Exec(`
+		INSERT INTO steam_app_cache (game_name, app_id)
+		VALUES ('Psychonauts', '607080')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to seed poisoned cache: %v", err)
+	}
+
+	// Seed library with both games
+	_, err = db.Exec(`
+		INSERT INTO steam_games (appid, name, playtime_forever, playtime_2weeks, header_url)
+		VALUES 
+			(3830, 'Psychonauts', 500, 0, 'https://example.com/p1.jpg'),
+			(607080, 'Psychonauts 2', 1200, 0, 'https://example.com/p2.jpg')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test games: %v", err)
+	}
+
+	// GetSteamAppID should prioritize exact library match (3830) and heal the cache
+	id := app.GetSteamAppID("Psychonauts")
+	if id != "3830" {
+		t.Fatalf("Expected healed AppID '3830', got %q", id)
+	}
+
+	// Verify that cache was updated to 3830
+	var cachedID string
+	err = db.QueryRow(`SELECT app_id FROM steam_app_cache WHERE game_name = ?`, "Psychonauts").Scan(&cachedID)
+	if err != nil {
+		t.Fatalf("Failed to query cache: %v", err)
+	}
+	if cachedID != "3830" {
+		t.Errorf("Expected cache to be updated to '3830', got %q", cachedID)
+	}
+}
+
+func TestSetSteamAppID_ManualBinding(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "test.db")
+	if err := app.InitTestDB(dbPath); err != nil {
+		t.Fatalf("Failed to init test DB: %v", err)
+	}
+
+	// Manually bind custom tag to AppID 3830
+	if err := app.SetSteamAppID("My Retro Series", "3830"); err != nil {
+		t.Fatalf("SetSteamAppID failed: %v", err)
+	}
+
+	id := app.GetSteamAppID("My Retro Series")
+	if id != "3830" {
+		t.Fatalf("Expected AppID '3830', got %q", id)
+	}
+
+	// Clearing binding
+	if err := app.SetSteamAppID("My Retro Series", ""); err != nil {
+		t.Fatalf("SetSteamAppID clear failed: %v", err)
+	}
+}
+
+

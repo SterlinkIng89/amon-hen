@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import VideoPill, { areVideoPillPropsEqual } from "../VideoPill";
 import { YTVideo, VideoFile } from "../../../types";
+import { generateYouTubeTitle } from "../../../utils/videoUtils";
 
 // Mock Wails backend App calls
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
@@ -918,6 +919,67 @@ describe("VideoPill YTVideo Memoization & areVideoPillPropsEqual", () => {
 
     const updatedImg = screen.getByRole("img");
     expect(updatedImg).toHaveAttribute("src", "https://example.com/updated_thumb.jpg");
+  });
+});
+
+describe("VideoPill Title Mismatch Indicator", () => {
+  const localVideoWithMismatch: VideoFile = {
+    name: "League of Legends 2026.08.04 - 15.30.00.01.DVR.mp4",
+    path: "/videos/lol1.mp4",
+    size: 1048576,
+    modTime: 1785800000000,
+    folder: "/videos",
+    game: "League of Legends",
+    youtubeId: "yt-123",
+    remoteYouTubeTitle: "League of Legends — 2/11/26 — ARAM",
+    episode: 1,
+  };
+
+  it("renders mismatch button when remote YouTube title differs from local expected title", () => {
+    const onFixTitleMismatch = vi.fn();
+    render(
+      <VideoPill
+        video={localVideoWithMismatch}
+        viewMode="list"
+        onFixTitleMismatch={onFixTitleMismatch}
+      />
+    );
+
+    const mismatchBtn = screen.getByRole("button", {
+      name: /Fix title mismatch for/i,
+    });
+    expect(mismatchBtn).toBeInTheDocument();
+    fireEvent.click(mismatchBtn);
+    expect(onFixTitleMismatch).toHaveBeenCalledWith(localVideoWithMismatch);
+  });
+
+  it("does not render mismatch button when titles match", () => {
+    const matchingTitle = generateYouTubeTitle(
+      localVideoWithMismatch.name,
+      localVideoWithMismatch.game,
+      localVideoWithMismatch.episode,
+      undefined,
+      localVideoWithMismatch.event,
+      localVideoWithMismatch.gameMode,
+      localVideoWithMismatch.customVars,
+      localVideoWithMismatch.modTime
+    );
+    const localVideoMatching: VideoFile = {
+      ...localVideoWithMismatch,
+      remoteYouTubeTitle: matchingTitle,
+    };
+
+    render(
+      <VideoPill
+        video={localVideoMatching}
+        viewMode="list"
+        onFixTitleMismatch={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Fix title mismatch for/i })
+    ).not.toBeInTheDocument();
   });
 });
 

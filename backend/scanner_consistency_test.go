@@ -53,6 +53,9 @@ func TestScanner_LinkedYouTubeConsistency(t *testing.T) {
 	if linkedVideo.Episode != 5 {
 		t.Errorf("expected linked video Episode to be 5, got %d", linkedVideo.Episode)
 	}
+	if linkedVideo.RemoteYouTubeTitle != "Control Resonant Ep 5" {
+		t.Errorf("expected linked video RemoteYouTubeTitle to be 'Control Resonant Ep 5', got %q", linkedVideo.RemoteYouTubeTitle)
+	}
 
 	// Free video (if assigned same game tag via local metadata or continuing)
 	// When free video has game "Control Resonant", it should continue at episode 6

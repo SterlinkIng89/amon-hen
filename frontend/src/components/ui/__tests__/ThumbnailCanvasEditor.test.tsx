@@ -1,21 +1,10 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ThumbnailCanvasEditor from "../ThumbnailCanvasEditor";
 import { TagThumbnailConfig } from "../../../types";
 import * as thumbnailGenerator from "../../../utils/thumbnailGenerator";
-
-// Mock HTMLCanvasElement.getContext
-HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
-  fillStyle: "",
-  fillRect: vi.fn(),
-  drawImage: vi.fn(),
-  measureText: vi.fn().mockReturnValue({ width: 50 }),
-  save: vi.fn(),
-  restore: vi.fn(),
-  strokeText: vi.fn(),
-  fillText: vi.fn(),
-}) as any;
+import * as thumbnailGuideRenderer from "../../../utils/thumbnailGuideRenderer";
 
 describe("ThumbnailCanvasEditor", () => {
   const baseConfig: TagThumbnailConfig = {
@@ -30,6 +19,33 @@ describe("ThumbnailCanvasEditor", () => {
     naturalWidth: 1000,
     naturalHeight: 1000,
   } as unknown as HTMLImageElement;
+
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      drawImage: vi.fn(),
+      measureText: vi.fn().mockReturnValue({ width: 50 }),
+      save: vi.fn(),
+      restore: vi.fn(),
+      strokeText: vi.fn(),
+      fillText: vi.fn(),
+      setLineDash: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+    }) as any;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("renders a canvas and calls onConfigChange with new image_framing when dragged", () => {
     const onConfigChange = vi.fn();
@@ -117,4 +133,883 @@ describe("ThumbnailCanvasEditor", () => {
       })
     );
   });
+
+  it("snaps dragged logo element to center grid axes and displays HUD pill indicator", () => {
+    const onConfigChange = vi.fn();
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 640, y: 360 });
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.48, y: 0.48, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    expect(canvas).toBeDefined();
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Drag logo slightly towards 0.50 center (from 0.48 by +25px -> ~0.50)
+    fireEvent.pointerDown(canvas, { clientX: 614, clientY: 345, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 640, clientY: 360, pointerId: 1 });
+
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.logo).toBeDefined();
+    // Snapped to exact center (0.5, 0.5)
+    expect(lastCall.logo.x).toBe(0.5);
+    expect(lastCall.logo.y).toBe(0.5);
+  });
+
+  it("bypasses magnetic snapping when Alt key is held during drag", () => {
+    const onConfigChange = vi.fn();
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.49, y: 0.49, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Drag with altKey=true to bypass snap
+    fireEvent.pointerDown(canvas, { clientX: 627, clientY: 352, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 633, clientY: 356, pointerId: 1, altKey: true });
+
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.logo).toBeDefined();
+    // Since snap was bypassed, it should not lock to 0.5
+    expect(lastCall.logo.x).not.toBe(0.5);
+  });
+
+  it("toggles snap and grid overlay via floating toolbar buttons", () => {
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const snapBtn = getByRole("button", { name: /toggle magnetic grid snap/i });
+    expect(snapBtn).toHaveTextContent(/Snap: On/i);
+    fireEvent.click(snapBtn);
+    expect(snapBtn).toHaveTextContent(/Snap: Off/i);
+
+    const gridBtn = getByRole("button", { name: /show or hide 3x3 alignment grid/i });
+    expect(gridBtn).toHaveTextContent(/Grid: Off/i);
+    fireEvent.click(gridBtn);
+    expect(gridBtn).toHaveTextContent(/Grid: On/i);
+  });
+
+  it("centers artwork framing when 'Center art' button is clicked", () => {
+    const onConfigChange = vi.fn();
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={{
+          ...baseConfig,
+          image_framing: { offset_x: 0.2, offset_y: 0.8, zoom: 1.5 },
+        }}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const centerBtn = getByRole("button", { name: /center artwork/i });
+    fireEvent.click(centerBtn);
+
+    expect(onConfigChange).toHaveBeenCalledWith({
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1.5 },
+    });
+  });
+
+  it("renders empty message when no baseImage is loaded", () => {
+    const { getByText } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={null}
+        episodeNumber={1}
+        emptyMessage="Custom empty text"
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    expect(getByText("Custom empty text")).toBeInTheDocument();
+  });
+
+  it("renders Undo and Redo toolbar buttons with initial disabled state", () => {
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    const redoBtn = getByRole("button", { name: /^redo/i });
+
+    expect(undoBtn).toBeInTheDocument();
+    expect(redoBtn).toBeInTheDocument();
+    expect(undoBtn).toBeDisabled();
+    expect(redoBtn).toBeDisabled();
+  });
+
+  it("records a single undoable step on canvas drag pointerUp and reverts via Undo button", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1 },
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { container, getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    expect(canvas).toBeDefined();
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 180,
+      height: 101.25,
+      left: 0,
+      top: 0,
+      right: 180,
+      bottom: 101.25,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Start drag
+    fireEvent.pointerDown(canvas, { clientX: 50, clientY: 50, pointerId: 1 });
+    // Intermediate drag moves
+    fireEvent.pointerMove(canvas, { clientX: 70, clientY: 60, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 90, clientY: 70, pointerId: 1 });
+    // Release pointer (commits single batch)
+    fireEvent.pointerUp(canvas, { clientX: 90, clientY: 70, pointerId: 1 });
+
+    // Rerender with latest config
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    expect(undoBtn).not.toBeDisabled();
+
+    // Click Undo
+    fireEvent.click(undoBtn);
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.image_framing).toBeDefined();
+    expect(lastCall.image_framing?.offset_x).toBe(0.5);
+    expect(lastCall.image_framing?.offset_y).toBe(0.5);
+
+    // Redo should now be enabled
+    const redoBtn = getByRole("button", { name: /^redo/i });
+    expect(redoBtn).not.toBeDisabled();
+    fireEvent.click(redoBtn);
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  it("handles Ctrl+Z and Ctrl+Y keyboard shortcuts to undo and redo", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1 },
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    // Click Center art to produce a state change
+    const centerBtn = getByRole("button", { name: /center artwork/i });
+    fireEvent.click(centerBtn);
+
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    // Ctrl+Z should trigger undo
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+
+    // Ctrl+Y should trigger redo
+    fireEvent.keyDown(window, { key: "y", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  it("does not trigger undo/redo when typing inside an input element", () => {
+    const onConfigChange = vi.fn();
+    render(
+      <div>
+        <ThumbnailCanvasEditor
+          config={baseConfig}
+          baseImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+        <input data-testid="test-input" type="text" />
+      </div>
+    );
+
+    const input = document.querySelector('input[data-testid="test-input"]');
+    expect(input).toBeInTheDocument();
+    if (!input) return;
+
+    fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+    expect(onConfigChange).not.toHaveBeenCalled();
+  });
+
+  it("enables undo on external studio control mutations and restores state via Ctrl+Z", () => {
+    let currentConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      episode_position: "bottom-left",
+    };
+    const onConfigChange = vi.fn((patch: Partial<TagThumbnailConfig>) => {
+      currentConfig = { ...currentConfig, ...patch };
+    });
+
+    const { getByRole, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const undoBtn = getByRole("button", { name: /^undo/i });
+    expect(undoBtn).toBeDisabled();
+
+    // External change from studio control (e.g. 3x3 matrix or dropdown)
+    currentConfig = {
+      ...currentConfig,
+      episode_position: "top-right",
+    };
+    rerender(
+      <ThumbnailCanvasEditor
+        config={currentConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    expect(undoBtn).not.toBeDisabled();
+
+    // Ctrl+Z reverts external change
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.episode_position).toBe("bottom-left");
+  });
+
+  it("keeps element selected after pointerUp and renders its bounding box and crosshairs", () => {
+    const guideSpy = vi.spyOn(thumbnailGuideRenderer, "renderAlignmentGuides");
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 250, y: 150 });
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        logoImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    expect(canvas).toBeDefined();
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    guideSpy.mockClear();
+
+    // Click logo: pointer down then pointer up without moving
+    fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+    // The element remains selected even after mouse release (pointerUp)
+    expect(guideSpy).toHaveBeenCalled();
+    const lastCallArgs = guideSpy.mock.calls[guideSpy.mock.calls.length - 1];
+    expect(lastCallArgs[3]).toEqual(
+      expect.objectContaining({
+        showCrosshairs: true,
+        selectedRect: expect.objectContaining({ w: expect.any(Number), h: expect.any(Number) }),
+      })
+    );
+  });
+
+  it("clears selection when clicking background artwork or pressing Escape", () => {
+    const guideSpy = vi.spyOn(thumbnailGuideRenderer, "renderAlignmentGuides");
+    const hitSpy = vi.spyOn(thumbnailGenerator, "hitTestElements");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 250, y: 150 });
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        logoImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // 1. Select logo
+    hitSpy.mockReturnValue("logo");
+    fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+    // 2. Press Escape -> clears selection
+    guideSpy.mockClear();
+    fireEvent.keyDown(canvas, { key: "Escape" });
+    const callsWithCrosshairs = guideSpy.mock.calls.filter((c) => c[3]?.selectedRect !== undefined);
+    expect(callsWithCrosshairs.length).toBe(0);
+
+    // 3. Re-select logo
+    fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+    // 4. Click background artwork -> clears selection
+    guideSpy.mockClear();
+    hitSpy.mockReturnValue(null);
+    fireEvent.pointerDown(canvas, { clientX: 50, clientY: 50, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 50, clientY: 50, pointerId: 2 });
+
+    const postBgCalls = guideSpy.mock.calls.filter((c) => c[3]?.selectedRect !== undefined);
+    expect(postBgCalls.length).toBe(0);
+  });
+
+  it("nudges selectedElement using arrow keys, displaying coordinate HUD and keeping crosshairs", () => {
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 250, y: 150 });
+    const guideSpy = vi.spyOn(thumbnailGuideRenderer, "renderAlignmentGuides");
+    const onConfigChange = vi.fn();
+
+    const logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+    };
+
+    const { container } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        logoImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={onConfigChange}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Click logo to select
+    fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+    // Nudge with ArrowRight
+    fireEvent.keyDown(canvas, { key: "ArrowRight" });
+
+    expect(onConfigChange).toHaveBeenCalled();
+    const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+    expect(lastCall.logo).toBeDefined();
+    expect(lastCall.logo.x).toBeCloseTo(0.205, 3);
+
+    // Crosshairs remain rendered
+    expect(guideSpy).toHaveBeenCalled();
+    const lastGuideCall = guideSpy.mock.calls[guideSpy.mock.calls.length - 1];
+    expect(lastGuideCall[3]).toEqual(
+      expect.objectContaining({
+        showCrosshairs: true,
+        selectedRect: expect.any(Object),
+      })
+    );
+  });
+
+  it("automatically deselects element if toggled off in config", () => {
+    vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+    vi.spyOn(thumbnailGenerator, "pointerToCanvasPoint").mockReturnValue({ x: 250, y: 150 });
+    const guideSpy = vi.spyOn(thumbnailGuideRenderer, "renderAlignmentGuides");
+
+    let logoConfig: TagThumbnailConfig = {
+      ...baseConfig,
+      logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+    };
+
+    const { container, rerender } = render(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        logoImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      width: 1280,
+      height: 720,
+      left: 0,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    canvas.setPointerCapture = vi.fn();
+    canvas.releasePointerCapture = vi.fn();
+
+    // Click logo to select
+    fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+    guideSpy.mockClear();
+
+    // Disable logo layer in config
+    logoConfig = {
+      ...logoConfig,
+      logo: { enabled: false, x: 0.2, y: 0.2, scale: 1 },
+    };
+    rerender(
+      <ThumbnailCanvasEditor
+        config={logoConfig}
+        baseImage={fakeImage}
+        logoImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    // Bounding box should no longer be rendered
+    const callsWithSelection = guideSpy.mock.calls.filter((c) => c[3]?.selectedRect !== undefined);
+    expect(callsWithSelection.length).toBe(0);
+  });
+
+  it("toggles YouTube safe zone overlay via toolbar button", () => {
+    const guideSpy = vi.spyOn(thumbnailGuideRenderer, "renderAlignmentGuides");
+    const { getByRole } = render(
+      <ThumbnailCanvasEditor
+        config={baseConfig}
+        baseImage={fakeImage}
+        episodeNumber={1}
+        onConfigChange={vi.fn()}
+      />
+    );
+
+    const safeZoneBtn = getByRole("button", { name: /toggle youtube timestamp safe zone overlay/i });
+    expect(safeZoneBtn).toHaveTextContent(/Safe zone: Off/i);
+
+    guideSpy.mockClear();
+    fireEvent.click(safeZoneBtn);
+    expect(safeZoneBtn).toHaveTextContent(/Safe zone: On/i);
+
+    expect(guideSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      1280,
+      720,
+      expect.objectContaining({
+        showSafeZone: true,
+      })
+    );
+  });
+
+  describe("Interactive Corner Resize Handles", () => {
+    it("updates canvas cursor to diagonal resize on hovering corner handles of selected element", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.23, y: 0.2, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={vi.fn()}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Click inside logo to select it
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // 2. Hover over bottom-right (se) corner -> (400, 200) -> cursor-nwse-resize
+      fireEvent.pointerMove(canvas, { clientX: 400, clientY: 200 });
+      expect(canvas.className).toContain("cursor-nwse-resize");
+
+      // 3. Hover over top-right (ne) corner -> (400, 100) -> cursor-nesw-resize
+      fireEvent.pointerMove(canvas, { clientX: 400, clientY: 100 });
+      expect(canvas.className).toContain("cursor-nesw-resize");
+
+      // 4. Pointer leave resets hover states
+      fireEvent.pointerLeave(canvas);
+      expect(canvas.className).not.toContain("cursor-nwse-resize");
+      expect(canvas.className).not.toContain("cursor-nesw-resize");
+    });
+
+    it("resizes logo scale smoothly on dragging a corner handle, showing live HUD scale pill", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.23, y: 0.2, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Select logo
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // 2. Press down on se corner handle (400, 200)
+      fireEvent.pointerDown(canvas, { clientX: 400, clientY: 200, pointerId: 1 });
+
+      // Active scale HUD pill should appear
+      const hudPill = container.querySelector(".animate-pulse");
+      expect(hudPill).toBeDefined();
+
+      // 3. Drag outward to (420, 210) to scale up
+      fireEvent.pointerMove(canvas, { clientX: 420, clientY: 210, pointerId: 1 });
+
+      expect(onConfigChange).toHaveBeenCalled();
+      const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+      expect(lastCall.logo?.scale).toBeGreaterThan(1);
+
+      // 4. Release pointer to commit batch
+      fireEvent.pointerUp(canvas, { clientX: 420, clientY: 210, pointerId: 1 });
+      expect(canvas.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it("resizes episode layout scale on corner drag when episode is selected", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        episode: { x: 900, y: 500, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const epConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        episode_layout: { x: 0.8, y: 0.7, scale: 1 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={epConfig}
+          baseImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+
+      // 1. Select episode
+      fireEvent.pointerDown(canvas, { clientX: 950, clientY: 550, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 950, clientY: 550, pointerId: 1 });
+
+      // 2. Drag se corner handle (1100, 600) inward to (1050, 575)
+      fireEvent.pointerDown(canvas, { clientX: 1100, clientY: 600, pointerId: 1 });
+      fireEvent.pointerMove(canvas, { clientX: 1050, clientY: 575, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 1050, clientY: 575, pointerId: 1 });
+
+      expect(onConfigChange).toHaveBeenCalled();
+      const lastCall = onConfigChange.mock.calls[onConfigChange.mock.calls.length - 1][0];
+      expect(lastCall.episode_layout?.scale).toBeLessThan(1);
+    });
+
+    it("adjusts scale with + and - keyboard shortcuts when an element is selected", () => {
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 200, h: 100 },
+      });
+      const onConfigChange = vi.fn();
+      const logoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.2, y: 0.2, scale: 1.0 },
+      };
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={logoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={onConfigChange}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+        width: 1280,
+        height: 720,
+        left: 0,
+        top: 0,
+        right: 1280,
+        bottom: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      // Select logo
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      // Press '+'
+      fireEvent.keyDown(canvas, { key: "+" });
+      expect(onConfigChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logo: expect.objectContaining({ scale: 1.05 }),
+        })
+      );
+
+      // Press '-'
+      fireEvent.keyDown(canvas, { key: "-" });
+      expect(onConfigChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logo: expect.objectContaining({ scale: 0.95 }),
+        })
+      );
+    });
+
+    it("renders shortcut hint bar when an element is selected and calls onSelectElement", () => {
+      const onSelectElement = vi.fn();
+      const testLogoConfig: TagThumbnailConfig = {
+        ...baseConfig,
+        logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+      };
+      vi.spyOn(thumbnailGenerator, "hitTestElements").mockReturnValue("logo");
+      vi.spyOn(thumbnailGenerator, "renderThumbnailToCanvas").mockReturnValue({
+        logo: { x: 200, y: 100, w: 100, h: 100 },
+      });
+
+      const { container } = render(
+        <ThumbnailCanvasEditor
+          config={testLogoConfig}
+          baseImage={fakeImage}
+          logoImage={fakeImage}
+          episodeNumber={1}
+          onConfigChange={vi.fn()}
+          onSelectElement={onSelectElement}
+        />
+      );
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) return;
+
+      fireEvent.pointerDown(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 250, clientY: 150, pointerId: 1 });
+
+      expect(onSelectElement).toHaveBeenCalledWith("logo");
+      expect(screen.getByText("Steam logo")).toBeInTheDocument();
+      expect(screen.getByText(/Drag corners or \+\/- to scale/i)).toBeInTheDocument();
+
+      fireEvent.keyDown(canvas, { key: "Escape" });
+      expect(onSelectElement).toHaveBeenCalledWith(null);
+      expect(screen.queryByText("Steam logo")).not.toBeInTheDocument();
+    });
+  });
 });
+
+

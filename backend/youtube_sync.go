@@ -347,8 +347,8 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 	// Read current local data to build the full snippet without a network round-trip.
 	// CategoryId defaults to 22 (People & Blogs) if unknown — YouTube requires it in updates.
 	a.db.mu.Lock()
-	var localTitle, localDesc sql.NullString
-	a.db.conn.QueryRow("SELECT title, description FROM yt_videos WHERE id = ?", videoID).Scan(&localTitle, &localDesc)
+	var localTitle, localDesc, localPrivacy, localFile sql.NullString
+	a.db.conn.QueryRow("SELECT title, description, privacy, local_file FROM yt_videos WHERE id = ?", videoID).Scan(&localTitle, &localDesc, &localPrivacy, &localFile)
 	a.db.mu.Unlock()
 
 	// Merge: use provided values, fall back to what we have locally
@@ -360,6 +360,13 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 	if finalDesc == "" && localDesc.Valid {
 		finalDesc = localDesc.String
 	}
+	finalPrivacy := privacy
+	if finalPrivacy == "" && localPrivacy.Valid {
+		finalPrivacy = localPrivacy.String
+	}
+	if finalPrivacy == "" {
+		finalPrivacy = "private"
+	}
 
 	video := &youtube.Video{
 		Id: videoID,
@@ -369,7 +376,7 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 			CategoryId:  "22", // required field for updates
 		},
 		Status: &youtube.VideoStatus{
-			PrivacyStatus: privacy,
+			PrivacyStatus: finalPrivacy,
 		},
 	}
 
@@ -388,7 +395,21 @@ func (a *App) UpdateYouTubeVideoMetadata(videoID, title, description, privacy st
 		UPDATE yt_videos 
 		SET title = ?, description = ?, privacy = ? 
 		WHERE id = ?`,
-		finalTitle, finalDesc, privacy, videoID)
+		finalTitle, finalDesc, finalPrivacy, videoID)
+	if err == nil && localFile.Valid && localFile.String != "" {
+		lf := localFile.String
+		if a.config.VideoMetadata == nil {
+			a.config.VideoMetadata = make(map[string]VideoMeta)
+		}
+		meta := a.config.VideoMetadata[lf]
+		if finalTitle != "" {
+			meta.YouTubeTitle = finalTitle
+		}
+		meta.Description = finalDesc
+		meta.Privacy = finalPrivacy
+		a.config.VideoMetadata[lf] = meta
+		_ = a.saveConfig()
+	}
 
 	return err
 }
@@ -525,8 +546,7 @@ func (a *App) syncVideos(svc *youtube.Service, uploadsPlaylistID string, syncTim
 					ON CONFLICT(id) DO UPDATE SET
 					title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 					thumbnail_url=CASE
-						WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
-						THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+						WHEN yt_videos.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_videos.thumbnail_url
 						WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
 						ELSE yt_videos.thumbnail_url
 					END,
@@ -669,8 +689,7 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 				ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, description=excluded.description, published_at=excluded.published_at,
 				thumbnail_url=CASE
-					WHEN COALESCE(yt_videos.custom_thumb_updated_at, 0) > 0 AND excluded.thumbnail_url != ''
-					THEN excluded.thumbnail_url || '?v=' || yt_videos.custom_thumb_updated_at
+					WHEN yt_videos.thumbnail_url LIKE '/cache/yt_thumbs/%' THEN yt_videos.thumbnail_url
 					WHEN excluded.thumbnail_url != '' THEN excluded.thumbnail_url
 					ELSE yt_videos.thumbnail_url
 				END,
@@ -777,6 +796,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 				epVal := int(ep.Int64)
 				v.Episode = &epVal
 			}
+			v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 			v.StatusIssues = parseStatusIssues(issuesStr)
 
 			if hasDateFilter {
@@ -899,6 +919,7 @@ func (a *App) GetChannelVideosPaginated(page, limit int, sortBy, search, dateFro
 			epVal := int(ep.Int64)
 			v.Episode = &epVal
 		}
+		v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}
@@ -1008,6 +1029,7 @@ func (a *App) GetPlaylistVideos(playlistID string) ([]YTVideo, error) {
 			epVal := int(ep.Int64)
 			v.Episode = &epVal
 		}
+		v.ThumbnailUrl = a.resolveVideoThumbnailCandidate(v.ID, v.LocalFile, v.Episode, v.ThumbnailUrl)
 		v.StatusIssues = parseStatusIssues(issuesStr)
 		videos = append(videos, v)
 	}

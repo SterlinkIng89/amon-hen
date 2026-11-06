@@ -21,8 +21,8 @@ export interface BatchThumbnailProgressProps {
   readonly onRetryFailed: () => void;
 }
 
-function getBatchItemStatusDetails(item: BatchItem): { readonly text: string; readonly className: string } {
-  switch (item.status) {
+function getBatchItemStatusDetails(item?: BatchItem): { readonly text: string; readonly className: string } {
+  switch (item?.status) {
     case "done":
       return { text: "Done", className: "text-emerald-400" };
     case "failed":
@@ -58,21 +58,30 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
       ? Math.round((currentProgress.current / currentProgress.total) * 100)
       : 0;
 
-  const syncedCount = useMemo(
-    () =>
-      items.filter(
-        (i) => (i.thumbnailUpdatedAt ?? 0) > 0 || i.status === "done"
-      ).length,
-    [items]
-  );
-  const unsyncedCount = items.length - syncedCount;
+  const { validItems, syncedCount, unsyncedCount } = useMemo(() => {
+    const valid: BatchItem[] = [];
+    let synced = 0;
+    for (const item of items) {
+      if (!item) continue;
+      valid.push(item);
+      if ((item.thumbnailUpdatedAt ?? 0) > 0 || item.status === "done") {
+        synced++;
+      }
+    }
+    return {
+      validItems: valid,
+      syncedCount: synced,
+      unsyncedCount: valid.length - synced,
+    };
+  }, [items]);
+
   const selectedCount = selectedVideoIds ? selectedVideoIds.size : 0;
 
   const effectiveQuota = useMemo(() => {
     if (selectedCount > 0) return selectedCount * 50;
     if (onStartUnsynced && unsyncedCount > 0) return unsyncedCount * 50;
-    return quotaEstimate > 0 ? quotaEstimate : items.length * 50;
-  }, [selectedCount, onStartUnsynced, unsyncedCount, quotaEstimate, items.length]);
+    return quotaEstimate > 0 ? quotaEstimate : validItems.length * 50;
+  }, [selectedCount, onStartUnsynced, unsyncedCount, quotaEstimate, validItems.length]);
 
   return (
     <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
@@ -233,9 +242,9 @@ export const BatchThumbnailProgress: FC<BatchThumbnailProgressProps> = ({
       )}
 
       {/* Item list details when active */}
-      {(isProcessing || isDone) && items.length > 0 && (
+      {(isProcessing || isDone) && validItems.length > 0 && (
         <div className="max-h-40 overflow-y-auto space-y-1.5 pt-2 border-t border-border-subtle/50 text-[11px] custom-scrollbar">
-          {items.map((item) => {
+          {validItems.map((item) => {
             const statusDetails = getBatchItemStatusDetails(item);
             return (
               <div key={item.videoId} className="flex items-center justify-between py-0.5">

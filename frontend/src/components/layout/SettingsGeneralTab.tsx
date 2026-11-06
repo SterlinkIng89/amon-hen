@@ -46,6 +46,8 @@ export function SettingsGeneralTab({
     setDefaultVideoPrivacy,
     defaultPlaylistPrivacy,
     setDefaultPlaylistPrivacy,
+    defaultVideoDescription,
+    setDefaultVideoDescription,
   } = useAppStore();
 
   const [customSepActive, setCustomSepActive] = useState(false);
@@ -219,6 +221,32 @@ export function SettingsGeneralTab({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="p-3.5 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="default-video-description"
+              className="text-xs font-medium text-text-primary"
+            >
+              Default Video Description
+            </label>
+            <span className="text-[10px] text-text-muted">
+              {defaultVideoDescription.length} characters
+            </span>
+          </div>
+          <p className="text-[10px] text-text-secondary">
+            Template applied to uploaded videos when no custom description is set. Great for search keywords, specs, or social links.
+          </p>
+          <textarea
+            id="default-video-description"
+            data-testid="default-video-description-input"
+            value={defaultVideoDescription}
+            onChange={(e) => setDefaultVideoDescription(e.target.value)}
+            placeholder="e.g. Gameplay ultrawide 3440x1440p&#10;PC Specs: ...&#10;Socials & Links..."
+            rows={3}
+            className="mt-1 w-full bg-base border border-border-subtle rounded px-2.5 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent resize-y min-h-[72px]"
+          />
         </div>
       </section>
 

@@ -13,6 +13,11 @@ import {
   groupVideos,
   extractGamePrefixFromTitle,
   groupVideosYT,
+  formatVideoDuration,
+  formatPublishedTime,
+  computeExpectedLocalTitle,
+  isVideoTitleMismatched,
+  titlesMatch,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -140,6 +145,88 @@ describe("videoUtils - Title generation & placeholder detection", () => {
         "clip",
       );
       expect(title).toBe("Valorant - 26/08/26 - Insane_Flick");
+    });
+
+    it("generates date from modTime when filename does not have a date prefix", () => {
+      const modTime = new Date(2026, 3, 8, 12, 0, 0).getTime();
+      const title = generateYouTubeTitle(
+        "League of Legends ARAM Highlight.mp4",
+        "League of Legends",
+        0,
+        multiplayerProfile,
+        "ARAM",
+        "Howling Abyss",
+        undefined,
+        modTime,
+        " — ",
+      );
+      expect(title).toBe("League of Legends - ARAM - Howling Abyss - 8/04/26");
+    });
+
+    it("computes expected title using computeExpectedLocalTitle", () => {
+      const modTime = new Date(2026, 7, 4, 12, 0, 0).getTime();
+      const video: VideoFile = {
+        name: "clip.mp4",
+        path: "/videos/clip.mp4",
+        size: 1024,
+        modTime,
+        folder: "/videos",
+        game: "League of Legends",
+        episode: 2,
+      };
+      const title = computeExpectedLocalTitle(video);
+      expect(title).toBe("League of Legends — 4/08/26 — 2");
+    });
+
+    it("detects title mismatch with isVideoTitleMismatched", () => {
+      const modTime = new Date(2026, 7, 4, 12, 0, 0).getTime();
+      const video: VideoFile = {
+        name: "clip.mp4",
+        path: "/videos/clip.mp4",
+        size: 1024,
+        modTime,
+        folder: "/videos",
+        game: "League of Legends",
+        episode: 2,
+        youtubeId: "yt-1",
+        remoteYouTubeTitle: "Wrong YouTube Title",
+      };
+
+      expect(isVideoTitleMismatched(video)).toBe(true);
+
+      const matchingVideo: VideoFile = {
+        ...video,
+        remoteYouTubeTitle: "League of Legends — 4/08/26 — 2",
+      };
+      expect(isVideoTitleMismatched(matchingVideo)).toBe(false);
+
+      // Dash variant (" - " instead of " — ") must also NOT be flagged as mismatch
+      const dashVariantVideo: VideoFile = {
+        ...video,
+        remoteYouTubeTitle: "League of Legends - 4/08/26 - 2",
+      };
+      expect(isVideoTitleMismatched(dashVariantVideo)).toBe(false);
+
+      const unuploadedVideo: VideoFile = {
+        ...video,
+        youtubeId: undefined,
+      };
+      expect(isVideoTitleMismatched(unuploadedVideo)).toBe(false);
+    });
+
+    it("verifies titlesMatch treats separator variants as matching", () => {
+      expect(
+        titlesMatch(
+          "DEATH STRANDING DIRECTOR'S CUT - 30/10/26 - 11",
+          "DEATH STRANDING DIRECTOR'S CUT — 30/10/26 — 11"
+        )
+      ).toBe(true);
+      expect(
+        titlesMatch(
+          "League of Legends - 02/11/26 - Pentakill",
+          "League of Legends - 28/10/26 - Pentakill"
+        )
+      ).toBe(false);
     });
   });
 
@@ -839,6 +926,48 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       const res = groupVideosYT([v2, v1], "playlist", "recent");
       expect(res[0].videos[0].id).toBe("second");
       expect(res[0].videos[1].id).toBe("first");
+    });
+  });
+
+  describe("formatVideoDuration", () => {
+    it("handles ISO 8601 durations", () => {
+      expect(formatVideoDuration("PT1H23M45S")).toBe("1:23:45");
+      expect(formatVideoDuration("PT45M12S")).toBe("45:12");
+      expect(formatVideoDuration("PT30S")).toBe("0:30");
+      expect(formatVideoDuration("PT1H")).toBe("1:00:00");
+      expect(formatVideoDuration("PT5M")).toBe("5:00");
+    });
+
+    it("handles numeric seconds", () => {
+      expect(formatVideoDuration(3600)).toBe("1:00:00");
+      expect(formatVideoDuration("3665")).toBe("1:01:05");
+      expect(formatVideoDuration(125)).toBe("2:05");
+    });
+
+    it("handles pre-formatted strings", () => {
+      expect(formatVideoDuration("1:23:45")).toBe("1:23:45");
+      expect(formatVideoDuration("45:12")).toBe("45:12");
+    });
+
+    it("returns empty string on empty or invalid inputs", () => {
+      expect(formatVideoDuration("")).toBe("");
+      expect(formatVideoDuration(undefined)).toBe("");
+      expect(formatVideoDuration(null)).toBe("");
+      expect(formatVideoDuration("invalid")).toBe("");
+      expect(formatVideoDuration(-10)).toBe("");
+    });
+  });
+
+  describe("formatPublishedTime", () => {
+    it("extracts HH:MM time from ISO timestamp", () => {
+      const res = formatPublishedTime("2024-03-15T18:30:00Z");
+      expect(res).toMatch(/^\d{2}:\d{2}$/);
+    });
+
+    it("returns empty string on invalid dates", () => {
+      expect(formatPublishedTime("")).toBe("");
+      expect(formatPublishedTime(undefined)).toBe("");
+      expect(formatPublishedTime("not-a-date")).toBe("");
     });
   });
 });

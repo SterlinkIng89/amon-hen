@@ -10,8 +10,16 @@ export function AddVideoToPlaylist(arg1, arg2) {
   return window['go']['backend']['App']['AddVideoToPlaylist'](arg1, arg2);
 }
 
+export function ApplyCatalogTitleUpdates(arg1) {
+  return window['go']['backend']['App']['ApplyCatalogTitleUpdates'](arg1);
+}
+
 export function ApplyPlaylistCatalog(arg1) {
   return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
+}
+
+export function ApplySingleVideoTitleUpdate(arg1, arg2) {
+  return window['go']['backend']['App']['ApplySingleVideoTitleUpdate'](arg1, arg2);
 }
 
 export function CacheHandler() {
@@ -278,6 +286,10 @@ export function OpenFolderInExplorer(arg1) {
   return window['go']['backend']['App']['OpenFolderInExplorer'](arg1);
 }
 
+export function PreviewCatalogTitleUpdates(arg1) {
+  return window['go']['backend']['App']['PreviewCatalogTitleUpdates'](arg1);
+}
+
 export function PurgePlaylistDuplicates(arg1) {
   return window['go']['backend']['App']['PurgePlaylistDuplicates'](arg1);
 }
@@ -342,6 +354,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
   return window['go']['backend']['App']['SaveYouTubeCredentials'](arg1, arg2);
 }
 
+export function SearchSteamGames(arg1) {
+  return window['go']['backend']['App']['SearchSteamGames'](arg1);
+}
+
 export function SelectCustomThumbnailImage() {
   return window['go']['backend']['App']['SelectCustomThumbnailImage']();
 }
@@ -356,6 +372,10 @@ export function SetAutoLaunch(arg1) {
 
 export function SetDefaultExportFolder(arg1) {
   return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
+}
+
+export function SetSteamAppID(arg1, arg2) {
+  return window['go']['backend']['App']['SetSteamAppID'](arg1, arg2);
 }
 
 export function SetTagPlaylist(arg1, arg2) {
@@ -452,6 +472,10 @@ export function UpdateVideoMonetizationStatus(arg1, arg2, arg3, arg4) {
 
 export function UpdateYouTubeThumbnail(arg1, arg2) {
   return window['go']['backend']['App']['UpdateYouTubeThumbnail'](arg1, arg2);
+}
+
+export function UpdateYouTubeThumbnailForEpisode(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['UpdateYouTubeThumbnailForEpisode'](arg1, arg2, arg3);
 }
 
 export function UpdateYouTubeVideoGameMeta(arg1, arg2, arg3) {

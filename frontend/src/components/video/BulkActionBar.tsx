@@ -81,6 +81,8 @@ export default function BulkActionBar({
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
     null,
   );
+  const pendingSaveAfterTagModalRef = useRef(false);
+  const tagSavedDuringModalRef = useRef(false);
   const [contentTypeOverride, setContentTypeOverride] = useState("auto");
   const [savingContentType, setSavingContentType] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -190,6 +192,8 @@ export default function BulkActionBar({
     const hasExistingTags = selectedVideos.some((v) => v.game === game);
     const isNewTagForTheseVideos = !hasExistingTags;
     if (isNewTagForTheseVideos && tagPlaylists[game] === undefined) {
+      pendingSaveAfterTagModalRef.current = true;
+      tagSavedDuringModalRef.current = false;
       setPendingTagForModal(game);
       return;
     }
@@ -436,7 +440,11 @@ export default function BulkActionBar({
             <button
               className="flex items-center gap-1 px-2 py-1 rounded-sm border border-border-subtle bg-transparent text-[10px] text-text-muted hover:text-accent hover:border-accent/40 transition-colors"
               title={`"${game}" has no linked playlist. Click to link one.`}
-              onClick={() => setPendingTagForModal(game.trim())}
+              onClick={() => {
+                pendingSaveAfterTagModalRef.current = false;
+                tagSavedDuringModalRef.current = false;
+                setPendingTagForModal(game.trim());
+              }}
             >
               <svg
                 width="10"
@@ -743,14 +751,23 @@ export default function BulkActionBar({
       {pendingTagForModal && (
         <TagPlaylistModal
           tag={pendingTagForModal}
-          onClose={() => setPendingTagForModal(null)}
-          onSaved={() => {
+          onClose={() => {
             setPendingTagForModal(null);
+            if (pendingSaveAfterTagModalRef.current) {
+              const shouldSave = tagSavedDuringModalRef.current;
+              pendingSaveAfterTagModalRef.current = false;
+              tagSavedDuringModalRef.current = false;
+              if (shouldSave) {
+                performSave();
+              }
+            }
+          }}
+          onSaved={() => {
+            tagSavedDuringModalRef.current = true;
             // Reload tag_playlists so the "Link playlist" indicator refreshes
             LoadConfig()
               .then((cfg) => setTagPlaylists(cfg.tag_playlists || {}))
               .catch(() => {});
-            performSave();
           }}
         />
       )}

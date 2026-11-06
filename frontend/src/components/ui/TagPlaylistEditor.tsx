@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   GetChannelPlaylists,
   GetOrCreatePlaylist,
@@ -12,8 +12,11 @@ import { YTPlaylist, PlaylistPrivacy, TagThumbnailConfig } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
 import { parseTagPlaylistConfig } from "../../utils/tagConfigParser";
 import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import { useSteamAppBinding } from "../../hooks/useSteamAppBinding";
 import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import TagThumbnailConfigSection from "./TagThumbnailConfigSection";
+import { SteamMatchBadge } from "./SteamMatchBadge";
+import { SteamGameSelectorModal } from "../youtube/catalog/SteamGameSelectorModal";
 
 export interface TagPlaylistEditorProps {
   readonly tag: string;
@@ -21,6 +24,21 @@ export interface TagPlaylistEditorProps {
   readonly onCancel?: () => void;
   readonly showCancel?: boolean;
 }
+
+const createLocalPlaylistItem = (
+  id: string,
+  title: string,
+  privacy: PlaylistPrivacy,
+): YTPlaylist => ({
+  id,
+  title,
+  description: "",
+  videoCount: 0,
+  thumbnailUrl: "",
+  publishedAt: new Date().toISOString(),
+  privacy,
+  duplicateCount: 0,
+});
 
 export default function TagPlaylistEditor({
   tag,
@@ -38,22 +56,20 @@ export default function TagPlaylistEditor({
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+  const [thumbnailSaved, setThumbnailSaved] = useState(false);
+  const thumbnailSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // VOD playlist section state
   const [selectedVodId, setSelectedVodId] = useState("");
   const [vodSearchQuery, setVodSearchQuery] = useState("");
   const [newVodTitle, setNewVodTitle] = useState(tag);
-  const [vodPrivacy, setVodPrivacy] = useState<PlaylistPrivacy>(
-    () => useAppStore.getState().defaultPlaylistPrivacy,
-  );
+  const [vodPrivacy, setVodPrivacy] = useState<PlaylistPrivacy>("public");
 
   // Clip playlist section state
   const [selectedClipId, setSelectedClipId] = useState("");
   const [clipSearchQuery, setClipSearchQuery] = useState("");
   const [newClipTitle, setNewClipTitle] = useState(`${tag} Clips`);
-  const [clipPrivacy, setClipPrivacy] = useState<PlaylistPrivacy>(
-    () => useAppStore.getState().defaultPlaylistPrivacy,
-  );
+  const [clipPrivacy, setClipPrivacy] = useState<PlaylistPrivacy>("public");
 
   // Cover generation & upload state
   const [applyCoverOnCreateVod, setApplyCoverOnCreateVod] = useState(true);
@@ -64,12 +80,29 @@ export default function TagPlaylistEditor({
     text: string;
   } | null>(null);
 
-  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(tag, thumbConfig);
+  const [showSteamSelector, setShowSteamSelector] = useState(false);
+  const {
+    appId: steamAppId,
+    isLoading: isSteamBindingLoading,
+    setBound: setSteamAppBound,
+  } = useSteamAppBinding(tag);
+  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(
+    tag,
+    thumbConfig,
+    isSteamBindingLoading ? undefined : steamAppId,
+  );
 
   useEffect(() => {
     setNewVodTitle(tag);
     setNewClipTitle(`${tag} Clips`);
+    setVodPrivacy("public");
+    setClipPrivacy("public");
     setError("");
+    setThumbnailSaved(false);
+    if (thumbnailSavedTimerRef.current) {
+      clearTimeout(thumbnailSavedTimerRef.current);
+      thumbnailSavedTimerRef.current = null;
+    }
 
     LoadConfig()
       .then((cfg) => {
@@ -95,6 +128,18 @@ export default function TagPlaylistEditor({
         setIsLoading(false);
       });
   }, [tag]);
+
+  useEffect(() => {
+    setThumbnailSaved(false);
+  }, [thumbConfig]);
+
+  useEffect(() => {
+    return () => {
+      if (thumbnailSavedTimerRef.current) {
+        clearTimeout(thumbnailSavedTimerRef.current);
+      }
+    };
+  }, []);
 
   const sortedPlaylists = useMemo(() => {
     return [...playlists].sort((a, b) =>
@@ -156,6 +201,11 @@ export default function TagPlaylistEditor({
     try {
       useAppStore.setState({ defaultPlaylistPrivacy: vodPrivacy });
       const id = await GetOrCreatePlaylist(newVodTitle.trim(), "", vodPrivacy);
+      setPlaylists((prev) =>
+        prev.some((p) => p.id === id)
+          ? prev
+          : [...prev, createLocalPlaylistItem(id, newVodTitle.trim(), vodPrivacy)],
+      );
       setVodPlaylistId(id);
       setSelectedVodId(id);
       await SetTagPlaylistConfig(tag, id, clipPlaylistId);
@@ -220,6 +270,11 @@ export default function TagPlaylistEditor({
         newClipTitle.trim(),
         "",
         clipPrivacy,
+      );
+      setPlaylists((prev) =>
+        prev.some((p) => p.id === id)
+          ? prev
+          : [...prev, createLocalPlaylistItem(id, newClipTitle.trim(), clipPrivacy)],
       );
       setClipPlaylistId(id);
       setSelectedClipId(id);
@@ -288,6 +343,13 @@ export default function TagPlaylistEditor({
           backend.TagThumbnailConfig.createFrom(thumbConfig),
         );
       }
+      setThumbnailSaved(true);
+      if (thumbnailSavedTimerRef.current) {
+        clearTimeout(thumbnailSavedTimerRef.current);
+      }
+      thumbnailSavedTimerRef.current = setTimeout(() => {
+        setThumbnailSaved(false);
+      }, 2000);
       onSaved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -304,6 +366,26 @@ export default function TagPlaylistEditor({
       console.error(e);
     }
     onSaved();
+    onCancel?.();
+  };
+
+  const handleConfirm = async () => {
+    setIsCreating(true);
+    setError("");
+    try {
+      if (thumbConfig) {
+        await SetTagThumbnailConfig(
+          tag,
+          backend.TagThumbnailConfig.createFrom(thumbConfig),
+        );
+      }
+      onSaved();
+      onCancel?.();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -774,9 +856,16 @@ export default function TagPlaylistEditor({
             onClick={handleSaveThumbnail}
             disabled={isCreating}
           >
-            {isCreating ? "Saving..." : "Save Thumbnail Template"}
+            {isCreating ? "Saving..." : thumbnailSaved ? "Saved!" : "Save Thumbnail Template"}
           </button>
         </div>
+
+        <SteamMatchBadge
+          appId={steamAppId}
+          gameTitle={steamAppId ? gameTitle : undefined}
+          isLoading={isSteamBindingLoading}
+          onOpenSelector={() => setShowSteamSelector(true)}
+        />
 
         <TagThumbnailConfigSection
           tag={tag}
@@ -784,6 +873,7 @@ export default function TagPlaylistEditor({
           onChange={setThumbConfig}
           vodPlaylistId={vodPlaylistId}
           clipPlaylistId={clipPlaylistId}
+          steamAppId={isSteamBindingLoading ? undefined : steamAppId}
           onPlaylistCoverUpdated={(plId, newThumbUrl) => {
             setPlaylists((prev) =>
               prev.map((p) => (p.id === plId ? { ...p, thumbnailUrl: newThumbUrl } : p))
@@ -793,16 +883,34 @@ export default function TagPlaylistEditor({
       </div>
 
       {showCancel && onCancel && (
-        <div className="flex justify-end pt-2 border-t border-border-subtle">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-subtle">
           <button
+            type="button"
             className="btn btn-ghost btn-sm text-text-muted hover:text-text-primary"
             onClick={onCancel}
             disabled={isCreating}
           >
             Cancel
           </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm px-4 text-xs font-semibold"
+            onClick={handleConfirm}
+            disabled={isCreating}
+          >
+            {isCreating ? "Saving..." : "Confirm"}
+          </button>
         </div>
       )}
+
+      <SteamGameSelectorModal
+        isOpen={showSteamSelector}
+        tag={tag}
+        currentAppId={steamAppId}
+        currentGameTitle={steamAppId ? gameTitle : undefined}
+        onSelectAppId={setSteamAppBound}
+        onClose={() => setShowSteamSelector(false)}
+      />
     </div>
   );
 }

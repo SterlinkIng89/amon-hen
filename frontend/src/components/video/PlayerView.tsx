@@ -4,6 +4,13 @@ import VideoPill from "./VideoPill";
 import InlinePlayer from "./InlinePlayer";
 import { QueueItem } from "../youtube/UploadQueue";
 import { useAppStore } from "../../store/useAppStore";
+import { YouTubeTitleUpdateModal } from "../youtube/catalog/YouTubeTitleUpdateModal";
+import {
+  ApplySingleVideoTitleUpdate,
+  LoadConfig,
+} from "../../../wailsjs/go/backend/App";
+import { backend } from "../../../wailsjs/go/models";
+import { computeExpectedLocalTitle } from "../../utils/videoUtils";
 
 interface PlayerViewProps {
   sortedVideos: VideoFile[];
@@ -54,14 +61,75 @@ export default function PlayerView({
   >({});
 
   React.useEffect(() => {
-    import("../../../wailsjs/go/backend/App").then(({ LoadConfig }) => {
-      LoadConfig()
-        .then((cfg: any) => {
-          setGameProfiles(cfg.game_profiles || {});
-        })
-        .catch(() => {});
-    });
+    LoadConfig()
+      .then((cfg: { game_profiles?: Record<string, GameProfile> }) => {
+        setGameProfiles(cfg.game_profiles || {});
+      })
+      .catch(() => {});
   }, []);
+
+  const [mismatchModalVideo, setMismatchModalVideo] =
+    React.useState<VideoFile | null>(null);
+  const [isMismatchModalOpen, setIsMismatchModalOpen] = React.useState(false);
+  const [isApplyingMismatch, setIsApplyingMismatch] = React.useState(false);
+  const [mismatchResult, setMismatchResult] =
+    React.useState<backend.CatalogTitleUpdateResult | null>(null);
+  const [mismatchError, setMismatchError] = React.useState<string | null>(null);
+
+  const handleFixTitleMismatch = React.useCallback((video: VideoFile) => {
+    setMismatchModalVideo(video);
+    setMismatchResult(null);
+    setMismatchError(null);
+    setIsMismatchModalOpen(true);
+  }, []);
+
+  const handleConfirmMismatchUpdate = React.useCallback(async () => {
+    if (!mismatchModalVideo?.youtubeId) return;
+    setIsApplyingMismatch(true);
+    setMismatchError(null);
+    try {
+      const expectedTitle = computeExpectedLocalTitle(
+        mismatchModalVideo,
+        gameProfiles,
+      );
+      await ApplySingleVideoTitleUpdate(
+        mismatchModalVideo.youtubeId,
+        expectedTitle,
+      );
+      setMismatchResult(
+        backend.CatalogTitleUpdateResult.createFrom({
+          updated: [mismatchModalVideo.youtubeId],
+          failed: {},
+          skipped: [],
+        }),
+      );
+      onTagSaved?.();
+    } catch (err: unknown) {
+      setMismatchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsApplyingMismatch(false);
+    }
+  }, [mismatchModalVideo, gameProfiles, onTagSaved]);
+
+  const mismatchChanges: backend.CatalogTitleChange[] = React.useMemo(() => {
+    if (!mismatchModalVideo?.youtubeId) return [];
+    const expectedTitle = computeExpectedLocalTitle(
+      mismatchModalVideo,
+      gameProfiles,
+    );
+    return [
+      backend.CatalogTitleChange.createFrom({
+        videoId: mismatchModalVideo.youtubeId,
+        oldTitle:
+          mismatchModalVideo.remoteYouTubeTitle ||
+          mismatchModalVideo.youtubeTitle ||
+          "",
+        newTitle: expectedTitle,
+        oldEpisode: mismatchModalVideo.episode || 0,
+        newEpisode: mismatchModalVideo.episode || 0,
+      }),
+    ];
+  }, [mismatchModalVideo, gameProfiles]);
 
   const uploadingProgressMap = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -202,6 +270,7 @@ export default function PlayerView({
                     uploadProgress={uploadingProgressMap.get(video.path)}
                     gameProfiles={gameProfiles}
                     isQueued={queuedPathsSet.has(video.path)}
+                    onFixTitleMismatch={handleFixTitleMismatch}
                   />
                 );
               })}
@@ -254,6 +323,7 @@ export default function PlayerView({
                 onAddToQueue={onAddToQueue}
                 onTagSaved={onTagSaved}
                 onDelete={onFilesDeleted}
+                onFixTitleMismatch={() => handleFixTitleMismatch(selectedVideo)}
               />
             );
           })()
@@ -265,6 +335,24 @@ export default function PlayerView({
           </div>
         )}
       </main>
+
+      <YouTubeTitleUpdateModal
+        isOpen={isMismatchModalOpen}
+        changes={mismatchChanges}
+        title="Correct video title"
+        description="Update video title on YouTube to match local recording date."
+        confirmLabel="Apply corrected title"
+        isApplying={isApplyingMismatch}
+        result={mismatchResult}
+        error={mismatchError}
+        onConfirm={() => void handleConfirmMismatchUpdate()}
+        onClose={() => {
+          setIsMismatchModalOpen(false);
+          setMismatchModalVideo(null);
+          setMismatchResult(null);
+          setMismatchError(null);
+        }}
+      />
     </div>
   );
 }

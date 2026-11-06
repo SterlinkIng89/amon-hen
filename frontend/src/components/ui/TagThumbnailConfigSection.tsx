@@ -11,6 +11,7 @@ import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import ThumbnailCanvasEditor from "./ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "./ThumbnailFramingControls";
 import ThumbnailElementControls from "./ThumbnailElementControls";
+import { ThumbnailRects, ThumbnailElementId } from "../../utils/thumbnailGenerator";
 
 export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
@@ -19,6 +20,11 @@ export interface TagThumbnailConfigSectionProps {
   readonly vodPlaylistId?: string;
   readonly clipPlaylistId?: string;
   readonly onPlaylistCoverUpdated?: (playlistId: string, thumbUrl: string) => void;
+  readonly hidePreviewCanvas?: boolean;
+  readonly elementRects?: ThumbnailRects;
+  readonly selectedElement?: ThumbnailElementId | null;
+  readonly onSelectElement?: (element: ThumbnailElementId | null) => void;
+  readonly steamAppId?: string | null;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -47,7 +53,19 @@ export default function TagThumbnailConfigSection({
   vodPlaylistId,
   clipPlaylistId,
   onPlaylistCoverUpdated,
+  hidePreviewCanvas = false,
+  elementRects,
+  selectedElement: propsSelectedElement,
+  onSelectElement,
+  steamAppId,
 }: TagThumbnailConfigSectionProps) {
+  const [localRects, setLocalRects] = useState<ThumbnailRects>({});
+  const [internalSelectedElement, setInternalSelectedElement] = useState<ThumbnailElementId | null>(null);
+  const activeSelectedElement = propsSelectedElement !== undefined ? propsSelectedElement : internalSelectedElement;
+  const handleSelectElement = (element: ThumbnailElementId | null) => {
+    setInternalSelectedElement(element);
+    onSelectElement?.(element);
+  };
   const parsed = parseTagThumbnailConfig(value);
   const config: TagThumbnailConfig = {
     ...DEFAULT_CONFIG,
@@ -57,7 +75,7 @@ export default function TagThumbnailConfigSection({
   };
 
   const { steamAssets, loadingAssets, baseImage, logoImage, gameTitle } =
-    useThumbnailAssets(tag, config);
+    useThumbnailAssets(tag, config, steamAppId);
 
   const [uploadingPlaylist, setUploadingPlaylist] = useState<"vod" | "clip" | null>(null);
   const [coverStatus, setCoverStatus] = useState<{
@@ -152,17 +170,25 @@ export default function TagThumbnailConfigSection({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2 border-t border-border-subtle animate-fadeIn">
           {/* Left Column: Preview Canvas, Framing Controls & Elements Controls (5 cols) */}
           <div className="md:col-span-5 flex flex-col gap-2">
-            <span className="text-xs font-medium text-text-secondary">
-              Thumbnail Preview
-            </span>
-            <ThumbnailCanvasEditor
-              config={config}
-              baseImage={baseImage}
-              logoImage={logoImage}
-              gameTitle={gameTitle}
-              episodeNumber={1}
-              onConfigChange={update}
-            />
+            {!hidePreviewCanvas && (
+              <>
+                <span className="text-xs font-medium text-text-secondary">
+                  Thumbnail Preview
+                </span>
+                <ThumbnailCanvasEditor
+                  config={config}
+                  baseImage={baseImage}
+                  logoImage={logoImage}
+                  gameTitle={gameTitle}
+                  episodeNumber={1}
+                  onConfigChange={update}
+                  onRenderRects={setLocalRects}
+                  historyResetKey={tag}
+                  selectedElement={activeSelectedElement}
+                  onSelectElement={handleSelectElement}
+                />
+              </>
+            )}
             <ThumbnailFramingControls
               framing={config.image_framing}
               disabled={!baseImage}
@@ -173,6 +199,9 @@ export default function TagThumbnailConfigSection({
               hasLogo={Boolean(steamAssets?.logoUrl)}
               defaultTitle={gameTitle}
               onChange={update}
+              elementRects={elementRects ?? localRects}
+              selectedElement={activeSelectedElement}
+              onSelectElement={handleSelectElement}
             />
           </div>
 

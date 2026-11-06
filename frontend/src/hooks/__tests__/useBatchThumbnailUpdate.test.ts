@@ -8,6 +8,7 @@ import * as thumbAssets from "../useThumbnailAssets";
 vi.mock("../../../wailsjs/go/backend/App", () => ({
   SaveCustomThumbnail: vi.fn(),
   UpdateYouTubeThumbnail: vi.fn(),
+  UpdateYouTubeThumbnailForEpisode: vi.fn(),
   GetCustomThumbnail: vi.fn(),
 }));
 
@@ -39,6 +40,7 @@ describe("useBatchThumbnailUpdate", () => {
     vi.mocked(appBackend.SaveCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/mock.jpg");
     vi.mocked(appBackend.GetCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/mock.jpg");
     vi.mocked(appBackend.UpdateYouTubeThumbnail).mockResolvedValue("https://yt.com/thumb.jpg");
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockResolvedValue("https://yt.com/thumb.jpg");
   });
 
   it("calculates estimated quota correctly (50 per item)", () => {
@@ -122,10 +124,15 @@ describe("useBatchThumbnailUpdate", () => {
     expect(appBackend.SaveCustomThumbnail).toHaveBeenCalledWith("C:\\Videos\\Ep1.mp4", "data:image/jpeg;base64,mock");
     expect(appBackend.SaveCustomThumbnail).toHaveBeenCalledWith("yt:v2", "data:image/jpeg;base64,mock");
 
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledWith("v1", "/cache/yt_thumbs/mock.jpg", 1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledWith("v2", "/cache/yt_thumbs/mock.jpg", 2);
+
     expect(result.current.items[0].status).toBe("done");
     expect(result.current.items[0].thumbnailUpdatedAt).toBeTypeOf("number");
+    expect(result.current.items[0].thumbnailEpisode).toBe(1);
     expect(result.current.items[1].status).toBe("done");
     expect(result.current.items[1].thumbnailUpdatedAt).toBeTypeOf("number");
+    expect(result.current.items[1].thumbnailEpisode).toBe(2);
     expect(result.current.running).toBe(false);
   });
 
@@ -142,10 +149,11 @@ describe("useBatchThumbnailUpdate", () => {
       await result.current.startSelected(["v2"]);
     });
 
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledWith("v2", "/cache/yt_thumbs/mock.jpg");
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledTimes(1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledWith("v2", "/cache/yt_thumbs/mock.jpg", 2);
     expect(result.current.items[0].status).toBe("pending");
     expect(result.current.items[1].status).toBe("done");
+    expect(result.current.items[1].thumbnailEpisode).toBe(2);
   });
 
   it("processes only unsynced videos and respects maxCount with startUnsynced", async () => {
@@ -168,8 +176,8 @@ describe("useBatchThumbnailUpdate", () => {
       await result.current.startUnsynced(1);
     });
 
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledWith("v2", "/cache/yt_thumbs/mock.jpg");
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledTimes(1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledWith("v2", "/cache/yt_thumbs/mock.jpg", 2);
     expect(result.current.items[0].status).toBe("pending");
     expect(result.current.items[1].status).toBe("done");
     expect(result.current.items[2].status).toBe("pending");
@@ -188,14 +196,15 @@ describe("useBatchThumbnailUpdate", () => {
       await result.current.updateSingle("v1");
     });
 
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledWith("v1", "/cache/yt_thumbs/mock.jpg");
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledTimes(1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledWith("v1", "/cache/yt_thumbs/mock.jpg", 1);
     expect(result.current.items[0].status).toBe("done");
+    expect(result.current.items[0].thumbnailEpisode).toBe(1);
     expect(result.current.items[1].status).toBe("pending");
   });
 
   it("continues to next item when a non-quota error occurs", async () => {
-    vi.mocked(appBackend.UpdateYouTubeThumbnail)
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode)
       .mockRejectedValueOnce(new Error("File corrupt"))
       .mockResolvedValueOnce("https://yt.com/thumb.jpg");
 
@@ -217,7 +226,7 @@ describe("useBatchThumbnailUpdate", () => {
   });
 
   it("aborts remaining items and marks them skipped when quota is exceeded", async () => {
-    vi.mocked(appBackend.UpdateYouTubeThumbnail).mockRejectedValueOnce(
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockRejectedValueOnce(
       new Error("YouTube API quota exceeded")
     );
 
@@ -235,11 +244,11 @@ describe("useBatchThumbnailUpdate", () => {
 
     expect(result.current.items[0].status).toBe("failed");
     expect(result.current.items[1].status).toBe("skipped");
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledTimes(1);
   });
 
   it("retryFailed only re-runs failed items", async () => {
-    vi.mocked(appBackend.UpdateYouTubeThumbnail)
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode)
       .mockRejectedValueOnce(new Error("Network glitch"))
       .mockResolvedValueOnce("https://yt.com/thumb2.jpg");
 
@@ -262,13 +271,13 @@ describe("useBatchThumbnailUpdate", () => {
     vi.clearAllMocks();
     vi.mocked(appBackend.SaveCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/mock.jpg");
     vi.mocked(appBackend.GetCustomThumbnail).mockResolvedValue("/cache/yt_thumbs/mock.jpg");
-    vi.mocked(appBackend.UpdateYouTubeThumbnail).mockResolvedValue("https://yt.com/thumb1.jpg");
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockResolvedValue("https://yt.com/thumb1.jpg");
 
     await act(async () => {
       await result.current.retryFailed();
     });
 
-    expect(appBackend.UpdateYouTubeThumbnail).toHaveBeenCalledTimes(1);
+    expect(appBackend.UpdateYouTubeThumbnailForEpisode).toHaveBeenCalledTimes(1);
     expect(result.current.items[0].status).toBe("done");
     expect(result.current.items[1].status).toBe("done");
   });
@@ -296,6 +305,9 @@ describe("useBatchThumbnailUpdate", () => {
 
     expect(result.current.items[0].status).toBe("done");
     expect(result.current.items[0].thumbnailUpdatedAt).toBeTypeOf("number");
+    expect(result.current.items[0].thumbnailEpisode).toBe(1);
+    expect(onVideoUpdated).toHaveBeenCalledWith("v1", "https://yt.com/thumb.jpg", 1);
+    expect(onVideoUpdated).toHaveBeenCalledWith("v2", "https://yt.com/thumb.jpg", 2);
     expect(onCompleted).toHaveBeenCalled();
 
     // Re-render with new array reference
@@ -312,4 +324,151 @@ describe("useBatchThumbnailUpdate", () => {
     expect(result.current.items[1].status).toBe("done");
     expect(result.current.items[0].thumbnailUpdatedAt).toBeGreaterThan(0);
   });
+
+  it("resets items and cancels ongoing queue when tag changes", async () => {
+    let currentTag = "Hades";
+    let currentItems: BatchThumbnailInputItem[] = [
+      { videoId: "hades-1", episode: 1, cacheKey: "yt:hades-1" },
+    ];
+
+    const { result, rerender } = renderHook(
+      (props: { tag: string; items: BatchThumbnailInputItem[] }) =>
+        useBatchThumbnailUpdate({
+          tag: props.tag,
+          config: mockConfig,
+          items: props.items,
+        }),
+      { initialProps: { tag: currentTag, items: currentItems } }
+    );
+
+    expect(result.current.items[0].videoId).toBe("hades-1");
+
+    // Change to new game / tag with new items
+    currentTag = "Felvidek";
+    currentItems = [
+      { videoId: "felvidek-1", episode: 1, cacheKey: "yt:felvidek-1" },
+      { videoId: "felvidek-2", episode: 2, cacheKey: "yt:felvidek-2" },
+    ];
+
+    act(() => {
+      rerender({ tag: currentTag, items: currentItems });
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].videoId).toBe("felvidek-1");
+    expect(result.current.items[1].videoId).toBe("felvidek-2");
+    expect(result.current.items[0].status).toBe("pending");
+  });
+
+  it("does not create undefined items or sparse holes when playlist or items change during in-flight batch execution", async () => {
+    let resolveFirstUpdate: ((val: string) => void) | null = null;
+    let resolveSecondUpdate: ((val: string) => void) | null = null;
+
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation((videoId) => {
+      if (videoId === "p1-v1") {
+        return new Promise<string>((resolve) => {
+          resolveFirstUpdate = resolve;
+        });
+      }
+      if (videoId === "p1-v2") {
+        return new Promise<string>((resolve) => {
+          resolveSecondUpdate = resolve;
+        });
+      }
+      return Promise.resolve("https://yt.com/done.jpg");
+    });
+
+    const onCompleted = vi.fn();
+    const playlist1Items: BatchThumbnailInputItem[] = [
+      { videoId: "p1-v1", episode: 1, cacheKey: "yt:p1-v1" },
+      { videoId: "p1-v2", episode: 2, cacheKey: "yt:p1-v2" },
+      { videoId: "p1-v3", episode: 3, cacheKey: "yt:p1-v3" },
+    ];
+
+    const { result, rerender } = renderHook(
+      (props: { playlistId?: string; tag: string; items: BatchThumbnailInputItem[] }) =>
+        useBatchThumbnailUpdate({
+          playlistId: props.playlistId,
+          tag: props.tag,
+          config: mockConfig,
+          items: props.items,
+          onCompleted,
+        }),
+      { initialProps: { playlistId: "pl-1", tag: "Dead Space", items: playlist1Items } }
+    );
+
+    // Start batch on Playlist 1
+    let startPromise: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+
+    expect(result.current.running).toBe(true);
+    expect(result.current.items[0].status).toBe("uploading");
+
+    // Switch to Playlist 2 with fewer items while batch is running
+    const playlist2Items: BatchThumbnailInputItem[] = [
+      { videoId: "p2-v1", episode: 1, cacheKey: "yt:p2-v1" },
+    ];
+
+    act(() => {
+      rerender({ playlistId: "pl-2", tag: "Deadlock", items: playlist2Items });
+    });
+
+    // Now resolve in-flight updates from Playlist 1
+    await act(async () => {
+      resolveFirstUpdate?.("https://yt.com/first.jpg");
+      resolveSecondUpdate?.("https://yt.com/second.jpg");
+      await startPromise;
+    });
+
+    // State must belong to Playlist 2 without any sparse or undefined holes
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0]).toBeDefined();
+    expect(result.current.items[0].videoId).toBe("p2-v1");
+    expect(result.current.items[0].status).toBe("pending");
+    expect(result.current.items.some((i) => i === undefined || i.status === undefined)).toBe(false);
+    expect(result.current.running).toBe(false);
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
+
+  it("aborts safely when component unmounts during active batch execution", async () => {
+    let resolveUpdate: ((val: string) => void) | null = null;
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation(() => {
+      return new Promise<string>((resolve) => {
+        resolveUpdate = resolve;
+      });
+    });
+
+    const onCompleted = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useBatchThumbnailUpdate({
+        tag: "Hades",
+        config: mockConfig,
+        items: mockItems,
+        onCompleted,
+      })
+    );
+
+    let startPromise: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+
+    expect(result.current.running).toBe(true);
+
+    // Unmount while running
+    unmount();
+
+    // Resolve deferred backend operation
+    await act(async () => {
+      resolveUpdate?.("https://yt.com/done.jpg");
+      await startPromise;
+    });
+
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
 });
+
+
+

@@ -1,5 +1,5 @@
 import { FC, useState, useMemo, useEffect, useRef } from "react";
-import { usePlaylistCatalog } from "../../../hooks/usePlaylistCatalog";
+import { usePlaylistCatalog, compareVideoChronology } from "../../../hooks/usePlaylistCatalog";
 import {
   useBatchThumbnailUpdate,
   BatchThumbnailInputItem,
@@ -7,83 +7,26 @@ import {
 import { useThumbnailAssets } from "../../../hooks/useThumbnailAssets";
 import { PlaylistCatalogRow } from "./PlaylistCatalogRow";
 import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
+import { DuplicateEpisodeDialog } from "./DuplicateEpisodeDialog";
+import { YouTubeTitleUpdateModal } from "./YouTubeTitleUpdateModal";
 import { BatchThumbnailProgress } from "./BatchThumbnailProgress";
+import { BatchDescriptionProgress } from "./BatchDescriptionProgress";
+import { SteamGameSelectorModal } from "./SteamGameSelectorModal";
 import {
   GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
+  SaveCustomThumbnail,
   SetTagThumbnailConfig,
 } from "../../../../wailsjs/go/backend/App";
 import { backend } from "../../../../wailsjs/go/models";
 import { BatchItem, TagThumbnailConfig } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
+import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
-import { renderThumbnailToCanvas } from "../../../utils/thumbnailGenerator";
+import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
+import { ThumbnailRects, ThumbnailElementId } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
-
-interface ThumbnailPreviewCanvasProps {
-  readonly config: TagThumbnailConfig;
-  readonly baseImage: HTMLImageElement | null;
-  readonly logoImage: HTMLImageElement | null;
-  readonly gameTitle: string;
-  readonly episodeNumber: number;
-  readonly isLoading: boolean;
-}
-
-const ThumbnailPreviewCanvas: FC<ThumbnailPreviewCanvasProps> = ({
-  config,
-  baseImage,
-  logoImage,
-  gameTitle,
-  episodeNumber,
-  isLoading,
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = 1280;
-    canvas.height = 720;
-    renderThumbnailToCanvas(canvas, baseImage, {
-      showEpisode: episodeNumber > 0,
-      episodeNumber: episodeNumber > 0 ? episodeNumber : 1,
-      episodeFormat: config.episode_format || "pad2",
-      position: config.episode_position || "bottom-left",
-      fontColor: config.font_color || "#ffffff",
-      framing: config.image_framing,
-      episodeLayout: config.episode_layout,
-      logo: config.logo?.enabled
-        ? {
-            image: logoImage,
-            layout: config.logo,
-          }
-        : undefined,
-      title: config.title?.enabled
-        ? {
-            text: config.title.text_override || gameTitle,
-            layout: config.title,
-          }
-        : undefined,
-    });
-  }, [config, baseImage, logoImage, gameTitle, episodeNumber]);
-
-  return (
-    <div className="relative w-full aspect-video bg-black/40 rounded-lg overflow-hidden border border-border-subtle shadow-sm shrink-0 flex items-center justify-center">
-      <canvas ref={canvasRef} className="w-full h-full object-cover" />
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-base/60 backdrop-blur-xs">
-          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-      {!isLoading && !baseImage && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted bg-base/80">
-          No artwork loaded
-        </span>
-      )}
-    </div>
-  );
-};
 
 export const PlaylistCatalogPanel: FC = () => {
   const {
@@ -98,33 +41,127 @@ export const PlaylistCatalogPanel: FC = () => {
     selectPlaylist,
     reloadDraft,
     updateVideoThumbnail,
+    updateVideoDescription,
+    updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
     editedEpisodes,
     setEpisode,
+    reorderDuplicate,
     hasConflicts,
     canApply,
     isApplying,
     applyError,
     applySuccess,
     applyCatalog,
+    syncVideoFromTitle,
+    syncAllFromTitle,
+    mismatchCount,
+    chronologyIssueIds,
     autoNumberByDate,
-    autoNumberByOrder,
-    reverseEpisodes,
+    isUpdatingTitles,
+    titleUpdateError,
+    previewTitleUpdates,
+    applyTitleUpdates,
+    applySingleTitleUpdate,
   } = usePlaylistCatalog();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterUnlinkedOnly, setFilterUnlinkedOnly] = useState(false);
   const [updateLocal, setUpdateLocal] = useState(true);
   const [matchedSteamAppId, setMatchedSteamAppId] = useState<string | null>(null);
+  const [showSteamSelector, setShowSteamSelector] = useState(false);
   const [knownTags, setKnownTags] = useState<string[]>([]);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
+  const [resolvingEpisode, setResolvingEpisode] = useState<number | null>(null);
 
-  // Reset video selection and preview when selected playlist changes
+  const duplicateEpisodes = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const ep of Object.values(editedEpisodes)) {
+      if (ep > 0) {
+        counts[ep] = (counts[ep] || 0) + 1;
+      }
+    }
+    return Object.keys(counts)
+      .map(Number)
+      .filter((ep) => counts[ep] > 1)
+      .sort((a, b) => a - b);
+  }, [editedEpisodes]);
+
+  const firstDuplicateEpisode = duplicateEpisodes[0] ?? null;
+
+  const resolvingVideos = useMemo(() => {
+    if (resolvingEpisode === null || !draft?.videos) return [];
+    return draft.videos
+      .filter((v) => (editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : 0)) === resolvingEpisode)
+      .sort(compareVideoChronology);
+  }, [resolvingEpisode, draft?.videos, editedEpisodes]);
+
+  const resolvingShiftedCount = useMemo(() => {
+    if (resolvingEpisode === null || !draft?.videos) return 0;
+    return draft.videos.filter(
+      (v) => (editedEpisodes[v.videoId] ?? (v.episode > 0 ? v.episode : 0)) > resolvingEpisode
+    ).length;
+  }, [resolvingEpisode, draft?.videos, editedEpisodes]);
+
+  const [isTitleModalOpen, setIsTitleModalOpen] = useState(false);
+  const [titleChanges, setTitleChanges] = useState<backend.CatalogTitleChange[]>([]);
+  const [isLoadingTitlePreview, setIsLoadingTitlePreview] = useState(false);
+  const [titleUpdateResult, setTitleUpdateResult] = useState<backend.CatalogTitleUpdateResult | null>(null);
+  const [singleTitleTarget, setSingleTitleTarget] = useState<{ videoId: string; newTitle: string } | null>(null);
+
+  const handleOpenTitleModal = async () => {
+    setSingleTitleTarget(null);
+    setIsTitleModalOpen(true);
+    setIsLoadingTitlePreview(true);
+    setTitleUpdateResult(null);
+    const changes = await previewTitleUpdates();
+    setTitleChanges(changes);
+    setIsLoadingTitlePreview(false);
+  };
+
+  const handleFixTitleMismatch = (vid: backend.CatalogVideoDraft) => {
+    if (!vid.localTitle) return;
+    const change = backend.CatalogTitleChange.createFrom({
+      videoId: vid.videoId,
+      oldTitle: vid.title,
+      newTitle: vid.localTitle,
+      oldEpisode: vid.titleEpisode || 0,
+      newEpisode: vid.episode || 0,
+    });
+    setSingleTitleTarget({ videoId: vid.videoId, newTitle: vid.localTitle });
+    setTitleChanges([change]);
+    setTitleUpdateResult(null);
+    setIsLoadingTitlePreview(false);
+    setIsTitleModalOpen(true);
+  };
+
+  const handleConfirmTitleUpdates = async () => {
+    if (singleTitleTarget) {
+      const res = await applySingleTitleUpdate(
+        singleTitleTarget.videoId,
+        singleTitleTarget.newTitle
+      );
+      if (res) {
+        setTitleUpdateResult(res);
+      }
+      return;
+    }
+    const res = await applyTitleUpdates();
+    if (res) {
+      setTitleUpdateResult(res);
+    }
+  };
+
+  // Reset video selection, preview, resolving modal, and title modal when selected playlist changes
   useEffect(() => {
     setSelectedVideoIds(new Set());
     setPreviewVideoId(null);
+    setResolvingEpisode(null);
+    setIsTitleModalOpen(false);
+    setTitleUpdateResult(null);
+    setSingleTitleTarget(null);
   }, [selectedPlaylistId]);
 
   // Fetch known game tags for autocomplete
@@ -154,10 +191,12 @@ export const PlaylistCatalogPanel: FC = () => {
     font_color: "#ffffff",
   });
   const [isConfigCustomized, setIsConfigCustomized] = useState(false);
-  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(true);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
+  const [editorRects, setEditorRects] = useState<ThumbnailRects>({});
+  const [studioSelectedElement, setStudioSelectedElement] = useState<ThumbnailElementId | null>(null);
 
   // Check Steam App ID when editedTag changes
   useEffect(() => {
@@ -166,7 +205,7 @@ export const PlaylistCatalogPanel: FC = () => {
       setMatchedSteamAppId(null);
       return;
     }
-    void GetSteamAppID(editedTag.trim())
+    void Promise.resolve(GetSteamAppID(editedTag.trim()))
       .then((appId) => {
         if (active) {
           setMatchedSteamAppId(appId && appId !== "NOT_FOUND" && appId !== "0" && appId !== "" ? appId : null);
@@ -234,6 +273,25 @@ export const PlaylistCatalogPanel: FC = () => {
       setIsConfigCustomized(true);
       setTemplateSaveSuccess(true);
       setTimeout(() => setTemplateSaveSuccess(false), 3000);
+
+      let previewDataUrl = "";
+      if (baseImage) {
+        try {
+          previewDataUrl = renderTagThumbnailDataUrl({
+            baseImage,
+            logoImage,
+            gameTitle,
+            episodeNumber: sampleEpisode,
+            config: thumbConfig,
+          });
+          await SaveCustomThumbnail("tag_template_" + tag.toLowerCase(), previewDataUrl);
+        } catch (renderErr: unknown) {
+          console.warn("[PlaylistCatalogPanel] Failed to render tag template preview:", renderErr);
+        }
+      }
+
+      updatePlaylistTemplatePreview(tag, previewDataUrl);
+      void loadPlaylists();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setTemplateSaveError(msg);
@@ -260,8 +318,9 @@ export const PlaylistCatalogPanel: FC = () => {
     baseImage,
     logoImage,
     gameTitle,
+    steamAssets,
     loadingAssets: isLoadingAssets,
-  } = useThumbnailAssets(editedTag.trim(), thumbConfig);
+  } = useThumbnailAssets(editedTag.trim(), thumbConfig, matchedSteamAppId);
 
   // Filtered playlists
   const filteredPlaylists = useMemo(() => {
@@ -279,13 +338,14 @@ export const PlaylistCatalogPanel: FC = () => {
   const batchItems: BatchThumbnailInputItem[] = useMemo(() => {
     if (!draft?.videos) return [];
     return draft.videos.map((vid) => {
-      const ep = editedEpisodes[vid.videoId] ?? vid.episode ?? 1;
+      const ep = editedEpisodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
       return {
         videoId: vid.videoId,
         episode: ep,
         cacheKey: `${vid.videoId}_${ep}`,
         localFile: vid.localFile,
         thumbnailUpdatedAt: vid.thumbnailUpdatedAt,
+        thumbnailEpisode: vid.thumbnailEpisode,
       };
     });
   }, [draft?.videos, editedEpisodes]);
@@ -302,11 +362,12 @@ export const PlaylistCatalogPanel: FC = () => {
     retryFailed,
     estimatedQuota,
   } = useBatchThumbnailUpdate({
+    playlistId: selectedPlaylistId ?? "",
     tag: editedTag.trim(),
     config: thumbConfig,
     items: batchItems,
-    onVideoUpdated: (videoId, newThumbUrl) => {
-      updateVideoThumbnail(videoId, newThumbUrl);
+    onVideoUpdated: (videoId, newThumbUrl, episode) => {
+      updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
     },
     onCompleted: () => {
       void loadPlaylists();
@@ -318,15 +379,25 @@ export const PlaylistCatalogPanel: FC = () => {
     return (
       !isBatchProcessing &&
       currentBatchItems.length > 0 &&
-      currentBatchItems.some((i) => i.status !== "pending")
+      currentBatchItems.some((i) => Boolean(i?.status && i.status !== "pending"))
     );
   }, [isBatchProcessing, currentBatchItems]);
 
   const batchProgress = useMemo(() => {
-    const total = currentBatchItems.length;
-    const current = currentBatchItems.filter((i) => i.status !== "pending").length;
-    const successCount = currentBatchItems.filter((i) => i.status === "done").length;
-    const failCount = currentBatchItems.filter((i) => i.status === "failed").length;
+    let current = 0;
+    let successCount = 0;
+    let failCount = 0;
+    let total = 0;
+
+    for (const item of currentBatchItems) {
+      if (!item) continue;
+      total++;
+      if (item.status !== "pending") {
+        current++;
+        if (item.status === "done") successCount++;
+        else if (item.status === "failed") failCount++;
+      }
+    }
     return { current, total, successCount, failCount };
   }, [currentBatchItems]);
 
@@ -341,6 +412,22 @@ export const PlaylistCatalogPanel: FC = () => {
   );
   const vodPlaylistId = isCurrentVod ? draft?.playlistId : tagVodPlaylist?.playlistId;
   const clipPlaylistId = isCurrentClip ? draft?.playlistId : tagClipPlaylist?.playlistId;
+
+  const isTagDivergent = Boolean(
+    draft &&
+    editedTag.trim() &&
+    (draft.tag ? draft.tag.toLowerCase() !== editedTag.trim().toLowerCase() : true) &&
+    !draft.title.toLowerCase().includes(editedTag.trim().toLowerCase())
+  );
+
+  const saveDisabledReason = useMemo(() => {
+    if (isApplying) return "Saving changes...";
+    if (!editedTag.trim()) return "Enter a game tag to save";
+    if (hasConflicts) return "Resolve duplicate or invalid episode numbers to save";
+    if (chronologyIssueIds.size > 0) return "Resolve chronological order violations to save";
+    if ((draft?.videos?.length ?? 0) === 0) return "No videos to save";
+    return null;
+  }, [isApplying, editedTag, hasConflicts, chronologyIssueIds.size, draft?.videos?.length]);
 
   return (
     <div className="flex h-full w-full bg-base overflow-hidden">
@@ -412,7 +499,12 @@ export const PlaylistCatalogPanel: FC = () => {
                 key={pId}
                 playlist={pl}
                 isSelected={selectedPlaylistId === pId}
-                onSelect={() => void selectPlaylist(pId)}
+                onSelect={() => {
+                  if (isBatchProcessing) {
+                    cancelBatch();
+                  }
+                  void selectPlaylist(pId);
+                }}
               />
             );
           })}
@@ -500,19 +592,47 @@ export const PlaylistCatalogPanel: FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       {matchedSteamAppId ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 max-w-xs sm:max-w-md truncate">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
                             <path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5l2.6-3.77A3.48 3.48 0 0 1 11 16.5c0-.98.4-1.87 1.05-2.51L10.3 11.2A5.5 5.5 0 0 1 12 11c3.04 0 5.5 2.46 5.5 5.5 0 2.22-1.32 4.13-3.21 4.97l2.67 3.87A10 10 0 0 0 22 12a10 10 0 0 0-10-10z" />
                           </svg>
-                          Steam matched: AppID {matchedSteamAppId}
-                        </span>
+                          <span className="truncate">
+                            Steam matched: {steamAssets?.title ? `${steamAssets.title} (AppID ${matchedSteamAppId})` : `AppID ${matchedSteamAppId}`}
+                          </span>
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-elevated/50 text-text-secondary border border-border-subtle">
                           No Steam match found
                         </span>
                       )}
+                      {editedTag.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setShowSteamSelector(true)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-elevated/60 text-text-secondary hover:text-text-primary hover:bg-elevated border border-border-subtle transition-colors cursor-pointer flex items-center gap-1"
+                          title="Search or change Steam game binding"
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          <span>Change</span>
+                        </button>
+                      )}
                     </div>
                   </div>
+                  {isTagDivergent && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span>
+                        Note: You are editing the tag for playlist &quot;{draft?.title}&quot;. Videos in the table below belong to &quot;{draft?.title}&quot;.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Episode Mapping Table */}
@@ -525,8 +645,50 @@ export const PlaylistCatalogPanel: FC = () => {
                   </div>
 
                   {hasConflicts && (
-                    <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl">
-                      Please resolve duplicate or invalid episode numbers before saving.
+                    <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span>
+                          Please resolve duplicate or invalid episode numbers before saving to database.
+                        </span>
+                      </div>
+                      {firstDuplicateEpisode !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setResolvingEpisode(firstDuplicateEpisode)}
+                          disabled={isBatchProcessing}
+                          className="px-2.5 py-1 rounded bg-fire-dim hover:bg-fire/20 border border-border-fire text-[11px] font-semibold text-red-300 transition-colors cursor-pointer"
+                        >
+                          Resolve duplicates (Ep {firstDuplicateEpisode})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {!hasConflicts && chronologyIssueIds.size > 0 && (
+                    <div className="p-3 text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span>
+                          Chronological order violations detected ({chronologyIssueIds.size} videos out of order). Episodes must strictly increase with release date.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={autoNumberByDate}
+                        disabled={isBatchProcessing}
+                        className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-semibold text-amber-200 transition-colors cursor-pointer"
+                      >
+                        Auto-number by date
+                      </button>
                     </div>
                   )}
 
@@ -542,10 +704,25 @@ export const PlaylistCatalogPanel: FC = () => {
                     onUpdateSingleVideo={updateSingle}
                     isBatchRunning={isBatchProcessing}
                     isAssetsReady={isAssetsReady}
-                    onAutoNumberByDate={autoNumberByDate}
-                    onAutoNumberByOrder={autoNumberByOrder}
-                    onReverseEpisodes={reverseEpisodes}
+                    onSyncVideoFromTitle={syncVideoFromTitle}
+                    onSyncAllFromTitle={syncAllFromTitle}
+                    chronologyIssueIds={chronologyIssueIds}
+                    onResolveDuplicate={setResolvingEpisode}
+                    onFixTitleMismatch={handleFixTitleMismatch}
                   />
+
+                  {resolvingEpisode !== null && (
+                    <DuplicateEpisodeDialog
+                      episode={resolvingEpisode}
+                      videos={resolvingVideos}
+                      shiftedCount={resolvingShiftedCount}
+                      onConfirm={(orderedVideoIds) => {
+                        reorderDuplicate(resolvingEpisode, orderedVideoIds);
+                        setResolvingEpisode(null);
+                      }}
+                      onCancel={() => setResolvingEpisode(null)}
+                    />
+                  )}
                 </div>
 
                 {/* Save Actions */}
@@ -572,17 +749,60 @@ export const PlaylistCatalogPanel: FC = () => {
                         Playlist saved &amp; linked!
                       </span>
                     )}
+                    {saveDisabledReason && !applyError && !applySuccess && (
+                      <span className="text-[11px] text-text-muted">
+                        {saveDisabledReason}
+                      </span>
+                    )}
+
+                    {mismatchCount > 0 && !hasConflicts && (
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenTitleModal()}
+                        disabled={isApplying || isBatchProcessing || isUpdatingTitles}
+                        title="Update video titles on YouTube to match assigned episodes (50 quota units per video)"
+                        className="px-3 py-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-semibold text-blue-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {isUpdatingTitles ? "Updating titles..." : `Update YouTube titles (${mismatchCount})`}
+                      </button>
+                    )}
 
                     <button
                       type="button"
                       onClick={() => void applyCatalog(updateLocal)}
                       disabled={!canApply || isApplying}
-                      className="btn btn-primary btn-sm px-4 py-2 font-semibold"
+                      title={
+                        saveDisabledReason ||
+                        "Save game tag and episode numbers to database (does not upload thumbnails)"
+                      }
+                      className="btn btn-primary btn-sm px-4 py-2 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isApplying ? "Saving..." : "Save & link playlist"}
                     </button>
                   </div>
                 </div>
+
+                <YouTubeTitleUpdateModal
+                  isOpen={isTitleModalOpen}
+                  changes={titleChanges}
+                  isLoadingPreview={isLoadingTitlePreview}
+                  isApplying={isUpdatingTitles}
+                  result={titleUpdateResult}
+                  error={titleUpdateError}
+                  title={singleTitleTarget ? "Correct video title" : undefined}
+                  description={
+                    singleTitleTarget
+                      ? "Update video title on YouTube to match local recording date."
+                      : undefined
+                  }
+                  confirmLabel={singleTitleTarget ? "Apply corrected title" : undefined}
+                  onConfirm={() => void handleConfirmTitleUpdates()}
+                  onClose={() => {
+                    setIsTitleModalOpen(false);
+                    setTitleUpdateResult(null);
+                    setSingleTitleTarget(null);
+                  }}
+                />
               </div>
 
               {/* Right Column: Thumbnail Studio & Batch Execution */}
@@ -628,13 +848,21 @@ export const PlaylistCatalogPanel: FC = () => {
                     </button>
                   </div>
 
-                  <ThumbnailPreviewCanvas
+                  <ThumbnailCanvasEditor
                     config={thumbConfig}
                     baseImage={baseImage}
                     logoImage={logoImage}
                     gameTitle={gameTitle}
                     episodeNumber={sampleEpisode}
                     isLoading={isLoadingAssets}
+                    emptyMessage="No artwork loaded"
+                    onConfigChange={(patch) =>
+                      setThumbConfig((prev) => ({ ...prev, ...patch, enabled: true }))
+                    }
+                    onRenderRects={setEditorRects}
+                    historyResetKey={editedTag.trim()}
+                    selectedElement={studioSelectedElement}
+                    onSelectElement={setStudioSelectedElement}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -711,6 +939,10 @@ export const PlaylistCatalogPanel: FC = () => {
                         onPlaylistCoverUpdated={() => {
                           void loadPlaylists();
                         }}
+                        hidePreviewCanvas={true}
+                        elementRects={editorRects}
+                        selectedElement={studioSelectedElement}
+                        onSelectElement={setStudioSelectedElement}
                       />
                     </div>
                   )}
@@ -731,11 +963,29 @@ export const PlaylistCatalogPanel: FC = () => {
                   onCancel={cancelBatch}
                   onRetryFailed={() => void retryFailed()}
                 />
+
+                <BatchDescriptionProgress
+                  playlistId={selectedPlaylistId ?? undefined}
+                  videos={draft.videos}
+                  selectedVideoIds={selectedVideoIds}
+                  onVideoUpdated={updateVideoDescription}
+                />
               </div>
             </div>
           </div>
         )}
       </div>
+
+      <SteamGameSelectorModal
+        isOpen={showSteamSelector}
+        tag={editedTag.trim()}
+        currentAppId={matchedSteamAppId}
+        currentGameTitle={steamAssets?.title}
+        onSelectAppId={(newAppId) => {
+          setMatchedSteamAppId(newAppId);
+        }}
+        onClose={() => setShowSteamSelector(false)}
+      />
     </div>
   );
 };

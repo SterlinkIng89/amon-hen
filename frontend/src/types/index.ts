@@ -6,6 +6,7 @@ export interface VideoFile {
   folder: string;
   game: string;
   youtubeTitle?: string;
+  remoteYouTubeTitle?: string;
   description?: string;
   privacy?: string;
   youtubeId?: string;
@@ -146,6 +147,10 @@ export interface CatalogVideoDraft {
   readonly source: "db" | "title" | "order" | "none";
   readonly conflict: boolean;
   readonly thumbnailUpdatedAt?: number;
+  readonly titleEpisode?: number;
+  readonly sortDate?: string;
+  readonly mismatch?: boolean;
+  readonly chronologyIssue?: boolean;
 }
 
 export type BatchItemStatus =
@@ -162,6 +167,7 @@ export interface BatchItem {
   readonly cacheKey: string;
   readonly localFile?: string;
   readonly thumbnailUpdatedAt?: number;
+  readonly thumbnailEpisode?: number;
   readonly status: BatchItemStatus;
   readonly error?: string;
 }

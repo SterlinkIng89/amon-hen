@@ -90,6 +90,7 @@ export namespace backend {
 	    tag: string;
 	    tagConfidence: string;
 	    linked: boolean;
+	    hasCustomTemplate: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogPlaylistSummary(source);
@@ -105,13 +106,52 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
+	        this.hasCustomTemplate = source["hasCustomTemplate"];
+	    }
+	}
+	export class CatalogTitleChange {
+	    videoId: string;
+	    oldTitle: string;
+	    newTitle: string;
+	    oldEpisode: number;
+	    newEpisode: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogTitleChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.oldTitle = source["oldTitle"];
+	        this.newTitle = source["newTitle"];
+	        this.oldEpisode = source["oldEpisode"];
+	        this.newEpisode = source["newEpisode"];
+	    }
+	}
+	export class CatalogTitleUpdateResult {
+	    updated: string[];
+	    failed: Record<string, string>;
+	    skipped: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogTitleUpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.updated = source["updated"];
+	        this.failed = source["failed"];
+	        this.skipped = source["skipped"];
 	    }
 	}
 	export class CatalogVideoDraft {
 	    videoId: string;
 	    title: string;
+	    description: string;
 	    publishedAt: string;
 	    thumbnailUrl: string;
+	    duration?: string;
 	    localFile?: string;
 	    position: number;
 	    existingEpisode: number;
@@ -119,6 +159,13 @@ export namespace backend {
 	    source: string;
 	    conflict: boolean;
 	    thumbnailUpdatedAt: number;
+	    thumbnailEpisode: number;
+	    titleEpisode: number;
+	    sortDate: string;
+	    mismatch: boolean;
+	    chronologyIssue: boolean;
+	    localTitle?: string;
+	    titleMismatch?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogVideoDraft(source);
@@ -128,8 +175,10 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.videoId = source["videoId"];
 	        this.title = source["title"];
+	        this.description = source["description"];
 	        this.publishedAt = source["publishedAt"];
 	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.duration = source["duration"];
 	        this.localFile = source["localFile"];
 	        this.position = source["position"];
 	        this.existingEpisode = source["existingEpisode"];
@@ -137,6 +186,13 @@ export namespace backend {
 	        this.source = source["source"];
 	        this.conflict = source["conflict"];
 	        this.thumbnailUpdatedAt = source["thumbnailUpdatedAt"];
+	        this.thumbnailEpisode = source["thumbnailEpisode"];
+	        this.titleEpisode = source["titleEpisode"];
+	        this.sortDate = source["sortDate"];
+	        this.mismatch = source["mismatch"];
+	        this.chronologyIssue = source["chronologyIssue"];
+	        this.localTitle = source["localTitle"];
+	        this.titleMismatch = source["titleMismatch"];
 	    }
 	}
 	export class HistoricalVideo {
@@ -458,6 +514,7 @@ export namespace backend {
 	    youtubeTitle: string;
 	    description: string;
 	    privacy: string;
+	    privacy_override?: boolean;
 	    youtubeId?: string;
 	    playlistId?: string;
 	    playlistTitle?: string;
@@ -478,6 +535,7 @@ export namespace backend {
 	        this.youtubeTitle = source["youtubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
+	        this.privacy_override = source["privacy_override"];
 	        this.youtubeId = source["youtubeId"];
 	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
@@ -658,6 +716,7 @@ export namespace backend {
 	    tag: string;
 	    tagConfidence: string;
 	    linked: boolean;
+	    hasCustomTemplate: boolean;
 	    steamAppId: string;
 	    needsSync: boolean;
 	    thumbnailConfig?: TagThumbnailConfig;
@@ -677,6 +736,7 @@ export namespace backend {
 	        this.tag = source["tag"];
 	        this.tagConfidence = source["tagConfidence"];
 	        this.linked = source["linked"];
+	        this.hasCustomTemplate = source["hasCustomTemplate"];
 	        this.steamAppId = source["steamAppId"];
 	        this.needsSync = source["needsSync"];
 	        this.thumbnailConfig = this.convertValues(source["thumbnailConfig"], TagThumbnailConfig);
@@ -835,6 +895,22 @@ export namespace backend {
 	        this.unlockedAchievements = source["unlockedAchievements"];
 	    }
 	}
+	export class SteamSearchResult {
+	    appId: string;
+	    name: string;
+	    headerUrl?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SteamSearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.name = source["name"];
+	        this.headerUrl = source["headerUrl"];
+	    }
+	}
 	export class SteamTagStats {
 	    tag: string;
 	    category: string;
@@ -905,6 +981,7 @@ export namespace backend {
 	    folder: string;
 	    game: string;
 	    youtubeTitle: string;
+	    remoteYouTubeTitle?: string;
 	    description: string;
 	    privacy: string;
 	    youtubeId?: string;
@@ -930,6 +1007,7 @@ export namespace backend {
 	        this.folder = source["folder"];
 	        this.game = source["game"];
 	        this.youtubeTitle = source["youtubeTitle"];
+	        this.remoteYouTubeTitle = source["remoteYouTubeTitle"];
 	        this.description = source["description"];
 	        this.privacy = source["privacy"];
 	        this.youtubeId = source["youtubeId"];

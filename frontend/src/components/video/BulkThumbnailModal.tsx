@@ -71,15 +71,25 @@ export const BulkThumbnailModal: FC<BulkThumbnailModalProps> = ({
     return (
       !isBatchProcessing &&
       currentBatchItems.length > 0 &&
-      currentBatchItems.some((i) => i.status !== "pending")
+      currentBatchItems.some((i) => Boolean(i?.status && i.status !== "pending"))
     );
   }, [isBatchProcessing, currentBatchItems]);
 
   const batchProgress = useMemo(() => {
-    const total = currentBatchItems.length;
-    const current = currentBatchItems.filter((i) => i.status !== "pending").length;
-    const successCount = currentBatchItems.filter((i) => i.status === "done").length;
-    const failCount = currentBatchItems.filter((i) => i.status === "failed").length;
+    let current = 0;
+    let successCount = 0;
+    let failCount = 0;
+    let total = 0;
+
+    for (const item of currentBatchItems) {
+      if (!item) continue;
+      total++;
+      if (item.status !== "pending") {
+        current++;
+        if (item.status === "done") successCount++;
+        else if (item.status === "failed") failCount++;
+      }
+    }
     return { current, total, successCount, failCount };
   }, [currentBatchItems]);
 

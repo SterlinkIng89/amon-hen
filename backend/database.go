@@ -52,6 +52,7 @@ func (db *DB) migrate() error {
 			rejection_reason TEXT DEFAULT '',
 			status_issues TEXT DEFAULT '',
 			custom_thumb_updated_at INTEGER DEFAULT 0,
+			custom_thumb_episode INTEGER DEFAULT 0,
 			synced_at INTEGER
 		)`,
 		`CREATE TABLE IF NOT EXISTS yt_playlists (
@@ -151,7 +152,7 @@ func (db *DB) migrate() error {
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
 	}
-	
+
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {
 			return fmt.Errorf("migration failed on query: %w", err)
@@ -167,6 +168,7 @@ func (db *DB) migrate() error {
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN rejection_reason TEXT DEFAULT ''")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN status_issues TEXT DEFAULT ''")
 	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN custom_thumb_updated_at INTEGER DEFAULT 0")
+	db.conn.Exec("ALTER TABLE yt_videos ADD COLUMN custom_thumb_episode INTEGER DEFAULT 0")
 	db.conn.Exec("ALTER TABLE upload_sessions ADD COLUMN thumbnail_path TEXT")
 
 	// Migrate yt_playlist_items if legacy composite primary key exists
@@ -245,6 +247,18 @@ func (db *DB) migrate() error {
 			}
 		}
 	}
+
+	// Strip query parameters from i.ytimg.com URLs that cause 404 in YouTube CDN
+	db.conn.Exec(`
+		UPDATE yt_videos
+		SET thumbnail_url = SUBSTR(thumbnail_url, 1, INSTR(thumbnail_url, '?') - 1)
+		WHERE thumbnail_url LIKE '%i.ytimg.com/%?%'
+	`)
+	db.conn.Exec(`
+		UPDATE yt_playlists
+		SET thumbnail_url = SUBSTR(thumbnail_url, 1, INSTR(thumbnail_url, '?') - 1)
+		WHERE thumbnail_url LIKE '%i.ytimg.com/%?%'
+	`)
 
 	return nil
 }
