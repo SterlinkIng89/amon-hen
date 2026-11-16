@@ -324,6 +324,7 @@ export default function PlayerView({
                 onTagSaved={onTagSaved}
                 onDelete={onFilesDeleted}
                 onFixTitleMismatch={() => handleFixTitleMismatch(selectedVideo)}
+                gameProfiles={gameProfiles}
               />
             );
           })()

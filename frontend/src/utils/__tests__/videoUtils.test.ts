@@ -163,6 +163,52 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(title).toBe("League of Legends - ARAM - Howling Abyss - 8/04/26");
     });
 
+    it("applies multiplayer profile titleTemplate even when contentType is 'clip'", () => {
+      const lolProfile: GameProfile = {
+        type: "multiplayer",
+        titleTemplate: "{champion} - {event} - {gamemode} - {date}",
+        modes: ["ARAM: Mayhem", "Ranked"],
+      };
+      const title = generateYouTubeTitle(
+        "2026-11-06_clip.mp4",
+        "League of Legends",
+        0,
+        lolProfile,
+        "Cuadrakill",
+        "ARAM: Mayhem",
+        { champion: "Zeri" },
+        sampleVideo.modTime,
+        " — ",
+        "clip",
+      );
+      expect(title).toBe("Zeri - Cuadrakill - ARAM: Mayhem - 6/11/26");
+    });
+
+    it("matches computeExpectedLocalTitle and resolveDisplayTitle for multiplayer clips", () => {
+      const lolProfile: GameProfile = {
+        type: "multiplayer",
+        titleTemplate: "{champion} - {event} - {gamemode} - {date}",
+      };
+      const profiles = { "League of Legends": lolProfile };
+      const clipVideo: VideoFile = {
+        name: "2026-11-06_clip.mp4",
+        path: "/videos/2026-11-06_clip.mp4",
+        size: 1024,
+        modTime: sampleVideo.modTime,
+        folder: "/videos",
+        game: "League of Legends",
+        durationSecs: 45,
+        event: "Cuadrakill",
+        gameMode: "ARAM: Mayhem",
+        customVars: { champion: "Zeri" },
+      };
+
+      const expected = computeExpectedLocalTitle(clipVideo, profiles);
+      const displayed = resolveDisplayTitle(clipVideo, profiles);
+      expect(expected).toBe("Zeri - Cuadrakill - ARAM: Mayhem - 6/11/26");
+      expect(displayed).toBe(expected);
+    });
+
     it("computes expected title using computeExpectedLocalTitle", () => {
       const modTime = new Date(2026, 7, 4, 12, 0, 0).getTime();
       const video: VideoFile = {
