@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useBatchThumbnailUpdate, BatchThumbnailInputItem } from "../useBatchThumbnailUpdate";
+import { useAppStore } from "../../store/useAppStore";
 import * as appBackend from "../../../wailsjs/go/backend/App";
 import * as thumbRender from "../../utils/thumbnailRender";
 import * as thumbAssets from "../useThumbnailAssets";
@@ -27,6 +28,7 @@ describe("useBatchThumbnailUpdate", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useAppStore.getState().clearBatchJobs();
 
     vi.spyOn(thumbAssets, "useThumbnailAssets").mockReturnValue({
       steamAssets: null,
@@ -360,19 +362,13 @@ describe("useBatchThumbnailUpdate", () => {
     expect(result.current.items[0].status).toBe("pending");
   });
 
-  it("does not create undefined items or sparse holes when playlist or items change during in-flight batch execution", async () => {
+  it("does not create undefined items or sparse holes when playlist changes during in-flight batch execution and preserves playlist 1 progress", async () => {
     let resolveFirstUpdate: ((val: string) => void) | null = null;
-    let resolveSecondUpdate: ((val: string) => void) | null = null;
 
     vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation((videoId) => {
       if (videoId === "p1-v1") {
         return new Promise<string>((resolve) => {
           resolveFirstUpdate = resolve;
-        });
-      }
-      if (videoId === "p1-v2") {
-        return new Promise<string>((resolve) => {
-          resolveSecondUpdate = resolve;
         });
       }
       return Promise.resolve("https://yt.com/done.jpg");
@@ -415,24 +411,39 @@ describe("useBatchThumbnailUpdate", () => {
       rerender({ playlistId: "pl-2", tag: "Deadlock", items: playlist2Items });
     });
 
-    // Now resolve in-flight updates from Playlist 1
-    await act(async () => {
-      resolveFirstUpdate?.("https://yt.com/first.jpg");
-      resolveSecondUpdate?.("https://yt.com/second.jpg");
-      await startPromise;
-    });
-
     // State must belong to Playlist 2 without any sparse or undefined holes
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0]).toBeDefined();
     expect(result.current.items[0].videoId).toBe("p2-v1");
     expect(result.current.items[0].status).toBe("pending");
+    expect(result.current.running).toBe(false);
+
+    // Now resolve in-flight update from Playlist 1
+    await waitFor(() => {
+      expect(resolveFirstUpdate).not.toBeNull();
+    });
+    await act(async () => {
+      resolveFirstUpdate?.("https://yt.com/first.jpg");
+      await startPromise;
+    });
+
+    // Playlist 2 remains untouched
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].videoId).toBe("p2-v1");
+    expect(result.current.items[0].status).toBe("pending");
     expect(result.current.items.some((i) => i === undefined || i.status === undefined)).toBe(false);
     expect(result.current.running).toBe(false);
-    expect(onCompleted).not.toHaveBeenCalled();
+
+    // Switching back to Playlist 1 shows all 3 items completed in the background
+    act(() => {
+      rerender({ playlistId: "pl-1", tag: "Dead Space", items: playlist1Items });
+    });
+    expect(result.current.items).toHaveLength(3);
+    expect(result.current.items.every((i) => i.status === "done")).toBe(true);
+    expect(result.current.running).toBe(false);
   });
 
-  it("aborts safely when component unmounts during active batch execution", async () => {
+  it("continues running in background and preserves state when component unmounts", async () => {
     let resolveUpdate: ((val: string) => void) | null = null;
     vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockImplementation(() => {
       return new Promise<string>((resolve) => {
@@ -443,6 +454,7 @@ describe("useBatchThumbnailUpdate", () => {
     const onCompleted = vi.fn();
     const { result, unmount } = renderHook(() =>
       useBatchThumbnailUpdate({
+        playlistId: "pl-unmount",
         tag: "Hades",
         config: mockConfig,
         items: mockItems,
@@ -461,12 +473,31 @@ describe("useBatchThumbnailUpdate", () => {
     unmount();
 
     // Resolve deferred backend operation
+    await waitFor(() => {
+      expect(resolveUpdate).not.toBeNull();
+    });
+    vi.mocked(appBackend.UpdateYouTubeThumbnailForEpisode).mockResolvedValue("https://yt.com/done.jpg");
     await act(async () => {
       resolveUpdate?.("https://yt.com/done.jpg");
       await startPromise;
     });
 
+    // Unmounted callback is not invoked on dead closure
     expect(onCompleted).not.toHaveBeenCalled();
+
+    // Remounting for the same playlist restores completed state
+    const { result: remounted } = renderHook(() =>
+      useBatchThumbnailUpdate({
+        playlistId: "pl-unmount",
+        tag: "Hades",
+        config: mockConfig,
+        items: mockItems,
+      })
+    );
+
+    expect(remounted.current.running).toBe(false);
+    expect(remounted.current.items).toHaveLength(2);
+    expect(remounted.current.items.every((i) => i.status === "done")).toBe(true);
   });
 });
 

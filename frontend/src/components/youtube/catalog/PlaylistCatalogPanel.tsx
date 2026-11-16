@@ -6,6 +6,11 @@ import {
 } from "../../../hooks/useBatchThumbnailUpdate";
 import { useThumbnailAssets } from "../../../hooks/useThumbnailAssets";
 import { PlaylistCatalogRow } from "./PlaylistCatalogRow";
+import { useAppStore } from "../../../store/useAppStore";
+import {
+  getPlaylistBatchStatus,
+  summarizeThumbnailBatchItems,
+} from "../../../utils/batchStatus";
 import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
 import { DuplicateEpisodeDialog } from "./DuplicateEpisodeDialog";
 import { YouTubeTitleUpdateModal } from "./YouTubeTitleUpdateModal";
@@ -350,6 +355,20 @@ export const PlaylistCatalogPanel: FC = () => {
     });
   }, [draft?.videos, editedEpisodes]);
 
+  const { thumbnailBatches, descriptionBatches } = useAppStore();
+  const isMountedRef = useRef(true);
+  const selectedPlaylistIdRef = useRef(selectedPlaylistId);
+  selectedPlaylistIdRef.current = selectedPlaylistId;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const activeBatchPlaylistId = selectedPlaylistId ?? "";
+
   const {
     items: currentBatchItems,
     running: isBatchProcessing,
@@ -362,16 +381,22 @@ export const PlaylistCatalogPanel: FC = () => {
     retryFailed,
     estimatedQuota,
   } = useBatchThumbnailUpdate({
-    playlistId: selectedPlaylistId ?? "",
+    playlistId: activeBatchPlaylistId,
     tag: editedTag.trim(),
     config: thumbConfig,
     items: batchItems,
     onVideoUpdated: (videoId, newThumbUrl, episode) => {
-      updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
+      if (isMountedRef.current && selectedPlaylistIdRef.current === activeBatchPlaylistId) {
+        updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
+      }
     },
     onCompleted: () => {
-      void loadPlaylists();
-      void reloadDraft();
+      if (isMountedRef.current) {
+        void loadPlaylists();
+        if (selectedPlaylistIdRef.current === activeBatchPlaylistId) {
+          void reloadDraft();
+        }
+      }
     },
   });
 
@@ -383,23 +408,10 @@ export const PlaylistCatalogPanel: FC = () => {
     );
   }, [isBatchProcessing, currentBatchItems]);
 
-  const batchProgress = useMemo(() => {
-    let current = 0;
-    let successCount = 0;
-    let failCount = 0;
-    let total = 0;
-
-    for (const item of currentBatchItems) {
-      if (!item) continue;
-      total++;
-      if (item.status !== "pending") {
-        current++;
-        if (item.status === "done") successCount++;
-        else if (item.status === "failed") failCount++;
-      }
-    }
-    return { current, total, successCount, failCount };
-  }, [currentBatchItems]);
+  const batchProgress = useMemo(
+    () => summarizeThumbnailBatchItems(currentBatchItems),
+    [currentBatchItems]
+  );
 
   // Resolve VOD and Clip playlist IDs for 1:1 playlist cover generator
   const isCurrentVod = draft?.kind === "vod";
@@ -499,10 +511,8 @@ export const PlaylistCatalogPanel: FC = () => {
                 key={pId}
                 playlist={pl}
                 isSelected={selectedPlaylistId === pId}
+                batchStatus={getPlaylistBatchStatus(thumbnailBatches[pId], descriptionBatches[pId])}
                 onSelect={() => {
-                  if (isBatchProcessing) {
-                    cancelBatch();
-                  }
                   void selectPlaylist(pId);
                 }}
               />

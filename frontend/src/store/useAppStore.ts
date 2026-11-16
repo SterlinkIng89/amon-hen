@@ -4,7 +4,15 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode, PlaylistPrivacy, SortMode, LibraryGroupMode, CardDensity } from "../types";
+import {
+  ViewMode,
+  PlaylistPrivacy,
+  SortMode,
+  LibraryGroupMode,
+  CardDensity,
+  ThumbnailBatchJob,
+  DescriptionBatchJob,
+} from "../types";
 
 
 interface AppState {
@@ -22,6 +30,8 @@ interface AppState {
   defaultPlaylistPrivacy: PlaylistPrivacy;
   defaultVideoPrivacy: PlaylistPrivacy;
   defaultVideoDescription: string;
+  thumbnailBatches: Record<string, ThumbnailBatchJob>;
+  descriptionBatches: Record<string, DescriptionBatchJob>;
 }
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -77,6 +87,8 @@ let state: AppState = {
   defaultVideoPrivacy:
     (saved.defaultVideoPrivacy as PlaylistPrivacy) ?? "unlisted",
   defaultVideoDescription: saved.defaultVideoDescription ?? "",
+  thumbnailBatches: {},
+  descriptionBatches: {},
 };
 
 type Listener = () => void;
@@ -150,6 +162,46 @@ const setDefaultVideoPrivacy = (defaultVideoPrivacy: PlaylistPrivacy) =>
 const setDefaultVideoDescription = (defaultVideoDescription: string) =>
   setState({ defaultVideoDescription });
 
+const setThumbnailBatch = (
+  batchKey: string,
+  jobOrUpdater:
+    | ThumbnailBatchJob
+    | ((prev: ThumbnailBatchJob | undefined) => ThumbnailBatchJob),
+) => {
+  setState((prev) => ({
+    thumbnailBatches: {
+      ...prev.thumbnailBatches,
+      [batchKey]:
+        typeof jobOrUpdater === "function"
+          ? jobOrUpdater(prev.thumbnailBatches[batchKey])
+          : jobOrUpdater,
+    },
+  }));
+};
+
+const setDescriptionBatch = (
+  batchKey: string,
+  jobOrUpdater:
+    | DescriptionBatchJob
+    | ((prev: DescriptionBatchJob | undefined) => DescriptionBatchJob),
+) => {
+  setState((prev) => ({
+    descriptionBatches: {
+      ...prev.descriptionBatches,
+      [batchKey]:
+        typeof jobOrUpdater === "function"
+          ? jobOrUpdater(prev.descriptionBatches[batchKey])
+          : jobOrUpdater,
+    },
+  }));
+};
+
+const clearBatchJobs = () =>
+  setState({
+    thumbnailBatches: {},
+    descriptionBatches: {},
+  });
+
 const storeActions = {
   setQueue,
   addToQueue,
@@ -166,6 +218,9 @@ const storeActions = {
   setDefaultPlaylistPrivacy,
   setDefaultVideoPrivacy,
   setDefaultVideoDescription,
+  setThumbnailBatch,
+  setDescriptionBatch,
+  clearBatchJobs,
 };
 
 // ─── React hook ───────────────────────────────────────────────────────────────

@@ -53,6 +53,7 @@ export interface TagThumbnailConfig {
   episode_position: EpisodeNumberPosition;
   episode_format: EpisodeFormat;
   font_color?: string;
+  font_family?: string;
   image_framing?: ImageFraming;
   episode_layout?: ElementLayout;
   logo?: LogoLayer;
@@ -171,6 +172,40 @@ export interface BatchItem {
   readonly thumbnailEpisode?: number;
   readonly status: BatchItemStatus;
   readonly error?: string;
+}
+
+export interface BatchDescriptionInputItem {
+  readonly videoId: string;
+  readonly title: string;
+  readonly currentDescription: string;
+}
+
+export interface BatchDescriptionItem extends BatchDescriptionInputItem {
+  readonly status: BatchItemStatus;
+  readonly error?: string;
+}
+
+export interface BatchProgress {
+  readonly current: number;
+  readonly total: number;
+  readonly successCount: number;
+  readonly failCount: number;
+}
+
+export interface ThumbnailBatchJob {
+  readonly items: readonly BatchItem[];
+  readonly running: boolean;
+  readonly runId: number;
+  readonly cancelRequested: boolean;
+}
+
+export interface DescriptionBatchJob {
+  readonly items: readonly BatchDescriptionItem[];
+  readonly running: boolean;
+  readonly runId: number;
+  readonly cancelRequested: boolean;
+  readonly progress: BatchProgress;
+  readonly targetDescription?: string;
 }
 
 export interface YTPlaylist {
