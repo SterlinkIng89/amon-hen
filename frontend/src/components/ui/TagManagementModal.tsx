@@ -7,7 +7,9 @@ export interface TagManagementModalProps {
   readonly onClose: () => void;
 }
 
-export default function TagManagementModal({ onClose }: TagManagementModalProps) {
+const TagManagementModal = React.memo(function TagManagementModal({
+  onClose,
+}: TagManagementModalProps) {
   const { allTags, configs, legacyPlaylists, isLoading, reload } = useTagConfigs();
   const { suggestions: recentTags } = useRecentTags();
 
@@ -290,4 +292,6 @@ export default function TagManagementModal({ onClose }: TagManagementModalProps)
       </div>
     </div>
   );
-}
+});
+
+export default TagManagementModal;

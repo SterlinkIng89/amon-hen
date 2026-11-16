@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   IsYouTubeAuthed,
   SaveVideoMetadata,
@@ -138,6 +138,7 @@ export default function Dashboard() {
   const [tagFilter, setTagFilter] = useState("");
   const [settingsFolder, setSettingsFolder] = useState<string | null>(null);
   const [tagManagementOpen, setTagManagementOpen] = useState(false);
+  const handleCloseTagManagement = useCallback(() => setTagManagementOpen(false), []);
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
     {},
   );
@@ -917,7 +918,7 @@ export default function Dashboard() {
         onRemoveFolder={handleRemoveFolder}
       />
       {tagManagementOpen && (
-        <TagManagementModal onClose={() => setTagManagementOpen(false)} />
+        <TagManagementModal onClose={handleCloseTagManagement} />
       )}
       {cleanupModalOpen && (
         <UploadedCleanupModal

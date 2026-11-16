@@ -86,11 +86,12 @@ export default function TagPlaylistEditor({
     isLoading: isSteamBindingLoading,
     setBound: setSteamAppBound,
   } = useSteamAppBinding(tag);
-  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(
+  const thumbnailAssets = useThumbnailAssets(
     tag,
     thumbConfig,
     isSteamBindingLoading ? undefined : steamAppId,
   );
+  const { baseImage, logoImage, gameTitle } = thumbnailAssets;
 
   useEffect(() => {
     setNewVodTitle(tag);
@@ -874,6 +875,7 @@ export default function TagPlaylistEditor({
           vodPlaylistId={vodPlaylistId}
           clipPlaylistId={clipPlaylistId}
           steamAppId={isSteamBindingLoading ? undefined : steamAppId}
+          thumbnailAssets={thumbnailAssets}
           onPlaylistCoverUpdated={(plId, newThumbUrl) => {
             setPlaylists((prev) =>
               prev.map((p) => (p.id === plId ? { ...p, thumbnailUrl: newThumbUrl } : p))

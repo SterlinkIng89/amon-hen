@@ -165,4 +165,16 @@ describe("useThumbnailAssets", () => {
       expect(result.current.baseImage).toBeNull();
     });
   });
+
+  it("skips fetching and image loading when skip option is true", () => {
+    const { result } = renderHook(() =>
+      useThumbnailAssets("Elden Ring", undefined, undefined, { skip: true })
+    );
+
+    expect(appBackend.GetSteamAppID).not.toHaveBeenCalled();
+    expect(appBackend.GetSteamGameAssets).not.toHaveBeenCalled();
+    expect(result.current.loadingAssets).toBe(false);
+    expect(result.current.steamAssets).toBeNull();
+    expect(result.current.baseImage).toBeNull();
+  });
 });

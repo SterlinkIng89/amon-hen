@@ -203,6 +203,67 @@ describe("TagThumbnailConfigSection", () => {
     expect(screen.getByText(/zoom framing/i)).toBeInTheDocument();
     expect(screen.getByText("Title & Logo Layers")).toBeInTheDocument();
   });
+
+  it("renders episode font selector and persists chosen font to localStorage and config", () => {
+    localStorage.clear();
+    const onChange = vi.fn();
+    render(
+      <TagThumbnailConfigSection
+        tag="Cyberpunk 2077"
+        value={defaultConfig}
+        onChange={onChange}
+      />
+    );
+
+    const fontSelect = screen.getByLabelText("Episode Font");
+    expect(fontSelect).toBeInTheDocument();
+    expect(fontSelect).toHaveValue("Montserrat");
+
+    fireEvent.change(fontSelect, { target: { value: "Nunito" } });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        font_family: "Nunito",
+      })
+    );
+    expect(localStorage.getItem("amon_hen_thumbnail_font_family")).toBe("Nunito");
+  });
+
+  it("does not trigger an infinite render loop when switching episode position with nested framing and layout config", () => {
+    const onChange = vi.fn();
+    const configWithNestedObjects: TagThumbnailConfig = {
+      ...defaultConfig,
+      image_framing: { offset_x: 0.5, offset_y: 0.5, zoom: 1.2 },
+      episode_layout: { x: 0.15, y: 0.85, scale: 1 },
+      logo: { enabled: true, x: 0.2, y: 0.2, scale: 1 },
+      title: { enabled: true, x: 0.5, y: 0.85, scale: 1 },
+    };
+
+    const { rerender } = render(
+      <TagThumbnailConfigSection
+        tag="Death Stranding"
+        value={configWithNestedObjects}
+        onChange={onChange}
+      />
+    );
+
+    const topLeftBtn = screen.getByRole("button", { name: "Top Left" });
+    fireEvent.click(topLeftBtn);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const updated = onChange.mock.calls[0][0] as TagThumbnailConfig;
+    expect(updated.episode_position).toBe("top-left");
+
+    rerender(
+      <TagThumbnailConfigSection
+        tag="Death Stranding"
+        value={updated}
+        onChange={onChange}
+      />
+    );
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
 });
 
 

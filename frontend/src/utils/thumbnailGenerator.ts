@@ -5,6 +5,7 @@ import {
   ImageFraming,
   SteamGameArtwork,
 } from "../types";
+import { resolveCanvasFontFamily } from "./thumbnailFont";
 
 export const DEFAULT_FRAMING: ImageFraming = {
   offset_x: 0.5,
@@ -233,6 +234,7 @@ export interface ThumbnailGeneratorOptions {
   episodeFormat: EpisodeFormat;
   position: EpisodeNumberPosition;
   fontColor?: string;
+  fontFamily?: string;
   framing?: ImageFraming;
   episodeLayout?: ElementLayout;
   logo?: {
@@ -314,9 +316,11 @@ function drawStrokedText(
   x: number,
   y: number,
   fontSize: number,
-  fillColor = "#ffffff"
+  fillColor = "#ffffff",
+  fontFamily?: string
 ): { width: number; height: number } {
-  ctx.font = `900 ${fontSize}px Impact, "Arial Black", sans-serif`;
+  const family = resolveCanvasFontFamily(fontFamily);
+  ctx.font = `900 ${fontSize}px ${family}`;
   ctx.textBaseline = "top";
 
   const textMetrics = ctx.measureText(text);
@@ -459,7 +463,8 @@ export function renderThumbnailToCanvas(
     const scale = options.episodeLayout?.scale || 1;
     const fontSize = Math.max(30, baseFontSize * scale);
 
-    ctx.font = `900 ${fontSize}px Impact, "Arial Black", sans-serif`;
+    const episodeFont = resolveCanvasFontFamily(options.fontFamily);
+    ctx.font = `900 ${fontSize}px ${episodeFont}`;
     const textMetrics = ctx.measureText(text);
     const textWidth = textMetrics.width;
     const textHeight = fontSize * 0.95;
@@ -491,7 +496,8 @@ export function renderThumbnailToCanvas(
       posX,
       posY,
       fontSize,
-      options.fontColor || "#ffffff"
+      options.fontColor || "#ffffff",
+      options.fontFamily
     );
 
     rects.episode = {
@@ -536,5 +542,19 @@ export function renderPlaylistCoverToCanvas(
     logo: options.logo,
     title: options.title,
   });
+}
+
+function areElementRectsEqual(a?: ElementRect, b?: ElementRect): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+export function areThumbnailRectsEqual(a: ThumbnailRects, b: ThumbnailRects): boolean {
+  return (
+    areElementRectsEqual(a.episode, b.episode) &&
+    areElementRectsEqual(a.logo, b.logo) &&
+    areElementRectsEqual(a.title, b.title)
+  );
 }
 
