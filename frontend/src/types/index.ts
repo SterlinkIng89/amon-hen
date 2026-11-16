@@ -96,6 +96,7 @@ export interface Config {
   steam_api_key?: string;
   steam_id?: string;
   export_folder?: string;
+  default_video_description?: string;
 }
 
 export interface ExportItem {

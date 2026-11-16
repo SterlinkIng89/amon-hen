@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SetAutoLaunch,
   SetWatchFolderEnabled,
   SetTitleSeparator,
   SetDefaultExportFolder,
+  SetDefaultVideoDescription,
   SelectExportFolder,
   OpenFolderInExplorer,
 } from "../../../wailsjs/go/backend/App";
@@ -55,6 +56,55 @@ export function SettingsGeneralTab({
   const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
   const [watchFolderSaving, setWatchFolderSaving] = useState(false);
   const [exportFolderSaving, setExportFolderSaving] = useState(false);
+  const [descSaving, setDescSaving] = useState(false);
+  const [descError, setDescError] = useState<string | null>(null);
+  const descSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedDescRef = useRef<string>(defaultVideoDescription);
+  const dirtyDescRef = useRef<boolean>(false);
+  const latestDescRef = useRef<string>(defaultVideoDescription);
+
+  useEffect(() => {
+    latestDescRef.current = defaultVideoDescription;
+    if (!dirtyDescRef.current) {
+      lastSavedDescRef.current = defaultVideoDescription;
+    }
+  }, [defaultVideoDescription]);
+
+  useEffect(() => {
+    return () => {
+      if (descSaveTimerRef.current) {
+        clearTimeout(descSaveTimerRef.current);
+        descSaveTimerRef.current = null;
+        if (dirtyDescRef.current && latestDescRef.current !== lastSavedDescRef.current) {
+          void SetDefaultVideoDescription(latestDescRef.current);
+        }
+      }
+    };
+  }, []);
+
+  const persistDefaultDescription = async (value: string) => {
+    if (descSaveTimerRef.current) {
+      clearTimeout(descSaveTimerRef.current);
+      descSaveTimerRef.current = null;
+    }
+    if (value === lastSavedDescRef.current) {
+      dirtyDescRef.current = false;
+      return;
+    }
+
+    setDescSaving(true);
+    setDescError(null);
+    try {
+      await SetDefaultVideoDescription(value);
+      lastSavedDescRef.current = value;
+      dirtyDescRef.current = false;
+    } catch (e) {
+      console.error("Failed to save default video description", e);
+      setDescError("Failed to save description");
+    } finally {
+      setDescSaving(false);
+    }
+  };
 
   return (
     <>
@@ -231,9 +281,14 @@ export function SettingsGeneralTab({
             >
               Default Video Description
             </label>
-            <span className="text-[10px] text-text-muted">
-              {defaultVideoDescription.length} characters
-            </span>
+            <div className="flex items-center gap-2">
+              {descSaving && (
+                <span className="text-[10px] text-text-muted">Saving...</span>
+              )}
+              <span className="text-[10px] text-text-muted tabular-nums">
+                {defaultVideoDescription.length} characters
+              </span>
+            </div>
           </div>
           <p className="text-[10px] text-text-secondary">
             Template applied to uploaded videos when no custom description is set. Great for search keywords, specs, or social links.
@@ -242,11 +297,30 @@ export function SettingsGeneralTab({
             id="default-video-description"
             data-testid="default-video-description-input"
             value={defaultVideoDescription}
-            onChange={(e) => setDefaultVideoDescription(e.target.value)}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              dirtyDescRef.current = true;
+              latestDescRef.current = nextValue;
+              setDefaultVideoDescription(nextValue);
+              if (descSaveTimerRef.current) {
+                clearTimeout(descSaveTimerRef.current);
+              }
+              descSaveTimerRef.current = setTimeout(() => {
+                void persistDefaultDescription(nextValue);
+              }, 500);
+            }}
+            onBlur={() => {
+              void persistDefaultDescription(defaultVideoDescription);
+            }}
             placeholder="e.g. Gameplay ultrawide 3440x1440p&#10;PC Specs: ...&#10;Socials & Links..."
             rows={3}
             className="mt-1 w-full bg-base border border-border-subtle rounded px-2.5 py-1.5 text-xs text-text-primary outline-none transition-colors hover:border-border-medium focus:border-accent resize-y min-h-[72px]"
           />
+          {descError && (
+            <p className="text-[10px] text-red-400" role="alert">
+              {descError}
+            </p>
+          )}
         </div>
       </section>
 

@@ -374,6 +374,10 @@ export function SetDefaultExportFolder(arg1) {
   return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
 }
 
+export function SetDefaultVideoDescription(arg1) {
+  return window['go']['backend']['App']['SetDefaultVideoDescription'](arg1);
+}
+
 export function SetSteamAppID(arg1, arg2) {
   return window['go']['backend']['App']['SetSteamAppID'](arg1, arg2);
 }

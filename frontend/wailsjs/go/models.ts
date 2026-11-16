@@ -564,6 +564,7 @@ export namespace backend {
 	    steam_api_key?: string;
 	    steam_id?: string;
 	    export_folder?: string;
+	    default_video_description?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -587,6 +588,7 @@ export namespace backend {
 	        this.steam_api_key = source["steam_api_key"];
 	        this.steam_id = source["steam_id"];
 	        this.export_folder = source["export_folder"];
+	        this.default_video_description = source["default_video_description"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

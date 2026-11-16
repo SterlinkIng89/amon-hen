@@ -191,6 +191,8 @@ export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetDefaultExportFolder(arg1:string):Promise<void>;
 
+export function SetDefaultVideoDescription(arg1:string):Promise<void>;
+
 export function SetSteamAppID(arg1:string,arg2:string):Promise<void>;
 
 export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
