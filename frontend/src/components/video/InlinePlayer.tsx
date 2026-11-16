@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { VideoFile, YTPlaylist, TagPlaylistConfig } from "../../types";
+import { VideoFile, YTPlaylist, TagPlaylistConfig, GameProfile } from "../../types";
 import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import {
   formatSize,
@@ -61,6 +61,7 @@ interface InlinePlayerProps {
   onTagSaved?: () => void;
   onDelete?: () => void;
   readonly onFixTitleMismatch?: () => void;
+  readonly gameProfiles?: Record<string, GameProfile>;
 }
 
 export default function InlinePlayer({
@@ -73,6 +74,7 @@ export default function InlinePlayer({
   onTagSaved,
   onDelete,
   onFixTitleMismatch,
+  gameProfiles: initialGameProfiles,
 }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
@@ -325,19 +327,28 @@ export default function InlinePlayer({
   };
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(
-    video.youtubeTitle ||
-      generateYouTubeTitle(
-        video.name,
-        video.game,
-        video.episode,
-        undefined,
-        video.event,
-        video.gameMode,
-        video.customVars,
-        video.modTime,
-      ),
-  );
+  const [ytTitle, setYtTitle] = useState(() => {
+    const initialProfile = initialGameProfiles?.[video.game || ""];
+    const initialContentType = resolveVideoContentType(
+      video.durationSecs,
+      video.contentType,
+    );
+    const initialGeneratedTitle = generateYouTubeTitle(
+      video.name,
+      video.game,
+      video.episode,
+      initialProfile,
+      video.event,
+      video.gameMode,
+      video.customVars,
+      video.modTime,
+      undefined,
+      initialContentType,
+    );
+    return initialProfile?.type === "multiplayer"
+      ? initialGeneratedTitle
+      : video.youtubeTitle || initialGeneratedTitle;
+  });
   const [tagInput, setTagInput] = useState(video.game || "");
   const [episodeInput, setEpisodeInput] = useState<number | "">(
     video.episode || "",
@@ -370,7 +381,9 @@ export default function InlinePlayer({
   const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] =
     useState(false);
   const [playlistCreateError, setPlaylistCreateError] = useState("");
-  const [gameProfiles, setGameProfiles] = useState<Record<string, any>>({});
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
+    initialGameProfiles || {},
+  );
   const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [tagPlaylistConfigs, setTagPlaylistConfigs] = useState<
     Record<string, TagPlaylistConfig>
@@ -397,7 +410,9 @@ export default function InlinePlayer({
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
-        setGameProfiles(cfg.game_profiles || {});
+        if (cfg.game_profiles) {
+          setGameProfiles(cfg.game_profiles);
+        }
         setTagPlaylists(cfg.tag_playlists || {});
         setTagPlaylistConfigs(
           parseTagPlaylistConfigs(cfg.tag_playlist_configs, cfg.tag_playlists),

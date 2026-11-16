@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import SettingsPanel from "../SettingsPanel";
 import { useAppStore } from "../../../store/useAppStore";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
+import { backend } from "../../../../wailsjs/go/models";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   IsYouTubeAuthed: vi.fn().mockResolvedValue(false),
@@ -22,6 +23,7 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetChannelPlaylists: vi.fn().mockResolvedValue([]),
   GetDefaultExportFolder: vi.fn().mockResolvedValue("/export/folder"),
   SetDefaultExportFolder: vi.fn().mockResolvedValue(null),
+  SetDefaultVideoDescription: vi.fn().mockResolvedValue(null),
   SelectExportFolder: vi.fn().mockResolvedValue("/new/export/folder"),
   OpenFolderInExplorer: vi.fn().mockResolvedValue(null),
   SaveGameProfile: vi.fn().mockResolvedValue(null),
@@ -44,6 +46,7 @@ describe("SettingsPanel - General Tab (#155)", () => {
     useAppStore.setState({
       defaultVideoPrivacy: "unlisted",
       defaultPlaylistPrivacy: "unlisted",
+      defaultVideoDescription: "",
     });
   });
 
@@ -95,19 +98,67 @@ describe("SettingsPanel - General Tab (#155)", () => {
     expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith("/export/folder");
   });
 
-  it("renders default video description textarea and updates store on change", async () => {
+  it("renders default video description textarea, updates store on change, and persists to backend on blur", async () => {
     render(<SettingsPanel open={true} onClose={() => {}} />);
 
     const descInput = await screen.findByTestId("default-video-description-input");
     expect(descInput).toBeInTheDocument();
     expect(descInput).toHaveValue("");
 
+    const nextDesc = "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090";
     fireEvent.change(descInput, {
-      target: { value: "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090" },
+      target: { value: nextDesc },
     });
 
+    expect(useAppStore.getState().defaultVideoDescription).toBe(nextDesc);
+
+    fireEvent.blur(descInput);
+    await waitFor(() => {
+      expect(appBackend.SetDefaultVideoDescription).toHaveBeenCalledWith(nextDesc);
+    });
+  });
+
+  it("hydrates default video description from backend LoadConfig", async () => {
+    vi.mocked(appBackend.LoadConfig).mockResolvedValue(
+      backend.Config.createFrom({
+        folders: ["/test"],
+        game_profiles: {},
+        tag_playlists: {},
+        title_separator: " - ",
+        default_video_description: "Persisted backend description",
+      }),
+    );
+
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    const descInput = await screen.findByTestId("default-video-description-input");
+    await waitFor(() => {
+      expect(descInput).toHaveValue("Persisted backend description");
+    });
     expect(useAppStore.getState().defaultVideoDescription).toBe(
-      "Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090",
+      "Persisted backend description",
+    );
+
+    fireEvent.change(descInput, { target: { value: "" } });
+    fireEvent.blur(descInput);
+    await waitFor(() => {
+      expect(appBackend.SetDefaultVideoDescription).toHaveBeenCalledWith("");
+    });
+  });
+
+  it("shows an error alert when saving default video description fails", async () => {
+    vi.mocked(appBackend.SetDefaultVideoDescription).mockRejectedValueOnce(
+      new Error("disk write failed"),
+    );
+
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+    const descInput = await screen.findByTestId("default-video-description-input");
+
+    fireEvent.change(descInput, { target: { value: "New description" } });
+    fireEvent.blur(descInput);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Failed to save description",
     );
   });
 

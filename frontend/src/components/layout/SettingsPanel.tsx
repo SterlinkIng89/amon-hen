@@ -11,6 +11,7 @@ import {
 import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import { GameProfile } from "../../types";
 import { useRecentTags } from "../../hooks/useRecentTags";
+import { useAppStore } from "../../store/useAppStore";
 import { SettingsGeneralTab } from "./SettingsGeneralTab";
 import {
   SettingsAccountsTab,
@@ -74,6 +75,11 @@ export default function SettingsPanel({
         setCredsLoaded(!!cfg.youtube_client_id);
         setGameProfiles(cfg.game_profiles || {});
         setTitleSeparator(cfg.title_separator || " - ");
+        if (cfg.default_video_description !== undefined) {
+          useAppStore
+            .getState()
+            .setDefaultVideoDescription(cfg.default_video_description);
+        }
         if (cfg.steam_api_key) setSteamApiKey(cfg.steam_api_key);
         if (cfg.steam_id) setSteamId(cfg.steam_id);
       })

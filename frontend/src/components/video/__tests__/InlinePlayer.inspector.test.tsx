@@ -187,5 +187,34 @@ describe("InlinePlayer inspector controls and spacing (#140)", () => {
 
     expect(desc.value).toBe("Gameplay ultrawide 3440x1440p\nPC Specs: RTX 4090");
   });
+
+  it("initializes YouTube title using provided gameProfiles for multiplayer clip", () => {
+    const multiplayerClip: VideoFile = {
+      name: "League 2026-11-06.mp4",
+      path: "C:/videos/League 2026-11-06.mp4",
+      folder: "C:/videos",
+      size: 1024 * 1024 * 10,
+      modTime: 1700000000,
+      durationSecs: 45,
+      game: "League of Legends",
+      event: "Cuadrakill",
+      gameMode: "ARAM: Mayhem",
+      customVars: { champion: "Zeri" },
+    };
+
+    const gameProfiles = {
+      "League of Legends": {
+        type: "multiplayer" as const,
+        titleTemplate: "{champion} - {event} - {gamemode} - {date}",
+        modes: ["ARAM: Mayhem"],
+      },
+    };
+
+    setupPlayer({ video: multiplayerClip, gameProfiles });
+
+    expect(
+      screen.getByDisplayValue("Zeri - Cuadrakill - ARAM: Mayhem - 6/11/26"),
+    ).toBeInTheDocument();
+  });
 });
 

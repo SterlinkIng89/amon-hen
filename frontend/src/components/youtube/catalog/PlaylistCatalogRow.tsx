@@ -3,15 +3,26 @@ import { backend } from "../../../../wailsjs/go/models";
 import { getGameColor, getTagBadgeStyle } from "../../../utils/tagColors";
 import { cleanThumbnailUrl } from "../../../utils/thumbnailGenerator";
 
+export interface PlaylistBatchStatus {
+  readonly running: boolean;
+  readonly isDone: boolean;
+  readonly current: number;
+  readonly total: number;
+  readonly successCount: number;
+  readonly failCount: number;
+}
+
 interface PlaylistCatalogRowProps {
   readonly playlist: backend.CatalogPlaylistSummary;
   readonly isSelected: boolean;
+  readonly batchStatus?: PlaylistBatchStatus;
   readonly onSelect: () => void;
 }
 
 export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
   playlist,
   isSelected,
+  batchStatus,
   onSelect,
 }) => {
   const isSuggested =
@@ -89,6 +100,26 @@ export const PlaylistCatalogRow: FC<PlaylistCatalogRowProps> = ({
           ) : (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface text-text-muted border border-border-subtle">
               Unlinked
+            </span>
+          )}
+
+          {batchStatus?.running && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono tabular-nums font-medium bg-accent/15 text-accent border border-accent/30">
+              Updating {batchStatus.current}/{batchStatus.total}
+            </span>
+          )}
+
+          {batchStatus && !batchStatus.running && batchStatus.isDone && (
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono tabular-nums font-medium border ${
+                batchStatus.failCount > 0
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              }`}
+            >
+              {batchStatus.failCount > 0
+                ? `${batchStatus.successCount} done, ${batchStatus.failCount} failed`
+                : `Updated (${batchStatus.successCount})`}
             </span>
           )}
         </div>

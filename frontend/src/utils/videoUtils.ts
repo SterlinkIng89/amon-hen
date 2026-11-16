@@ -184,18 +184,6 @@ export function generateYouTubeTitle(
 
   if (!game) return datePart;
 
-  if (contentType === "clip") {
-    let clipTitle = event?.trim() || "";
-    if (!clipTitle) {
-      const stem = filename.replace(/\.[^/.]+$/, "");
-      const cleanStem = stem
-        .replace(/(?:^|_|-|\s)\d{4}-\d{2}-\d{2}(?:_|-|\s|$)/, "")
-        .replace(/^[_\-\s]+|[_\-\s]+$/g, "");
-      clipTitle = cleanStem || "Clip";
-    }
-    return `${game}${sep}${datePart}${sep}${clipTitle}`;
-  }
-
   if (profile && profile.type === "multiplayer") {
     let template = profile.titleTemplate || "{event} - {gamemode} - {date}";
     let res = template.replace(/\{game\}/gi, game);
@@ -217,6 +205,18 @@ export function generateYouTubeTitle(
     res = res.replace(/\s*-\s*$/, "");
 
     return res;
+  }
+
+  if (contentType === "clip") {
+    let clipTitle = event?.trim() || "";
+    if (!clipTitle) {
+      const stem = filename.replace(/\.[^/.]+$/, "");
+      const cleanStem = stem
+        .replace(/(?:^|_|-|\s)\d{4}-\d{2}-\d{2}(?:_|-|\s|$)/, "")
+        .replace(/^[_\-\s]+|[_\-\s]+$/g, "");
+      clipTitle = cleanStem || "Clip";
+    }
+    return `${game}${sep}${datePart}${sep}${clipTitle}`;
   }
 
   const epSuffix = episode && episode > 0 ? `${sep}${episode}` : "";

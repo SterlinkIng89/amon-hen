@@ -14,6 +14,7 @@ import {
   ResizeHandleId,
   hitTestResizeHandle,
   computeCornerResizeScale,
+  areThumbnailRectsEqual,
 } from "../../utils/thumbnailGenerator";
 import {
   buildSnapLabel,
@@ -27,6 +28,7 @@ import {
   SmartGuideLine,
 } from "../../utils/thumbnailSnap";
 import { renderAlignmentGuides } from "../../utils/thumbnailGuideRenderer";
+import { ensureFontsLoaded } from "../../utils/thumbnailFont";
 import {
   useThumbnailHistory,
   buildConfigRestorePatch,
@@ -74,6 +76,9 @@ export default function ThumbnailCanvasEditor({
 }: ThumbnailCanvasEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectsRef = useRef<ThumbnailRects>({});
+  const onRenderRectsRef = useRef(onRenderRects);
+  onRenderRectsRef.current = onRenderRects;
+  const lastNotifiedRectsRef = useRef<ThumbnailRects | null>(null);
   const [activeDrag, setActiveDrag] = useState<ThumbnailElementId | "image" | null>(null);
   const [activeResize, setActiveResize] = useState<ActiveResizeState | null>(null);
   const [hoveredHandle, setHoveredHandle] = useState<ResizeHandleId | null>(null);
@@ -201,6 +206,7 @@ export default function ThumbnailCanvasEditor({
       episodeFormat: config.episode_format || "pad2",
       position: config.episode_position || "bottom-left",
       fontColor: config.font_color || "#ffffff",
+      fontFamily: config.font_family,
       framing: config.image_framing || DEFAULT_FRAMING,
       episodeLayout: config.episode_layout,
       logo: config.logo?.enabled
@@ -218,7 +224,13 @@ export default function ThumbnailCanvasEditor({
     });
 
     rectsRef.current = renderedRects;
-    onRenderRects?.(renderedRects);
+    if (
+      lastNotifiedRectsRef.current === null ||
+      !areThumbnailRectsEqual(lastNotifiedRectsRef.current, renderedRects)
+    ) {
+      lastNotifiedRectsRef.current = renderedRects;
+      onRenderRectsRef.current?.(renderedRects);
+    }
 
     const ctx = canvas.getContext("2d");
     const shouldRenderGuides =
@@ -256,6 +268,7 @@ export default function ThumbnailCanvasEditor({
     config.episode_format,
     config.episode_position,
     config.font_color,
+    config.font_family,
     config.image_framing,
     config.episode_layout,
     config.logo,
@@ -266,12 +279,26 @@ export default function ThumbnailCanvasEditor({
     activeDrag,
     activeResize,
     quickAlignedElement,
-    onRenderRects,
   ]);
+
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
 
   useEffect(() => {
     draw();
   }, [draw]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void ensureFontsLoaded().then(() => {
+      if (!cancelled) {
+        drawRef.current();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config.font_family]);
 
   useEffect(() => {
     return () => {
@@ -738,22 +765,14 @@ export default function ThumbnailCanvasEditor({
     }
 
     const step = e.shiftKey ? 0.02 : 0.005;
-    let dx = 0;
-    let dy = 0;
-    if (e.key === "ArrowLeft") dx = -step;
-    if (e.key === "ArrowRight") dx = step;
-    if (e.key === "ArrowUp") dy = -step;
-    if (e.key === "ArrowDown") dy = step;
+    const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+    const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
 
     let updatedCoord: { x: number; y: number } | null = null;
 
     if (target === "logo" && config.logo?.enabled) {
       const cur = config.logo;
-      const updated = clampLayout({
-        x: cur.x + dx,
-        y: cur.y + dy,
-        scale: cur.scale,
-      });
+      const updated = clampLayout({ x: cur.x + dx, y: cur.y + dy, scale: cur.scale });
       updatedCoord = { x: updated.x, y: updated.y };
       const patch = { logo: { ...cur, ...updated } };
       history.pushState({ ...config, ...patch });
@@ -761,11 +780,7 @@ export default function ThumbnailCanvasEditor({
       e.preventDefault();
     } else if (target === "title" && config.title?.enabled) {
       const cur = config.title;
-      const updated = clampLayout({
-        x: cur.x + dx,
-        y: cur.y + dy,
-        scale: cur.scale,
-      });
+      const updated = clampLayout({ x: cur.x + dx, y: cur.y + dy, scale: cur.scale });
       updatedCoord = { x: updated.x, y: updated.y };
       const patch = { title: { ...cur, ...updated } };
       history.pushState({ ...config, ...patch });
@@ -773,11 +788,7 @@ export default function ThumbnailCanvasEditor({
       e.preventDefault();
     } else if (target === "episode") {
       const cur = config.episode_layout || { x: 0.85, y: 0.85, scale: 1 };
-      const updated = clampLayout({
-        x: cur.x + dx,
-        y: cur.y + dy,
-        scale: cur.scale,
-      });
+      const updated = clampLayout({ x: cur.x + dx, y: cur.y + dy, scale: cur.scale });
       updatedCoord = { x: updated.x, y: updated.y };
       const patch = { episode_layout: updated };
       history.pushState({ ...config, ...patch });

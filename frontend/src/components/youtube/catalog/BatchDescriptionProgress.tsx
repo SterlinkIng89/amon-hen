@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, useCallback } from "react";
+import { FC, useState, useMemo, useCallback, useEffect } from "react";
 import { useAppStore } from "../../../store/useAppStore";
 import {
   useBatchDescriptionUpdate,
@@ -50,6 +50,7 @@ export const BatchDescriptionProgress: FC<BatchDescriptionProgressProps> = ({
     syncedCount,
     unsyncedCount,
     progress,
+    storedTargetDescription,
     start,
     startSelected,
     startUnsynced,
@@ -62,6 +63,14 @@ export const BatchDescriptionProgress: FC<BatchDescriptionProgressProps> = ({
     onVideoUpdated,
     onCompleted,
   });
+
+  useEffect(() => {
+    if (storedTargetDescription !== undefined) {
+      setCustomDescription(storedTargetDescription);
+    } else {
+      setCustomDescription(defaultVideoDescription || "");
+    }
+  }, [playlistId, storedTargetDescription, defaultVideoDescription]);
 
   const selectedCount = selectedVideoIds ? selectedVideoIds.size : 0;
 

@@ -4,9 +4,43 @@ import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/ToastContainer";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 import { useEffect } from "react";
-import { LogFrontendEvent } from "../wailsjs/go/backend/App";
+import {
+  LoadConfig,
+  LogFrontendEvent,
+  SetDefaultVideoDescription,
+} from "../wailsjs/go/backend/App";
+import { useAppStore } from "./store/useAppStore";
 
 function App() {
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateConfig = async () => {
+      try {
+        const cfg = await LoadConfig();
+        if (cancelled || !cfg) return;
+
+        const backendDesc = cfg.default_video_description ?? "";
+        if (backendDesc.length > 0) {
+          useAppStore.getState().setDefaultVideoDescription(backendDesc);
+          return;
+        }
+
+        const localDesc = useAppStore.getState().defaultVideoDescription;
+        if (localDesc.length > 0) {
+          await SetDefaultVideoDescription(localDesc);
+        }
+      } catch {
+        // Ignore when running outside Wails runtime
+      }
+    };
+
+    void hydrateConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     let timeoutId: any;
     let lastState = "";

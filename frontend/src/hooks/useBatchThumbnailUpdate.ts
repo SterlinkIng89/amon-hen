@@ -1,5 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { TagThumbnailConfig, BatchItem, BatchItemStatus } from "../types";
+import { useRef, useCallback, useEffect, useMemo } from "react";
+import {
+  TagThumbnailConfig,
+  BatchItem,
+  BatchItemStatus,
+  ThumbnailBatchJob,
+} from "../types";
 import { useThumbnailAssets } from "./useThumbnailAssets";
 import { renderTagThumbnailDataUrl } from "../utils/thumbnailRender";
 import {
@@ -8,6 +13,7 @@ import {
   UpdateYouTubeThumbnailForEpisode,
 } from "../../wailsjs/go/backend/App";
 import { notifyCustomThumbChanged } from "./useThumbnailQueue";
+import { useAppStore } from "../store/useAppStore";
 
 export interface BatchThumbnailInputItem {
   readonly videoId: string;
@@ -48,6 +54,14 @@ const DEFAULT_BATCH_CONFIG: TagThumbnailConfig = {
   episode_format: "pad2",
 };
 
+interface ThumbnailBatchCallbacks {
+  readonly onVideoUpdated?: (videoId: string, newThumbUrl: string, thumbnailEpisode?: number) => void;
+  readonly onCompleted?: () => void;
+}
+
+const callbackRegistry = new Map<string, ThumbnailBatchCallbacks>();
+let ephemeralCounter = 0;
+
 async function persistAndNotifyThumbnail(key: string, dataUrl: string): Promise<string> {
   const savedPath = await SaveCustomThumbnail(key, dataUrl);
   try {
@@ -71,6 +85,220 @@ function toPendingBatchItem(item: BatchThumbnailInputItem): BatchItem {
   };
 }
 
+function mergeBatchItems(
+  prev: readonly BatchItem[],
+  inputItems: readonly BatchThumbnailInputItem[]
+): { readonly next: BatchItem[]; readonly changed: boolean } {
+  const prevMap = new Map(prev.map((p) => [p.videoId, p]));
+  let changed = prev.length !== inputItems.length;
+
+  const next = inputItems.map((item) => {
+    const existing = prevMap.get(item.videoId);
+    const inputTs = item.thumbnailUpdatedAt ?? 0;
+    const existingTs = existing?.thumbnailUpdatedAt ?? 0;
+    const latestUpdatedAt = Math.max(inputTs, existingTs);
+    const resolvedUpdatedAt = latestUpdatedAt > 0 ? latestUpdatedAt : undefined;
+    const thumbnailEpisode = item.thumbnailEpisode ?? existing?.thumbnailEpisode;
+    const status = existing ? existing.status : "pending";
+
+    if (
+      !existing ||
+      existing.episode !== item.episode ||
+      existing.cacheKey !== item.cacheKey ||
+      existing.localFile !== item.localFile ||
+      existing.thumbnailUpdatedAt !== resolvedUpdatedAt ||
+      existing.thumbnailEpisode !== thumbnailEpisode ||
+      existing.status !== status
+    ) {
+      changed = true;
+    }
+
+    return {
+      ...(existing || {}),
+      videoId: item.videoId,
+      episode: item.episode,
+      cacheKey: item.cacheKey,
+      localFile: item.localFile,
+      thumbnailUpdatedAt: resolvedUpdatedAt,
+      thumbnailEpisode,
+      status,
+    };
+  });
+
+  return { next, changed };
+}
+
+function updateStoredItemStatus(
+  batchKey: string,
+  videoId: string,
+  status: BatchItemStatus,
+  error?: string,
+  thumbnailUpdatedAt?: number,
+  thumbnailEpisode?: number
+): void {
+  useAppStore.getState().setThumbnailBatch(batchKey, (prev) => {
+    const base: ThumbnailBatchJob = prev ?? {
+      items: [],
+      running: true,
+      runId: 0,
+      cancelRequested: false,
+    };
+    return {
+      ...base,
+      items: base.items.map((item) =>
+        item.videoId === videoId
+          ? {
+              ...item,
+              status,
+              error,
+              ...(thumbnailUpdatedAt !== undefined ? { thumbnailUpdatedAt } : {}),
+              ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
+            }
+          : item
+      ),
+    };
+  });
+}
+
+async function runThumbnailBatchQueue(args: {
+  readonly batchKey: string;
+  readonly targetVideoIds: readonly string[];
+  readonly fallbackItems: readonly BatchItem[];
+  readonly baseImage: HTMLImageElement | null;
+  readonly logoImage: HTMLImageElement | null;
+  readonly gameTitle: string;
+  readonly effectiveConfig: TagThumbnailConfig;
+}): Promise<void> {
+  const {
+    batchKey,
+    targetVideoIds,
+    fallbackItems,
+    baseImage,
+    logoImage,
+    gameTitle,
+    effectiveConfig,
+  } = args;
+
+  const existingJob = useAppStore.getState().thumbnailBatches[batchKey];
+  if (existingJob?.running || targetVideoIds.length === 0) return;
+
+  const baseItems =
+    existingJob?.items && existingJob.items.length > 0
+      ? existingJob.items
+      : fallbackItems;
+  const currentRunId = (existingJob?.runId ?? 0) + 1;
+
+  useAppStore.getState().setThumbnailBatch(batchKey, {
+    items: baseItems,
+    running: true,
+    runId: currentRunId,
+    cancelRequested: false,
+  });
+
+  let quotaExceeded = false;
+
+  for (let i = 0; i < targetVideoIds.length; i++) {
+    const videoId = targetVideoIds[i];
+    const latestJob = useAppStore.getState().thumbnailBatches[batchKey];
+
+    if (!latestJob || latestJob.runId !== currentRunId) {
+      return;
+    }
+
+    if (latestJob.cancelRequested || quotaExceeded) {
+      updateStoredItemStatus(batchKey, videoId, "skipped");
+      continue;
+    }
+
+    const item = latestJob.items.find((b) => b.videoId === videoId);
+    if (!item) {
+      continue;
+    }
+
+    updateStoredItemStatus(batchKey, videoId, "rendering");
+
+    try {
+      const dataUrl = renderTagThumbnailDataUrl({
+        baseImage,
+        logoImage,
+        gameTitle,
+        episodeNumber: item.episode,
+        config: effectiveConfig,
+      });
+
+      const afterRenderJob = useAppStore.getState().thumbnailBatches[batchKey];
+      if (!afterRenderJob || afterRenderJob.runId !== currentRunId) {
+        return;
+      }
+
+      updateStoredItemStatus(batchKey, videoId, "uploading");
+
+      const savedPath = await persistAndNotifyThumbnail(item.cacheKey, dataUrl);
+      if (useAppStore.getState().thumbnailBatches[batchKey]?.runId !== currentRunId) {
+        return;
+      }
+
+      if (item.localFile) {
+        await persistAndNotifyThumbnail(item.localFile, dataUrl).catch(() => {});
+        if (useAppStore.getState().thumbnailBatches[batchKey]?.runId !== currentRunId) {
+          return;
+        }
+      }
+
+      const ytKey = `yt:${item.videoId}`;
+      if (item.cacheKey !== ytKey) {
+        await persistAndNotifyThumbnail(ytKey, dataUrl).catch(() => {});
+        if (useAppStore.getState().thumbnailBatches[batchKey]?.runId !== currentRunId) {
+          return;
+        }
+      }
+
+      const newThumbUrl = await UpdateYouTubeThumbnailForEpisode(
+        item.videoId,
+        savedPath,
+        item.episode
+      );
+      if (useAppStore.getState().thumbnailBatches[batchKey]?.runId !== currentRunId) {
+        return;
+      }
+
+      updateStoredItemStatus(
+        batchKey,
+        videoId,
+        "done",
+        undefined,
+        Math.floor(Date.now() / 1000),
+        item.episode
+      );
+      callbackRegistry.get(batchKey)?.onVideoUpdated?.(
+        item.videoId,
+        newThumbUrl,
+        item.episode
+      );
+    } catch (err: unknown) {
+      if (useAppStore.getState().thumbnailBatches[batchKey]?.runId !== currentRunId) {
+        return;
+      }
+
+      const msg = err instanceof Error ? err.message : String(err);
+      updateStoredItemStatus(batchKey, videoId, "failed", msg);
+
+      if (msg.toLowerCase().includes("quota")) {
+        quotaExceeded = true;
+      }
+    }
+  }
+
+  const finalJob = useAppStore.getState().thumbnailBatches[batchKey];
+  if (finalJob && finalJob.runId === currentRunId) {
+    useAppStore.getState().setThumbnailBatch(batchKey, {
+      ...finalJob,
+      running: false,
+    });
+    callbackRegistry.get(batchKey)?.onCompleted?.();
+  }
+}
+
 export function useBatchThumbnailUpdate({
   playlistId,
   tag,
@@ -80,74 +308,53 @@ export function useBatchThumbnailUpdate({
   onCompleted,
 }: UseBatchThumbnailUpdateArgs): UseBatchThumbnailUpdateResult {
   const effectiveConfig: TagThumbnailConfig = config ?? DEFAULT_BATCH_CONFIG;
+  const ephemeralKeyRef = useRef<string>("");
+  if (!ephemeralKeyRef.current) {
+    ephemeralKeyRef.current = `ephemeral-thumb-${++ephemeralCounter}`;
+  }
 
-  const [batchItems, setBatchItems] = useState<BatchItem[]>(() =>
-    inputItems.map(toPendingBatchItem)
-  );
+  const normalizedPlaylistId = playlistId?.trim() ?? "";
+  const batchKey = normalizedPlaylistId.length > 0 ? normalizedPlaylistId : ephemeralKeyRef.current;
 
-  const [running, setRunning] = useState(false);
-  const cancelRequestedRef = useRef(false);
-  const runIdRef = useRef(0);
+  const { thumbnailBatches } = useAppStore();
+  const job = thumbnailBatches[batchKey];
+  const running = job?.running ?? false;
 
-  const batchItemsRef = useRef(batchItems);
-  useEffect(() => {
-    batchItemsRef.current = batchItems;
-  }, [batchItems]);
-
-  const prevTagRef = useRef(tag);
-  const prevPlaylistIdRef = useRef(playlistId);
-
-  useEffect(() => {
-    const tagChanged = prevTagRef.current !== tag;
-    const playlistChanged = prevPlaylistIdRef.current !== playlistId;
-
-    if (tagChanged || playlistChanged) {
-      prevTagRef.current = tag;
-      prevPlaylistIdRef.current = playlistId;
-
-      runIdRef.current++;
-      cancelRequestedRef.current = true;
-      setRunning(false);
-
-      setBatchItems(inputItems.map(toPendingBatchItem));
+  const batchItems = useMemo<readonly BatchItem[]>(() => {
+    if (job?.items && job.items.length > 0) {
+      return job.items;
     }
-  }, [tag, playlistId, inputItems]);
+    return inputItems.map(toPendingBatchItem);
+  }, [job?.items, inputItems]);
 
-  // Clean up on unmount to prevent state updates on unmounted component
+  // Keep latest callbacks registered for the active batchKey while mounted
   useEffect(() => {
+    const entry: ThumbnailBatchCallbacks = { onVideoUpdated, onCompleted };
+    callbackRegistry.set(batchKey, entry);
     return () => {
-      runIdRef.current++;
-      cancelRequestedRef.current = true;
+      if (callbackRegistry.get(batchKey) === entry) {
+        callbackRegistry.delete(batchKey);
+      }
     };
-  }, []);
+  }, [batchKey, onVideoUpdated, onCompleted]);
 
-  // Sync batchItems when inputItems change if not currently running
+  // Sync inputItems into store when idle and non-empty
   useEffect(() => {
-    if (!running) {
-      setBatchItems((prev) => {
-        const prevMap = new Map(prev.map((p) => [p.videoId, p]));
-        return inputItems.map((item) => {
-          const existing = prevMap.get(item.videoId);
-          const inputTs = item.thumbnailUpdatedAt ?? 0;
-          const existingTs = existing?.thumbnailUpdatedAt ?? 0;
-          const latestUpdatedAt = Math.max(inputTs, existingTs);
-          const thumbnailEpisode = item.thumbnailEpisode ?? existing?.thumbnailEpisode;
+    if (inputItems.length === 0) return;
+    const currentJob = useAppStore.getState().thumbnailBatches[batchKey];
+    if (currentJob?.running) return;
 
-          const status = existing ? existing.status : "pending";
-          return {
-            ...(existing || {}),
-            videoId: item.videoId,
-            episode: item.episode,
-            cacheKey: item.cacheKey,
-            localFile: item.localFile,
-            thumbnailUpdatedAt: latestUpdatedAt > 0 ? latestUpdatedAt : undefined,
-            thumbnailEpisode,
-            status,
-          };
-        });
+    const prevItems = currentJob?.items ?? [];
+    const { next, changed } = mergeBatchItems(prevItems, inputItems);
+    if (!currentJob || changed) {
+      useAppStore.getState().setThumbnailBatch(batchKey, {
+        items: next,
+        running: false,
+        runId: currentJob?.runId ?? 0,
+        cancelRequested: false,
       });
     }
-  }, [inputItems, running]);
+  }, [batchKey, inputItems, running]);
 
   const { baseImage, logoImage, gameTitle, loadingAssets } = useThumbnailAssets(
     tag,
@@ -156,141 +363,28 @@ export function useBatchThumbnailUpdate({
 
   const isAssetsReady = !loadingAssets && Boolean(baseImage);
 
-  const updateItemStatus = useCallback(
-    (
-      videoId: string,
-      status: BatchItemStatus,
-      error?: string,
-      thumbnailUpdatedAt?: number,
-      thumbnailEpisode?: number
-    ) => {
-      setBatchItems((prev) =>
-        prev.map((item) =>
-          item.videoId === videoId
-            ? {
-                ...item,
-                status,
-                error,
-                ...(thumbnailUpdatedAt !== undefined ? { thumbnailUpdatedAt } : {}),
-                ...(thumbnailEpisode !== undefined ? { thumbnailEpisode } : {}),
-              }
-            : item
-        )
-      );
-    },
-    []
-  );
-
   const processQueue = useCallback(
     async (targetVideoIds: readonly string[]) => {
       if (running || !isAssetsReady || targetVideoIds.length === 0) return;
-
-      const currentRunId = ++runIdRef.current;
-      setRunning(true);
-      cancelRequestedRef.current = false;
-
-      let quotaExceeded = false;
-
-      for (let i = 0; i < targetVideoIds.length; i++) {
-        const videoId = targetVideoIds[i];
-
-        if (runIdRef.current !== currentRunId) {
-          return;
-        }
-
-        if (cancelRequestedRef.current || quotaExceeded) {
-          updateItemStatus(videoId, "skipped");
-          continue;
-        }
-
-        const item = batchItemsRef.current.find((b) => b.videoId === videoId);
-        if (!item) {
-          continue;
-        }
-
-        updateItemStatus(videoId, "rendering");
-
-        try {
-          const dataUrl = renderTagThumbnailDataUrl({
-            baseImage,
-            logoImage,
-            gameTitle,
-            episodeNumber: item.episode,
-            config: effectiveConfig,
-          });
-
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          updateItemStatus(videoId, "uploading");
-
-          const savedPath = await persistAndNotifyThumbnail(item.cacheKey, dataUrl);
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          if (item.localFile) {
-            await persistAndNotifyThumbnail(item.localFile, dataUrl).catch(() => {});
-            if (runIdRef.current !== currentRunId) {
-              return;
-            }
-          }
-
-          const ytKey = `yt:${item.videoId}`;
-          if (item.cacheKey !== ytKey) {
-            await persistAndNotifyThumbnail(ytKey, dataUrl).catch(() => {});
-            if (runIdRef.current !== currentRunId) {
-              return;
-            }
-          }
-
-          const newThumbUrl = await UpdateYouTubeThumbnailForEpisode(
-            item.videoId,
-            savedPath,
-            item.episode
-          );
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          updateItemStatus(
-            videoId,
-            "done",
-            undefined,
-            Math.floor(Date.now() / 1000),
-            item.episode
-          );
-          onVideoUpdated?.(item.videoId, newThumbUrl, item.episode);
-        } catch (err: unknown) {
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          const msg = err instanceof Error ? err.message : String(err);
-          updateItemStatus(videoId, "failed", msg);
-
-          if (msg.toLowerCase().includes("quota")) {
-            quotaExceeded = true;
-          }
-        }
-      }
-
-      if (runIdRef.current === currentRunId) {
-        setRunning(false);
-        onCompleted?.();
-      }
+      await runThumbnailBatchQueue({
+        batchKey,
+        targetVideoIds,
+        fallbackItems: batchItems,
+        baseImage,
+        logoImage,
+        gameTitle,
+        effectiveConfig,
+      });
     },
     [
+      batchKey,
       running,
       isAssetsReady,
-      updateItemStatus,
+      batchItems,
       baseImage,
       logoImage,
       gameTitle,
       effectiveConfig,
-      onVideoUpdated,
-      onCompleted,
     ]
   );
 
@@ -345,8 +439,13 @@ export function useBatchThumbnailUpdate({
   }, [batchItems, processQueue]);
 
   const cancel = useCallback(() => {
-    cancelRequestedRef.current = true;
-  }, []);
+    useAppStore.getState().setThumbnailBatch(batchKey, (prev) => {
+      if (!prev) {
+        return { items: [], running: false, runId: 0, cancelRequested: true };
+      }
+      return { ...prev, cancelRequested: true };
+    });
+  }, [batchKey]);
 
   return {
     items: batchItems,
