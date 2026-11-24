@@ -151,6 +151,27 @@ func (db *DB) migrate() error {
 			notes TEXT NOT NULL DEFAULT '',
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS exported_videos (
+			export_id TEXT PRIMARY KEY,
+			source_path TEXT NOT NULL,
+			exported_path TEXT NOT NULL,
+			target_title TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			privacy TEXT NOT NULL DEFAULT 'private',
+			game_tag TEXT NOT NULL DEFAULT '',
+			playlist_id TEXT NOT NULL DEFAULT '',
+			playlist_title TEXT NOT NULL DEFAULT '',
+			episode INTEGER NOT NULL DEFAULT 0,
+			content_type TEXT NOT NULL DEFAULT '',
+			tags TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'exported',
+			youtube_id TEXT NOT NULL DEFAULT '',
+			error_msg TEXT NOT NULL DEFAULT '',
+			exported_at INTEGER NOT NULL,
+			applied_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_exported_videos_status ON exported_videos(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_exported_videos_source ON exported_videos(source_path)`,
 	}
 
 	for _, q := range queries {
