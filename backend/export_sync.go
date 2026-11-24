@@ -140,7 +140,7 @@ func (a *App) MatchExportedVideos() (int, error) {
 			return matchedCount, fmt.Errorf("failed to update matched export %s: %w", p.exportID, err)
 		}
 
-		localPath := resolveExistingLocalPath(p.sourcePath, p.exportedPath)
+		localPath := a.resolveExistingLocalPath(p.sourcePath, p.exportedPath)
 		if localPath != "" {
 			if err := a.LinkLocalToYouTube(localPath, yt.id, p.gameTag, p.episode); err != nil {
 				appLog("[MatchExportedVideos] Failed to link local file %q to YouTube %s: %v", localPath, yt.id, err)
@@ -374,7 +374,7 @@ func (a *App) applyMatchedExportsWithDeps(
 		result.Applied = append(result.Applied, rec.ExportID)
 
 		if deleteExportedFiles {
-			cleaned := cleanupTemporaryExportFiles(rec.ExportedPath, rec.SourcePath)
+			cleaned := a.cleanupTemporaryExportFiles(rec.ExportedPath, rec.SourcePath)
 			result.CleanedUpPaths = append(result.CleanedUpPaths, cleaned...)
 		}
 
@@ -429,10 +429,13 @@ func isQuotaExceededError(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "quota")
 }
 
-func resolveExistingLocalPath(sourcePath, exportedPath string) string {
+func (a *App) resolveExistingLocalPath(sourcePath, exportedPath string) string {
 	if sourcePath != "" {
 		if info, err := os.Stat(sourcePath); err == nil && !info.IsDir() {
 			return sourcePath
+		}
+		if backupPath, ok := a.ResolveBackupPath(sourcePath); ok {
+			return backupPath
 		}
 	}
 	if exportedPath != "" {
@@ -443,7 +446,36 @@ func resolveExistingLocalPath(sourcePath, exportedPath string) string {
 	return ""
 }
 
-func cleanupTemporaryExportFiles(exportedPath, sourcePath string) []string {
+func (a *App) isActiveYouTubeLocalFile(exportedPath string) bool {
+	if a.db == nil || a.db.conn == nil || strings.TrimSpace(exportedPath) == "" {
+		return false
+	}
+
+	absExported := normalizePath(exportedPath)
+	cleanExported := filepath.Clean(exportedPath)
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	rows, err := a.db.conn.Query(`SELECT local_file FROM yt_videos WHERE local_file IS NOT NULL AND local_file != ''`)
+	if err != nil {
+		return true
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var localFile string
+		if err := rows.Scan(&localFile); err != nil {
+			continue
+		}
+		if strings.EqualFold(normalizePath(localFile), absExported) || strings.EqualFold(filepath.Clean(localFile), cleanExported) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) cleanupTemporaryExportFiles(exportedPath, sourcePath string) []string {
 	cleaned := make([]string, 0)
 	if strings.TrimSpace(exportedPath) == "" {
 		return cleaned
@@ -457,6 +489,18 @@ func cleanupTemporaryExportFiles(exportedPath, sourcePath string) []string {
 
 	// Never delete the original source file.
 	if cleanSource != "" && strings.EqualFold(cleanExported, cleanSource) {
+		return cleaned
+	}
+
+	// Never delete any file inside the configured backup folder.
+	if backupFolder := strings.TrimSpace(a.GetBackupFolder()); backupFolder != "" {
+		if isPathWithinRoot(normalizePath(backupFolder), normalizePath(cleanExported), true) {
+			return cleaned
+		}
+	}
+
+	// Never delete a file that is currently linked as the active local_file in yt_videos.
+	if a.isActiveYouTubeLocalFile(cleanExported) {
 		return cleaned
 	}
 

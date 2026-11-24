@@ -342,3 +342,185 @@ func TestApplyMatchedExports_StopsOnQuotaAndMarksNonQuotaFailures(t *testing.T) 
 		t.Fatalf("expected quota-stopped and remaining items to stay matched, got %q and %q", stQuota, stRemain)
 	}
 }
+
+func TestMatchExportedVideos_BackupFallbackPriority(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpDir := t.TempDir()
+	app.configPath = filepath.Join(tmpDir, "config.json")
+	backupRoot := filepath.Join(tmpDir, "backups")
+	if err := os.MkdirAll(backupRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	app.config.BackupFolder = backupRoot
+
+	// Case 1: source_path deleted, backup exists in video_backups -> must link backup_path
+	deletedSource1 := filepath.Join(tmpDir, "outplayed", "clip1.mp4")
+	backupFile1 := filepath.Join(backupRoot, "outplayed", "clip1.mp4")
+	if err := os.MkdirAll(filepath.Dir(backupFile1), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(backupFile1, []byte("backup-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	exportedFile1 := filepath.Join(tmpDir, "exports", "AH-BKP11111.mp4")
+	if err := os.MkdirAll(filepath.Dir(exportedFile1), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exportedFile1, []byte("export-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := app.db.conn.Exec(`
+		INSERT INTO video_backups (source_path, backup_path, folder_root, file_size, file_mtime, backed_up_at, status)
+		VALUES (?, ?, ?, 11, 1700000000, 1700000000, 'backed_up')
+	`, normalizePath(deletedSource1), backupFile1, filepath.Join(tmpDir, "outplayed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:     "AH-BKP11111",
+		SourcePath:   deletedSource1,
+		ExportedPath: exportedFile1,
+		TargetTitle:  "Backup Fallback Episode",
+		GameTag:      "hades",
+		Episode:      10,
+		Status:       "exported",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-bkp-1", "AH-BKP11111 - Hades", "private", "https://img/bkp1.jpg")
+
+	// Case 2: source_path deleted AND backup file missing on disk -> must fall back to exported_path
+	deletedSource2 := filepath.Join(tmpDir, "outplayed", "clip2.mp4")
+	missingBackup2 := filepath.Join(backupRoot, "outplayed", "clip2.mp4")
+	exportedFile2 := filepath.Join(tmpDir, "exports", "AH-EXP22222.mp4")
+	if err := os.WriteFile(exportedFile2, []byte("export-data-2"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = app.db.conn.Exec(`
+		INSERT INTO video_backups (source_path, backup_path, folder_root, file_size, file_mtime, backed_up_at, status)
+		VALUES (?, ?, ?, 13, 1700000000, 1700000000, 'backed_up')
+	`, normalizePath(deletedSource2), missingBackup2, filepath.Join(tmpDir, "outplayed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:     "AH-EXP22222",
+		SourcePath:   deletedSource2,
+		ExportedPath: exportedFile2,
+		TargetTitle:  "Exported Fallback Episode",
+		GameTag:      "celeste",
+		Episode:      11,
+		Status:       "exported",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-exp-2", "AH-EXP22222 - Celeste", "private", "https://img/exp2.jpg")
+
+	count, err := app.MatchExportedVideos()
+	if err != nil {
+		t.Fatalf("MatchExportedVideos failed: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 matched videos, got %d", count)
+	}
+
+	var localFile1, localFile2 string
+	if err := app.db.conn.QueryRow(`SELECT local_file FROM yt_videos WHERE id = 'yt-bkp-1'`).Scan(&localFile1); err != nil {
+		t.Fatal(err)
+	}
+	if localFile1 != backupFile1 {
+		t.Fatalf("expected yt-bkp-1 local_file to resolve to backupPath %q, got %q", backupFile1, localFile1)
+	}
+
+	if err := app.db.conn.QueryRow(`SELECT local_file FROM yt_videos WHERE id = 'yt-exp-2'`).Scan(&localFile2); err != nil {
+		t.Fatal(err)
+	}
+	if localFile2 != exportedFile2 {
+		t.Fatalf("expected yt-exp-2 local_file to fall back to exportedPath %q, got %q", exportedFile2, localFile2)
+	}
+}
+
+func TestApplyMatchedExports_CleanupSafetyGuards(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpDir := t.TempDir()
+	backupRoot := filepath.Join(tmpDir, "backups")
+	if err := os.MkdirAll(backupRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	app.config.BackupFolder = backupRoot
+
+	// Guard 1: exported_path inside BackupFolder must NEVER be deleted
+	fileInBackup := filepath.Join(backupRoot, "sub", "AH-GUARD111.mp4")
+	if err := os.MkdirAll(filepath.Dir(fileInBackup), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fileInBackup, []byte("backup-keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:     "AH-GUARD111",
+		SourcePath:   filepath.Join(tmpDir, "missing_src_1.mp4"),
+		ExportedPath: fileInBackup,
+		TargetTitle:  "Guard Backup Folder",
+		Privacy:      "public",
+		Status:       "matched",
+		YouTubeID:    "yt-guard-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-guard-1", "AH-GUARD111", "private", "")
+
+	// Guard 2: exported_path that is currently the active local_file in yt_videos must NEVER be deleted
+	activeLocalExport := filepath.Join(tmpDir, "exports", "AH-GUARD222.mp4")
+	if err := os.MkdirAll(filepath.Dir(activeLocalExport), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(activeLocalExport, []byte("active-keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:     "AH-GUARD222",
+		SourcePath:   filepath.Join(tmpDir, "missing_src_2.mp4"),
+		ExportedPath: activeLocalExport,
+		TargetTitle:  "Guard Active Local File",
+		Privacy:      "public",
+		Status:       "matched",
+		YouTubeID:    "yt-guard-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-guard-2", "AH-GUARD222", "private", "")
+	if _, err := app.db.conn.Exec(`UPDATE yt_videos SET local_file = ? WHERE id = 'yt-guard-2'`, activeLocalExport); err != nil {
+		t.Fatal(err)
+	}
+
+	noopMeta := func(videoID, title, description, privacy string) error { return nil }
+	noopPlaylist := func(playlistID, videoID string) error { return nil }
+
+	res, err := app.applyMatchedExportsWithDeps([]string{"AH-GUARD111", "AH-GUARD222"}, false, true, noopMeta, noopPlaylist)
+	if err != nil {
+		t.Fatalf("applyMatchedExportsWithDeps failed: %v", err)
+	}
+	if len(res.Applied) != 2 {
+		t.Fatalf("expected 2 applied exports, got %v", res.Applied)
+	}
+	if len(res.CleanedUpPaths) != 0 {
+		t.Fatalf("expected 0 cleaned up paths due to safety guards, got %v", res.CleanedUpPaths)
+	}
+	if _, err := os.Stat(fileInBackup); err != nil {
+		t.Fatalf("expected file inside BackupFolder to remain on disk, got err=%v", err)
+	}
+	if _, err := os.Stat(activeLocalExport); err != nil {
+		t.Fatalf("expected active yt_videos.local_file to remain on disk, got err=%v", err)
+	}
+}
