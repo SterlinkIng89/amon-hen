@@ -176,6 +176,37 @@ func TestGetMatchedExports_QuotaAndPlaylistDedup(t *testing.T) {
 	}
 }
 
+func TestGetMatchedExports_AutoMatchesPendingExports(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	insertTestYouTubeVideo(t, app, "yt-pending", "AH-CCCC3333 - Uploaded Clip", "private", "https://img/c.jpg")
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-CCCC3333",
+		SourcePath:  "c.mp4",
+		TargetTitle: "Game C Ep 3",
+		Status:      "exported",
+		ExportedAt:  300,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := app.GetMatchedExports()
+	if err != nil {
+		t.Fatalf("GetMatchedExports failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 auto-matched item, got %d", len(items))
+	}
+	if items[0].ExportID != "AH-CCCC3333" || items[0].Status != "matched" || items[0].YouTubeID != "yt-pending" {
+		t.Fatalf("unexpected auto-matched item: %+v", items[0])
+	}
+	if items[0].YouTubeTitle != "AH-CCCC3333 - Uploaded Clip" || items[0].ThumbnailURL != "https://img/c.jpg" {
+		t.Fatalf("unexpected YouTube enrichment fields: %+v", items[0])
+	}
+}
+
 func TestApplyMatchedExports_SuccessPlaylistDedupAndSafeCleanup(t *testing.T) {
 	app := setupTestDB(t)
 	defer app.db.conn.Close()

@@ -150,6 +150,8 @@ func (a *App) MatchExportedVideos() (int, error) {
 		matchedCount++
 	}
 
+	appLog("[MatchExportedVideos] Evaluated %d pending export(s), matched %d against local yt_videos", len(pending), matchedCount)
+
 	if matchedCount > 0 && a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "export-sync:matched", matchedCount)
 	}
@@ -157,11 +159,28 @@ func (a *App) MatchExportedVideos() (int, error) {
 	return matchedCount, nil
 }
 
+func (a *App) hasPendingExports() bool {
+	if a.db == nil || a.db.conn == nil {
+		return false
+	}
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+	var exists int
+	err := a.db.conn.QueryRow(`SELECT 1 FROM exported_videos WHERE status = 'exported' LIMIT 1`).Scan(&exists)
+	return err == nil && exists == 1
+}
+
 // GetMatchedExports returns all matched or failed exported video records enriched with YouTube metadata and quota estimates.
 func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 	items := make([]MatchedExportItem, 0)
 	if a.db == nil || a.db.conn == nil {
 		return items, fmt.Errorf("database not initialized")
+	}
+
+	if a.hasPendingExports() {
+		if _, err := a.MatchExportedVideos(); err != nil {
+			appLog("[GetMatchedExports] Auto-match failed: %v", err)
+		}
 	}
 
 	a.db.mu.Lock()
