@@ -75,7 +75,7 @@ describe("ExportModal", () => {
     expect(trackingCheckbox.checked).toBe(true);
 
     expect(
-      screen.getAllByText("AH-XXXXXXXX - Valorant.mp4"),
+      screen.getAllByText("AH\u2013XXXXXXXX \u2013 Valorant.mp4"),
     ).toHaveLength(2);
     expect(
       screen.getByText("YouTube title: Custom: Manual / Title - 1"),

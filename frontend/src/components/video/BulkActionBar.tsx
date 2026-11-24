@@ -36,6 +36,8 @@ interface Props {
   onTagsSaved: () => void;
   onFilesDeleted: () => void;
   onAddToQueue: (items: QueueItem[]) => void;
+  readonly gameProfiles?: Record<string, GameProfile>;
+  readonly titleSeparator?: string;
 }
 
 export default function BulkActionBar({
@@ -46,6 +48,8 @@ export default function BulkActionBar({
   onTagsSaved,
   onFilesDeleted,
   onAddToQueue,
+  gameProfiles,
+  titleSeparator: initialTitleSeparator,
 }: Props) {
   const [game, setGame] = useState("");
   const [event, setEvent] = useState("");
@@ -75,7 +79,9 @@ export default function BulkActionBar({
 
   const { suggestions, addRecentTag } = useRecentTags();
 
-  const [profiles, setProfiles] = useState<Record<string, GameProfile>>({});
+  const [fallbackProfiles, setFallbackProfiles] = useState<
+    Record<string, GameProfile>
+  >({});
   const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [selectedProfileTag, setSelectedProfileTag] = useState("");
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(
@@ -87,7 +93,10 @@ export default function BulkActionBar({
   const [savingContentType, setSavingContentType] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState(false);
-  const [titleSeparator, setTitleSeparator] = useState(" - ");
+  const [fallbackTitleSeparator, setFallbackTitleSeparator] = useState(" - ");
+
+  const profiles = gameProfiles ?? fallbackProfiles;
+  const titleSeparator = initialTitleSeparator ?? fallbackTitleSeparator;
 
   // Check if selected videos have YouTube IDs and share a single game tag
   const ytVideosWithTag = selectedVideos.filter((v) => Boolean(v.youtubeId && v.game));
@@ -128,9 +137,9 @@ export default function BulkActionBar({
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
-        setProfiles(cfg.game_profiles || {});
+        setFallbackProfiles(cfg.game_profiles || {});
         setTagPlaylists(cfg.tag_playlists || {});
-        setTitleSeparator(cfg.title_separator || " - ");
+        setFallbackTitleSeparator(cfg.title_separator || " - ");
       })
       .catch(console.error);
   }, []);

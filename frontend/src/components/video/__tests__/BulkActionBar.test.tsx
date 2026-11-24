@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import BulkActionBar from "../BulkActionBar";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
-import { VideoFile } from "../../../types";
+import { VideoFile, GameProfile } from "../../../types";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
   SetVideoGames: vi.fn().mockResolvedValue(undefined),
@@ -264,5 +264,60 @@ describe("BulkActionBar ContentType routing", () => {
         }),
       );
     });
+  });
+
+  it("immediately uses passed gameProfiles and titleSeparator in ExportModal before LoadConfig resolves", async () => {
+    vi.mocked(appBackend.LoadConfig).mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    const gameProfiles: Record<string, GameProfile> = {
+      "League of Legends": {
+        type: "multiplayer",
+        titleTemplate: "{champion} - {event} - {gamemode} - {date}",
+      },
+    };
+
+    const lolClip: VideoFile = {
+      name: "lol_clip.mp4",
+      path: "/path/lol_clip.mp4",
+      size: 4096,
+      modTime: new Date(2026, 10, 22, 12, 0, 0).getTime(),
+      folder: "/path",
+      game: "League of Legends",
+      contentType: "clip",
+      event: "Flop",
+      gameMode: "Summoner's Rift",
+      customVars: { champion: "Neeko" },
+    };
+
+    render(
+      <BulkActionBar
+        selectedPaths={["/path/lol_clip.mp4"]}
+        selectedVideos={[lolClip]}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+        gameProfiles={gameProfiles}
+        titleSeparator=" — "
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Export 1" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText("AH\u2013XXXXXXXX \u2013 League of Legends.mp4"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "YouTube title: Neeko - Flop - Summoner's Rift - 22/11/26",
+      ),
+    ).toBeInTheDocument();
   });
 });

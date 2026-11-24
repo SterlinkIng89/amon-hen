@@ -759,6 +759,8 @@ export default function Dashboard() {
             setQueue((q) => [...q, ...items]);
             bumpQueueAdded();
           }}
+          gameProfiles={gameProfiles}
+          titleSeparator={titleSeparator}
         />
       )}
 

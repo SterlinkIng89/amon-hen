@@ -356,10 +356,10 @@ export default function ExportModal({
                       ? v.name.slice(v.name.lastIndexOf("."))
                       : ".mp4";
                     const gameSuffix = v.game?.trim()
-                      ? ` - ${sanitizeExportFilename(v.game.trim())}`
+                      ? ` \u2013 ${sanitizeExportFilename(v.game.trim())}`
                       : "";
                     const exportFilename = useTrackingId
-                      ? `AH-XXXXXXXX${gameSuffix}${ext}`
+                      ? `AH\u2013XXXXXXXX${gameSuffix}${ext}`
                       : `${sanitizeExportFilename(resolvedTitle)}${ext}`;
                     return (
                       <div
