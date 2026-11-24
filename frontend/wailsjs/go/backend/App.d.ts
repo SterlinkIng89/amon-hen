@@ -11,6 +11,8 @@ export function AddVideoToPlaylist(arg1:string,arg2:string):Promise<void>;
 
 export function ApplyCatalogTitleUpdates(arg1:Array<backend.CatalogAssignment>):Promise<backend.CatalogTitleUpdateResult>;
 
+export function ApplyMatchedExports(arg1:Array<string>,arg2:boolean,arg3:boolean):Promise<backend.ApplyMatchedExportsResult>;
+
 export function ApplyPlaylistCatalog(arg1:backend.CatalogApplyRequest):Promise<void>;
 
 export function ApplySingleVideoTitleUpdate(arg1:string,arg2:string):Promise<void>;
@@ -36,6 +38,8 @@ export function DeleteYouTubeVideo(arg1:string,arg2:boolean):Promise<void>;
 export function DeleteYouTubeVideos(arg1:Array<string>,arg2:boolean):Promise<Array<string>|Array<string>>;
 
 export function DiscardUploadSession(arg1:string):Promise<void>;
+
+export function DismissExportRecord(arg1:string):Promise<void>;
 
 export function DisconnectSteam():Promise<void>;
 
@@ -70,6 +74,8 @@ export function GetEnrichedSteamGames(arg1:boolean):Promise<Array<backend.Enrich
 export function GetExportedVideos(arg1:string):Promise<Array<backend.ExportedVideoRecord>>;
 
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
+
+export function GetMatchedExports():Promise<Array<backend.MatchedExportItem>>;
 
 export function GetOrCreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
 

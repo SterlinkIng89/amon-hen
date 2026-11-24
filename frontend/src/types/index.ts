@@ -284,6 +284,48 @@ export type LibraryGroupMode = "date" | "game" | "status" | "folder" | "none";
 export type ChannelGroupMode = "date" | "playlist" | "game" | "privacy" | "status" | "none";
 export type CardDensity = "compact" | "default" | "large";
 
+export interface MatchedExportItem {
+  readonly exportId: string;
+  readonly sourcePath: string;
+  readonly exportedPath: string;
+  readonly targetTitle: string;
+  readonly description: string;
+  readonly privacy: string;
+  readonly gameTag: string;
+  readonly playlistId: string;
+  readonly playlistTitle: string;
+  readonly episode: number;
+  readonly contentType: string;
+  readonly tags: string;
+  readonly status: string;
+  readonly youtubeId: string;
+  readonly errorMsg: string;
+  readonly exportedAt: number;
+  readonly appliedAt: number;
+  readonly youtubeTitle: string;
+  readonly youtubePrivacy: string;
+  readonly thumbnailUrl: string;
+  readonly alreadyInPlaylist: boolean;
+  readonly estimatedQuota: number;
+}
+
+export interface ApplyMatchedExportsResult {
+  readonly applied: readonly string[];
+  readonly failed: Readonly<Record<string, string>>;
+  readonly skipped: readonly string[];
+  readonly cleanedUpPaths: readonly string[];
+  readonly stoppedOnQuota: boolean;
+}
+
+export interface ExportSyncProgressEvent {
+  readonly current: number;
+  readonly total: number;
+  readonly exportId: string;
+  readonly videoId: string;
+  readonly title: string;
+  readonly percentage: number;
+}
+
 export const CARD_DENSITY_CLASSES: Record<CardDensity, string> = {
   compact: "grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-4",
   default: "grid-cols-[repeat(auto-fill,minmax(213px,1fr))] gap-5",

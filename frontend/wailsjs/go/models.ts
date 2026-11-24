@@ -559,6 +559,47 @@ export namespace backend {
 	        this.appliedAt = source["appliedAt"];
 	    }
 	}
+	export class MatchedExportItem extends ExportedVideoRecord {
+	    youtubeTitle: string;
+	    youtubePrivacy: string;
+	    thumbnailUrl: string;
+	    alreadyInPlaylist: boolean;
+	    estimatedQuota: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MatchedExportItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        super(source);
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.youtubeTitle = source["youtubeTitle"];
+	        this.youtubePrivacy = source["youtubePrivacy"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.alreadyInPlaylist = source["alreadyInPlaylist"];
+	        this.estimatedQuota = source["estimatedQuota"];
+	    }
+	}
+	export class ApplyMatchedExportsResult {
+	    applied: string[];
+	    failed: Record<string, string>;
+	    skipped: string[];
+	    cleanedUpPaths: string[];
+	    stoppedOnQuota: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ApplyMatchedExportsResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applied = source["applied"] || [];
+	        this.failed = source["failed"] || {};
+	        this.skipped = source["skipped"] || [];
+	        this.cleanedUpPaths = source["cleanedUpPaths"] || [];
+	        this.stoppedOnQuota = Boolean(source["stoppedOnQuota"]);
+	    }
+	}
 	export class BackupStatus {
 	    backupFolder: string;
 	    totalBackedUp: number;

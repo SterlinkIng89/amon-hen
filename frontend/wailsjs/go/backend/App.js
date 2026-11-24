@@ -14,6 +14,10 @@ export function ApplyCatalogTitleUpdates(arg1) {
   return window['go']['backend']['App']['ApplyCatalogTitleUpdates'](arg1);
 }
 
+export function ApplyMatchedExports(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['ApplyMatchedExports'](arg1, arg2, arg3);
+}
+
 export function ApplyPlaylistCatalog(arg1) {
   return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
 }
@@ -64,6 +68,10 @@ export function DeleteYouTubeVideos(arg1, arg2) {
 
 export function DiscardUploadSession(arg1) {
   return window['go']['backend']['App']['DiscardUploadSession'](arg1);
+}
+
+export function DismissExportRecord(arg1) {
+  return window['go']['backend']['App']['DismissExportRecord'](arg1);
 }
 
 export function DisconnectSteam() {
@@ -132,6 +140,10 @@ export function GetExportedVideos(arg1) {
 
 export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
+}
+
+export function GetMatchedExports() {
+  return window['go']['backend']['App']['GetMatchedExports']();
 }
 
 export function GetOrCreatePlaylist(arg1, arg2, arg3) {
