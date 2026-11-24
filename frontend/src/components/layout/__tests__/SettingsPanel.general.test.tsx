@@ -26,6 +26,15 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   SetDefaultVideoDescription: vi.fn().mockResolvedValue(null),
   SelectExportFolder: vi.fn().mockResolvedValue("/new/export/folder"),
   OpenFolderInExplorer: vi.fn().mockResolvedValue(null),
+  GetBackupStatus: vi.fn().mockResolvedValue({
+    backupFolder: "/backups",
+    totalBackedUp: 3,
+    totalBytes: 10485760,
+    lastBackupAt: 1700000000,
+    enabledFolders: ["/test"],
+  }),
+  SetBackupFolder: vi.fn().mockResolvedValue(null),
+  SelectBackupFolder: vi.fn().mockResolvedValue("/new/backups"),
   SaveGameProfile: vi.fn().mockResolvedValue(null),
   DeleteGameProfile: vi.fn().mockResolvedValue(null),
   GetSteamAppID: vi.fn().mockResolvedValue(""),
@@ -167,6 +176,43 @@ describe("SettingsPanel - General Tab (#155)", () => {
 
     await screen.findByRole("tab", { name: /general/i });
     expect(screen.queryByText("Tag Playlists")).not.toBeInTheDocument();
+  });
+
+  it("renders Local Backup status summary and updates backup folder on Browse", async () => {
+    vi.mocked(appBackend.GetBackupStatus)
+      .mockResolvedValueOnce({
+        backupFolder: "/backups",
+        totalBackedUp: 3,
+        totalBytes: 10485760,
+        lastBackupAt: 1700000000,
+        enabledFolders: ["/test"],
+      })
+      .mockResolvedValueOnce({
+        backupFolder: "/new/backups",
+        totalBackedUp: 3,
+        totalBytes: 10485760,
+        lastBackupAt: 1700000000,
+        enabledFolders: ["/test"],
+      });
+
+    render(<SettingsPanel open={true} onClose={() => {}} />);
+
+    const summary = await screen.findByTestId("backup-status-summary");
+    await waitFor(() => {
+      expect(summary).toHaveTextContent("3 videos backed up (10.00 MB)");
+    });
+
+    const browseBtn = screen.getByTestId("backup-browse-btn");
+    fireEvent.click(browseBtn);
+
+    await waitFor(() => {
+      expect(appBackend.SelectBackupFolder).toHaveBeenCalled();
+      expect(appBackend.SetBackupFolder).toHaveBeenCalledWith("/new/backups");
+    });
+
+    const openBtn = screen.getByTestId("backup-open-folder-btn");
+    fireEvent.click(openBtn);
+    expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith("/new/backups");
   });
 });
 

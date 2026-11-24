@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   SetAutoLaunch,
   SetWatchFolderEnabled,
@@ -7,9 +7,14 @@ import {
   SetDefaultVideoDescription,
   SelectExportFolder,
   OpenFolderInExplorer,
+  GetBackupStatus,
+  SetBackupFolder,
+  SelectBackupFolder,
 } from "../../../wailsjs/go/backend/App";
-import { CardDensity } from "../../types";
+import { EventsOn } from "../../../wailsjs/runtime/runtime";
+import { BackupStatus, CardDensity } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
+import { formatSize } from "../../utils/videoUtils";
 
 export interface SettingsGeneralTabProps {
   readonly titleSeparator: string;
@@ -56,6 +61,13 @@ export function SettingsGeneralTab({
   const [autoLaunchSaving, setAutoLaunchSaving] = useState(false);
   const [watchFolderSaving, setWatchFolderSaving] = useState(false);
   const [exportFolderSaving, setExportFolderSaving] = useState(false);
+  const [backupFolder, setBackupFolder] = useState("");
+  const [backupFolderSaving, setBackupFolderSaving] = useState(false);
+  const [backupStatusState, setBackupStatusState] = useState<
+    | { status: "loading" }
+    | { status: "ready"; data: BackupStatus }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
   const [descSaving, setDescSaving] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
   const descSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,6 +93,42 @@ export function SettingsGeneralTab({
       }
     };
   }, []);
+
+  const loadBackupStatus = useCallback(async () => {
+    try {
+      const status = await GetBackupStatus();
+      setBackupFolder(status.backupFolder ?? "");
+      setBackupStatusState({ status: "ready", data: status });
+    } catch (e) {
+      console.error("Failed to load backup status", e);
+      setBackupStatusState({
+        status: "error",
+        message: "Failed to load backup status",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBackupStatus();
+    const unsub = EventsOn("backup:done", () => {
+      void loadBackupStatus();
+    });
+    return () => {
+      unsub();
+    };
+  }, [loadBackupStatus]);
+
+  const persistBackupFolder = async (nextFolder: string) => {
+    setBackupFolderSaving(true);
+    try {
+      await SetBackupFolder(nextFolder);
+      await loadBackupStatus();
+    } catch (e) {
+      console.error("Failed to save backup folder", e);
+    } finally {
+      setBackupFolderSaving(false);
+    }
+  };
 
   const persistDefaultDescription = async (value: string) => {
     if (descSaveTimerRef.current) {
@@ -457,6 +505,92 @@ export function SettingsGeneralTab({
             >
               Open Folder
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Card 4: Local Backup */}
+      <section className="bg-elevated border border-border-subtle rounded-lg divide-y divide-border-subtle">
+        <div className="p-3.5 flex flex-col gap-2">
+          <p className="text-xs font-medium text-text-primary">
+            Local Backup
+          </p>
+          <p className="text-[10px] text-text-secondary">
+            Global destination folder for non-destructive backups. Enable Auto-backup per folder in Folder Settings.
+          </p>
+          <div className="flex gap-2 items-center mt-1">
+            <input
+              type="text"
+              data-testid="backup-folder-input"
+              value={backupFolder}
+              onChange={(e) => setBackupFolder(e.target.value)}
+              onBlur={() => {
+                void persistBackupFolder(backupFolder);
+              }}
+              placeholder="e.g. D:\Backups\AmonHen"
+              className="flex-1 min-w-0 bg-base border border-border-subtle rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              data-testid="backup-browse-btn"
+              onClick={async () => {
+                try {
+                  const dir = await SelectBackupFolder();
+                  if (dir) {
+                    setBackupFolder(dir);
+                    await persistBackupFolder(dir);
+                  }
+                } catch (e) {
+                  console.error("Failed to select backup folder", e);
+                }
+              }}
+              disabled={backupFolderSaving}
+              className="px-2.5 py-1.5 rounded text-xs bg-surface border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              Browse...
+            </button>
+            <button
+              type="button"
+              aria-label="Open backup folder"
+              data-testid="backup-open-folder-btn"
+              onClick={() => {
+                if (backupFolder) {
+                  OpenFolderInExplorer(backupFolder);
+                }
+              }}
+              disabled={!backupFolder}
+              className="px-2.5 py-1.5 rounded text-xs bg-surface border border-border-subtle text-text-secondary hover:border-border-medium hover:text-text-primary transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Open Folder
+            </button>
+          </div>
+          <div
+            data-testid="backup-status-summary"
+            className="mt-1 flex flex-wrap items-center justify-between gap-2 bg-base border border-border-subtle rounded px-2.5 py-2 text-[11px] text-text-secondary"
+          >
+            {backupStatusState.status === "loading" && (
+              <span>Loading backup status...</span>
+            )}
+            {backupStatusState.status === "error" && (
+              <span className="text-red-400" role="alert">
+                {backupStatusState.message}
+              </span>
+            )}
+            {backupStatusState.status === "ready" && (
+              <>
+                <span className="tabular-nums">
+                  {backupStatusState.data.totalBackedUp}{" "}
+                  {backupStatusState.data.totalBackedUp === 1 ? "video" : "videos"} backed up (
+                  {formatSize(backupStatusState.data.totalBytes)})
+                </span>
+                <span className="text-text-muted tabular-nums">
+                  Last backup:{" "}
+                  {backupStatusState.data.lastBackupAt > 0
+                    ? new Date(backupStatusState.data.lastBackupAt * 1000).toLocaleString()
+                    : "Never"}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </section>

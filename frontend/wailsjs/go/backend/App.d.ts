@@ -47,6 +47,10 @@ export function GetAllGameTags():Promise<Array<string>>;
 
 export function GetAutoLaunch():Promise<boolean>;
 
+export function GetBackupFolder():Promise<string>;
+
+export function GetBackupStatus():Promise<backend.BackupStatus>;
+
 export function GetCacheDir():Promise<string>;
 
 export function GetChannelAnalytics():Promise<backend.ChannelAnalytics>;
@@ -185,9 +189,15 @@ export function SearchSteamGames(arg1:string):Promise<Array<backend.SteamSearchR
 
 export function SelectCustomThumbnailImage():Promise<string>;
 
+export function RunFolderBackup(arg1:string):Promise<backend.BackupRunResult>;
+
 export function SelectExportFolder():Promise<string>;
 
+export function SelectBackupFolder():Promise<string>;
+
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
+
+export function SetBackupFolder(arg1:string):Promise<void>;
 
 export function SetDefaultExportFolder(arg1:string):Promise<void>;
 

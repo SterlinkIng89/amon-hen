@@ -497,9 +497,48 @@ export namespace backend {
 	        this.modes = source["modes"];
 	    }
 	}
+	export class BackupRunResult {
+	    copiedCount: number;
+	    skippedCount: number;
+	    failedCount: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.copiedCount = source["copiedCount"];
+	        this.skippedCount = source["skippedCount"];
+	        this.failedCount = source["failedCount"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class BackupStatus {
+	    backupFolder: string;
+	    totalBackedUp: number;
+	    totalBytes: number;
+	    lastBackupAt: number;
+	    enabledFolders: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backupFolder = source["backupFolder"];
+	        this.totalBackedUp = source["totalBackedUp"];
+	        this.totalBytes = source["totalBytes"];
+	        this.lastBackupAt = source["lastBackupAt"];
+	        this.enabledFolders = source["enabledFolders"];
+	    }
+	}
 	export class FolderConfig {
 	    recursive: boolean;
 	    max_duration_secs: number;
+	    auto_backup?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FolderConfig(source);
@@ -509,6 +548,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.recursive = source["recursive"];
 	        this.max_duration_secs = source["max_duration_secs"];
+	        this.auto_backup = source["auto_backup"];
 	    }
 	}
 	export class VideoMeta {

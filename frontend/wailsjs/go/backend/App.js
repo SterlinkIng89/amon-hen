@@ -86,6 +86,14 @@ export function GetAutoLaunch() {
   return window['go']['backend']['App']['GetAutoLaunch']();
 }
 
+export function GetBackupFolder() {
+  return window['go']['backend']['App']['GetBackupFolder']();
+}
+
+export function GetBackupStatus() {
+  return window['go']['backend']['App']['GetBackupStatus']();
+}
+
 export function GetCacheDir() {
   return window['go']['backend']['App']['GetCacheDir']();
 }
@@ -362,12 +370,24 @@ export function SelectCustomThumbnailImage() {
   return window['go']['backend']['App']['SelectCustomThumbnailImage']();
 }
 
+export function RunFolderBackup(arg1) {
+  return window['go']['backend']['App']['RunFolderBackup'](arg1);
+}
+
+export function SelectBackupFolder() {
+  return window['go']['backend']['App']['SelectBackupFolder']();
+}
+
 export function SelectExportFolder() {
   return window['go']['backend']['App']['SelectExportFolder']();
 }
 
 export function SetAutoLaunch(arg1) {
   return window['go']['backend']['App']['SetAutoLaunch'](arg1);
+}
+
+export function SetBackupFolder(arg1) {
+  return window['go']['backend']['App']['SetBackupFolder'](arg1);
 }
 
 export function SetDefaultExportFolder(arg1) {

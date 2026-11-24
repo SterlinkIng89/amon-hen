@@ -234,6 +234,22 @@ export interface VideoGroupYT {
 export interface FolderConfig {
   recursive: boolean;
   max_duration_secs: number;
+  auto_backup?: boolean;
+}
+
+export interface BackupStatus {
+  readonly backupFolder: string;
+  readonly totalBackedUp: number;
+  readonly totalBytes: number;
+  readonly lastBackupAt: number;
+  readonly enabledFolders: string[];
+}
+
+export interface BackupRunResult {
+  readonly copiedCount: number;
+  readonly skippedCount: number;
+  readonly failedCount: number;
+  readonly errors: string[];
 }
 
 export type ViewMode =
