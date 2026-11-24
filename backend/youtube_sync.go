@@ -159,6 +159,10 @@ func (a *App) SyncChannelData() error {
 		appLog("[SyncChannelData] Error purging deleted playlists: %v", err)
 	}
 
+	if _, err := a.MatchExportedVideos(); err != nil {
+		appLog("[SyncChannelData] Error matching exported videos: %v", err)
+	}
+
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
 	return nil
 }
