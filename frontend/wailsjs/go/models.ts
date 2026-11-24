@@ -403,6 +403,7 @@ export namespace backend {
 	    episode_position: string;
 	    episode_format: string;
 	    font_color?: string;
+	    font_family?: string;
 	    image_framing?: ImageFraming;
 	    episode_layout?: ElementLayout;
 	    logo?: LogoLayer;
@@ -421,6 +422,7 @@ export namespace backend {
 	        this.episode_position = source["episode_position"];
 	        this.episode_format = source["episode_format"];
 	        this.font_color = source["font_color"];
+	        this.font_family = source["font_family"];
 	        this.image_framing = this.convertValues(source["image_framing"], ImageFraming);
 	        this.episode_layout = this.convertValues(source["episode_layout"], ElementLayout);
 	        this.logo = this.convertValues(source["logo"], LogoLayer);
@@ -666,7 +668,10 @@ export namespace backend {
 	    targetTitle: string;
 	    description: string;
 	    game: string;
+	    playlistId?: string;
 	    playlistTitle: string;
+	    episode?: number;
+	    contentType?: string;
 	    privacy: string;
 	    tags: string[];
 	
@@ -680,7 +685,10 @@ export namespace backend {
 	        this.targetTitle = source["targetTitle"];
 	        this.description = source["description"];
 	        this.game = source["game"];
+	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
 	        this.privacy = source["privacy"];
 	        this.tags = source["tags"];
 	    }
@@ -689,6 +697,7 @@ export namespace backend {
 	    successCount: number;
 	    failedCount: number;
 	    exportedPaths: string[];
+	    exportIds: string[];
 	    errors: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -700,6 +709,7 @@ export namespace backend {
 	        this.successCount = source["successCount"];
 	        this.failedCount = source["failedCount"];
 	        this.exportedPaths = source["exportedPaths"];
+	        this.exportIds = source["exportIds"];
 	        this.errors = source["errors"];
 	    }
 	}

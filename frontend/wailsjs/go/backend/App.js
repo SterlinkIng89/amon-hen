@@ -70,8 +70,8 @@ export function DisconnectSteam() {
   return window['go']['backend']['App']['DisconnectSteam']();
 }
 
-export function ExportVideos(arg1, arg2, arg3) {
-  return window['go']['backend']['App']['ExportVideos'](arg1, arg2, arg3);
+export function ExportVideos(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['ExportVideos'](arg1, arg2, arg3, arg4);
 }
 
 export function GetAPILogs(arg1) {

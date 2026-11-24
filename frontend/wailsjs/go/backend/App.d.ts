@@ -39,7 +39,7 @@ export function DiscardUploadSession(arg1:string):Promise<void>;
 
 export function DisconnectSteam():Promise<void>;
 
-export function ExportVideos(arg1:Array<backend.ExportItem>,arg2:string,arg3:boolean):Promise<backend.ExportResult>;
+export function ExportVideos(arg1:Array<backend.ExportItem>,arg2:string,arg3:boolean,arg4:boolean):Promise<backend.ExportResult>;
 
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
 
