@@ -118,6 +118,17 @@ func normalizePath(p string) string {
 	return abs
 }
 
+func isPathWithinRoot(absRoot, absPath string, allowEqual bool) bool {
+	rel, err := filepath.Rel(strings.ToLower(absRoot), strings.ToLower(absPath))
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return allowEqual
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
 // validateBackupTarget prevents empty backup paths and recursive self-backups.
 func validateBackupTarget(backupFolder, folderRoot string) (string, string, error) {
 	if strings.TrimSpace(backupFolder) == "" {
@@ -134,8 +145,7 @@ func validateBackupTarget(backupFolder, folderRoot string) (string, string, erro
 		return "", "", fmt.Errorf("backup folder cannot be the same as source folder %q", absRoot)
 	}
 
-	rel, relErr := filepath.Rel(strings.ToLower(absRoot), strings.ToLower(absBackup))
-	if relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+	if isPathWithinRoot(absRoot, absBackup, false) {
 		return "", "", fmt.Errorf("backup folder %q cannot be inside source folder %q", absBackup, absRoot)
 	}
 
@@ -391,4 +401,60 @@ func (a *App) ResolveBackupPath(sourcePath string) (string, bool) {
 		return "", false
 	}
 	return backupPath, true
+}
+
+// waitForFileStable polls os.Stat(path) every checkInterval until the file size is non-zero
+// and unchanged for stableChecks consecutive checks, or until maxWait elapses or the file disappears.
+func waitForFileStable(path string, checkInterval time.Duration, stableChecks int, maxWait time.Duration) error {
+	return waitForFileStableWithStop(path, checkInterval, stableChecks, maxWait, nil)
+}
+
+func waitForFileStableWithStop(path string, checkInterval time.Duration, stableChecks int, maxWait time.Duration, stopCh <-chan struct{}) error {
+	if checkInterval <= 0 {
+		checkInterval = 2 * time.Second
+	}
+	if stableChecks <= 0 {
+		stableChecks = 2
+	}
+	if maxWait <= 0 {
+		maxWait = 10 * time.Minute
+	}
+
+	deadline := time.NewTimer(maxWait)
+	defer deadline.Stop()
+
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	var lastSize int64 = -1
+	consecutiveStable := 0
+
+	for {
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("file unavailable while waiting for stability: %w", err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("path %q is a directory", path)
+		}
+
+		size := info.Size()
+		if size > 0 && size == lastSize {
+			consecutiveStable++
+			if consecutiveStable >= stableChecks {
+				return nil
+			}
+		} else {
+			lastSize = size
+			consecutiveStable = 0
+		}
+
+		select {
+		case <-stopCh:
+			return fmt.Errorf("stability wait cancelled")
+		case <-deadline.C:
+			return fmt.Errorf("timed out waiting for file %q to stabilize", path)
+		case <-ticker.C:
+		}
+	}
 }

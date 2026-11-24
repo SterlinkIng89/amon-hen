@@ -32,9 +32,14 @@ func isTempVideoFile(path string) bool {
 
 // FolderWatcher watches configured folders for new video files.
 type FolderWatcher struct {
-	watcher *fsnotify.Watcher
-	stopCh  chan struct{}
-	mu      sync.Mutex
+	watcher                *fsnotify.Watcher
+	stopCh                 chan struct{}
+	mu                     sync.Mutex
+	inFlight               map[string]struct{}
+	inFlightMu             sync.Mutex
+	stabilityCheckInterval time.Duration
+	stabilityChecks        int
+	stabilityMaxWait       time.Duration
 }
 
 // stopWatcher tears down the current watcher if running.
@@ -76,8 +81,9 @@ func (a *App) startWatcher() {
 	}
 
 	fw := &FolderWatcher{
-		watcher: w,
-		stopCh:  make(chan struct{}),
+		watcher:  w,
+		stopCh:   make(chan struct{}),
+		inFlight: make(map[string]struct{}),
 	}
 	a.watcher = fw
 
@@ -116,12 +122,20 @@ func (a *App) startWatcher() {
 				if !ok {
 					return
 				}
-				// Only react to file creation / rename (moved-in)
-				if !event.Has(fsnotify.Create) && !event.Has(fsnotify.Rename) {
+				// React to file creation, rename (moved-in), or writes
+				isCreateOrRename := event.Has(fsnotify.Create) || event.Has(fsnotify.Rename)
+				isWrite := event.Has(fsnotify.Write)
+				if !isCreateOrRename && !isWrite {
 					continue
 				}
 				ext := strings.ToLower(filepath.Ext(event.Name))
 				if !supportedVideoExts[ext] || isTempVideoFile(event.Name) {
+					continue
+				}
+
+				a.maybeAutoBackup(fw, event.Name)
+
+				if !isCreateOrRename {
 					continue
 				}
 
@@ -162,4 +176,124 @@ func (a *App) startWatcher() {
 	}()
 
 	appLog("[Watcher] Started — watching %d root(s)", len(a.config.Folders))
+}
+
+// resolveWatchedFolderRoot finds the most specific configured folder root containing filePath.
+func (a *App) resolveWatchedFolderRoot(filePath string) (string, bool) {
+	absFile := normalizePath(filePath)
+
+	a.configMu.RLock()
+	folders := make([]string, len(a.config.Folders))
+	copy(folders, a.config.Folders)
+	a.configMu.RUnlock()
+
+	bestRoot := ""
+	bestLen := -1
+
+	for _, folder := range folders {
+		absRoot := normalizePath(folder)
+		if !isPathWithinRoot(absRoot, absFile, false) {
+			continue
+		}
+
+		fSettings := a.GetFolderSettings(folder)
+		if !fSettings.Recursive && !strings.EqualFold(filepath.Dir(absFile), absRoot) {
+			continue
+		}
+
+		if len(absRoot) > bestLen {
+			bestLen = len(absRoot)
+			bestRoot = folder
+		}
+	}
+
+	return bestRoot, bestRoot != ""
+}
+
+// maybeAutoBackup schedules a debounced stability wait and background backup for filePath
+// when its watched folder has AutoBackup enabled and BackupFolder is configured.
+func (a *App) maybeAutoBackup(fw *FolderWatcher, filePath string) {
+	if fw == nil {
+		return
+	}
+	if strings.TrimSpace(a.GetBackupFolder()) == "" {
+		return
+	}
+	folderRoot, ok := a.resolveWatchedFolderRoot(filePath)
+	if !ok {
+		return
+	}
+	if !a.GetFolderSettings(folderRoot).AutoBackup {
+		return
+	}
+
+	fw.mu.Lock()
+	stopCh := fw.stopCh
+	fw.mu.Unlock()
+	if stopCh == nil {
+		return
+	}
+	select {
+	case <-stopCh:
+		return
+	default:
+	}
+
+	key := strings.ToLower(normalizePath(filePath))
+	fw.inFlightMu.Lock()
+	if fw.inFlight == nil {
+		fw.inFlight = make(map[string]struct{})
+	}
+	if _, exists := fw.inFlight[key]; exists {
+		fw.inFlightMu.Unlock()
+		return
+	}
+	fw.inFlight[key] = struct{}{}
+	fw.inFlightMu.Unlock()
+
+	go func() {
+		defer func() {
+			fw.inFlightMu.Lock()
+			delete(fw.inFlight, key)
+			fw.inFlightMu.Unlock()
+		}()
+
+		if err := waitForFileStableWithStop(filePath, fw.stabilityCheckInterval, fw.stabilityChecks, fw.stabilityMaxWait, stopCh); err != nil {
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
+			appLog("[AutoBackup] Stability wait failed for %s: %v", filePath, err)
+			a.emitBackupFileError(filePath, folderRoot, err)
+			return
+		}
+
+		destPath, err := a.BackupSingleFile(filePath, folderRoot)
+		if err != nil {
+			appLog("[AutoBackup] Failed to backup %s: %v", filePath, err)
+			a.emitBackupFileError(filePath, folderRoot, err)
+			return
+		}
+
+		appLog("[AutoBackup] Backed up %s -> %s", filePath, destPath)
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "backup:file-completed", map[string]interface{}{
+				"sourcePath": filePath,
+				"backupPath": destPath,
+				"folderRoot": folderRoot,
+			})
+		}
+	}()
+}
+
+func (a *App) emitBackupFileError(sourcePath, folderRoot string, err error) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "backup:file-error", map[string]interface{}{
+		"sourcePath": sourcePath,
+		"folderRoot": folderRoot,
+		"error":      err.Error(),
+	})
 }

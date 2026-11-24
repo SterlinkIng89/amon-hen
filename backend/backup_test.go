@@ -311,3 +311,207 @@ func TestResolveBackupPath(t *testing.T) {
 		t.Fatalf("expected ResolveBackupPath to return false after backup deletion, got (%q, %v)", path, ok)
 	}
 }
+
+func TestWaitForFileStable_GrowingThenStable(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "recording.mp4")
+
+	// Start with an empty file, then append data in chunks before stabilizing.
+	if err := os.WriteFile(filePath, []byte{}, 0644); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	doneWriting := make(chan struct{})
+	go func() {
+		defer close(doneWriting)
+		for i := 0; i < 3; i++ {
+			time.Sleep(25 * time.Millisecond)
+			f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				_, _ = f.WriteString("chunk-data-")
+				_ = f.Close()
+			}
+		}
+	}()
+
+	err := waitForFileStable(filePath, 20*time.Millisecond, 2, 2*time.Second)
+	<-doneWriting
+	if err != nil {
+		t.Fatalf("expected waitForFileStable to succeed, got: %v", err)
+	}
+}
+
+func TestWaitForFileStable_StopsOnCancel(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "recording.mp4")
+	if err := os.WriteFile(filePath, []byte("initial"), 0644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	stopCh := make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- waitForFileStableWithStop(filePath, 200*time.Millisecond, 5, 10*time.Second, stopCh)
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	close(stopCh)
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatalf("expected cancellation error, got nil")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("waitForFileStableWithStop did not exit promptly after stopCh closed")
+	}
+}
+
+func TestMaybeAutoBackup_IgnoresDisabledFolder(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpDir := t.TempDir()
+	disabledRoot := filepath.Join(tmpDir, "Disabled")
+	backupRoot := filepath.Join(tmpDir, "Backups")
+	if err := os.MkdirAll(disabledRoot, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	clip := filepath.Join(disabledRoot, "clip.mp4")
+	if err := os.WriteFile(clip, []byte("video-bytes"), 0644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	app.config.Folders = []string{disabledRoot}
+	app.config.BackupFolder = backupRoot
+	app.config.FolderSettings = map[string]FolderConfig{
+		disabledRoot: {AutoBackup: false},
+	}
+
+	fw := &FolderWatcher{
+		stopCh:                 make(chan struct{}),
+		inFlight:               make(map[string]struct{}),
+		stabilityCheckInterval: 10 * time.Millisecond,
+		stabilityChecks:        1,
+		stabilityMaxWait:       500 * time.Millisecond,
+	}
+	defer close(fw.stopCh)
+
+	app.maybeAutoBackup(fw, clip)
+	time.Sleep(60 * time.Millisecond)
+
+	if _, ok := app.ResolveBackupPath(clip); ok {
+		t.Fatalf("expected no backup for folder with AutoBackup=false")
+	}
+}
+
+func TestMaybeAutoBackup_DeduplicatesAndBacksUp(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpDir := t.TempDir()
+	enabledRoot := filepath.Join(tmpDir, "Outplayed")
+	backupRoot := filepath.Join(tmpDir, "Backups")
+	if err := os.MkdirAll(enabledRoot, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	clip := filepath.Join(enabledRoot, "ace.mp4")
+	payload := []byte("stable-clip-bytes")
+	if err := os.WriteFile(clip, payload, 0644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	app.config.Folders = []string{enabledRoot}
+	app.config.BackupFolder = backupRoot
+	app.config.FolderSettings = map[string]FolderConfig{
+		enabledRoot: {AutoBackup: true},
+	}
+
+	fw := &FolderWatcher{
+		stopCh:                 make(chan struct{}),
+		inFlight:               make(map[string]struct{}),
+		stabilityCheckInterval: 15 * time.Millisecond,
+		stabilityChecks:        2,
+		stabilityMaxWait:       2 * time.Second,
+	}
+	defer close(fw.stopCh)
+
+	// Trigger duplicate events rapidly for the same file.
+	app.maybeAutoBackup(fw, clip)
+	app.maybeAutoBackup(fw, clip)
+	app.maybeAutoBackup(fw, clip)
+
+	fw.inFlightMu.Lock()
+	inFlightCount := len(fw.inFlight)
+	fw.inFlightMu.Unlock()
+	if inFlightCount != 1 {
+		t.Fatalf("expected exactly 1 in-flight entry after duplicate triggers, got %d", inFlightCount)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if destPath, ok := app.ResolveBackupPath(clip); ok {
+			copied, err := os.ReadFile(destPath)
+			if err != nil {
+				t.Fatalf("read backup failed: %v", err)
+			}
+			if string(copied) != string(payload) {
+				t.Fatalf("backup payload mismatch: got %q, want %q", string(copied), string(payload))
+			}
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for auto-backup to complete")
+}
+
+func TestStopWatcher_CancelsPendingStabilityWait(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	tmpDir := t.TempDir()
+	enabledRoot := filepath.Join(tmpDir, "Outplayed")
+	backupRoot := filepath.Join(tmpDir, "Backups")
+	if err := os.MkdirAll(enabledRoot, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	clip := filepath.Join(enabledRoot, "long_recording.mp4")
+	if err := os.WriteFile(clip, []byte("recording"), 0644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	app.config.Folders = []string{enabledRoot}
+	app.config.BackupFolder = backupRoot
+	app.config.FolderSettings = map[string]FolderConfig{
+		enabledRoot: {AutoBackup: true},
+	}
+
+	fw := &FolderWatcher{
+		stopCh:                 make(chan struct{}),
+		inFlight:               make(map[string]struct{}),
+		stabilityCheckInterval: 500 * time.Millisecond,
+		stabilityChecks:        10,
+		stabilityMaxWait:       30 * time.Second,
+	}
+	app.watcher = fw
+
+	app.maybeAutoBackup(fw, clip)
+	time.Sleep(20 * time.Millisecond)
+
+	app.stopWatcher()
+
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		fw.inFlightMu.Lock()
+		remaining := len(fw.inFlight)
+		fw.inFlightMu.Unlock()
+		if remaining == 0 {
+			if _, ok := app.ResolveBackupPath(clip); ok {
+				t.Fatalf("expected cancelled stability wait not to perform backup")
+			}
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	t.Fatalf("pending stability wait goroutine did not clean up after stopWatcher()")
+}
