@@ -105,7 +105,10 @@ export interface ExportItem {
   targetTitle: string;
   description: string;
   game: string;
+  playlistId?: string;
   playlistTitle: string;
+  episode?: number;
+  contentType?: string;
   privacy: string;
   tags: string[];
 }
@@ -114,6 +117,7 @@ export interface ExportResult {
   successCount: number;
   failedCount: number;
   exportedPaths: string[];
+  exportIds?: string[];
   errors: string[];
 }
 
