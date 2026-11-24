@@ -285,18 +285,20 @@ func TestAppExportVideos_TrackingID(t *testing.T) {
 		t.Fatalf("expected 2 exportIds and 2 exportedPaths, got ids=%v paths=%v", res.ExportIDs, res.ExportedPaths)
 	}
 
-	// Item 1: AH-XXXXXXXX - <SanitizedGame>.mp4
+	// Item 1: AH–XXXXXXXX – <SanitizedGame>.mp4 (YouTube-safe en-dash in filename, canonical AH-XXXXXXXX in DB)
 	id1 := res.ExportIDs[0]
+	safeID1 := strings.ReplaceAll(id1, "-", "\u2013")
 	base1 := filepath.Base(res.ExportedPaths[0])
-	wantBase1 := id1 + " - Hades∶ II ∕ Test.mp4"
+	wantBase1 := safeID1 + " \u2013 Hades∶ II ∕ Test.mp4"
 	if base1 != wantBase1 {
 		t.Errorf("item 1 filename = %q, want %q", base1, wantBase1)
 	}
 
-	// Item 2: AH-XXXXXXXX.mp4
+	// Item 2: AH–XXXXXXXX.mp4
 	id2 := res.ExportIDs[1]
+	safeID2 := strings.ReplaceAll(id2, "-", "\u2013")
 	base2 := filepath.Base(res.ExportedPaths[1])
-	wantBase2 := id2 + ".mp4"
+	wantBase2 := safeID2 + ".mp4"
 	if base2 != wantBase2 {
 		t.Errorf("item 2 filename = %q, want %q", base2, wantBase2)
 	}
@@ -341,6 +343,37 @@ func TestAppExportVideos_TrackingID(t *testing.T) {
 	}
 	if rec2.ContentType != "clip" || rec2.Tags != "clip" {
 		t.Errorf("rec2 fields mismatch: contentType=%q tags=%q", rec2.ContentType, rec2.Tags)
+	}
+}
+
+func TestResolveExportBaseName(t *testing.T) {
+	baseWithGame, idWithGame, err := resolveExportBaseName(ExportItem{
+		SourcePath: "clip.mp4",
+		Game:       "League of Legends",
+	}, ".mp4", true)
+	if err != nil {
+		t.Fatalf("resolveExportBaseName with game failed: %v", err)
+	}
+	if !strings.HasPrefix(idWithGame, "AH-") {
+		t.Fatalf("expected canonical AH- prefix in exportID, got %q", idWithGame)
+	}
+	wantWithGame := strings.ReplaceAll(idWithGame, "-", "\u2013") + " \u2013 League of Legends"
+	if baseWithGame != wantWithGame {
+		t.Errorf("baseWithGame = %q, want %q", baseWithGame, wantWithGame)
+	}
+
+	baseNoGame, idNoGame, err := resolveExportBaseName(ExportItem{
+		SourcePath: "clip.mp4",
+	}, ".mp4", true)
+	if err != nil {
+		t.Fatalf("resolveExportBaseName without game failed: %v", err)
+	}
+	if !strings.HasPrefix(idNoGame, "AH-") {
+		t.Fatalf("expected canonical AH- prefix in exportID, got %q", idNoGame)
+	}
+	wantNoGame := strings.ReplaceAll(idNoGame, "-", "\u2013")
+	if baseNoGame != wantNoGame {
+		t.Errorf("baseNoGame = %q, want %q", baseNoGame, wantNoGame)
 	}
 }
 

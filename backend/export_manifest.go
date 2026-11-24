@@ -12,7 +12,7 @@ import (
 const exportIDAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const exportIDLength = 8
 
-var exportIDRegex = regexp.MustCompile(`\bAH-[A-Z0-9]{8}\b`)
+var exportIDRegex = regexp.MustCompile(`(?i)\bAH(?:[-\x{2013}_]|\s+)?([A-Z0-9]{8})\b`)
 
 // ExportedVideoRecord represents a persisted exported video entry in the manifest.
 type ExportedVideoRecord struct {
@@ -49,13 +49,15 @@ func GenerateExportID() (string, error) {
 	return "AH-" + string(buf), nil
 }
 
-// ExtractExportID extracts an AH-XXXXXXXX tracking ID from a filename or title.
+// ExtractExportID extracts an AH-XXXXXXXX tracking ID from a filename or title,
+// tolerating hyphen, en-dash, underscore, whitespace, or omitted separators case-insensitively,
+// and normalizing the returned ID to uppercase AH-XXXXXXXX.
 func ExtractExportID(text string) (string, bool) {
-	match := exportIDRegex.FindString(text)
-	if match == "" {
+	matches := exportIDRegex.FindStringSubmatch(text)
+	if len(matches) < 2 {
 		return "", false
 	}
-	return match, true
+	return "AH-" + strings.ToUpper(matches[1]), true
 }
 
 func (a *App) insertExportedVideo(rec ExportedVideoRecord) error {

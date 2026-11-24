@@ -76,6 +76,42 @@ func TestExtractExportID(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:   "YouTube title with hyphen replaced by space",
+			input:  "AH KZEAC3U4 League of Legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
+			name:   "YouTube title with multiple spaces",
+			input:  "AH  KZEAC3U4   League of Legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
+			name:   "en-dash separator",
+			input:  "AH\u2013KZEAC3U4 \u2013 League of Legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
+			name:   "underscore separator",
+			input:  "AH_KZEAC3U4 - League of Legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
+			name:   "omitted separator",
+			input:  "AHKZEAC3U4 League of Legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
+			name:   "lowercase prefix and code",
+			input:  "ah kzeac3u4 league of legends",
+			wantID: "AH-KZEAC3U4",
+			wantOK: true,
+		},
+		{
 			name:   "decorated filename with extension",
 			input:  "2026-11-23 Gameplay [AH-9A2B3C4D].mp4",
 			wantID: "AH-9A2B3C4D",

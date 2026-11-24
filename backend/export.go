@@ -260,10 +260,11 @@ func resolveExportBaseName(item ExportItem, ext string, useTrackingID bool) (str
 		if err != nil {
 			return "", "", fmt.Errorf("failed to generate tracking ID for %s: %v", filepath.Base(item.SourcePath), err)
 		}
+		safeID := strings.ReplaceAll(exportID, "-", "\u2013")
 		if strings.TrimSpace(item.Game) != "" {
-			return fmt.Sprintf("%s - %s", exportID, sanitizeFilename(item.Game)), exportID, nil
+			return fmt.Sprintf("%s \u2013 %s", safeID, sanitizeFilename(item.Game)), exportID, nil
 		}
-		return exportID, exportID, nil
+		return safeID, exportID, nil
 	}
 
 	titleToUse := item.TargetTitle
