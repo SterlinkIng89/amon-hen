@@ -43,6 +43,7 @@ type TagThumbnailConfig struct {
 	EpisodePosition string         `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
 	EpisodeFormat   string         `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
 	FontColor       string         `json:"font_color,omitempty"`
+	FontFamily      string         `json:"font_family,omitempty"`
 	ImageFraming    *ImageFraming  `json:"image_framing,omitempty"`
 	EpisodeLayout   *ElementLayout `json:"episode_layout,omitempty"`
 	Logo            *LogoLayer     `json:"logo,omitempty"`
@@ -75,6 +76,7 @@ type VideoMeta struct {
 type FolderConfig struct {
 	Recursive       bool `json:"recursive"`
 	MaxDurationSecs int  `json:"max_duration_secs"`
+	AutoBackup      bool `json:"auto_backup,omitempty"`
 }
 
 type GameProfile struct {
@@ -104,6 +106,7 @@ type Config struct {
 	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
 	SteamID             string                  `json:"steam_id,omitempty"`
 	ExportFolder        string                  `json:"export_folder,omitempty"`
+	BackupFolder        string                  `json:"backup_folder,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/

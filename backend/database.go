@@ -172,6 +172,16 @@ func (db *DB) migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_exported_videos_status ON exported_videos(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_exported_videos_source ON exported_videos(source_path)`,
+		`CREATE TABLE IF NOT EXISTS video_backups (
+			source_path TEXT PRIMARY KEY,
+			backup_path TEXT NOT NULL,
+			folder_root TEXT NOT NULL,
+			file_size INTEGER NOT NULL DEFAULT 0,
+			file_mtime INTEGER NOT NULL DEFAULT 0,
+			backed_up_at INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'backed_up'
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_video_backups_folder ON video_backups(folder_root)`,
 	}
 
 	for _, q := range queries {
