@@ -119,6 +119,7 @@ export default function Dashboard() {
     scanning,
     error,
     isDraggingOver,
+    exportedPendingPaths,
     handleAddFolder,
     handleRemoveFolder,
     handleRescan,
@@ -792,6 +793,7 @@ export default function Dashboard() {
               onUploadTarget={setUploadTarget}
               onQuickQueue={handleQuickQueue}
               onOpenInExplorer={handleOpenInExplorer}
+              exportedPendingPaths={exportedPendingPaths}
             />
           </ErrorBoundary>
         )}

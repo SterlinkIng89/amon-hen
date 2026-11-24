@@ -67,6 +67,8 @@ export function GetDefaultExportFolder():Promise<string>;
 
 export function GetEnrichedSteamGames(arg1:boolean):Promise<Array<backend.EnrichedSteamGameItem>>;
 
+export function GetExportedVideos(arg1:string):Promise<Array<backend.ExportedVideoRecord>>;
+
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
 
 export function GetOrCreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;

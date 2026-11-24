@@ -12,6 +12,7 @@ import {
   sanitizeExportFilename,
 } from "../../utils/videoUtils";
 import { useAppStore } from "../../store/useAppStore";
+import { EXPORTS_UPDATED_EVENT } from "../../hooks/useVideoLibrary";
 
 export interface ExportModalProps {
   readonly open: boolean;
@@ -115,6 +116,9 @@ export default function ExportModal({
         useTrackingId,
       );
       setExportResult(res);
+      if (res.successCount > 0) {
+        window.dispatchEvent(new CustomEvent(EXPORTS_UPDATED_EVENT));
+      }
       onExportComplete?.(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));

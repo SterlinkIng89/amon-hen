@@ -515,6 +515,50 @@ export namespace backend {
 	        this.errors = source["errors"];
 	    }
 	}
+	export class ExportedVideoRecord {
+	    exportId: string;
+	    sourcePath: string;
+	    exportedPath: string;
+	    targetTitle: string;
+	    description: string;
+	    privacy: string;
+	    gameTag: string;
+	    playlistId: string;
+	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
+	    tags: string;
+	    status: string;
+	    youtubeId: string;
+	    errorMsg: string;
+	    exportedAt: number;
+	    appliedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportedVideoRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exportId = source["exportId"];
+	        this.sourcePath = source["sourcePath"];
+	        this.exportedPath = source["exportedPath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.gameTag = source["gameTag"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
+	        this.tags = source["tags"];
+	        this.status = source["status"];
+	        this.youtubeId = source["youtubeId"];
+	        this.errorMsg = source["errorMsg"];
+	        this.exportedAt = source["exportedAt"];
+	        this.appliedAt = source["appliedAt"];
+	    }
+	}
 	export class BackupStatus {
 	    backupFolder: string;
 	    totalBackedUp: number;

@@ -49,6 +49,7 @@ export interface VideoPillProps {
   duplicateCount?: number;
   onDelete?: () => void;
   readonly isQueued?: boolean;
+  readonly isExportedPending?: boolean;
   readonly onQuickQueue?: () => void;
   readonly onOpenInExplorer?: () => void;
   readonly onEdit?: () => void;
@@ -73,6 +74,7 @@ function VideoPillComponent({
   duplicateCount,
   onDelete,
   isQueued = false,
+  isExportedPending = false,
   onQuickQueue,
   onOpenInExplorer,
   onEdit,
@@ -154,6 +156,11 @@ function VideoPillComponent({
     : "";
   const showQueuedBadge =
     isLocal && !video.youtubeId && isQueued && uploadProgress === undefined;
+  const showExportedPendingBadge =
+    isLocal &&
+    !video.youtubeId &&
+    isExportedPending &&
+    uploadProgress === undefined;
 
   // Duration normalization
   const parseYTDuration = (isoDuration: string) => {
@@ -726,6 +733,14 @@ function VideoPillComponent({
                     Queued
                   </span>
                 )}
+                {showExportedPendingBadge && (
+                  <span
+                    className="inline-flex items-center rounded-sm border border-border-subtle bg-elevated px-1.5 py-0.5 text-[10px] font-medium text-text-secondary"
+                    title="Exported for YouTube Studio upload (pending sync)"
+                  >
+                    Exported (Pending YT)
+                  </span>
+                )}
                 <span className="flex items-center gap-1 font-medium">
                   {formatSize(video.size)}
                 </span>
@@ -828,6 +843,7 @@ export function areVideoPillPropsEqual(
     prev.readOnlyThumbnail === next.readOnlyThumbnail &&
     prev.gameProfiles === next.gameProfiles &&
     prev.isQueued === next.isQueued &&
+    prev.isExportedPending === next.isExportedPending &&
     Boolean(prev.onEdit) === Boolean(next.onEdit) &&
     Boolean(prev.onFixTitleMismatch) === Boolean(next.onFixTitleMismatch)
   );

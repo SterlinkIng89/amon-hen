@@ -121,6 +121,26 @@ export interface ExportResult {
   errors: string[];
 }
 
+export interface ExportedVideoRecord {
+  readonly exportId: string;
+  readonly sourcePath: string;
+  readonly exportedPath: string;
+  readonly targetTitle: string;
+  readonly description: string;
+  readonly privacy: string;
+  readonly gameTag: string;
+  readonly playlistId: string;
+  readonly playlistTitle: string;
+  readonly episode: number;
+  readonly contentType: string;
+  readonly tags: string;
+  readonly status: string;
+  readonly youtubeId: string;
+  readonly errorMsg: string;
+  readonly exportedAt: number;
+  readonly appliedAt: number;
+}
+
 export interface YTVideo {
   id: string;
   title: string;

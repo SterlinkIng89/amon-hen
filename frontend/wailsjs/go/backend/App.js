@@ -126,6 +126,10 @@ export function GetEnrichedSteamGames(arg1) {
   return window['go']['backend']['App']['GetEnrichedSteamGames'](arg1);
 }
 
+export function GetExportedVideos(arg1) {
+  return window['go']['backend']['App']['GetExportedVideos'](arg1);
+}
+
 export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
 }
