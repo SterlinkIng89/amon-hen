@@ -18,6 +18,7 @@ import {
   computeExpectedLocalTitle,
   isVideoTitleMismatched,
   titlesMatch,
+  sanitizeExportFilename,
 } from "../videoUtils";
 import { VideoFile, GameProfile, YTVideo } from "../../types";
 
@@ -1014,6 +1015,43 @@ describe("videoUtils - Title generation & placeholder detection", () => {
       expect(formatPublishedTime("")).toBe("");
       expect(formatPublishedTime(undefined)).toBe("");
       expect(formatPublishedTime("not-a-date")).toBe("");
+    });
+  });
+
+  describe("sanitizeExportFilename & Unicode homoglyph compatibility", () => {
+    it("replaces ASCII hyphens, slashes, colons, pipes, and quotes with YouTube-safe Unicode equivalents", () => {
+      expect(sanitizeExportFilename("Valorant - Match 1 - 17/11/26")).toBe(
+        "Valorant – Match 1 – 17∕11∕26",
+      );
+      expect(sanitizeExportFilename("Valorant — 17/11/26 — 1")).toBe(
+        "Valorant — 17∕11∕26 — 1",
+      );
+      expect(
+        sanitizeExportFilename(
+          `Hades: Escape Run / Tartarus \\ "Boss" | <Final> *Hard* ?`,
+        ),
+      ).toBe("Hades∶ Escape Run ∕ Tartarus ∕ ''Boss'' ∣ Final Hard");
+      expect(sanitizeExportFilename("Game | 17/11/26 | 1")).toBe(
+        "Game ∣ 17∕11∕26 ∣ 1",
+      );
+      expect(sanitizeExportFilename("?*<>")).toBe("video");
+    });
+
+    it("matches ASCII punctuation titles with exported Unicode homoglyph titles", () => {
+      expect(
+        titlesMatch(
+          "Halo: Campaign - 17/11/26 - 1",
+          "Halo∶ Campaign – 17∕11∕26 – 1",
+        ),
+      ).toBe(true);
+      expect(
+        titlesMatch("Game | 17/11/26 | 2", "Game ∣ 17∕11∕26 ∣ 2"),
+      ).toBe(true);
+    });
+
+    it("extracts episode numbers when dates use division slash and ignores date-only titles", () => {
+      expect(extractEpisodeFromTitle("Hades – 17∕11∕26 – 14")).toBe(14);
+      expect(extractEpisodeFromTitle("Hades – 17∕11∕26")).toBe(0);
     });
   });
 });

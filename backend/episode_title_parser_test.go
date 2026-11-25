@@ -425,6 +425,27 @@ func TestParseEpisodeFromTitle(t *testing.T) {
 			wantEpisode: 0,
 			wantOK:      false,
 		},
+		{
+			name:        "en-dash and division slash date with episode",
+			title:       "Hades – 17∕11∕26 – 4",
+			sep:         " - ",
+			wantEpisode: 4,
+			wantOK:      true,
+		},
+		{
+			name:        "en-dash and division slash date only must not parse episode",
+			title:       "Hades – 17∕11∕26",
+			sep:         " - ",
+			wantEpisode: 0,
+			wantOK:      false,
+		},
+		{
+			name:        "divides pipe homoglyph and division slash date with episode",
+			title:       "Hades ∣ 17∕11∕26 ∣ 12",
+			sep:         " | ",
+			wantEpisode: 12,
+			wantOK:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -498,6 +519,18 @@ func TestTitlesMatch(t *testing.T) {
 			a:    "Game - 30/10/26",
 			b:    "",
 			want: false,
+		},
+		{
+			name: "ASCII punctuation matches exported Unicode homoglyphs",
+			a:    "Halo: Campaign - 17/11/26 - 1",
+			b:    "Halo∶ Campaign – 17∕11∕26 – 1",
+			want: true,
+		},
+		{
+			name: "ASCII pipe matches exported divides homoglyph",
+			a:    "Game | 17/11/26 | 2",
+			b:    "Game ∣ 17∕11∕26 ∣ 2",
+			want: true,
 		},
 	}
 

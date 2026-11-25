@@ -28,6 +28,64 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class ApplyMatchedExportsResult {
+	    applied: string[];
+	    failed: Record<string, string>;
+	    skipped: string[];
+	    cleanedUpPaths: string[];
+	    stoppedOnQuota: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyMatchedExportsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applied = source["applied"];
+	        this.failed = source["failed"];
+	        this.skipped = source["skipped"];
+	        this.cleanedUpPaths = source["cleanedUpPaths"];
+	        this.stoppedOnQuota = source["stoppedOnQuota"];
+	    }
+	}
+	export class BackupRunResult {
+	    copiedCount: number;
+	    skippedCount: number;
+	    failedCount: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.copiedCount = source["copiedCount"];
+	        this.skippedCount = source["skippedCount"];
+	        this.failedCount = source["failedCount"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class BackupStatus {
+	    backupFolder: string;
+	    totalBackedUp: number;
+	    totalBytes: number;
+	    lastBackupAt: number;
+	    enabledFolders: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backupFolder = source["backupFolder"];
+	        this.totalBackedUp = source["totalBackedUp"];
+	        this.totalBytes = source["totalBytes"];
+	        this.lastBackupAt = source["lastBackupAt"];
+	        this.enabledFolders = source["enabledFolders"];
+	    }
+	}
 	export class CatalogAssignment {
 	    videoId: string;
 	    episode: number;
@@ -497,129 +555,6 @@ export namespace backend {
 	        this.modes = source["modes"];
 	    }
 	}
-	export class BackupRunResult {
-	    copiedCount: number;
-	    skippedCount: number;
-	    failedCount: number;
-	    errors: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new BackupRunResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.copiedCount = source["copiedCount"];
-	        this.skippedCount = source["skippedCount"];
-	        this.failedCount = source["failedCount"];
-	        this.errors = source["errors"];
-	    }
-	}
-	export class ExportedVideoRecord {
-	    exportId: string;
-	    sourcePath: string;
-	    exportedPath: string;
-	    targetTitle: string;
-	    description: string;
-	    privacy: string;
-	    gameTag: string;
-	    playlistId: string;
-	    playlistTitle: string;
-	    episode: number;
-	    contentType: string;
-	    tags: string;
-	    status: string;
-	    youtubeId: string;
-	    errorMsg: string;
-	    exportedAt: number;
-	    appliedAt: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new ExportedVideoRecord(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.exportId = source["exportId"];
-	        this.sourcePath = source["sourcePath"];
-	        this.exportedPath = source["exportedPath"];
-	        this.targetTitle = source["targetTitle"];
-	        this.description = source["description"];
-	        this.privacy = source["privacy"];
-	        this.gameTag = source["gameTag"];
-	        this.playlistId = source["playlistId"];
-	        this.playlistTitle = source["playlistTitle"];
-	        this.episode = source["episode"];
-	        this.contentType = source["contentType"];
-	        this.tags = source["tags"];
-	        this.status = source["status"];
-	        this.youtubeId = source["youtubeId"];
-	        this.errorMsg = source["errorMsg"];
-	        this.exportedAt = source["exportedAt"];
-	        this.appliedAt = source["appliedAt"];
-	    }
-	}
-	export class MatchedExportItem extends ExportedVideoRecord {
-	    youtubeTitle: string;
-	    youtubePrivacy: string;
-	    thumbnailUrl: string;
-	    alreadyInPlaylist: boolean;
-	    estimatedQuota: number;
-
-	    static createFrom(source: any = {}) {
-	        return new MatchedExportItem(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        super(source);
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.youtubeTitle = source["youtubeTitle"];
-	        this.youtubePrivacy = source["youtubePrivacy"];
-	        this.thumbnailUrl = source["thumbnailUrl"];
-	        this.alreadyInPlaylist = source["alreadyInPlaylist"];
-	        this.estimatedQuota = source["estimatedQuota"];
-	    }
-	}
-	export class ApplyMatchedExportsResult {
-	    applied: string[];
-	    failed: Record<string, string>;
-	    skipped: string[];
-	    cleanedUpPaths: string[];
-	    stoppedOnQuota: boolean;
-
-	    static createFrom(source: any = {}) {
-	        return new ApplyMatchedExportsResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.applied = source["applied"] || [];
-	        this.failed = source["failed"] || {};
-	        this.skipped = source["skipped"] || [];
-	        this.cleanedUpPaths = source["cleanedUpPaths"] || [];
-	        this.stoppedOnQuota = Boolean(source["stoppedOnQuota"]);
-	    }
-	}
-	export class BackupStatus {
-	    backupFolder: string;
-	    totalBackedUp: number;
-	    totalBytes: number;
-	    lastBackupAt: number;
-	    enabledFolders: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new BackupStatus(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.backupFolder = source["backupFolder"];
-	        this.totalBackedUp = source["totalBackedUp"];
-	        this.totalBytes = source["totalBytes"];
-	        this.lastBackupAt = source["lastBackupAt"];
-	        this.enabledFolders = source["enabledFolders"];
-	    }
-	}
 	export class FolderConfig {
 	    recursive: boolean;
 	    max_duration_secs: number;
@@ -691,6 +626,7 @@ export namespace backend {
 	    steam_api_key?: string;
 	    steam_id?: string;
 	    export_folder?: string;
+	    backup_folder?: string;
 	    default_video_description?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -715,6 +651,7 @@ export namespace backend {
 	        this.steam_api_key = source["steam_api_key"];
 	        this.steam_id = source["steam_id"];
 	        this.export_folder = source["export_folder"];
+	        this.backup_folder = source["backup_folder"];
 	        this.default_video_description = source["default_video_description"];
 	    }
 	
@@ -793,10 +730,10 @@ export namespace backend {
 	    targetTitle: string;
 	    description: string;
 	    game: string;
-	    playlistId?: string;
+	    playlistId: string;
 	    playlistTitle: string;
-	    episode?: number;
-	    contentType?: string;
+	    episode: number;
+	    contentType: string;
 	    privacy: string;
 	    tags: string[];
 	
@@ -838,11 +775,109 @@ export namespace backend {
 	        this.errors = source["errors"];
 	    }
 	}
+	export class ExportedVideoRecord {
+	    exportId: string;
+	    sourcePath: string;
+	    exportedPath: string;
+	    targetTitle: string;
+	    description: string;
+	    privacy: string;
+	    gameTag: string;
+	    playlistId: string;
+	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
+	    tags: string;
+	    status: string;
+	    youtubeId: string;
+	    errorMsg: string;
+	    exportedAt: number;
+	    appliedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportedVideoRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exportId = source["exportId"];
+	        this.sourcePath = source["sourcePath"];
+	        this.exportedPath = source["exportedPath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.gameTag = source["gameTag"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
+	        this.tags = source["tags"];
+	        this.status = source["status"];
+	        this.youtubeId = source["youtubeId"];
+	        this.errorMsg = source["errorMsg"];
+	        this.exportedAt = source["exportedAt"];
+	        this.appliedAt = source["appliedAt"];
+	    }
+	}
 	
 	
 	
 	
 	
+	export class MatchedExportItem {
+	    exportId: string;
+	    sourcePath: string;
+	    exportedPath: string;
+	    targetTitle: string;
+	    description: string;
+	    privacy: string;
+	    gameTag: string;
+	    playlistId: string;
+	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
+	    tags: string;
+	    status: string;
+	    youtubeId: string;
+	    errorMsg: string;
+	    exportedAt: number;
+	    appliedAt: number;
+	    youtubeTitle: string;
+	    youtubePrivacy: string;
+	    thumbnailUrl: string;
+	    alreadyInPlaylist: boolean;
+	    estimatedQuota: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MatchedExportItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exportId = source["exportId"];
+	        this.sourcePath = source["sourcePath"];
+	        this.exportedPath = source["exportedPath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.gameTag = source["gameTag"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
+	        this.tags = source["tags"];
+	        this.status = source["status"];
+	        this.youtubeId = source["youtubeId"];
+	        this.errorMsg = source["errorMsg"];
+	        this.exportedAt = source["exportedAt"];
+	        this.appliedAt = source["appliedAt"];
+	        this.youtubeTitle = source["youtubeTitle"];
+	        this.youtubePrivacy = source["youtubePrivacy"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.alreadyInPlaylist = source["alreadyInPlaylist"];
+	        this.estimatedQuota = source["estimatedQuota"];
+	    }
+	}
 	
 	export class PlaylistCatalogDraft {
 	    playlistId: string;

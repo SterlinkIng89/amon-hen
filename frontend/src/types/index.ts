@@ -105,10 +105,10 @@ export interface ExportItem {
   targetTitle: string;
   description: string;
   game: string;
-  playlistId?: string;
+  playlistId: string;
   playlistTitle: string;
-  episode?: number;
-  contentType?: string;
+  episode: number;
+  contentType: string;
   privacy: string;
   tags: string[];
 }

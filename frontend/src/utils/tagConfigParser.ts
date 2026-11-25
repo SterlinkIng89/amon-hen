@@ -78,6 +78,7 @@ export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefin
     episode_position: raw.episode_position || "bottom-left",
     episode_format: raw.episode_format || "pad2",
     font_color: raw.font_color,
+    font_family: raw.font_family,
     image_framing: framing,
     episode_layout: episodeLayout,
     logo,

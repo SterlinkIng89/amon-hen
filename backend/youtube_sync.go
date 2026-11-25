@@ -721,6 +721,10 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 		}
 	}
 
+	if _, err := a.MatchExportedVideos(); err != nil {
+		appLog("[SyncRecentVideos] Error matching exported videos during light sync: %v", err)
+	}
+
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
 	return nil
 }
