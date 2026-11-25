@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ExportModal from "../ExportModal";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
+import { useAppStore } from "../../../store/useAppStore";
 import { VideoFile } from "../../../types";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
@@ -45,6 +46,7 @@ const mockVideos: VideoFile[] = [
 describe("ExportModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAppStore.setState({ defaultVideoDescription: "" });
   });
 
   it("loads default destination folder and renders tracking ID preview by default", async () => {
@@ -220,5 +222,73 @@ describe("ExportModal", () => {
     expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith(
       "/default/videos/amonhen",
     );
+  });
+
+  it("falls back to defaultVideoDescription when video description is empty and sanitizes 'none' playlist", async () => {
+    useAppStore.setState({
+      defaultVideoDescription: "Global default channel description",
+    });
+
+    const videosWithFallbacks: VideoFile[] = [
+      {
+        name: "clip-empty-desc.mp4",
+        path: "/source/clip-empty-desc.mp4",
+        size: 1024,
+        modTime: 1787754600000,
+        folder: "/source",
+        game: "Valorant",
+        description: "   ",
+        playlistId: "none",
+        playlistTitle: "No Playlist",
+      },
+      {
+        name: "clip-custom-desc.mp4",
+        path: "/source/clip-custom-desc.mp4",
+        size: 2048,
+        modTime: 1787754600000,
+        folder: "/source",
+        game: "Valorant",
+        description: "Custom clip description",
+        playlistId: "PL-val-1",
+        playlistTitle: "Valorant Ranked",
+      },
+    ];
+
+    render(
+      <ExportModal
+        open={true}
+        selectedVideos={videosWithFallbacks}
+        profiles={{}}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(appBackend.GetDefaultExportFolder).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Export 2 Videos" }));
+
+    await waitFor(() => {
+      expect(appBackend.ExportVideos).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            sourcePath: "/source/clip-empty-desc.mp4",
+            description: "Global default channel description",
+            playlistId: "",
+            playlistTitle: "",
+          }),
+          expect.objectContaining({
+            sourcePath: "/source/clip-custom-desc.mp4",
+            description: "Custom clip description",
+            playlistId: "PL-val-1",
+            playlistTitle: "Valorant Ranked",
+          }),
+        ],
+        "/default/videos/amonhen",
+        true,
+        true,
+      );
+    });
   });
 });

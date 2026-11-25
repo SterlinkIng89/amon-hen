@@ -390,4 +390,31 @@ describe("ExportSyncModal", () => {
     );
     expect(callOrder).toEqual(["update", "apply"]);
   });
+
+  it("renders Description included badge with tooltip only when item description is non-empty", async () => {
+    mockGetMatchedExports.mockResolvedValue([
+      {
+        ...mockItems[0],
+        description: "Clean pentakill with Neeko",
+      },
+      {
+        ...mockItems[1],
+        description: "   ",
+      },
+    ]);
+
+    render(
+      <ExportSyncModal open={true} onClose={vi.fn()} onChanged={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
+      ).toBeInTheDocument();
+    });
+
+    const badges = screen.getAllByText("Description included");
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveAttribute("title", "Clean pentakill with Neeko");
+  });
 });

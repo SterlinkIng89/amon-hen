@@ -709,6 +709,15 @@ function ExportSyncModalContent({
                               </span>
                             )}
 
+                            {item.description?.trim() && (
+                              <span
+                                title={item.description}
+                                className="px-2 py-0.5 rounded-md bg-elevated border border-border-subtle text-text-secondary"
+                              >
+                                Description included
+                              </span>
+                            )}
+
                             <span className="px-2 py-0.5 rounded-md bg-elevated border border-border-subtle text-text-muted tabular-nums">
                               {rowQuota} units
                             </span>

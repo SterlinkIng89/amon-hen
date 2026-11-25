@@ -93,18 +93,25 @@ export default function ExportModal({
         await SetDefaultExportFolder(destinationFolder);
       }
 
+      const { defaultVideoDescription, defaultVideoPrivacy } =
+        useAppStore.getState();
+
       const items: ExportItem[] = selectedVideos.map((v) => {
         const title = resolveDisplayTitle(v, profiles, titleSeparator);
+        const playlistId =
+          v.playlistId && v.playlistId !== "none" ? v.playlistId : "";
         return {
           sourcePath: v.path,
           targetTitle: title,
-          description: v.description || "",
+          description: v.description?.trim()
+            ? v.description
+            : defaultVideoDescription || "",
           game: v.game || "",
-          playlistId: v.playlistId || "",
-          playlistTitle: v.playlistTitle || "",
+          playlistId,
+          playlistTitle: playlistId ? v.playlistTitle || "" : "",
           episode: v.episode || 0,
           contentType: v.contentType || "",
-          privacy: v.privacy || useAppStore.getState().defaultVideoPrivacy,
+          privacy: v.privacy || defaultVideoPrivacy,
           tags: v.game ? [v.game] : [],
         };
       });
