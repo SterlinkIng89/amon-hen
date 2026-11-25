@@ -105,8 +105,9 @@ type Config struct {
 	TitleSeparator string `json:"title_separator,omitempty"`
 	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
 	SteamID             string                  `json:"steam_id,omitempty"`
-	ExportFolder        string                  `json:"export_folder,omitempty"`
-	BackupFolder        string                  `json:"backup_folder,omitempty"`
+	ExportFolder            string `json:"export_folder,omitempty"`
+	BackupFolder            string `json:"backup_folder,omitempty"`
+	DefaultVideoDescription string `json:"default_video_description,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -525,11 +526,20 @@ func (a *App) resolveContentType(meta VideoMeta, path string) string {
 
 // resolveTagPlaylist returns the playlist ID mapped to the given game tag and content type ("vod" or "clip").
 func (a *App) resolveTagPlaylist(tag string, contentType string) string {
+	return resolveTagPlaylistFromMaps(a.config.TagPlaylistConfigs, a.config.TagPlaylists, tag, contentType)
+}
+
+func resolveTagPlaylistFromMaps(
+	tagPlaylistConfigs map[string]TagPlaylistConfig,
+	tagPlaylists map[string]string,
+	tag string,
+	contentType string,
+) string {
 	if tag == "" {
 		return ""
 	}
-	if a.config.TagPlaylistConfigs != nil {
-		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+	if tagPlaylistConfigs != nil {
+		if cfg, ok := tagPlaylistConfigs[tag]; ok {
 			if contentType == "clip" {
 				return cfg.ClipPlaylistID
 			}
@@ -538,8 +548,8 @@ func (a *App) resolveTagPlaylist(tag string, contentType string) string {
 			}
 		}
 	}
-	if contentType != "clip" && a.config.TagPlaylists != nil {
-		return a.config.TagPlaylists[tag]
+	if contentType != "clip" && tagPlaylists != nil {
+		return tagPlaylists[tag]
 	}
 	return ""
 }
@@ -772,6 +782,14 @@ func (a *App) SaveRecentFieldValues(values map[string][]string) error {
 func (a *App) SetTitleSeparator(sep string) error {
 	a.configMu.Lock()
 	a.config.TitleSeparator = sep
+	a.configMu.Unlock()
+	return a.saveConfig()
+}
+
+// SetDefaultVideoDescription updates the default YouTube description template in config.
+func (a *App) SetDefaultVideoDescription(desc string) error {
+	a.configMu.Lock()
+	a.config.DefaultVideoDescription = desc
 	a.configMu.Unlock()
 	return a.saveConfig()
 }

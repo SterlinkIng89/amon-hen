@@ -183,7 +183,7 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 		}
 	}
 
-	liveTitles := a.snapshotLiveYouTubeTitles()
+	cfgSnap := a.snapshotExportSyncConfig()
 
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
@@ -193,14 +193,7 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 		       e.privacy, e.game_tag, e.playlist_id, e.playlist_title, e.episode,
 		       e.content_type, e.tags, e.status, e.youtube_id, e.error_msg,
 		       e.exported_at, e.applied_at,
-		       v.title, v.privacy, v.thumbnail_url,
-		       CASE
-		           WHEN e.playlist_id != '' AND e.youtube_id != '' AND EXISTS (
-		               SELECT 1 FROM yt_playlist_items pi
-		               WHERE pi.playlist_id = e.playlist_id AND pi.video_id = e.youtube_id
-		           ) THEN 1
-		           ELSE 0
-		       END AS already_in_playlist
+		       v.title, v.privacy, v.thumbnail_url
 		FROM exported_videos e
 		LEFT JOIN yt_videos v ON v.id = e.youtube_id
 		WHERE e.status IN ('matched', 'failed')
@@ -209,12 +202,16 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 	if err != nil {
 		return items, fmt.Errorf("failed to query matched exports: %w", err)
 	}
-	defer rows.Close()
+
+	type rawMatchedRow struct {
+		item           MatchedExportItem
+		origPlaylistID string
+	}
+	var rawRows []rawMatchedRow
 
 	for rows.Next() {
 		var item MatchedExportItem
 		var ytTitle, ytPrivacy, thumbURL sql.NullString
-		var alreadyInPlaylist int
 		if err := rows.Scan(
 			&item.ExportID,
 			&item.SourcePath,
@@ -236,18 +233,50 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 			&ytTitle,
 			&ytPrivacy,
 			&thumbURL,
-			&alreadyInPlaylist,
 		); err != nil {
+			rows.Close()
 			return items, fmt.Errorf("failed to scan matched export item: %w", err)
 		}
 
-		if liveTitle, ok := liveTitles[item.SourcePath]; ok {
-			item.TargetTitle = liveTitle
-		}
 		item.YouTubeTitle = ytTitle.String
 		item.YouTubePrivacy = ytPrivacy.String
 		item.ThumbnailURL = thumbURL.String
-		item.AlreadyInPlaylist = alreadyInPlaylist == 1
+		rawRows = append(rawRows, rawMatchedRow{
+			item:           item,
+			origPlaylistID: strings.TrimSpace(item.PlaylistID),
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return items, fmt.Errorf("error iterating matched exports: %w", err)
+	}
+	rows.Close()
+
+	if len(rawRows) == 0 {
+		return items, nil
+	}
+
+	playlistTitles, playlistItems := a.loadPlaylistLookupMapsLocked()
+
+	for _, raw := range rawRows {
+		item := raw.item
+		cfgSnap.resolveExportRecord(&item.ExportedVideoRecord)
+
+		if item.PlaylistID == "" {
+			item.PlaylistTitle = ""
+			item.AlreadyInPlaylist = false
+		} else {
+			if item.PlaylistTitle == "" || item.PlaylistID != raw.origPlaylistID {
+				if title, ok := playlistTitles[item.PlaylistID]; ok && title != "" {
+					item.PlaylistTitle = title
+				}
+			}
+			if item.YouTubeID != "" {
+				item.AlreadyInPlaylist = playlistItems[item.PlaylistID+"\x00"+item.YouTubeID]
+			}
+		}
+
 		item.EstimatedQuota = quotaVideoMetadataUpdate
 		if item.PlaylistID != "" && !item.AlreadyInPlaylist {
 			item.EstimatedQuota += quotaPlaylistItemInsert
@@ -256,24 +285,109 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		return items, fmt.Errorf("error iterating matched exports: %w", err)
-	}
-
 	return items, nil
 }
 
-func (a *App) snapshotLiveYouTubeTitles() map[string]string {
+type exportSyncConfigSnapshot struct {
+	defaultDescription string
+	videoMeta          map[string]VideoMeta
+	tagPlaylistConfigs map[string]TagPlaylistConfig
+	tagPlaylists       map[string]string
+}
+
+func (a *App) snapshotExportSyncConfig() exportSyncConfigSnapshot {
 	a.configMu.RLock()
 	defer a.configMu.RUnlock()
 
-	titles := make(map[string]string, len(a.config.VideoMetadata))
+	snap := exportSyncConfigSnapshot{
+		defaultDescription: a.config.DefaultVideoDescription,
+		videoMeta:          make(map[string]VideoMeta, len(a.config.VideoMetadata)),
+		tagPlaylistConfigs: make(map[string]TagPlaylistConfig, len(a.config.TagPlaylistConfigs)),
+		tagPlaylists:       make(map[string]string, len(a.config.TagPlaylists)),
+	}
 	for path, meta := range a.config.VideoMetadata {
-		if title := strings.TrimSpace(meta.YouTubeTitle); title != "" {
-			titles[path] = title
+		snap.videoMeta[path] = meta
+	}
+	for tag, cfg := range a.config.TagPlaylistConfigs {
+		snap.tagPlaylistConfigs[tag] = cfg
+	}
+	for tag, plID := range a.config.TagPlaylists {
+		snap.tagPlaylists[tag] = plID
+	}
+	return snap
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			return trimmed
 		}
 	}
-	return titles
+	return ""
+}
+
+// resolveExportRecord applies live config metadata (title, description, privacy, playlist)
+// onto rec without acquiring any locks.
+func (s exportSyncConfigSnapshot) resolveExportRecord(rec *ExportedVideoRecord) {
+	meta := s.videoMeta[rec.SourcePath]
+
+	if title := strings.TrimSpace(meta.YouTubeTitle); title != "" {
+		rec.TargetTitle = title
+	}
+	rec.Description = firstNonEmptyTrimmed(meta.Description, rec.Description, s.defaultDescription)
+	rec.Privacy = firstNonEmptyTrimmed(meta.Privacy, rec.Privacy, "private")
+
+	origPlaylistID := strings.TrimSpace(rec.PlaylistID)
+	metaPlaylistID := strings.TrimSpace(meta.PlaylistID)
+	if metaPlaylistID == "none" {
+		rec.PlaylistID = ""
+		rec.PlaylistTitle = ""
+		return
+	}
+
+	resolvedPlaylistID := ""
+	if metaPlaylistID != "" {
+		resolvedPlaylistID = metaPlaylistID
+	} else if origPlaylistID != "" && origPlaylistID != "none" {
+		resolvedPlaylistID = origPlaylistID
+	} else {
+		gameTag := firstNonEmptyTrimmed(meta.Game, rec.GameTag)
+		contentType := firstNonEmptyTrimmed(meta.ContentType, rec.ContentType)
+		if plID := strings.TrimSpace(resolveTagPlaylistFromMaps(s.tagPlaylistConfigs, s.tagPlaylists, gameTag, contentType)); plID != "" && plID != "none" {
+			resolvedPlaylistID = plID
+		}
+	}
+
+	rec.PlaylistID = resolvedPlaylistID
+	if resolvedPlaylistID == "" || resolvedPlaylistID != origPlaylistID {
+		rec.PlaylistTitle = ""
+	}
+}
+
+func (a *App) loadPlaylistLookupMapsLocked() (map[string]string, map[string]bool) {
+	titles := make(map[string]string)
+	if rows, err := a.db.conn.Query(`SELECT id, COALESCE(title, '') FROM yt_playlists`); err == nil {
+		for rows.Next() {
+			var id, title string
+			if err := rows.Scan(&id, &title); err == nil && id != "" {
+				titles[id] = title
+			}
+		}
+		rows.Close()
+	}
+
+	items := make(map[string]bool)
+	if rows, err := a.db.conn.Query(`SELECT playlist_id, video_id FROM yt_playlist_items`); err == nil {
+		for rows.Next() {
+			var plID, vidID string
+			if err := rows.Scan(&plID, &vidID); err == nil && plID != "" && vidID != "" {
+				items[plID+"\x00"+vidID] = true
+			}
+		}
+		rows.Close()
+	}
+
+	return titles, items
 }
 
 // UpdateExportTargetTitle updates the target_title for an editable exported video record.
@@ -343,6 +457,8 @@ func (a *App) applyMatchedExportsWithDeps(
 		return result, nil
 	}
 
+	cfgSnap := a.snapshotExportSyncConfig()
+
 	var targets []ExportedVideoRecord
 	seenIDs := make(map[string]bool, len(exportIDs))
 
@@ -385,6 +501,7 @@ func (a *App) applyMatchedExportsWithDeps(
 			result.Skipped = append(result.Skipped, id)
 			continue
 		}
+		cfgSnap.resolveExportRecord(&rec)
 		targets = append(targets, rec)
 	}
 	a.db.mu.Unlock()
@@ -432,7 +549,7 @@ func (a *App) applyMatchedExportsWithDeps(
 			continue
 		}
 
-		if includePlaylists && rec.PlaylistID != "" && !a.isVideoInPlaylist(rec.PlaylistID, rec.YouTubeID) {
+		if includePlaylists && rec.PlaylistID != "" && rec.PlaylistID != "none" && !a.isVideoInPlaylist(rec.PlaylistID, rec.YouTubeID) {
 			if err := addToPlaylistFn(rec.PlaylistID, rec.YouTubeID); err != nil {
 				if handleApplyError(i, rec, "playlist insert", err) {
 					break

@@ -670,3 +670,245 @@ func TestGetMatchedExports_PrefersLiveYouTubeTitle(t *testing.T) {
 		t.Fatalf("expected AH-LIVE2 to keep snapshot title when live YouTubeTitle is blank, got %q", gotTitles["AH-LIVE2"])
 	}
 }
+
+func TestGetMatchedExports_LiveMetadataResolution(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.config.DefaultVideoDescription = "Default channel description\nSubscribe!"
+	app.config.TagPlaylistConfigs = map[string]TagPlaylistConfig{
+		"hades": {
+			VodPlaylistID:  "pl-hades-vod",
+			ClipPlaylistID: "pl-hades-clip",
+		},
+	}
+
+	if _, err := app.db.conn.Exec(`
+		INSERT INTO yt_playlists (id, title) VALUES
+		('pl-hades-vod', 'Hades VODs'),
+		('pl-hades-clip', 'Hades Clips'),
+		('pl-manual', 'Manual Override Playlist')
+	`); err != nil {
+		t.Fatalf("failed to seed yt_playlists: %v", err)
+	}
+
+	// Case 1: Empty descriptions -> DefaultVideoDescription; TagPlaylistConfigs clip; live privacy override
+	clipSrc := "/videos/hades_clip.mp4"
+	app.config.VideoMetadata = map[string]VideoMeta{
+		clipSrc: {
+			Privacy:     "unlisted",
+			ContentType: "clip",
+		},
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-RES-CLIP",
+		SourcePath:  clipSrc,
+		TargetTitle: "Hades Clip",
+		Description: "   ",
+		Privacy:     "private",
+		GameTag:     "hades",
+		Status:      "matched",
+		YouTubeID:   "yt-res-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-res-1", "AH-RES-CLIP", "private", "")
+
+	// Case 2: Explicit VideoMetadata.Description & PlaylistID override, already in playlist -> quota 50
+	vodSrc := "/videos/hades_vod.mp4"
+	app.config.VideoMetadata[vodSrc] = VideoMeta{
+		Description: "Explicit video description",
+		PlaylistID:  "pl-manual",
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:      "AH-RES-MANUAL",
+		SourcePath:    vodSrc,
+		TargetTitle:   "Hades VOD",
+		Description:   "Snapshot description",
+		PlaylistID:    "pl-hades-vod",
+		PlaylistTitle: "Hades VODs",
+		GameTag:       "hades",
+		Status:        "matched",
+		YouTubeID:     "yt-res-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-res-2", "AH-RES-MANUAL", "private", "")
+	if _, err := app.db.conn.Exec(`INSERT INTO yt_playlist_items (playlist_id, video_id, position) VALUES ('pl-manual', 'yt-res-2', 0)`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 3: Explicit "none" opt-out in VideoMetadata -> PlaylistID "" and no tag fallback, snapshot description preserved
+	optOutSrc := "/videos/hades_optout.mp4"
+	app.config.VideoMetadata[optOutSrc] = VideoMeta{
+		PlaylistID: "none",
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:      "AH-RES-NONE",
+		SourcePath:    optOutSrc,
+		TargetTitle:   "Hades OptOut",
+		Description:   "Explicit export description",
+		PlaylistID:    "pl-hades-vod",
+		PlaylistTitle: "Hades VODs",
+		GameTag:       "hades",
+		Status:        "matched",
+		YouTubeID:     "yt-res-3",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-res-3", "AH-RES-NONE", "private", "")
+
+	// Case 4: Snapshot playlist_id="none" with no VideoMetadata override -> falls back to TagPlaylistConfigs vod & default privacy "private"
+	noneSnapSrc := "/videos/hades_nonesnap.mp4"
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-RES-VOD",
+		SourcePath:  noneSnapSrc,
+		TargetTitle: "Hades VOD Fallback",
+		PlaylistID:  "none",
+		GameTag:     "hades",
+		ContentType: "vod",
+		Status:      "matched",
+		YouTubeID:   "yt-res-4",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	insertTestYouTubeVideo(t, app, "yt-res-4", "AH-RES-VOD", "private", "")
+
+	items, err := app.GetMatchedExports()
+	if err != nil {
+		t.Fatalf("GetMatchedExports failed: %v", err)
+	}
+	byID := make(map[string]MatchedExportItem, len(items))
+	for _, item := range items {
+		byID[item.ExportID] = item
+	}
+
+	clipItem := byID["AH-RES-CLIP"]
+	if clipItem.Description != "Default channel description\nSubscribe!" {
+		t.Fatalf("AH-RES-CLIP expected default description, got %q", clipItem.Description)
+	}
+	if clipItem.Privacy != "unlisted" {
+		t.Fatalf("AH-RES-CLIP expected privacy 'unlisted', got %q", clipItem.Privacy)
+	}
+	if clipItem.PlaylistID != "pl-hades-clip" || clipItem.PlaylistTitle != "Hades Clips" {
+		t.Fatalf("AH-RES-CLIP expected pl-hades-clip / Hades Clips, got %q / %q", clipItem.PlaylistID, clipItem.PlaylistTitle)
+	}
+	if clipItem.AlreadyInPlaylist || clipItem.EstimatedQuota != quotaVideoMetadataUpdate+quotaPlaylistItemInsert {
+		t.Fatalf("AH-RES-CLIP unexpected playlist/quota state: already=%v quota=%d", clipItem.AlreadyInPlaylist, clipItem.EstimatedQuota)
+	}
+
+	manualItem := byID["AH-RES-MANUAL"]
+	if manualItem.Description != "Explicit video description" {
+		t.Fatalf("AH-RES-MANUAL expected explicit description, got %q", manualItem.Description)
+	}
+	if manualItem.PlaylistID != "pl-manual" || manualItem.PlaylistTitle != "Manual Override Playlist" {
+		t.Fatalf("AH-RES-MANUAL expected pl-manual / Manual Override Playlist, got %q / %q", manualItem.PlaylistID, manualItem.PlaylistTitle)
+	}
+	if !manualItem.AlreadyInPlaylist || manualItem.EstimatedQuota != quotaVideoMetadataUpdate {
+		t.Fatalf("AH-RES-MANUAL expected alreadyInPlaylist=true and quota=50, got already=%v quota=%d", manualItem.AlreadyInPlaylist, manualItem.EstimatedQuota)
+	}
+
+	noneItem := byID["AH-RES-NONE"]
+	if noneItem.Description != "Explicit export description" {
+		t.Fatalf("AH-RES-NONE expected snapshot description, got %q", noneItem.Description)
+	}
+	if noneItem.PlaylistID != "" || noneItem.PlaylistTitle != "" {
+		t.Fatalf("AH-RES-NONE expected empty playlist after 'none' opt-out, got %q / %q", noneItem.PlaylistID, noneItem.PlaylistTitle)
+	}
+	if noneItem.EstimatedQuota != quotaVideoMetadataUpdate {
+		t.Fatalf("AH-RES-NONE expected quota=50, got %d", noneItem.EstimatedQuota)
+	}
+
+	vodItem := byID["AH-RES-VOD"]
+	if vodItem.Privacy != "private" {
+		t.Fatalf("AH-RES-VOD expected default privacy 'private', got %q", vodItem.Privacy)
+	}
+	if vodItem.PlaylistID != "pl-hades-vod" || vodItem.PlaylistTitle != "Hades VODs" {
+		t.Fatalf("AH-RES-VOD expected pl-hades-vod / Hades VODs, got %q / %q", vodItem.PlaylistID, vodItem.PlaylistTitle)
+	}
+}
+
+func TestApplyMatchedExports_AppliesLiveResolvedMetadata(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	app.config.DefaultVideoDescription = "Channel default desc"
+	app.config.TagPlaylistConfigs = map[string]TagPlaylistConfig{
+		"celeste": {
+			VodPlaylistID:  "pl-celeste-vod",
+			ClipPlaylistID: "pl-celeste-clip",
+		},
+	}
+
+	srcFallback := "/videos/celeste_fallback.mp4"
+	srcOptOut := "/videos/celeste_optout.mp4"
+	app.config.VideoMetadata = map[string]VideoMeta{
+		srcFallback: {
+			Privacy:     "public",
+			ContentType: "clip",
+		},
+		srcOptOut: {
+			Description: "Custom clip desc",
+			PlaylistID:  "none",
+		},
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-APPLY-1",
+		SourcePath:  srcFallback,
+		TargetTitle: "Celeste Clip",
+		GameTag:     "celeste",
+		Status:      "matched",
+		YouTubeID:   "yt-a1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-APPLY-2",
+		SourcePath:  srcOptOut,
+		TargetTitle: "Celeste OptOut",
+		PlaylistID:  "none",
+		GameTag:     "celeste",
+		Status:      "matched",
+		YouTubeID:   "yt-a2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	type metaCall struct {
+		videoID, title, desc, privacy string
+	}
+	var metaCalls []metaCall
+	var playlistCalls []string
+
+	updateFn := func(videoID, title, description, privacy string) error {
+		metaCalls = append(metaCalls, metaCall{videoID, title, description, privacy})
+		return nil
+	}
+	playlistFn := func(playlistID, videoID string) error {
+		playlistCalls = append(playlistCalls, playlistID+":"+videoID)
+		return nil
+	}
+
+	res, err := app.applyMatchedExportsWithDeps([]string{"AH-APPLY-1", "AH-APPLY-2"}, true, false, updateFn, playlistFn)
+	if err != nil {
+		t.Fatalf("applyMatchedExportsWithDeps failed: %v", err)
+	}
+	if len(res.Applied) != 2 {
+		t.Fatalf("expected 2 applied exports, got %v (failed=%v)", res.Applied, res.Failed)
+	}
+
+	if len(metaCalls) != 2 {
+		t.Fatalf("expected 2 metadata calls, got %d", len(metaCalls))
+	}
+	if metaCalls[0].desc != "Channel default desc" || metaCalls[0].privacy != "public" {
+		t.Fatalf("unexpected meta call 0: %+v", metaCalls[0])
+	}
+	if metaCalls[1].desc != "Custom clip desc" || metaCalls[1].privacy != "private" {
+		t.Fatalf("unexpected meta call 1: %+v", metaCalls[1])
+	}
+
+	if len(playlistCalls) != 1 || playlistCalls[0] != "pl-celeste-clip:yt-a1" {
+		t.Fatalf("expected only [pl-celeste-clip:yt-a1] playlist call, got %v", playlistCalls)
+	}
+}
