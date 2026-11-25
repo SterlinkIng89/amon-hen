@@ -7,6 +7,8 @@ const mockGetMatchedExports = vi.fn();
 const mockApplyMatchedExports = vi.fn();
 const mockDismissExportRecord = vi.fn();
 const mockGetQuotaStatus = vi.fn();
+const mockLoadConfig = vi.fn();
+const mockUpdateExportTargetTitle = vi.fn();
 
 const eventListeners = new Map<string, Array<(payload: unknown) => void>>();
 
@@ -15,6 +17,9 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   ApplyMatchedExports: (...args: unknown[]) => mockApplyMatchedExports(...args),
   DismissExportRecord: (...args: unknown[]) => mockDismissExportRecord(...args),
   GetQuotaStatus: () => mockGetQuotaStatus(),
+  LoadConfig: () => mockLoadConfig(),
+  UpdateExportTargetTitle: (...args: unknown[]) =>
+    mockUpdateExportTargetTitle(...args),
 }));
 
 vi.mock("../../../../wailsjs/runtime/runtime", () => ({
@@ -95,6 +100,12 @@ describe("ExportSyncModal", () => {
     eventListeners.clear();
     mockGetMatchedExports.mockResolvedValue(mockItems);
     mockDismissExportRecord.mockResolvedValue(undefined);
+    mockUpdateExportTargetTitle.mockResolvedValue(undefined);
+    mockLoadConfig.mockResolvedValue({
+      video_metadata: {},
+      game_profiles: {},
+      title_separator: " - ",
+    });
     mockGetQuotaStatus.mockResolvedValue({
       used: 500,
       limit: 10000,
@@ -124,7 +135,7 @@ describe("ExportSyncModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("League of Legends - 23/11/26 - Pentakill"),
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
       ).toBeInTheDocument();
     });
 
@@ -132,7 +143,7 @@ describe("ExportSyncModal", () => {
       screen.getByText("AH-7F3K9Q2M - League of Legends"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Dark Souls - 23/11/26 - Boss Fight"),
+      screen.getByDisplayValue("Dark Souls - 23/11/26 - Boss Fight"),
     ).toBeInTheDocument();
 
     // 100 (metadata + playlist) + 50 (metadata only, already in playlist) = 150 units
@@ -163,7 +174,7 @@ describe("ExportSyncModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("League of Legends - 23/11/26 - Pentakill"),
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
       ).toBeInTheDocument();
     });
 
@@ -182,6 +193,7 @@ describe("ExportSyncModal", () => {
         true,
       );
     });
+    expect(mockUpdateExportTargetTitle).not.toHaveBeenCalled();
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -193,7 +205,7 @@ describe("ExportSyncModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("League of Legends - 23/11/26 - Pentakill"),
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
       ).toBeInTheDocument();
     });
 
@@ -208,7 +220,7 @@ describe("ExportSyncModal", () => {
     });
 
     expect(
-      screen.queryByText("League of Legends - 23/11/26 - Pentakill"),
+      screen.queryByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
     ).not.toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();
   });
@@ -228,7 +240,7 @@ describe("ExportSyncModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("League of Legends - 23/11/26 - Pentakill"),
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
       ).toBeInTheDocument();
     });
 
@@ -270,5 +282,112 @@ describe("ExportSyncModal", () => {
     expect(
       screen.getByText(/video\(s\) updated successfully/i),
     ).toBeInTheDocument();
+  });
+
+  it("resolves live YouTube title from LoadConfig metadata and game_profiles over stale targetTitle", async () => {
+    mockGetMatchedExports.mockResolvedValue([
+      {
+        ...mockItems[0],
+        sourcePath: "C:/Videos/2026-11-22_lol-flop.mp4",
+        targetTitle: "League of Legends - 22/11/26 - Flop",
+      },
+    ]);
+    mockLoadConfig.mockResolvedValue({
+      title_separator: " - ",
+      game_profiles: {
+        "League of Legends": {
+          type: "multiplayer",
+          titleTemplate: "{champion} - {event} - {gamemode} - {date}",
+          modes: ["Summoner's Rift"],
+        },
+      },
+      video_metadata: {
+        // Case-insensitive backslash Windows path lookup
+        "c:\\videos\\2026-11-22_lol-flop.mp4": {
+          game: "League of Legends",
+          event: "Flop",
+          gameMode: "Summoner's Rift",
+          customVars: {
+            champion: "Neeko",
+          },
+          contentType: "clip",
+        },
+      },
+    });
+
+    render(
+      <ExportSyncModal open={true} onClose={vi.fn()} onChanged={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByDisplayValue("Neeko - Flop - Summoner's Rift - 22/11/26"),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByDisplayValue("League of Legends - 22/11/26 - Flop"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists inline title edits via UpdateExportTargetTitle before ApplyMatchedExports and blocks empty titles", async () => {
+    const callOrder: string[] = [];
+    mockUpdateExportTargetTitle.mockImplementation(async () => {
+      callOrder.push("update");
+    });
+    mockApplyMatchedExports.mockImplementation(async () => {
+      callOrder.push("apply");
+      return {
+        applied: ["AH-7F3K9Q2M", "AH-9B2M4K1P"],
+        failed: {},
+        skipped: [],
+        cleanedUpPaths: [],
+        stoppedOnQuota: false,
+      };
+    });
+
+    render(
+      <ExportSyncModal open={true} onClose={vi.fn()} onChanged={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByDisplayValue("League of Legends - 23/11/26 - Pentakill"),
+      ).toBeInTheDocument();
+    });
+
+    const firstInput = screen.getByLabelText(
+      "Target title for AH-7F3K9Q2M - League of Legends",
+    );
+
+    // Empty/whitespace title disables Apply and shows inline validation
+    fireEvent.change(firstInput, { target: { value: "   " } });
+    expect(
+      screen.getByText("Target title cannot be empty."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Apply to YouTube (2 videos)" }),
+    ).toBeDisabled();
+
+    // Edit first item's title; leave second item unchanged
+    fireEvent.change(firstInput, {
+      target: { value: "  Neeko - Pentakill - Summoner's Rift  " },
+    });
+    const applyButton = screen.getByRole("button", {
+      name: "Apply to YouTube (2 videos)",
+    });
+    expect(applyButton).not.toBeDisabled();
+
+    fireEvent.click(applyButton);
+
+    await waitFor(() => {
+      expect(mockApplyMatchedExports).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockUpdateExportTargetTitle).toHaveBeenCalledTimes(1);
+    expect(mockUpdateExportTargetTitle).toHaveBeenCalledWith(
+      "AH-7F3K9Q2M",
+      "Neeko - Pentakill - Summoner's Rift",
+    );
+    expect(callOrder).toEqual(["update", "apply"]);
   });
 });

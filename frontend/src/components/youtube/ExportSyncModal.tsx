@@ -2,18 +2,24 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   ApplyMatchedExportsResult,
   ExportSyncProgressEvent,
+  GameProfile,
   MatchedExportItem,
+  VideoFile,
 } from "../../types";
 import {
   ApplyMatchedExports,
   DismissExportRecord,
   GetMatchedExports,
+  LoadConfig,
+  UpdateExportTargetTitle,
 } from "../../../wailsjs/go/backend/App";
 import { EventsOn } from "../../../wailsjs/runtime/runtime";
 import { useQuotaStatus } from "../../hooks/useQuotaStatus";
+import { resolveDisplayTitle } from "../../utils/videoUtils";
 
 const QUOTA_VIDEO_METADATA_UPDATE = 50;
 const QUOTA_PLAYLIST_ITEM_INSERT = 50;
+const YOUTUBE_TITLE_MAX_LENGTH = 100;
 
 export interface ExportSyncModalProps {
   readonly open: boolean;
@@ -86,6 +92,86 @@ function getResultBannerClass(result: ApplyMatchedExportsResult): string {
     : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
 }
 
+interface LocalVideoMeta {
+  readonly game?: string;
+  readonly youtubeTitle?: string;
+  readonly description?: string;
+  readonly privacy?: string;
+  readonly youtubeId?: string;
+  readonly playlistId?: string;
+  readonly playlistTitle?: string;
+  readonly episode?: number;
+  readonly durationSecs?: number;
+  readonly event?: string;
+  readonly gameMode?: string;
+  readonly customVars?: Record<string, string>;
+  readonly contentType?: string;
+}
+
+function isLocalVideoMeta(value: unknown): value is LocalVideoMeta {
+  return Boolean(value) && typeof value === "object";
+}
+
+function normalizePathKey(filePath: string): string {
+  return filePath.replace(/\\/g, "/").toLowerCase();
+}
+
+function findVideoMetadata(
+  videoMetadata: Record<string, unknown> | undefined,
+  sourcePath: string,
+): LocalVideoMeta | null {
+  if (!videoMetadata || !sourcePath) return null;
+  const exact = videoMetadata[sourcePath];
+  if (isLocalVideoMeta(exact)) return exact;
+
+  const targetKey = normalizePathKey(sourcePath);
+  for (const [key, value] of Object.entries(videoMetadata)) {
+    if (normalizePathKey(key) === targetKey && isLocalVideoMeta(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function getFileBasename(filePath: string): string {
+  const parts = filePath.split(/[\\/]/);
+  return parts[parts.length - 1] || filePath;
+}
+
+function resolveLiveTargetTitle(
+  item: MatchedExportItem,
+  videoMetadata: Record<string, unknown> | undefined,
+  gameProfiles: Record<string, GameProfile> | undefined,
+  titleSeparator: string | undefined,
+): string {
+  const meta = findVideoMetadata(videoMetadata, item.sourcePath);
+  if (!meta) return item.targetTitle;
+
+  const videoFile: VideoFile = {
+    name: getFileBasename(item.sourcePath),
+    path: item.sourcePath,
+    size: 0,
+    modTime: item.exportedAt || 0,
+    folder: "",
+    game: meta.game ?? item.gameTag ?? "",
+    youtubeTitle: meta.youtubeTitle,
+    description: meta.description ?? item.description,
+    privacy: meta.privacy ?? item.privacy,
+    youtubeId: meta.youtubeId ?? item.youtubeId,
+    playlistId: meta.playlistId ?? item.playlistId,
+    playlistTitle: meta.playlistTitle ?? item.playlistTitle,
+    episode: meta.episode ?? item.episode,
+    durationSecs: meta.durationSecs,
+    event: meta.event,
+    gameMode: meta.gameMode,
+    customVars: meta.customVars,
+    contentType: meta.contentType ?? item.contentType,
+  };
+
+  const resolved = resolveDisplayTitle(videoFile, gameProfiles, titleSeparator).trim();
+  return resolved || item.targetTitle;
+}
+
 export default function ExportSyncModal({
   open,
   onClose,
@@ -106,6 +192,7 @@ function ExportSyncModalContent({
 }: ExportSyncModalContentProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
   const [includePlaylists, setIncludePlaylists] = useState(true);
   const [deleteExportedFiles, setDeleteExportedFiles] = useState(false);
   const [dismissingIds, setDismissingIds] = useState<Set<string>>(new Set());
@@ -120,10 +207,29 @@ function ExportSyncModalContent({
   const loadMatchedExports = useCallback(async () => {
     setLoadState({ status: "loading" });
     try {
-      const items = await GetMatchedExports();
+      const [items, cfg] = await Promise.all([
+        GetMatchedExports(),
+        LoadConfig().catch(() => null),
+      ]);
       const safeItems = Array.isArray(items) ? items : [];
+      const videoMetadata: Record<string, unknown> | undefined =
+        cfg?.video_metadata;
+      const gameProfiles = cfg?.game_profiles;
+      const titleSeparator = cfg?.title_separator;
+
+      const resolvedTitles: Record<string, string> = {};
+      for (const item of safeItems) {
+        resolvedTitles[item.exportId] = resolveLiveTargetTitle(
+          item,
+          videoMetadata,
+          gameProfiles,
+          titleSeparator,
+        );
+      }
+
       setLoadState({ status: "ready", items: safeItems });
       setSelectedIds(new Set(safeItems.map((item) => item.exportId)));
+      setEditedTitles(resolvedTitles);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setLoadState({
@@ -171,6 +277,19 @@ function ExportSyncModalContent({
     items.length > 0 && items.every((item) => selectedIds.has(item.exportId));
   const exceedsQuota =
     quotaStatus !== null && estimatedQuota > quotaStatus.remaining;
+  const hasInvalidSelectedTitle = items.some((item) => {
+    if (!selectedIds.has(item.exportId)) return false;
+    const trimmed = (editedTitles[item.exportId] ?? item.targetTitle).trim();
+    return trimmed.length === 0 || trimmed.length > YOUTUBE_TITLE_MAX_LENGTH;
+  });
+
+  const handleTitleChange = (exportId: string, value: string) => {
+    if (isApplying) return;
+    setEditedTitles((prev) => ({
+      ...prev,
+      [exportId]: value,
+    }));
+  };
 
   const handleToggleAll = () => {
     if (isApplying) return;
@@ -228,10 +347,20 @@ function ExportSyncModalContent({
   };
 
   const handleApply = async () => {
-    if (selectedIds.size === 0 || isApplying) return;
+    if (selectedIds.size === 0 || isApplying || hasInvalidSelectedTitle) return;
     setApplyState({ status: "applying", progress: null });
 
     try {
+      for (const item of items) {
+        if (!selectedIds.has(item.exportId)) continue;
+        const trimmedTitle = (
+          editedTitles[item.exportId] ?? item.targetTitle
+        ).trim();
+        if (trimmedTitle !== item.targetTitle) {
+          await UpdateExportTargetTitle(item.exportId, trimmedTitle);
+        }
+      }
+
       const result = await ApplyMatchedExports(
         Array.from(selectedIds),
         includePlaylists,
@@ -458,6 +587,12 @@ function ExportSyncModalContent({
                 {items.map((item) => {
                   const isSelected = selectedIds.has(item.exportId);
                   const isDismissing = dismissingIds.has(item.exportId);
+                  const currentTitle =
+                    editedTitles[item.exportId] ?? item.targetTitle;
+                  const trimmedTitle = currentTitle.trim();
+                  const isTitleEmpty = trimmedTitle.length === 0;
+                  const isTitleOverLimit =
+                    trimmedTitle.length > YOUTUBE_TITLE_MAX_LENGTH;
                   const rowQuota =
                     QUOTA_VIDEO_METADATA_UPDATE +
                     (includePlaylists &&
@@ -481,7 +616,7 @@ function ExportSyncModalContent({
                           checked={isSelected}
                           onChange={() => handleToggleItem(item.exportId)}
                           disabled={isApplying}
-                          aria-label={`Select ${item.targetTitle}`}
+                          aria-label={`Select ${currentTitle || item.targetTitle}`}
                           className="mt-1 h-4 w-4 rounded border-border-medium bg-surface text-accent focus:ring-accent shrink-0"
                         />
 
@@ -499,23 +634,60 @@ function ExportSyncModalContent({
 
                         <div className="min-w-0 flex-1 space-y-1.5">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1 space-y-1">
                               <p className="text-xs text-text-muted truncate">
                                 {item.youtubeTitle || item.exportId}
                               </p>
-                              <p className="text-sm font-medium text-text-primary truncate">
-                                <span aria-hidden="true" className="text-text-muted mr-1.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  aria-hidden="true"
+                                  className="text-sm text-text-muted shrink-0"
+                                >
                                   →
                                 </span>
-                                {item.targetTitle}
-                              </p>
+                                <input
+                                  type="text"
+                                  value={currentTitle}
+                                  onChange={(e) =>
+                                    handleTitleChange(
+                                      item.exportId,
+                                      e.target.value,
+                                    )
+                                  }
+                                  disabled={isApplying}
+                                  maxLength={YOUTUBE_TITLE_MAX_LENGTH}
+                                  aria-label={`Target title for ${item.youtubeTitle || item.exportId}`}
+                                  placeholder="Enter YouTube title..."
+                                  className={`w-full min-w-0 px-2.5 py-1 rounded-lg border text-sm font-medium bg-base text-text-primary placeholder:text-text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none ${
+                                    isTitleEmpty || isTitleOverLimit
+                                      ? "border-red-500/60"
+                                      : "border-border-subtle focus:border-accent/60"
+                                  }`}
+                                />
+                                <span
+                                  className={`text-[11px] tabular-nums shrink-0 ${
+                                    isTitleOverLimit
+                                      ? "text-red-300"
+                                      : currentTitle.length >= 90
+                                        ? "text-amber-300"
+                                        : "text-text-muted"
+                                  }`}
+                                >
+                                  {currentTitle.length}/{YOUTUBE_TITLE_MAX_LENGTH}
+                                </span>
+                              </div>
+                              {isTitleEmpty && (
+                                <p className="text-[11px] text-red-300 pl-5">
+                                  Target title cannot be empty.
+                                </p>
+                              )}
                             </div>
 
                             <button
                               type="button"
                               onClick={() => void handleDismiss(item.exportId)}
                               disabled={isApplying || isDismissing}
-                              aria-label={`Dismiss ${item.targetTitle}`}
+                              aria-label={`Dismiss ${currentTitle || item.targetTitle}`}
                               className="px-2 py-1 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-elevated border border-transparent hover:border-border-subtle transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none"
                             >
                               {isDismissing ? "Dismissing..." : "Dismiss"}
@@ -635,7 +807,9 @@ function ExportSyncModalContent({
             <button
               type="button"
               onClick={() => void handleApply()}
-              disabled={selectedIds.size === 0 || isApplying}
+              disabled={
+                selectedIds.size === 0 || isApplying || hasInvalidSelectedTitle
+              }
               className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent text-white hover:bg-accent/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
             >
               {isApplying
