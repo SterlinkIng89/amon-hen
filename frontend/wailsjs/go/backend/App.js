@@ -26,6 +26,10 @@ export function ApplySingleVideoTitleUpdate(arg1, arg2) {
   return window['go']['backend']['App']['ApplySingleVideoTitleUpdate'](arg1, arg2);
 }
 
+export function BackupSingleFile(arg1, arg2) {
+  return window['go']['backend']['App']['BackupSingleFile'](arg1, arg2);
+}
+
 export function CacheHandler() {
   return window['go']['backend']['App']['CacheHandler']();
 }
@@ -44,6 +48,10 @@ export function CreateVideoClip(arg1, arg2, arg3, arg4) {
 
 export function DeleteCustomThumbnail(arg1) {
   return window['go']['backend']['App']['DeleteCustomThumbnail'](arg1);
+}
+
+export function DeleteExportRecord(arg1) {
+  return window['go']['backend']['App']['DeleteExportRecord'](arg1);
 }
 
 export function DeleteFiles(arg1) {
@@ -70,12 +78,12 @@ export function DiscardUploadSession(arg1) {
   return window['go']['backend']['App']['DiscardUploadSession'](arg1);
 }
 
-export function DismissExportRecord(arg1) {
-  return window['go']['backend']['App']['DismissExportRecord'](arg1);
-}
-
 export function DisconnectSteam() {
   return window['go']['backend']['App']['DisconnectSteam']();
+}
+
+export function DismissExportRecord(arg1) {
+  return window['go']['backend']['App']['DismissExportRecord'](arg1);
 }
 
 export function ExportVideos(arg1, arg2, arg3, arg4) {
@@ -302,6 +310,10 @@ export function LoginSteam() {
   return window['go']['backend']['App']['LoginSteam']();
 }
 
+export function MatchExportedVideos() {
+  return window['go']['backend']['App']['MatchExportedVideos']();
+}
+
 export function OpenFolderDialog() {
   return window['go']['backend']['App']['OpenFolderDialog']();
 }
@@ -342,8 +354,16 @@ export function ReorderSteamBacklog(arg1) {
   return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
 }
 
+export function ResolveBackupPath(arg1) {
+  return window['go']['backend']['App']['ResolveBackupPath'](arg1);
+}
+
 export function ResumeUpload(arg1) {
   return window['go']['backend']['App']['ResumeUpload'](arg1);
+}
+
+export function RunFolderBackup(arg1) {
+  return window['go']['backend']['App']['RunFolderBackup'](arg1);
 }
 
 export function SaveCustomThumbnail(arg1, arg2) {
@@ -382,16 +402,12 @@ export function SearchSteamGames(arg1) {
   return window['go']['backend']['App']['SearchSteamGames'](arg1);
 }
 
-export function SelectCustomThumbnailImage() {
-  return window['go']['backend']['App']['SelectCustomThumbnailImage']();
-}
-
-export function RunFolderBackup(arg1) {
-  return window['go']['backend']['App']['RunFolderBackup'](arg1);
-}
-
 export function SelectBackupFolder() {
   return window['go']['backend']['App']['SelectBackupFolder']();
+}
+
+export function SelectCustomThumbnailImage() {
+  return window['go']['backend']['App']['SelectCustomThumbnailImage']();
 }
 
 export function SelectExportFolder() {
@@ -492,6 +508,10 @@ export function SyncSteamData() {
 
 export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
+}
+
+export function UpdateExportTargetTitle(arg1, arg2) {
+  return window['go']['backend']['App']['UpdateExportTargetTitle'](arg1, arg2);
 }
 
 export function UpdatePlaylistMetadata(arg1, arg2, arg3, arg4) {

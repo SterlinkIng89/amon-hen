@@ -183,6 +183,8 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 		}
 	}
 
+	liveTitles := a.snapshotLiveYouTubeTitles()
+
 	a.db.mu.Lock()
 	defer a.db.mu.Unlock()
 
@@ -239,6 +241,9 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 			return items, fmt.Errorf("failed to scan matched export item: %w", err)
 		}
 
+		if liveTitle, ok := liveTitles[item.SourcePath]; ok {
+			item.TargetTitle = liveTitle
+		}
 		item.YouTubeTitle = ytTitle.String
 		item.YouTubePrivacy = ytPrivacy.String
 		item.ThumbnailURL = thumbURL.String
@@ -256,6 +261,58 @@ func (a *App) GetMatchedExports() ([]MatchedExportItem, error) {
 	}
 
 	return items, nil
+}
+
+func (a *App) snapshotLiveYouTubeTitles() map[string]string {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+
+	titles := make(map[string]string, len(a.config.VideoMetadata))
+	for path, meta := range a.config.VideoMetadata {
+		if title := strings.TrimSpace(meta.YouTubeTitle); title != "" {
+			titles[path] = title
+		}
+	}
+	return titles
+}
+
+// UpdateExportTargetTitle updates the target_title for an editable exported video record.
+func (a *App) UpdateExportTargetTitle(exportID string, targetTitle string) error {
+	if a.db == nil || a.db.conn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	cleanID := strings.TrimSpace(exportID)
+	if cleanID == "" {
+		return fmt.Errorf("export ID cannot be empty")
+	}
+
+	cleanTitle := strings.TrimSpace(targetTitle)
+	if cleanTitle == "" {
+		return fmt.Errorf("target title cannot be empty")
+	}
+
+	a.db.mu.Lock()
+	defer a.db.mu.Unlock()
+
+	res, err := a.db.conn.Exec(`
+		UPDATE exported_videos
+		SET target_title = ?
+		WHERE export_id = ? AND status IN ('exported', 'matched', 'failed')
+	`, cleanTitle, cleanID)
+	if err != nil {
+		return fmt.Errorf("failed to update target title for export %s: %w", cleanID, err)
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check updated rows for export %s: %w", cleanID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("no editable export found for ID %s", cleanID)
+	}
+
+	return nil
 }
 
 // ApplyMatchedExports applies YouTube metadata updates, optional playlist additions,

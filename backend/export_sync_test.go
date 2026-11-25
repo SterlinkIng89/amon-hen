@@ -555,3 +555,118 @@ func TestApplyMatchedExports_CleanupSafetyGuards(t *testing.T) {
 		t.Fatalf("expected active yt_videos.local_file to remain on disk, got err=%v", err)
 	}
 }
+
+func TestUpdateExportTargetTitle(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-TITLE1",
+		SourcePath:  "/videos/clip1.mp4",
+		TargetTitle: "Old Title",
+		Status:      "matched",
+		YouTubeID:   "yt-t1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-TITLE2",
+		SourcePath:  "/videos/clip2.mp4",
+		TargetTitle: "Applied Title",
+		Status:      "applied",
+		YouTubeID:   "yt-t2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-TITLE3",
+		SourcePath:  "/videos/clip3.mp4",
+		TargetTitle: "Dismissed Title",
+		Status:      "dismissed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.UpdateExportTargetTitle("AH-TITLE1", "  New Live Title  "); err != nil {
+		t.Fatalf("expected UpdateExportTargetTitle to succeed, got: %v", err)
+	}
+
+	var updatedTitle string
+	if err := app.db.conn.QueryRow(`SELECT target_title FROM exported_videos WHERE export_id = 'AH-TITLE1'`).Scan(&updatedTitle); err != nil {
+		t.Fatal(err)
+	}
+	if updatedTitle != "New Live Title" {
+		t.Fatalf("expected trimmed target_title %q, got %q", "New Live Title", updatedTitle)
+	}
+
+	if err := app.UpdateExportTargetTitle("   ", "Valid Title"); err == nil {
+		t.Fatalf("expected error for empty/whitespace exportID")
+	}
+	if err := app.UpdateExportTargetTitle("AH-TITLE1", "   "); err == nil {
+		t.Fatalf("expected error for empty/whitespace targetTitle")
+	}
+	if err := app.UpdateExportTargetTitle("AH-TITLE2", "Should Fail"); err == nil {
+		t.Fatalf("expected error when updating applied export")
+	}
+	if err := app.UpdateExportTargetTitle("AH-TITLE3", "Should Fail"); err == nil {
+		t.Fatalf("expected error when updating dismissed export")
+	}
+	if err := app.UpdateExportTargetTitle("AH-UNKNOWN", "Should Fail"); err == nil {
+		t.Fatalf("expected error for unknown exportID")
+	}
+}
+
+func TestGetMatchedExports_PrefersLiveYouTubeTitle(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	liveSource := "/videos/live_override.mp4"
+	blankSource := "/videos/blank_override.mp4"
+
+	app.config.VideoMetadata = map[string]VideoMeta{
+		liveSource:  {YouTubeTitle: "  Live Manual YouTube Title  "},
+		blankSource: {YouTubeTitle: "   "},
+	}
+
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-LIVE1",
+		SourcePath:  liveSource,
+		TargetTitle: "Stale Snapshot Title",
+		Status:      "matched",
+		YouTubeID:   "yt-live-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.insertExportedVideo(ExportedVideoRecord{
+		ExportID:    "AH-LIVE2",
+		SourcePath:  blankSource,
+		TargetTitle: "Fallback Snapshot Title",
+		Status:      "matched",
+		YouTubeID:   "yt-live-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	insertTestYouTubeVideo(t, app, "yt-live-1", "AH-LIVE1", "private", "")
+	insertTestYouTubeVideo(t, app, "yt-live-2", "AH-LIVE2", "private", "")
+
+	items, err := app.GetMatchedExports()
+	if err != nil {
+		t.Fatalf("GetMatchedExports failed: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 matched exports, got %d", len(items))
+	}
+
+	gotTitles := make(map[string]string, len(items))
+	for _, item := range items {
+		gotTitles[item.ExportID] = item.TargetTitle
+	}
+
+	if gotTitles["AH-LIVE1"] != "Live Manual YouTube Title" {
+		t.Fatalf("expected AH-LIVE1 to use live YouTubeTitle, got %q", gotTitles["AH-LIVE1"])
+	}
+	if gotTitles["AH-LIVE2"] != "Fallback Snapshot Title" {
+		t.Fatalf("expected AH-LIVE2 to keep snapshot title when live YouTubeTitle is blank, got %q", gotTitles["AH-LIVE2"])
+	}
+}
