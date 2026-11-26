@@ -182,6 +182,21 @@ func (db *DB) migrate() error {
 			status TEXT NOT NULL DEFAULT 'backed_up'
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_video_backups_folder ON video_backups(folder_root)`,
+		`CREATE TABLE IF NOT EXISTS title_normalization_drafts (
+			video_id TEXT PRIMARY KEY,
+			playlist_id TEXT NOT NULL DEFAULT '',
+			game_tag TEXT NOT NULL DEFAULT '',
+			profile_type TEXT NOT NULL DEFAULT '',
+			event TEXT NOT NULL DEFAULT '',
+			game_mode TEXT NOT NULL DEFAULT '',
+			date_override TEXT NOT NULL DEFAULT '',
+			episode INTEGER NOT NULL DEFAULT 0,
+			custom_vars_json TEXT NOT NULL DEFAULT '{}',
+			proposed_title TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'draft',
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_title_norm_drafts_playlist ON title_normalization_drafts(playlist_id)`,
 	}
 
 	for _, q := range queries {
