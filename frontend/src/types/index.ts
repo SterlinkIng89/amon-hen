@@ -185,6 +185,21 @@ export interface CatalogVideoDraft {
   readonly chronologyIssue?: boolean;
 }
 
+export interface TitleNormalizationDraft {
+  readonly videoId: string;
+  readonly playlistId: string;
+  readonly gameTag: string;
+  readonly profileType: string;
+  readonly event: string;
+  readonly gameMode: string;
+  readonly dateOverride: string;
+  readonly episode: number;
+  readonly customVars: Record<string, string>;
+  readonly proposedTitle: string;
+  readonly status: "draft" | "ready" | "synced" | string;
+  readonly updatedAt: number;
+}
+
 export type BatchItemStatus =
   | "pending"
   | "rendering"
