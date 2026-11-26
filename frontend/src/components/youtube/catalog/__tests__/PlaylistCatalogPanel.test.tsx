@@ -17,6 +17,7 @@ vi.mock("../../../../../wailsjs/go/backend/App", () => ({
   UpdateYouTubeThumbnailForEpisode: vi.fn(),
   GetCustomThumbnail: vi.fn(),
   GetAllGameTags: vi.fn(),
+  LoadConfig: vi.fn(),
 }));
 
 vi.mock("../../../../utils/thumbnailRender", () => ({
@@ -40,6 +41,7 @@ describe("PlaylistCatalogPanel", () => {
     vi.mocked(AppBindings.GetTagPlaylistConfig).mockResolvedValue({} as any);
     vi.mocked(AppBindings.GetSteamGameAssets).mockResolvedValue(null as any);
     vi.mocked(AppBindings.GetAllGameTags).mockResolvedValue(["control", "alan_wake", "cyberpunk"]);
+    vi.mocked(AppBindings.LoadConfig).mockResolvedValue({} as any);
   });
 
   it("renders playlists list and empty selection state initially", async () => {

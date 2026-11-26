@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from "react";
+import { FC, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePlaylistNormalizer,
   type NormalizerRowStatus,
@@ -13,6 +13,7 @@ export interface PlaylistNormalizerTableProps {
   readonly defaultGameTag?: string;
   readonly gameProfiles: Record<string, GameProfile>;
   readonly recentFieldValues?: Record<string, string[]>;
+  readonly refreshTrigger?: number;
   readonly onWatchVideo: (video: YTVideo, gameTag: string) => void;
 }
 
@@ -31,6 +32,7 @@ export const PlaylistNormalizerTable: FC<PlaylistNormalizerTableProps> = ({
   playlistId,
   defaultGameTag = "",
   gameProfiles,
+  refreshTrigger = 0,
   onWatchVideo,
 }) => {
   const {
@@ -52,6 +54,14 @@ export const PlaylistNormalizerTable: FC<PlaylistNormalizerTableProps> = ({
     playlistId,
     initialGameTag: defaultGameTag,
   });
+
+  const lastRefreshTriggerRef = useRef(refreshTrigger);
+  useEffect(() => {
+    if (refreshTrigger > 0 && refreshTrigger !== lastRefreshTriggerRef.current) {
+      lastRefreshTriggerRef.current = refreshTrigger;
+      void reload();
+    }
+  }, [refreshTrigger, reload]);
 
   const [filter, setFilter] = useState<NormalizerFilter>("all");
   const [isSavingAll, setIsSavingAll] = useState(false);

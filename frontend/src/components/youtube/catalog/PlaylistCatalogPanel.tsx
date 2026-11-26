@@ -12,6 +12,7 @@ import {
   summarizeThumbnailBatchItems,
 } from "../../../utils/batchStatus";
 import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
+import { PlaylistNormalizerTable } from "./PlaylistNormalizerTable";
 import { DuplicateEpisodeDialog } from "./DuplicateEpisodeDialog";
 import { YouTubeTitleUpdateModal } from "./YouTubeTitleUpdateModal";
 import { BatchThumbnailProgress } from "./BatchThumbnailProgress";
@@ -21,11 +22,12 @@ import {
   GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
+  LoadConfig,
   SaveCustomThumbnail,
   SetTagThumbnailConfig,
 } from "../../../../wailsjs/go/backend/App";
 import { backend } from "../../../../wailsjs/go/models";
-import { BatchItem, TagThumbnailConfig } from "../../../types";
+import { BatchItem, GameProfile, TagThumbnailConfig, YTVideo } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
@@ -33,7 +35,19 @@ import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
 import { ThumbnailRects, ThumbnailElementId } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
 
-export const PlaylistCatalogPanel: FC = () => {
+export interface PlaylistCatalogPanelProps {
+  readonly onOpenVideoInPlayer?: (
+    playlistId: string,
+    video: YTVideo,
+    gameTag: string,
+  ) => void;
+  readonly refreshTrigger?: number;
+}
+
+export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
+  onOpenVideoInPlayer,
+  refreshTrigger = 0,
+}) => {
   const {
     playlists,
     isLoadingPlaylists,
@@ -80,6 +94,9 @@ export const PlaylistCatalogPanel: FC = () => {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
   const [resolvingEpisode, setResolvingEpisode] = useState<number | null>(null);
+  const [catalogMode, setCatalogMode] = useState<"episodes" | "normalize">("episodes");
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+  const [recentFieldValues, setRecentFieldValues] = useState<Record<string, string[]>>({});
 
   const duplicateEpisodes = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -169,7 +186,7 @@ export const PlaylistCatalogPanel: FC = () => {
     setSingleTitleTarget(null);
   }, [selectedPlaylistId]);
 
-  // Fetch known game tags for autocomplete
+  // Fetch known game tags and normalizer config
   useEffect(() => {
     let active = true;
     void GetAllGameTags()
@@ -181,6 +198,17 @@ export const PlaylistCatalogPanel: FC = () => {
       .catch(() => {
         if (active) setKnownTags([]);
       });
+    void LoadConfig()
+      .then((cfg) => {
+        if (!active || !cfg) return;
+        if (cfg.game_profiles) {
+          setGameProfiles(cfg.game_profiles);
+        }
+        if (cfg.recent_field_values) {
+          setRecentFieldValues(cfg.recent_field_values);
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -554,14 +582,40 @@ export const PlaylistCatalogPanel: FC = () => {
         {selectedPlaylistId && !isLoadingDraft && draft && (
           <div className="p-6 w-full space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between border-b border-border-subtle pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4">
               <div>
                 <h3 className="text-base font-bold text-text-primary">{draft.title}</h3>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {draft.videoCount} {draft.videoCount === 1 ? "video" : "videos"} in playlist
                 </p>
               </div>
-              <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-elevated/60 p-0.5">
+                  <button
+                    type="button"
+                    aria-pressed={catalogMode === "episodes"}
+                    onClick={() => setCatalogMode("episodes")}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      catalogMode === "episodes"
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Episodes &amp; Thumbnails
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={catalogMode === "normalize"}
+                    onClick={() => setCatalogMode("normalize")}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      catalogMode === "normalize"
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Normalize Titles
+                  </button>
+                </div>
                 {draft.linked ? (
                   <span
                     className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
@@ -577,7 +631,18 @@ export const PlaylistCatalogPanel: FC = () => {
               </div>
             </div>
 
-            {/* Responsive Two-Column Studio Layout (Adapts from mobile to ultrawide) */}
+            {catalogMode === "normalize" ? (
+              <PlaylistNormalizerTable
+                playlistId={selectedPlaylistId}
+                defaultGameTag={editedTag}
+                gameProfiles={gameProfiles}
+                recentFieldValues={recentFieldValues}
+                refreshTrigger={refreshTrigger}
+                onWatchVideo={(video, gameTag) => {
+                  onOpenVideoInPlayer?.(selectedPlaylistId, video, gameTag);
+                }}
+              />
+            ) : (
             <div className="grid grid-cols-1 xl:grid-cols-12 2xl:grid-cols-12 gap-6 items-start">
               {/* Left Column: Metadata & Episode Mapping */}
               <div className="xl:col-span-7 2xl:col-span-7 3xl:col-span-8 space-y-4">
@@ -982,6 +1047,7 @@ export const PlaylistCatalogPanel: FC = () => {
                 />
               </div>
             </div>
+            )}
           </div>
         )}
       </div>

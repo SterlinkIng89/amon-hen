@@ -110,6 +110,10 @@ export default function ChannelPage() {
   const lastSelectedId = useRef<string | null>(null);
   const lastSelectedPlaylistId = useRef<string | null>(null);
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
+  const [playerNormalizerOpen, setPlayerNormalizerOpen] = useState(false);
+  const [playerPlaylistId, setPlayerPlaylistId] = useState<string | undefined>(undefined);
+  const [catalogRefreshTrigger, setCatalogRefreshTrigger] = useState(0);
+  const prevViewTypeRef = useRef<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [autoplay, setAutoplay] = useState(true);
@@ -164,6 +168,18 @@ export default function ChannelPage() {
   useEffect(() => {
     localStorage.setItem("ch:groupMode", channelGroupMode);
   }, [channelGroupMode]);
+
+  // Refresh catalog normalizer drafts and clear temporary playlist selection when returning from player
+  useEffect(() => {
+    const prev = prevViewTypeRef.current;
+    prevViewTypeRef.current = viewType;
+    if (prev === "player" && viewType === "grid" && activeTab === "catalog") {
+      setSelectedPlaylist(null);
+      setPlayerNormalizerOpen(false);
+      setPlayerPlaylistId(undefined);
+      setCatalogRefreshTrigger((count) => count + 1);
+    }
+  }, [viewType, activeTab]);
 
   // Reset state when tab changes
   useEffect(() => {
@@ -427,6 +443,26 @@ export default function ChannelPage() {
       )
     : displayedVideos;
 
+  const handleOpenVideoInPlayerFromCatalog = (
+    playlistId: string,
+    video: YTVideo,
+    _gameTag: string,
+  ) => {
+    const targetPlaylist: YTPlaylist = playlists.find((p) => p.id === playlistId) ?? {
+      id: playlistId,
+      title: "",
+      description: "",
+      thumbnailUrl: "",
+      videoCount: 0,
+      publishedAt: "",
+    };
+    setSelectedPlaylist(targetPlaylist);
+    setSelectedVideo(video);
+    setPlayerNormalizerOpen(true);
+    setPlayerPlaylistId(playlistId);
+    setViewType("player");
+  };
+
   const handleNext = () => {
     if (!selectedVideo) return;
     const idx = playerVideos.findIndex((v) => v.id === selectedVideo.id);
@@ -486,6 +522,8 @@ export default function ChannelPage() {
 
     lastSelectedId.current = video.id;
     setSelectedVideo(video);
+    setPlayerNormalizerOpen(false);
+    setPlayerPlaylistId(selectedPlaylist?.id);
     setViewType("player");
   };
 
@@ -1643,6 +1681,8 @@ export default function ChannelPage() {
                 onNext={handleNext}
                 onPrev={handlePrev}
                 onRequestDelete={(v) => setDeleteTargets([v])}
+                initialNormalizerOpen={playerNormalizerOpen}
+                playlistId={playerPlaylistId ?? selectedPlaylist?.id}
                 onEnded={() => {
                   if (autoplay) handleNext();
                 }}
@@ -1650,11 +1690,22 @@ export default function ChannelPage() {
             </ErrorBoundary>
           </main>
         </div>
-      ) : activeTab === "catalog" ? (
-        <div className="flex-1 flex overflow-hidden">
-          <PlaylistCatalogPanel />
+      ) : null}
+      {activeTab === "catalog" && (
+        <div
+          className={
+            viewType === "player" && selectedVideo
+              ? "hidden"
+              : "flex-1 flex overflow-hidden"
+          }
+        >
+          <PlaylistCatalogPanel
+            onOpenVideoInPlayer={handleOpenVideoInPlayerFromCatalog}
+            refreshTrigger={catalogRefreshTrigger}
+          />
         </div>
-      ) : (
+      )}
+      {!(viewType === "player" && selectedVideo) && activeTab !== "catalog" && (
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-full">
