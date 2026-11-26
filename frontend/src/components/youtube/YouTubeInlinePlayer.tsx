@@ -19,6 +19,7 @@ import YouTubeThumbnailPicker from "./YouTubeThumbnailPicker";
 import YouTubePlaylistPicker from "./YouTubePlaylistPicker";
 import VideoStatusBadge from "./VideoStatusBadge";
 import YouTubeTransportBar from "./YouTubeTransportBar";
+import TitleNormalizerPanel from "./TitleNormalizerPanel";
 import {
   resolvePlayerKeyAction,
   clampSeek,
@@ -48,6 +49,8 @@ interface YouTubeInlinePlayerProps {
   onUpdate?: () => void;
   onEnded?: () => void;
   onRequestDelete?: (video: YTVideo) => void;
+  initialNormalizerOpen?: boolean;
+  playlistId?: string;
 }
 
 const STORAGE_YT_INFO_EXPANDED_KEY = "yt_player_info_expanded";
@@ -60,6 +63,8 @@ export default function YouTubeInlinePlayer({
   onUpdate,
   onEnded,
   onRequestDelete,
+  initialNormalizerOpen = false,
+  playlistId,
 }: YouTubeInlinePlayerProps) {
   const formatNumber = (num: number) => {
     if (!num) return "0";
@@ -134,6 +139,15 @@ export default function YouTubeInlinePlayer({
   );
   const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
   const [pendingTagForModal, setPendingTagForModal] = useState<string | null>(null);
+  const [isNormalizerOpen, setIsNormalizerOpen] = useState<boolean>(
+    initialNormalizerOpen,
+  );
+  const [titleSeparator, setTitleSeparator] = useState<string | undefined>(
+    undefined,
+  );
+  const [recentFieldValues, setRecentFieldValues] = useState<
+    Record<string, string[]> | undefined
+  >(undefined);
 
   const [isSaving, setIsSaving] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
@@ -205,6 +219,12 @@ export default function YouTubeInlinePlayer({
           setTagPlaylistConfigs(parseTagPlaylistConfigs(raw, legacy));
           if (cfg.game_profiles) {
             setGameProfiles(cfg.game_profiles);
+          }
+          if (cfg.title_separator) {
+            setTitleSeparator(cfg.title_separator);
+          }
+          if (cfg.recent_field_values) {
+            setRecentFieldValues(cfg.recent_field_values);
           }
         }
       })
@@ -393,6 +413,50 @@ export default function YouTubeInlinePlayer({
 
   const renderMetadataForm = () => (
     <>
+      {/* Normalize with Profile collapsible section */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          aria-expanded={isNormalizerOpen}
+          onClick={() => setIsNormalizerOpen((prev) => !prev)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-xs font-medium text-white/90 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3ea6ff]"
+        >
+          <span>Normalize with Profile</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`transition-transform ${isNormalizerOpen ? "rotate-180" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        {isNormalizerOpen && (
+          <TitleNormalizerPanel
+            video={video}
+            playlistId={playlistId}
+            gameProfiles={gameProfiles}
+            recentFieldValues={recentFieldValues}
+            titleSeparator={titleSeparator}
+            defaultGameTag={tagInput}
+            hasNext={Boolean(onNext)}
+            onSyncAndNext={onNext ?? undefined}
+            onSynced={(_videoId, newTitle, nextGameTag, nextEpisode) => {
+              setEditableTitle(newTitle);
+              setTagInput(nextGameTag);
+              setEpisodeInput(nextEpisode > 0 ? nextEpisode : "");
+              onUpdate?.();
+            }}
+          />
+        )}
+      </div>
+
       <div className="flex flex-wrap gap-3">
         <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
           <label htmlFor="yt-game-profile-select" className="text-sm font-medium text-white/90">
