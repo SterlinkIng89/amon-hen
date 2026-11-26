@@ -17,6 +17,8 @@ export function ApplyPlaylistCatalog(arg1:backend.CatalogApplyRequest):Promise<v
 
 export function ApplySingleVideoTitleUpdate(arg1:string,arg2:string):Promise<void>;
 
+export function BackfillGameTagsFromPlaylists():Promise<number>;
+
 export function BackupSingleFile(arg1:string,arg2:string):Promise<string>;
 
 export function CacheHandler():Promise<http.Handler>;

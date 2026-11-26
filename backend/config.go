@@ -445,7 +445,13 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 	a.config.TagPlaylists[canonicalKey] = vodPlaylistID
 	a.configMu.Unlock()
 
-	return a.saveConfig()
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SetTagPlaylistConfig] Error backfilling game tags from playlists: %v", err)
+	}
+	return nil
 }
 
 // SetTagThumbnailConfig updates the automated thumbnail template configuration for a given tag.

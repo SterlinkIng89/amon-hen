@@ -26,6 +26,10 @@ export function ApplySingleVideoTitleUpdate(arg1, arg2) {
   return window['go']['backend']['App']['ApplySingleVideoTitleUpdate'](arg1, arg2);
 }
 
+export function BackfillGameTagsFromPlaylists() {
+  return window['go']['backend']['App']['BackfillGameTagsFromPlaylists']();
+}
+
 export function BackupSingleFile(arg1, arg2) {
   return window['go']['backend']['App']['BackupSingleFile'](arg1, arg2);
 }

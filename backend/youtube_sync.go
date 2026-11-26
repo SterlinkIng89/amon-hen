@@ -163,6 +163,10 @@ func (a *App) SyncChannelData() error {
 		appLog("[SyncChannelData] Error matching exported videos: %v", err)
 	}
 
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SyncChannelData] Error backfilling game tags from playlists: %v", err)
+	}
+
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
 	return nil
 }
@@ -723,6 +727,10 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 
 	if _, err := a.MatchExportedVideos(); err != nil {
 		appLog("[SyncRecentVideos] Error matching exported videos during light sync: %v", err)
+	}
+
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SyncRecentVideos] Error backfilling game tags from playlists during light sync: %v", err)
 	}
 
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
