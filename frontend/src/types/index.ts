@@ -68,10 +68,16 @@ export interface SteamGameArtwork {
   logoUrl?: string;
 }
 
+export interface GameArtworkConfig {
+  readonly poster_url?: string;
+  readonly hero_url?: string;
+}
+
 export interface TagPlaylistConfig {
   vod_playlist_id: string;
   clip_playlist_id: string;
   thumbnail_config?: TagThumbnailConfig;
+  artwork?: GameArtworkConfig;
 }
 
 export interface GameProfile {

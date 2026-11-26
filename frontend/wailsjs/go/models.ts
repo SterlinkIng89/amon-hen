@@ -381,6 +381,20 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class GameArtworkConfig {
+	    poster_url?: string;
+	    hero_url?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameArtworkConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.poster_url = source["poster_url"];
+	        this.hero_url = source["hero_url"];
+	    }
+	}
 	export class TitleLayer {
 	    enabled: boolean;
 	    text_override?: string;
@@ -509,6 +523,7 @@ export namespace backend {
 	    vod_playlist_id: string;
 	    clip_playlist_id: string;
 	    thumbnail_config?: TagThumbnailConfig;
+	    artwork?: GameArtworkConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new TagPlaylistConfig(source);
@@ -519,6 +534,7 @@ export namespace backend {
 	        this.vod_playlist_id = source["vod_playlist_id"];
 	        this.clip_playlist_id = source["clip_playlist_id"];
 	        this.thumbnail_config = this.convertValues(source["thumbnail_config"], TagThumbnailConfig);
+	        this.artwork = this.convertValues(source["artwork"], GameArtworkConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -824,6 +840,7 @@ export namespace backend {
 	
 	
 	
+	
 	export class MatchedExportItem {
 	    exportId: string;
 	    sourcePath: string;
@@ -1106,6 +1123,40 @@ export namespace backend {
 	
 	
 	
+	export class TitleNormalizationDraft {
+	    videoId: string;
+	    playlistId: string;
+	    gameTag: string;
+	    profileType: string;
+	    event: string;
+	    gameMode: string;
+	    dateOverride: string;
+	    episode: number;
+	    customVars: Record<string, string>;
+	    proposedTitle: string;
+	    status: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TitleNormalizationDraft(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.playlistId = source["playlistId"];
+	        this.gameTag = source["gameTag"];
+	        this.profileType = source["profileType"];
+	        this.event = source["event"];
+	        this.gameMode = source["gameMode"];
+	        this.dateOverride = source["dateOverride"];
+	        this.episode = source["episode"];
+	        this.customVars = source["customVars"];
+	        this.proposedTitle = source["proposedTitle"];
+	        this.status = source["status"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	
 	export class UploadSession {
 	    videoPath: string;

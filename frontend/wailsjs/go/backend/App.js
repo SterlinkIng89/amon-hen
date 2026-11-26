@@ -70,6 +70,10 @@ export function DeletePlaylist(arg1) {
   return window['go']['backend']['App']['DeletePlaylist'](arg1);
 }
 
+export function DeleteTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['DeleteTitleNormalizationDraft'](arg1);
+}
+
 export function DeleteYouTubeVideo(arg1, arg2) {
   return window['go']['backend']['App']['DeleteYouTubeVideo'](arg1, arg2);
 }
@@ -238,12 +242,24 @@ export function GetSyncStatus() {
   return window['go']['backend']['App']['GetSyncStatus']();
 }
 
+export function GetTagGameArtwork(arg1) {
+  return window['go']['backend']['App']['GetTagGameArtwork'](arg1);
+}
+
 export function GetTagPlaylistConfig(arg1) {
   return window['go']['backend']['App']['GetTagPlaylistConfig'](arg1);
 }
 
 export function GetThumbnail(arg1) {
   return window['go']['backend']['App']['GetThumbnail'](arg1);
+}
+
+export function GetTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['GetTitleNormalizationDraft'](arg1);
+}
+
+export function GetTitleNormalizationDrafts(arg1) {
+  return window['go']['backend']['App']['GetTitleNormalizationDrafts'](arg1);
 }
 
 export function GetUploadSessions() {
@@ -312,6 +328,10 @@ export function LogFrontendEvent(arg1) {
 
 export function LoginSteam() {
   return window['go']['backend']['App']['LoginSteam']();
+}
+
+export function MarkTitleNormalizationDraftSynced(arg1, arg2) {
+  return window['go']['backend']['App']['MarkTitleNormalizationDraftSynced'](arg1, arg2);
 }
 
 export function MatchExportedVideos() {
@@ -394,6 +414,14 @@ export function SaveSteamAPIKey(arg1) {
   return window['go']['backend']['App']['SaveSteamAPIKey'](arg1);
 }
 
+export function SaveTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['SaveTitleNormalizationDraft'](arg1);
+}
+
+export function SaveTitleNormalizationDraftsBatch(arg1) {
+  return window['go']['backend']['App']['SaveTitleNormalizationDraftsBatch'](arg1);
+}
+
 export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
   return window['go']['backend']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
@@ -436,6 +464,10 @@ export function SetDefaultVideoDescription(arg1) {
 
 export function SetSteamAppID(arg1, arg2) {
   return window['go']['backend']['App']['SetSteamAppID'](arg1, arg2);
+}
+
+export function SetTagGameArtwork(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['SetTagGameArtwork'](arg1, arg2, arg3);
 }
 
 export function SetTagPlaylist(arg1, arg2) {
@@ -548,6 +580,10 @@ export function UpdateYouTubeVideoGameMeta(arg1, arg2, arg3) {
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
+}
+
+export function UploadTagGameArtworkFile(arg1, arg2) {
+  return window['go']['backend']['App']['UploadTagGameArtworkFile'](arg1, arg2);
 }
 
 export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {

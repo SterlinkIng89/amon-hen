@@ -3,7 +3,9 @@ import {
   GetSteamAppID,
   GetSteamGameAssets,
   GetSteamGameAchievementPct,
+  GetTagGameArtwork,
 } from "../../wailsjs/go/backend/App";
+import { GameArtworkConfig } from "../types";
 
 export interface SteamGameData {
   readonly appId: string;
@@ -22,7 +24,8 @@ const INITIAL_STEAM_DATA: SteamGameData = {
 };
 
 /**
- * Custom hook to retrieve Steam metadata, posters, and achievements for a game title.
+ * Custom hook to retrieve Steam metadata, posters, and achievements for a game title,
+ * prioritizing user-configured custom artwork when present.
  */
 export function useSteamGameData(gameName: string): SteamGameData {
   const [data, setData] = useState<SteamGameData>(INITIAL_STEAM_DATA);
@@ -36,49 +39,80 @@ export function useSteamGameData(gameName: string): SteamGameData {
       return;
     }
 
-    GetSteamAppID(trimmed)
-      .then(async (id: unknown) => {
-        const strId = typeof id === "string" ? id : "";
-        if (!mounted || !strId || strId === "NOT_FOUND") {
-          if (mounted) setData(INITIAL_STEAM_DATA);
-          return;
-        }
+    const loadArtwork = async () => {
+      const customPromise: Promise<GameArtworkConfig> =
+        typeof GetTagGameArtwork === "function"
+          ? GetTagGameArtwork(trimmed).catch((err) => {
+              console.error(err);
+              return {};
+            })
+          : Promise.resolve({});
 
-        let heroUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${strId}/library_hero.jpg`;
-        let posterUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${strId}/library_600x900_2x.jpg`;
-        let headerUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${strId}/header.jpg`;
-        let achievementsPct = 0;
+      const steamIdPromise: Promise<string> =
+        typeof GetSteamAppID === "function"
+          ? GetSteamAppID(trimmed)
+              .then((id: unknown) => (typeof id === "string" ? id : ""))
+              .catch((err) => {
+                console.error(err);
+                return "";
+              })
+          : Promise.resolve("");
 
-        if (typeof GetSteamGameAssets === "function") {
-          try {
-            const assets = await GetSteamGameAssets(strId);
-            if (assets?.heroUrl) heroUrl = assets.heroUrl;
-            if (assets?.posterUrl) posterUrl = assets.posterUrl;
-            if (assets?.headerUrl) headerUrl = assets.headerUrl;
-          } catch (e) {
-            console.error(e);
-          }
-        }
+      const [custom, rawId] = await Promise.all([customPromise, steamIdPromise]);
+      if (!mounted) return;
 
-        if (typeof GetSteamGameAchievementPct === "function") {
-          try {
-            const pct = await GetSteamGameAchievementPct(strId);
-            if (typeof pct === "number" && pct > 0) {
-              achievementsPct = pct;
-            }
-          } catch (e) {
-            console.error(e);
-          }
-        }
+      const customPoster = custom?.poster_url?.trim() || "";
+      const customHero = custom?.hero_url?.trim() || "";
 
-        if (mounted) {
-          setData({ appId: strId, heroUrl, posterUrl, headerUrl, achievementsPct });
+      const strId = rawId && rawId !== "NOT_FOUND" ? rawId : "";
+
+      let steamHeroUrl = "";
+      let steamPosterUrl = "";
+      let steamHeaderUrl = "";
+      let achievementsPct = 0;
+
+      if (strId) {
+        steamHeroUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${strId}/library_hero.jpg`;
+        steamPosterUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${strId}/library_600x900_2x.jpg`;
+        steamHeaderUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${strId}/header.jpg`;
+
+        const assetsPromise =
+          typeof GetSteamGameAssets === "function"
+            ? GetSteamGameAssets(strId).catch((e) => {
+                console.error(e);
+                return null;
+              })
+            : Promise.resolve(null);
+
+        const pctPromise =
+          typeof GetSteamGameAchievementPct === "function"
+            ? GetSteamGameAchievementPct(strId).catch((e) => {
+                console.error(e);
+                return 0;
+              })
+            : Promise.resolve(0);
+
+        const [assets, pct] = await Promise.all([assetsPromise, pctPromise]);
+        if (assets?.heroUrl) steamHeroUrl = assets.heroUrl;
+        if (assets?.posterUrl) steamPosterUrl = assets.posterUrl;
+        if (assets?.headerUrl) steamHeaderUrl = assets.headerUrl;
+        if (typeof pct === "number" && pct > 0) {
+          achievementsPct = pct;
         }
-      })
-      .catch((err) => {
-        console.error(err);
-        if (mounted) setData(INITIAL_STEAM_DATA);
+      }
+
+      if (!mounted) return;
+
+      setData({
+        appId: strId,
+        posterUrl: customPoster || steamPosterUrl,
+        heroUrl: customHero || steamHeroUrl,
+        headerUrl: customHero || steamHeaderUrl || customPoster,
+        achievementsPct,
       });
+    };
+
+    void loadArtwork();
 
     return () => {
       mounted = false;

@@ -1,4 +1,9 @@
-import { ElementLayout, TagPlaylistConfig, TagThumbnailConfig } from "../types";
+import {
+  ElementLayout,
+  GameArtworkConfig,
+  TagPlaylistConfig,
+  TagThumbnailConfig,
+} from "../types";
 
 export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefined {
   if (!raw) return undefined;
@@ -86,6 +91,18 @@ export function parseTagThumbnailConfig(raw?: any): TagThumbnailConfig | undefin
   };
 }
 
+export function parseGameArtworkConfig(raw?: unknown): GameArtworkConfig | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const obj = raw as Record<string, unknown>;
+  const posterUrl = typeof obj.poster_url === "string" ? obj.poster_url.trim() : "";
+  const heroUrl = typeof obj.hero_url === "string" ? obj.hero_url.trim() : "";
+  if (!posterUrl && !heroUrl) return undefined;
+  return {
+    ...(posterUrl ? { poster_url: posterUrl } : {}),
+    ...(heroUrl ? { hero_url: heroUrl } : {}),
+  };
+}
+
 export function parseTagPlaylistConfig(
   raw?: any,
   legacyVod?: string,
@@ -104,6 +121,7 @@ export function parseTagPlaylistConfig(
     vod_playlist_id: vod,
     clip_playlist_id: clip,
     thumbnail_config: parseTagThumbnailConfig(raw?.thumbnail_config),
+    artwork: parseGameArtworkConfig(raw?.artwork),
   };
 }
 
