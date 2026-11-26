@@ -50,10 +50,16 @@ type TagThumbnailConfig struct {
 	Title           *TitleLayer    `json:"title,omitempty"`
 }
 
+type GameArtworkConfig struct {
+	PosterURL string `json:"poster_url,omitempty"`
+	HeroURL   string `json:"hero_url,omitempty"`
+}
+
 type TagPlaylistConfig struct {
 	VodPlaylistID   string             `json:"vod_playlist_id"`
 	ClipPlaylistID  string             `json:"clip_playlist_id"`
 	ThumbnailConfig TagThumbnailConfig `json:"thumbnail_config,omitempty"`
+	Artwork         *GameArtworkConfig `json:"artwork,omitempty"`
 }
 
 type VideoMeta struct {
