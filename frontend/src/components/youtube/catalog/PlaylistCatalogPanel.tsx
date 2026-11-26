@@ -64,6 +64,9 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
     updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
+    editedKind,
+    setEditedKind,
+    isClipPlaylist,
     editedEpisodes,
     setEpisode,
     reorderDuplicate,
@@ -442,8 +445,8 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
   );
 
   // Resolve VOD and Clip playlist IDs for 1:1 playlist cover generator
-  const isCurrentVod = draft?.kind === "vod";
-  const isCurrentClip = draft?.kind === "clip";
+  const isCurrentVod = editedKind === "vod";
+  const isCurrentClip = editedKind === "clip";
   const tagVodPlaylist = playlists.find(
     (p) => p.tag === editedTag.trim() && p.kind === "vod"
   );
@@ -648,7 +651,37 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
               <div className="xl:col-span-7 2xl:col-span-7 3xl:col-span-8 space-y-4">
                 {/* Game Tag Mapping */}
                 <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
-                  <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-elevated/60 p-0.5" role="group" aria-label="Playlist Type">
+                      <button
+                        type="button"
+                        aria-pressed={editedKind === "vod"}
+                        onClick={() => setEditedKind("vod")}
+                        disabled={isBatchProcessing}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          editedKind === "vod"
+                            ? "bg-surface text-text-primary shadow-xs"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        VODs (Numbered)
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={editedKind === "clip"}
+                        onClick={() => setEditedKind("clip")}
+                        disabled={isBatchProcessing}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          editedKind === "clip"
+                            ? "bg-surface text-text-primary shadow-xs"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Clips (No numbering)
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <div className="w-full sm:w-72">
                       <input
@@ -713,13 +746,17 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
                 {/* Episode Mapping Table */}
                 <div className="space-y-3">
                   <div>
-                    <h4 className="text-xs font-semibold text-text-primary">Episode Mapping</h4>
+                    <h4 className="text-xs font-semibold text-text-primary">
+                      {isClipPlaylist ? "Playlist Videos" : "Episode Mapping"}
+                    </h4>
                     <p className="text-[11px] text-text-secondary mt-0.5">
-                      Verify episode numbering, select rows for thumbnail updates, or preview in the template studio.
+                      {isClipPlaylist
+                        ? "Select rows for thumbnail updates or preview in the template studio."
+                        : "Verify episode numbering, select rows for thumbnail updates, or preview in the template studio."}
                     </p>
                   </div>
 
-                  {hasConflicts && (
+                  {!isClipPlaylist && hasConflicts && (
                     <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -744,7 +781,7 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
                     </div>
                   )}
 
-                  {!hasConflicts && chronologyIssueIds.size > 0 && (
+                  {!isClipPlaylist && !hasConflicts && chronologyIssueIds.size > 0 && (
                     <div className="p-3 text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
@@ -782,6 +819,7 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
                     onSyncVideoFromTitle={syncVideoFromTitle}
                     onSyncAllFromTitle={syncAllFromTitle}
                     chronologyIssueIds={chronologyIssueIds}
+                    isClipPlaylist={isClipPlaylist}
                     onResolveDuplicate={setResolvingEpisode}
                     onFixTitleMismatch={handleFixTitleMismatch}
                   />
@@ -810,7 +848,9 @@ export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
                       onChange={(e) => setUpdateLocal(e.target.checked)}
                       className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated"
                     />
-                    Sync game tag and episode numbers to matched local library videos
+                    {isClipPlaylist
+                      ? "Sync game tag to matched local library videos"
+                      : "Sync game tag and episode numbers to matched local library videos"}
                   </label>
 
                   <div className="flex items-center gap-3">

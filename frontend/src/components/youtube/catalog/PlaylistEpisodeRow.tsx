@@ -132,6 +132,7 @@ export interface PlaylistEpisodeRowProps {
   readonly isSelected: boolean;
   readonly isPreviewActive: boolean;
   readonly isChronologyIssue: boolean;
+  readonly isClipPlaylist?: boolean;
   readonly isBatchRunning?: boolean;
   readonly isAssetsReady?: boolean;
   readonly batchItem?: BatchItem;
@@ -152,6 +153,7 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
   isSelected,
   isPreviewActive,
   isChronologyIssue,
+  isClipPlaylist = false,
   isBatchRunning,
   isAssetsReady,
   batchItem,
@@ -175,6 +177,7 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
   const isSynced = isVideoThumbnailSynced(video, assignedEpisode, batchItem);
   const thumbEp = batchItem?.thumbnailEpisode ?? video.thumbnailEpisode ?? 0;
   const isStale =
+    !isClipPlaylist &&
     thumbEp > 0 &&
     assignedEpisode > 0 &&
     thumbEp !== assignedEpisode &&
@@ -333,85 +336,89 @@ export const PlaylistEpisodeRow: FC<PlaylistEpisodeRowProps> = ({
         <div className="text-[10px] text-text-muted font-mono mt-0.5 truncate">{video.videoId}</div>
       </td>
 
-      {/* Inferred Source Badge */}
-      <td className="py-2.5 px-3 w-28 min-w-28 text-center">
-        <div className="flex items-center justify-center">
-          {sourceBadge ? (
-            <span
-              className={`inline-flex items-center justify-center min-w-[56px] px-2 py-0.5 rounded text-[10px] font-mono border ${sourceBadge.className}`}
-            >
-              {sourceBadge.label}
-            </span>
-          ) : (
-            <span className="text-[10px] text-text-muted font-mono">
-              {video.episode > 0 ? `Ep ${video.episode}` : "—"}
-            </span>
-          )}
-        </div>
-      </td>
-
-      {/* Episode Number Input & Title Suggestion */}
-      <td className="py-2.5 px-3 w-64 min-w-64 text-center">
-        <div className="flex items-center justify-center gap-3">
-          <input
-            type="number"
-            min="1"
-            value={assignedEpisode}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              onEpisodeChange(video.videoId, isNaN(val) ? 0 : val);
-            }}
-            className={`w-14 h-7 text-center rounded-lg bg-elevated border text-text-primary text-xs font-mono outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors ${
-              isDuplicate || isInvalid
-                ? "border-fire text-red-400 bg-fire-dim/30"
-                : "border-border-subtle"
-            }`}
-          />
-          <div className="w-36 h-7 flex items-center justify-start gap-1.5 shrink-0">
-            {isMismatch ? (
-              <>
+      {!isClipPlaylist && (
+        <>
+          {/* Inferred Source Badge */}
+          <td className="py-2.5 px-3 w-28 min-w-28 text-center">
+            <div className="flex items-center justify-center">
+              {sourceBadge ? (
                 <span
-                  className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap"
-                  title={`Parsed episode from title is ${titleEp}`}
+                  className={`inline-flex items-center justify-center min-w-[56px] px-2 py-0.5 rounded text-[10px] font-mono border ${sourceBadge.className}`}
                 >
-                  Title: {titleEp}
+                  {sourceBadge.label}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onSyncVideoFromTitle) {
-                      onSyncVideoFromTitle(video.videoId);
-                    } else {
-                      onEpisodeChange(video.videoId, titleEp);
-                    }
-                  }}
-                  disabled={isBatchRunning}
-                  className="px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 border border-accent/20 text-[10px] font-medium text-accent transition-colors disabled:opacity-40 whitespace-nowrap hover:border-accent/40 cursor-pointer"
-                  title={`Set episode to ${titleEp} from video title`}
-                >
-                  Use {titleEp}
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </td>
+              ) : (
+                <span className="text-[10px] text-text-muted font-mono">
+                  {video.episode > 0 ? `Ep ${video.episode}` : "—"}
+                </span>
+              )}
+            </div>
+          </td>
 
-      {/* Chronology Order Badge */}
-      <td className="py-2.5 px-3 w-36 min-w-36 text-center">
-        <div className="flex items-center justify-center">
-          {isChronologyIssue ? (
-            <span
-              className="inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap min-w-[84px]"
-              title="Video violates chronological release order relative to its assigned episode"
-            >
-              Out of order
-            </span>
-          ) : (
-            <span className="text-[10px] text-text-muted/40 font-mono">—</span>
-          )}
-        </div>
-      </td>
+          {/* Episode Number Input & Title Suggestion */}
+          <td className="py-2.5 px-3 w-64 min-w-64 text-center">
+            <div className="flex items-center justify-center gap-3">
+              <input
+                type="number"
+                min="1"
+                value={assignedEpisode}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  onEpisodeChange(video.videoId, isNaN(val) ? 0 : val);
+                }}
+                className={`w-14 h-7 text-center rounded-lg bg-elevated border text-text-primary text-xs font-mono outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors ${
+                  isDuplicate || isInvalid
+                    ? "border-fire text-red-400 bg-fire-dim/30"
+                    : "border-border-subtle"
+                }`}
+              />
+              <div className="w-36 h-7 flex items-center justify-start gap-1.5 shrink-0">
+                {isMismatch ? (
+                  <>
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap"
+                      title={`Parsed episode from title is ${titleEp}`}
+                    >
+                      Title: {titleEp}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSyncVideoFromTitle) {
+                          onSyncVideoFromTitle(video.videoId);
+                        } else {
+                          onEpisodeChange(video.videoId, titleEp);
+                        }
+                      }}
+                      disabled={isBatchRunning}
+                      className="px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 border border-accent/20 text-[10px] font-medium text-accent transition-colors disabled:opacity-40 whitespace-nowrap hover:border-accent/40 cursor-pointer"
+                      title={`Set episode to ${titleEp} from video title`}
+                    >
+                      Use {titleEp}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </td>
+
+          {/* Chronology Order Badge */}
+          <td className="py-2.5 px-3 w-36 min-w-36 text-center">
+            <div className="flex items-center justify-center">
+              {isChronologyIssue ? (
+                <span
+                  className="inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap min-w-[84px]"
+                  title="Video violates chronological release order relative to its assigned episode"
+                >
+                  Out of order
+                </span>
+              ) : (
+                <span className="text-[10px] text-text-muted/40 font-mono">—</span>
+              )}
+            </div>
+          </td>
+        </>
+      )}
 
       {/* Thumbnail Status Badge */}
       <td className="py-2.5 px-3 w-36 min-w-36 text-center">

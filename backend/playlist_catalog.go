@@ -870,8 +870,17 @@ func (a *App) ApplyPlaylistCatalog(req CatalogApplyRequest) error {
 	existingCfg := a.config.TagPlaylistConfigs[tag]
 	if req.Kind == "clip" {
 		existingCfg.ClipPlaylistID = req.PlaylistID
+		if existingCfg.VodPlaylistID == req.PlaylistID {
+			existingCfg.VodPlaylistID = ""
+		}
+		if a.config.TagPlaylists[tag] == req.PlaylistID {
+			delete(a.config.TagPlaylists, tag)
+		}
 	} else {
 		existingCfg.VodPlaylistID = req.PlaylistID
+		if existingCfg.ClipPlaylistID == req.PlaylistID {
+			existingCfg.ClipPlaylistID = ""
+		}
 		a.config.TagPlaylists[tag] = req.PlaylistID
 	}
 	a.config.TagPlaylistConfigs[tag] = existingCfg
