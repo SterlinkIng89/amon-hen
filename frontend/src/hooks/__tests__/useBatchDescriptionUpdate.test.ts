@@ -1,6 +1,7 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useBatchDescriptionUpdate } from "../useBatchDescriptionUpdate";
+import { useAppStore } from "../../store/useAppStore";
 import * as AppBindings from "../../../wailsjs/go/backend/App";
 
 vi.mock("../../../wailsjs/go/backend/App", () => ({
@@ -10,6 +11,7 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
 describe("useBatchDescriptionUpdate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAppStore.getState().clearBatchJobs();
   });
 
   const sampleItems = [

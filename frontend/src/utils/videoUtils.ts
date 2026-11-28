@@ -184,18 +184,6 @@ export function generateYouTubeTitle(
 
   if (!game) return datePart;
 
-  if (contentType === "clip") {
-    let clipTitle = event?.trim() || "";
-    if (!clipTitle) {
-      const stem = filename.replace(/\.[^/.]+$/, "");
-      const cleanStem = stem
-        .replace(/(?:^|_|-|\s)\d{4}-\d{2}-\d{2}(?:_|-|\s|$)/, "")
-        .replace(/^[_\-\s]+|[_\-\s]+$/g, "");
-      clipTitle = cleanStem || "Clip";
-    }
-    return `${game}${sep}${datePart}${sep}${clipTitle}`;
-  }
-
   if (profile && profile.type === "multiplayer") {
     let template = profile.titleTemplate || "{event} - {gamemode} - {date}";
     let res = template.replace(/\{game\}/gi, game);
@@ -217,6 +205,18 @@ export function generateYouTubeTitle(
     res = res.replace(/\s*-\s*$/, "");
 
     return res;
+  }
+
+  if (contentType === "clip") {
+    let clipTitle = event?.trim() || "";
+    if (!clipTitle) {
+      const stem = filename.replace(/\.[^/.]+$/, "");
+      const cleanStem = stem
+        .replace(/(?:^|_|-|\s)\d{4}-\d{2}-\d{2}(?:_|-|\s|$)/, "")
+        .replace(/^[_\-\s]+|[_\-\s]+$/g, "");
+      clipTitle = cleanStem || "Clip";
+    }
+    return `${game}${sep}${datePart}${sep}${clipTitle}`;
   }
 
   const epSuffix = episode && episode > 0 ? `${sep}${episode}` : "";
@@ -275,11 +275,33 @@ export function computeExpectedLocalTitle(
   );
 }
 
+/**
+ * Transforms characters forbidden on Windows/macOS/Linux filesystems and ASCII hyphens
+ * into YouTube-safe Unicode equivalents so drag-and-drop uploads preserve slashes, colons,
+ * separators, and single spacing. Mirrors backend `sanitizeFilename`.
+ */
+export function sanitizeExportFilename(name: string): string {
+  const cleaned = name
+    .replace(/[/\\]/g, "\u2215")
+    .replace(/:/g, "\u2236")
+    .replace(/\|/g, "\u2223")
+    .replace(/"/g, "''")
+    .replace(/-/g, "\u2013")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[*?<>\r\n\t\x00-\x1f]/g, "")
+    .replace(/\u2013+/g, "\u2013")
+    .replace(/\s+/g, " ")
+    .replace(/^[ .\u2013]+|[ .\u2013]+$/g, "");
+  return cleaned || "video";
+}
+
 export function normalizeTitleForComparison(title?: string): string {
   if (!title) return "";
   return title
     .trim()
-    .replace(/\s*[—–\-|]\s*/g, " - ");
+    .replace(/[\u2215\u2044\uff0f]/g, "/")
+    .replace(/[\u2236\uff1a]/g, ":")
+    .replace(/\s*[—–\-|\u2223\uff5c]\s*/g, " - ");
 }
 
 export function titlesMatch(a?: string, b?: string): boolean {
@@ -535,7 +557,7 @@ export function groupByDayYT(
 
 export function extractGamePrefixFromTitle(title?: string): string {
   if (!title) return "";
-  const match = title.match(/^(.+?)(\s+[—\-]\s+.*)$/);
+  const match = title.match(/^(.+?)(\s+[—–\-|\u2223]\s+.*)$/);
   if (match && extractTitleDate(match[1]) === "") {
     return match[1].trim();
   }
@@ -903,7 +925,7 @@ export function formatPlaytimeHoursMinutes(decimalHours: number): string {
  */
 export function extractEpisodeFromTitle(title?: string): number {
   if (!title) return 0;
-  const match = title.match(/(?:[—\-]\s*|#)(\d+)(?![\d/])(?:\s*|$)/);
+  const match = title.match(/(?:[—–\-|\u2223]\s*|#)(\d+)(?![\d/\u2215])(?:\s*|$)/);
   if (!match) return 0;
   const parsed = parseInt(match[1], 10);
   return isNaN(parsed) ? 0 : parsed;

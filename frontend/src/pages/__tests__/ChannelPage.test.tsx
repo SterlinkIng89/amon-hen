@@ -28,6 +28,21 @@ vi.mock("../../../wailsjs/go/backend/App", () => ({
   GetPlaylistCatalogDraft: vi.fn().mockResolvedValue(null),
   GetSteamAppID: vi.fn().mockResolvedValue(""),
   GetAllGameTags: vi.fn().mockResolvedValue([]),
+  GetMatchedExports: vi.fn().mockResolvedValue([]),
+  ApplyMatchedExports: vi.fn().mockResolvedValue({
+    applied: [],
+    failed: {},
+    skipped: [],
+    cleanedUpPaths: [],
+    stoppedOnQuota: false,
+  }),
+  DismissExportRecord: vi.fn().mockResolvedValue(undefined),
+  GetQuotaStatus: vi.fn().mockResolvedValue({
+    used: 0,
+    limit: 10000,
+    remaining: 10000,
+    resetsAt: 0,
+  }),
 }));
 
 // Mock runtime events

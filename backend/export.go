@@ -19,7 +19,10 @@ type ExportItem struct {
 	TargetTitle   string   `json:"targetTitle"`
 	Description   string   `json:"description"`
 	Game          string   `json:"game"`
+	PlaylistID    string   `json:"playlistId"`
 	PlaylistTitle string   `json:"playlistTitle"`
+	Episode       int      `json:"episode"`
+	ContentType   string   `json:"contentType"`
 	Privacy       string   `json:"privacy"`
 	Tags          []string `json:"tags"`
 }
@@ -29,21 +32,32 @@ type ExportResult struct {
 	SuccessCount  int      `json:"successCount"`
 	FailedCount   int      `json:"failedCount"`
 	ExportedPaths []string `json:"exportedPaths"`
+	ExportIDs     []string `json:"exportIds"`
 	Errors        []string `json:"errors"`
 }
 
 var (
-	forbiddenCharsRegex = regexp.MustCompile(`[\\/:*?"<>|\r\n\t\x00-\x1f]`)
-	multiDashRegex      = regexp.MustCompile(`-+`)
+	forbiddenStripRegex = regexp.MustCompile(`[*?<>\r\n\t\x00-\x1f]`)
+	multiEnDashRegex    = regexp.MustCompile(`–+`)
 	multiSpaceRegex     = regexp.MustCompile(`\s+`)
 )
 
-// sanitizeFilename strips and transforms characters forbidden on Windows, macOS, and Linux filesystems.
+// sanitizeFilename transforms characters forbidden on Windows, macOS, and Linux filesystems
+// and replaces ASCII hyphens with YouTube-safe Unicode equivalents so drag-and-drop uploads
+// into YouTube Studio preserve slashes, colons, separators, and single spacing.
 func sanitizeFilename(name string) string {
-	cleaned := forbiddenCharsRegex.ReplaceAllString(name, "-")
-	cleaned = multiDashRegex.ReplaceAllString(cleaned, "-")
+	cleaned := strings.NewReplacer(
+		"/", "\u2215",
+		"\\", "\u2215",
+		":", "\u2236",
+		"|", "\u2223",
+		"\"", "''",
+		"-", "\u2013",
+	).Replace(name)
+	cleaned = forbiddenStripRegex.ReplaceAllString(cleaned, "")
+	cleaned = multiEnDashRegex.ReplaceAllString(cleaned, "\u2013")
 	cleaned = multiSpaceRegex.ReplaceAllString(cleaned, " ")
-	cleaned = strings.Trim(cleaned, " .-")
+	cleaned = strings.Trim(cleaned, " .–")
 	if cleaned == "" {
 		return "video"
 	}
@@ -147,11 +161,16 @@ func (a *App) SelectExportFolder() (string, error) {
 	return dir, nil
 }
 
-// ExportVideos copies selected videos with sanitized titles and optional metadata to destinationFolder.
-func (a *App) ExportVideos(items []ExportItem, destinationFolder string, writeMetadata bool) (ExportResult, error) {
+// ExportVideos copies selected videos with sanitized titles or tracking IDs and optional metadata to destinationFolder.
+func (a *App) ExportVideos(items []ExportItem, destinationFolder string, writeMetadata bool, useTrackingID bool) (ExportResult, error) {
 	result := ExportResult{
 		ExportedPaths: make([]string, 0),
+		ExportIDs:     make([]string, 0),
 		Errors:        make([]string, 0),
+	}
+
+	if useTrackingID && (a.db == nil || a.db.conn == nil) {
+		return result, fmt.Errorf("database not initialized")
 	}
 
 	targetDir := destinationFolder
@@ -168,45 +187,91 @@ func (a *App) ExportVideos(items []ExportItem, destinationFolder string, writeMe
 	}
 
 	for _, item := range items {
-		if item.SourcePath == "" {
+		destPath, exportID, err := a.exportSingleVideo(item, targetDir, writeMetadata, useTrackingID)
+		if err != nil {
 			result.FailedCount++
-			result.Errors = append(result.Errors, "source path cannot be empty")
+			result.Errors = append(result.Errors, err.Error())
 			continue
 		}
-
-		if _, err := os.Stat(item.SourcePath); os.IsNotExist(err) {
-			result.FailedCount++
-			result.Errors = append(result.Errors, fmt.Sprintf("source file does not exist: %s", item.SourcePath))
-			continue
+		if exportID != "" {
+			result.ExportIDs = append(result.ExportIDs, exportID)
 		}
-
-		ext := filepath.Ext(item.SourcePath)
-		titleToUse := item.TargetTitle
-		if strings.TrimSpace(titleToUse) == "" {
-			titleToUse = strings.TrimSuffix(filepath.Base(item.SourcePath), ext)
-		}
-		sanitized := sanitizeFilename(titleToUse)
-		destPath := resolveUniqueDestination(targetDir, sanitized, ext)
-
-		if err := copyFileNonDestructive(item.SourcePath, destPath); err != nil {
-			result.FailedCount++
-			result.Errors = append(result.Errors, fmt.Sprintf("failed to copy %s: %v", filepath.Base(item.SourcePath), err))
-			continue
-		}
-
-		if writeMetadata {
-			stem := strings.TrimSuffix(destPath, ext)
-			metaPath := stem + ".txt"
-			if err := writeMetadataCompanion(metaPath, item); err != nil {
-				appLog("[Export] Warning: failed to write metadata companion for %s: %v", filepath.Base(destPath), err)
-			}
-		}
-
 		result.SuccessCount++
 		result.ExportedPaths = append(result.ExportedPaths, destPath)
 	}
 
 	return result, nil
+}
+
+func (a *App) exportSingleVideo(item ExportItem, targetDir string, writeMetadata bool, useTrackingID bool) (string, string, error) {
+	if item.SourcePath == "" {
+		return "", "", fmt.Errorf("source path cannot be empty")
+	}
+	if _, err := os.Stat(item.SourcePath); os.IsNotExist(err) {
+		return "", "", fmt.Errorf("source file does not exist: %s", item.SourcePath)
+	}
+
+	ext := filepath.Ext(item.SourcePath)
+	baseName, exportID, err := resolveExportBaseName(item, ext, useTrackingID)
+	if err != nil {
+		return "", "", err
+	}
+
+	destPath := resolveUniqueDestination(targetDir, baseName, ext)
+	if err := copyFileNonDestructive(item.SourcePath, destPath); err != nil {
+		return "", "", fmt.Errorf("failed to copy %s: %v", filepath.Base(item.SourcePath), err)
+	}
+
+	if useTrackingID {
+		rec := ExportedVideoRecord{
+			ExportID:      exportID,
+			SourcePath:    item.SourcePath,
+			ExportedPath:  destPath,
+			TargetTitle:   item.TargetTitle,
+			Description:   item.Description,
+			Privacy:       item.Privacy,
+			GameTag:       item.Game,
+			PlaylistID:    item.PlaylistID,
+			PlaylistTitle: item.PlaylistTitle,
+			Episode:       item.Episode,
+			ContentType:   item.ContentType,
+			Tags:          strings.Join(item.Tags, ","),
+			Status:        "exported",
+		}
+		if err := a.insertExportedVideo(rec); err != nil {
+			_ = os.Remove(destPath)
+			return "", "", fmt.Errorf("failed to persist export manifest for %s: %v", filepath.Base(item.SourcePath), err)
+		}
+	}
+
+	if writeMetadata {
+		metaPath := strings.TrimSuffix(destPath, ext) + ".txt"
+		if err := writeMetadataCompanion(metaPath, item); err != nil {
+			appLog("[Export] Warning: failed to write metadata companion for %s: %v", filepath.Base(destPath), err)
+		}
+	}
+
+	return destPath, exportID, nil
+}
+
+func resolveExportBaseName(item ExportItem, ext string, useTrackingID bool) (string, string, error) {
+	if useTrackingID {
+		exportID, err := GenerateExportID()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to generate tracking ID for %s: %v", filepath.Base(item.SourcePath), err)
+		}
+		safeID := strings.ReplaceAll(exportID, "-", "\u2013")
+		if strings.TrimSpace(item.Game) != "" {
+			return fmt.Sprintf("%s \u2013 %s", safeID, sanitizeFilename(item.Game)), exportID, nil
+		}
+		return safeID, exportID, nil
+	}
+
+	titleToUse := item.TargetTitle
+	if strings.TrimSpace(titleToUse) == "" {
+		titleToUse = strings.TrimSuffix(filepath.Base(item.SourcePath), ext)
+	}
+	return sanitizeFilename(titleToUse), "", nil
 }
 
 // OpenFolderInExplorer opens the specified folder path or selects the file in the OS file manager.

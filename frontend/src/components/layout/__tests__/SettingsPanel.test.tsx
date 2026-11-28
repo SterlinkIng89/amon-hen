@@ -18,6 +18,15 @@ vi.mock("../../../../wailsjs/go/backend/App", () => ({
   GetSteamAppID: vi.fn().mockResolvedValue("123"),
   GetSteamGameAssets: vi.fn().mockResolvedValue({ heroUrl: "", headerUrl: "", posterUrl: "" }),
   SelectCustomThumbnailImage: vi.fn().mockResolvedValue(""),
+  GetBackupStatus: vi.fn().mockResolvedValue({
+    backupFolder: "",
+    totalBackedUp: 0,
+    totalBytes: 0,
+    lastBackupAt: 0,
+    enabledFolders: [],
+  }),
+  SetBackupFolder: vi.fn().mockResolvedValue(undefined),
+  SelectBackupFolder: vi.fn().mockResolvedValue(""),
 }));
 
 vi.mock("../../../../wailsjs/runtime/runtime", () => ({

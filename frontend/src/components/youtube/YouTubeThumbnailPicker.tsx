@@ -22,6 +22,11 @@ import {
   setCachedCustomThumb,
   subscribeCustomThumb,
 } from "../../hooks/useThumbnailQueue";
+import {
+  THUMBNAIL_FONTS,
+  getCachedThumbnailFont,
+  setCachedThumbnailFont,
+} from "../../utils/thumbnailFont";
 
 export interface YouTubeThumbnailPickerProps {
   readonly videoPath: string;
@@ -45,6 +50,7 @@ function createInitialThumbnailConfig(
     episode_position: config?.episode_position ?? "bottom-left",
     episode_format: config?.episode_format ?? "pad2",
     font_color: config?.font_color || "#ffffff",
+    font_family: config?.font_family || getCachedThumbnailFont(),
     image_framing: config?.image_framing,
     episode_layout: config?.episode_layout,
     logo: config?.logo,
@@ -457,6 +463,31 @@ export default function YouTubeThumbnailPicker({
                   <option value="pad2">01</option>
                   <option value="hash">#01</option>
                   <option value="ep">EP 01</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-text-secondary">
+                  Font
+                </span>
+                <select
+                  aria-label="Episode Font"
+                  className="h-6 bg-surface border border-border-subtle rounded px-1.5 text-[11px] text-text-primary outline-none focus:border-accent cursor-pointer"
+                  value={localConfig.font_family || getCachedThumbnailFont()}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setCachedThumbnailFont(chosen);
+                    setLocalConfig((prev) => ({
+                      ...prev,
+                      font_family: chosen,
+                    }));
+                  }}
+                >
+                  {THUMBNAIL_FONTS.map((font) => (
+                    <option key={font.id} value={font.id}>
+                      {font.id}
+                    </option>
+                  ))}
                 </select>
               </div>
 

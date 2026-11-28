@@ -14,11 +14,17 @@ export interface ThumbnailAssetsResult {
   readonly gameTitle: string;
 }
 
+export interface UseThumbnailAssetsOptions {
+  readonly skip?: boolean;
+}
+
 export function useThumbnailAssets(
   tag: string,
   config?: TagThumbnailConfig,
-  steamAppIdOverride?: string | null
+  steamAppIdOverride?: string | null,
+  options?: UseThumbnailAssetsOptions
 ): ThumbnailAssetsResult {
+  const skip = Boolean(options?.skip);
   const [steamAssets, setSteamAssets] = useState<SteamGameArtwork | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [decodingImage, setDecodingImage] = useState(false);
@@ -27,7 +33,7 @@ export function useThumbnailAssets(
 
   // Fetch Steam assets whenever tag or steamAppIdOverride changes
   useEffect(() => {
-    if (!tag) {
+    if (skip || !tag) {
       setSteamAssets(null);
       setFetchingMetadata(false);
       setBaseImage(null);
@@ -74,7 +80,7 @@ export function useThumbnailAssets(
     return () => {
       isCancelled = true;
     };
-  }, [tag, steamAppIdOverride]);
+  }, [skip, tag, steamAppIdOverride]);
 
   const resolvedImageUrl = useMemo(() => {
     return resolveThumbnailImageUrl(
@@ -93,7 +99,7 @@ export function useThumbnailAssets(
   // Preload base image element for canvas
   useEffect(() => {
     setBaseImage(null);
-    if (!resolvedImageUrl) {
+    if (skip || !resolvedImageUrl) {
       setDecodingImage(false);
       return;
     }
@@ -131,13 +137,13 @@ export function useThumbnailAssets(
     return () => {
       isCancelled = true;
     };
-  }, [resolvedImageUrl, tag, config?.source_type, steamAssets?.headerUrl]);
+  }, [skip, resolvedImageUrl, tag, config?.source_type, steamAssets?.headerUrl]);
 
   // Preload logo image element for canvas
   const logoUrl = steamAssets?.logoUrl;
   useEffect(() => {
     setLogoImage(null);
-    if (!logoUrl) {
+    if (skip || !logoUrl) {
       return;
     }
     let isCancelled = false;
@@ -153,7 +159,7 @@ export function useThumbnailAssets(
     return () => {
       isCancelled = true;
     };
-  }, [logoUrl]);
+  }, [skip, logoUrl]);
 
   return {
     steamAssets,

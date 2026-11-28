@@ -970,3 +970,72 @@ func TestGetPlaylistCatalogDraft_Description(t *testing.T) {
 		t.Errorf("expected draft.Videos[1].Description == %q, got %q", "", draft.Videos[1].Description)
 	}
 }
+
+func TestApplyPlaylistCatalog_SwitchKindCleansOldLink(t *testing.T) {
+	app := setupTestDB(t)
+	defer app.db.conn.Close()
+
+	_, err := app.db.conn.Exec(`INSERT INTO yt_videos (id, title) VALUES ('vid-sw-1', 'Highlight 1')`)
+	if err != nil {
+		t.Fatalf("failed to insert video: %v", err)
+	}
+
+	// First save as VOD
+	vodReq := CatalogApplyRequest{
+		PlaylistID:  "pl-switch",
+		Tag:         "lol",
+		Kind:        "vod",
+		UpdateLocal: false,
+		Assignments: []CatalogAssignment{{VideoID: "vid-sw-1", Episode: 1}},
+	}
+	if err := app.ApplyPlaylistCatalog(vodReq); err != nil {
+		t.Fatalf("ApplyPlaylistCatalog (vod) failed: %v", err)
+	}
+
+	// Switch the same playlist to Clip
+	clipReq := CatalogApplyRequest{
+		PlaylistID:  "pl-switch",
+		Tag:         "lol",
+		Kind:        "clip",
+		UpdateLocal: false,
+		Assignments: []CatalogAssignment{{VideoID: "vid-sw-1", Episode: 0}},
+	}
+	if err := app.ApplyPlaylistCatalog(clipReq); err != nil {
+		t.Fatalf("ApplyPlaylistCatalog (clip) failed: %v", err)
+	}
+
+	app.configMu.Lock()
+	cfg := app.config.TagPlaylistConfigs["lol"]
+	legacyVod := app.config.TagPlaylists["lol"]
+	app.configMu.Unlock()
+
+	if cfg.ClipPlaylistID != "pl-switch" {
+		t.Errorf("expected ClipPlaylistID == 'pl-switch', got %q", cfg.ClipPlaylistID)
+	}
+	if cfg.VodPlaylistID != "" {
+		t.Errorf("expected VodPlaylistID cleared when switching to clip, got %q", cfg.VodPlaylistID)
+	}
+	if legacyVod != "" {
+		t.Errorf("expected TagPlaylists['lol'] cleared when switching to clip, got %q", legacyVod)
+	}
+
+	// Switch back to VOD
+	if err := app.ApplyPlaylistCatalog(vodReq); err != nil {
+		t.Fatalf("ApplyPlaylistCatalog (back to vod) failed: %v", err)
+	}
+
+	app.configMu.Lock()
+	cfg = app.config.TagPlaylistConfigs["lol"]
+	legacyVod = app.config.TagPlaylists["lol"]
+	app.configMu.Unlock()
+
+	if cfg.VodPlaylistID != "pl-switch" {
+		t.Errorf("expected VodPlaylistID == 'pl-switch', got %q", cfg.VodPlaylistID)
+	}
+	if cfg.ClipPlaylistID != "" {
+		t.Errorf("expected ClipPlaylistID cleared when switching to vod, got %q", cfg.ClipPlaylistID)
+	}
+	if legacyVod != "pl-switch" {
+		t.Errorf("expected TagPlaylists['lol'] == 'pl-switch', got %q", legacyVod)
+	}
+}

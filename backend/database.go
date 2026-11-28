@@ -151,6 +151,52 @@ func (db *DB) migrate() error {
 			notes TEXT NOT NULL DEFAULT '',
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS exported_videos (
+			export_id TEXT PRIMARY KEY,
+			source_path TEXT NOT NULL,
+			exported_path TEXT NOT NULL,
+			target_title TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			privacy TEXT NOT NULL DEFAULT 'private',
+			game_tag TEXT NOT NULL DEFAULT '',
+			playlist_id TEXT NOT NULL DEFAULT '',
+			playlist_title TEXT NOT NULL DEFAULT '',
+			episode INTEGER NOT NULL DEFAULT 0,
+			content_type TEXT NOT NULL DEFAULT '',
+			tags TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'exported',
+			youtube_id TEXT NOT NULL DEFAULT '',
+			error_msg TEXT NOT NULL DEFAULT '',
+			exported_at INTEGER NOT NULL,
+			applied_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_exported_videos_status ON exported_videos(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_exported_videos_source ON exported_videos(source_path)`,
+		`CREATE TABLE IF NOT EXISTS video_backups (
+			source_path TEXT PRIMARY KEY,
+			backup_path TEXT NOT NULL,
+			folder_root TEXT NOT NULL,
+			file_size INTEGER NOT NULL DEFAULT 0,
+			file_mtime INTEGER NOT NULL DEFAULT 0,
+			backed_up_at INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'backed_up'
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_video_backups_folder ON video_backups(folder_root)`,
+		`CREATE TABLE IF NOT EXISTS title_normalization_drafts (
+			video_id TEXT PRIMARY KEY,
+			playlist_id TEXT NOT NULL DEFAULT '',
+			game_tag TEXT NOT NULL DEFAULT '',
+			profile_type TEXT NOT NULL DEFAULT '',
+			event TEXT NOT NULL DEFAULT '',
+			game_mode TEXT NOT NULL DEFAULT '',
+			date_override TEXT NOT NULL DEFAULT '',
+			episode INTEGER NOT NULL DEFAULT 0,
+			custom_vars_json TEXT NOT NULL DEFAULT '{}',
+			proposed_title TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'draft',
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_title_norm_drafts_playlist ON title_normalization_drafts(playlist_id)`,
 	}
 
 	for _, q := range queries {

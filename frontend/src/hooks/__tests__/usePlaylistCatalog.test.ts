@@ -723,6 +723,67 @@ describe("usePlaylistCatalog", () => {
     expect(result.current.hasConflicts).toBe(false);
     expect(result.current.canApply).toBe(true);
   });
+
+  it("bypasses episode conflicts and chronology checks for clip playlists and sends editedKind", async () => {
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([]);
+    const mockDraft = {
+      playlistId: "pl-highlights",
+      title: "Highlights",
+      videoCount: 2,
+      kind: "clip",
+      tag: "lol",
+      videos: [
+        { videoId: "c1", title: "Pentakill", sortDate: "2026-08-10", titleEpisode: 3, episode: 0 },
+        { videoId: "c2", title: "Baron Steal", sortDate: "2026-08-09", titleEpisode: 0, episode: 0 },
+      ],
+    };
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockResolvedValueOnce(
+      backend.PlaylistCatalogDraft.createFrom(mockDraft)
+    );
+    vi.mocked(AppBindings.ApplyPlaylistCatalog).mockResolvedValueOnce();
+
+    const { result } = renderHook(() => usePlaylistCatalog());
+
+    await act(async () => {
+      await result.current.selectPlaylist("pl-highlights");
+    });
+
+    expect(result.current.editedKind).toBe("clip");
+    expect(result.current.isClipPlaylist).toBe(true);
+    expect(result.current.hasConflicts).toBe(false);
+    expect(result.current.hasChronologyErrors).toBe(false);
+    expect(result.current.chronologyIssueIds.size).toBe(0);
+    expect(result.current.mismatchCount).toBe(0);
+    expect(result.current.canApply).toBe(true);
+
+    // Toggling to vod restores episode conflict validation
+    act(() => {
+      result.current.setEditedKind("vod");
+    });
+    expect(result.current.isClipPlaylist).toBe(false);
+    expect(result.current.hasConflicts).toBe(true);
+    expect(result.current.canApply).toBe(false);
+
+    // Toggling back to clip clears conflicts and submits kind: "clip"
+    act(() => {
+      result.current.setEditedKind("clip");
+    });
+    expect(result.current.canApply).toBe(true);
+
+    let success = false;
+    await act(async () => {
+      success = await result.current.applyCatalog();
+    });
+
+    expect(success).toBe(true);
+    expect(AppBindings.ApplyPlaylistCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playlistId: "pl-highlights",
+        tag: "lol",
+        kind: "clip",
+      })
+    );
+  });
 });
 
 

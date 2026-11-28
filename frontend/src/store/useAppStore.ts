@@ -4,7 +4,15 @@
  */
 import { useSyncExternalStore } from "react";
 import { QueueItem } from "../components/youtube/UploadQueue";
-import { ViewMode, PlaylistPrivacy, SortMode, LibraryGroupMode, CardDensity } from "../types";
+import {
+  ViewMode,
+  PlaylistPrivacy,
+  SortMode,
+  LibraryGroupMode,
+  CardDensity,
+  ThumbnailBatchJob,
+  DescriptionBatchJob,
+} from "../types";
 
 
 interface AppState {
@@ -22,6 +30,8 @@ interface AppState {
   defaultPlaylistPrivacy: PlaylistPrivacy;
   defaultVideoPrivacy: PlaylistPrivacy;
   defaultVideoDescription: string;
+  thumbnailBatches: Record<string, ThumbnailBatchJob>;
+  descriptionBatches: Record<string, DescriptionBatchJob>;
 }
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -77,6 +87,8 @@ let state: AppState = {
   defaultVideoPrivacy:
     (saved.defaultVideoPrivacy as PlaylistPrivacy) ?? "unlisted",
   defaultVideoDescription: saved.defaultVideoDescription ?? "",
+  thumbnailBatches: {},
+  descriptionBatches: {},
 };
 
 type Listener = () => void;
@@ -115,6 +127,61 @@ function subscribe(listener: Listener) {
 
 // ─── Stable Module-level Action Setters ─────────────────────────────────────────
 
+const BLOCKED_QUEUE_STATUSES: ReadonlySet<QueueItem["status"]> = new Set([
+  "pending",
+  "uploading",
+  "processing",
+  "done",
+]);
+
+export function isQueueBlockedStatus(status: QueueItem["status"]): boolean {
+  return BLOCKED_QUEUE_STATUSES.has(status);
+}
+
+export function hasActiveOrCompletedQueueEntry(
+  queue: readonly QueueItem[],
+  videoPath: string,
+): boolean {
+  const existing = queue.find((item) => item.videoPath === videoPath);
+  return existing ? isQueueBlockedStatus(existing.status) : false;
+}
+
+export function mergeQueueItems(
+  existing: readonly QueueItem[],
+  incoming: readonly QueueItem[],
+  position: "append" | "prepend" = "append",
+): { nextQueue: QueueItem[]; addedPaths: string[] } {
+  const seenIncoming = new Set<string>();
+  const nextQueue = [...existing];
+  const addedPaths: string[] = [];
+
+  for (const item of incoming) {
+    if (seenIncoming.has(item.videoPath)) continue;
+    seenIncoming.add(item.videoPath);
+
+    const existingIdx = nextQueue.findIndex(
+      (q) => q.videoPath === item.videoPath,
+    );
+    if (existingIdx !== -1) {
+      if (isQueueBlockedStatus(nextQueue[existingIdx].status)) {
+        continue;
+      }
+      nextQueue[existingIdx] = item;
+      addedPaths.push(item.videoPath);
+      continue;
+    }
+
+    if (position === "prepend") {
+      nextQueue.unshift(item);
+    } else {
+      nextQueue.push(item);
+    }
+    addedPaths.push(item.videoPath);
+  }
+
+  return { nextQueue, addedPaths };
+}
+
 const setQueue = (
   queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[]),
 ) => {
@@ -126,11 +193,22 @@ const setQueue = (
   }));
 };
 
-const addToQueue = (items: QueueItem[]) =>
-  setState((prev) => ({
-    queue: [...prev.queue, ...items],
+const addToQueue = (
+  items: QueueItem[],
+  position: "append" | "prepend" = "append",
+): string[] => {
+  const { nextQueue, addedPaths } = mergeQueueItems(
+    state.queue,
+    items,
+    position,
+  );
+  if (addedPaths.length === 0) return [];
+  setState({
+    queue: nextQueue,
     queueAddedAt: Date.now(),
-  }));
+  });
+  return addedPaths;
+};
 
 const bumpQueueAdded = () => setState({ queueAddedAt: Date.now() });
 const bumpQueueDone = () => setState({ queueDoneAt: Date.now() });
@@ -150,6 +228,46 @@ const setDefaultVideoPrivacy = (defaultVideoPrivacy: PlaylistPrivacy) =>
 const setDefaultVideoDescription = (defaultVideoDescription: string) =>
   setState({ defaultVideoDescription });
 
+const setThumbnailBatch = (
+  batchKey: string,
+  jobOrUpdater:
+    | ThumbnailBatchJob
+    | ((prev: ThumbnailBatchJob | undefined) => ThumbnailBatchJob),
+) => {
+  setState((prev) => ({
+    thumbnailBatches: {
+      ...prev.thumbnailBatches,
+      [batchKey]:
+        typeof jobOrUpdater === "function"
+          ? jobOrUpdater(prev.thumbnailBatches[batchKey])
+          : jobOrUpdater,
+    },
+  }));
+};
+
+const setDescriptionBatch = (
+  batchKey: string,
+  jobOrUpdater:
+    | DescriptionBatchJob
+    | ((prev: DescriptionBatchJob | undefined) => DescriptionBatchJob),
+) => {
+  setState((prev) => ({
+    descriptionBatches: {
+      ...prev.descriptionBatches,
+      [batchKey]:
+        typeof jobOrUpdater === "function"
+          ? jobOrUpdater(prev.descriptionBatches[batchKey])
+          : jobOrUpdater,
+    },
+  }));
+};
+
+const clearBatchJobs = () =>
+  setState({
+    thumbnailBatches: {},
+    descriptionBatches: {},
+  });
+
 const storeActions = {
   setQueue,
   addToQueue,
@@ -166,6 +284,9 @@ const storeActions = {
   setDefaultPlaylistPrivacy,
   setDefaultVideoPrivacy,
   setDefaultVideoDescription,
+  setThumbnailBatch,
+  setDescriptionBatch,
+  clearBatchJobs,
 };
 
 // ─── React hook ───────────────────────────────────────────────────────────────

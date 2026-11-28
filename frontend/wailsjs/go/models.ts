@@ -28,6 +28,64 @@ export namespace backend {
 	        this.durationMs = source["durationMs"];
 	    }
 	}
+	export class ApplyMatchedExportsResult {
+	    applied: string[];
+	    failed: Record<string, string>;
+	    skipped: string[];
+	    cleanedUpPaths: string[];
+	    stoppedOnQuota: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyMatchedExportsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applied = source["applied"];
+	        this.failed = source["failed"];
+	        this.skipped = source["skipped"];
+	        this.cleanedUpPaths = source["cleanedUpPaths"];
+	        this.stoppedOnQuota = source["stoppedOnQuota"];
+	    }
+	}
+	export class BackupRunResult {
+	    copiedCount: number;
+	    skippedCount: number;
+	    failedCount: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.copiedCount = source["copiedCount"];
+	        this.skippedCount = source["skippedCount"];
+	        this.failedCount = source["failedCount"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class BackupStatus {
+	    backupFolder: string;
+	    totalBackedUp: number;
+	    totalBytes: number;
+	    lastBackupAt: number;
+	    enabledFolders: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backupFolder = source["backupFolder"];
+	        this.totalBackedUp = source["totalBackedUp"];
+	        this.totalBytes = source["totalBytes"];
+	        this.lastBackupAt = source["lastBackupAt"];
+	        this.enabledFolders = source["enabledFolders"];
+	    }
+	}
 	export class CatalogAssignment {
 	    videoId: string;
 	    episode: number;
@@ -323,6 +381,20 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class GameArtworkConfig {
+	    poster_url?: string;
+	    hero_url?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameArtworkConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.poster_url = source["poster_url"];
+	        this.hero_url = source["hero_url"];
+	    }
+	}
 	export class TitleLayer {
 	    enabled: boolean;
 	    text_override?: string;
@@ -403,6 +475,7 @@ export namespace backend {
 	    episode_position: string;
 	    episode_format: string;
 	    font_color?: string;
+	    font_family?: string;
 	    image_framing?: ImageFraming;
 	    episode_layout?: ElementLayout;
 	    logo?: LogoLayer;
@@ -421,6 +494,7 @@ export namespace backend {
 	        this.episode_position = source["episode_position"];
 	        this.episode_format = source["episode_format"];
 	        this.font_color = source["font_color"];
+	        this.font_family = source["font_family"];
 	        this.image_framing = this.convertValues(source["image_framing"], ImageFraming);
 	        this.episode_layout = this.convertValues(source["episode_layout"], ElementLayout);
 	        this.logo = this.convertValues(source["logo"], LogoLayer);
@@ -449,6 +523,7 @@ export namespace backend {
 	    vod_playlist_id: string;
 	    clip_playlist_id: string;
 	    thumbnail_config?: TagThumbnailConfig;
+	    artwork?: GameArtworkConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new TagPlaylistConfig(source);
@@ -459,6 +534,7 @@ export namespace backend {
 	        this.vod_playlist_id = source["vod_playlist_id"];
 	        this.clip_playlist_id = source["clip_playlist_id"];
 	        this.thumbnail_config = this.convertValues(source["thumbnail_config"], TagThumbnailConfig);
+	        this.artwork = this.convertValues(source["artwork"], GameArtworkConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -498,6 +574,7 @@ export namespace backend {
 	export class FolderConfig {
 	    recursive: boolean;
 	    max_duration_secs: number;
+	    auto_backup?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FolderConfig(source);
@@ -507,6 +584,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.recursive = source["recursive"];
 	        this.max_duration_secs = source["max_duration_secs"];
+	        this.auto_backup = source["auto_backup"];
 	    }
 	}
 	export class VideoMeta {
@@ -564,6 +642,8 @@ export namespace backend {
 	    steam_api_key?: string;
 	    steam_id?: string;
 	    export_folder?: string;
+	    backup_folder?: string;
+	    default_video_description?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -587,6 +667,8 @@ export namespace backend {
 	        this.steam_api_key = source["steam_api_key"];
 	        this.steam_id = source["steam_id"];
 	        this.export_folder = source["export_folder"];
+	        this.backup_folder = source["backup_folder"];
+	        this.default_video_description = source["default_video_description"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -664,7 +746,10 @@ export namespace backend {
 	    targetTitle: string;
 	    description: string;
 	    game: string;
+	    playlistId: string;
 	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
 	    privacy: string;
 	    tags: string[];
 	
@@ -678,7 +763,10 @@ export namespace backend {
 	        this.targetTitle = source["targetTitle"];
 	        this.description = source["description"];
 	        this.game = source["game"];
+	        this.playlistId = source["playlistId"];
 	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
 	        this.privacy = source["privacy"];
 	        this.tags = source["tags"];
 	    }
@@ -687,6 +775,7 @@ export namespace backend {
 	    successCount: number;
 	    failedCount: number;
 	    exportedPaths: string[];
+	    exportIds: string[];
 	    errors: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -698,7 +787,52 @@ export namespace backend {
 	        this.successCount = source["successCount"];
 	        this.failedCount = source["failedCount"];
 	        this.exportedPaths = source["exportedPaths"];
+	        this.exportIds = source["exportIds"];
 	        this.errors = source["errors"];
+	    }
+	}
+	export class ExportedVideoRecord {
+	    exportId: string;
+	    sourcePath: string;
+	    exportedPath: string;
+	    targetTitle: string;
+	    description: string;
+	    privacy: string;
+	    gameTag: string;
+	    playlistId: string;
+	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
+	    tags: string;
+	    status: string;
+	    youtubeId: string;
+	    errorMsg: string;
+	    exportedAt: number;
+	    appliedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportedVideoRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exportId = source["exportId"];
+	        this.sourcePath = source["sourcePath"];
+	        this.exportedPath = source["exportedPath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.gameTag = source["gameTag"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
+	        this.tags = source["tags"];
+	        this.status = source["status"];
+	        this.youtubeId = source["youtubeId"];
+	        this.errorMsg = source["errorMsg"];
+	        this.exportedAt = source["exportedAt"];
+	        this.appliedAt = source["appliedAt"];
 	    }
 	}
 	
@@ -706,6 +840,61 @@ export namespace backend {
 	
 	
 	
+	
+	export class MatchedExportItem {
+	    exportId: string;
+	    sourcePath: string;
+	    exportedPath: string;
+	    targetTitle: string;
+	    description: string;
+	    privacy: string;
+	    gameTag: string;
+	    playlistId: string;
+	    playlistTitle: string;
+	    episode: number;
+	    contentType: string;
+	    tags: string;
+	    status: string;
+	    youtubeId: string;
+	    errorMsg: string;
+	    exportedAt: number;
+	    appliedAt: number;
+	    youtubeTitle: string;
+	    youtubePrivacy: string;
+	    thumbnailUrl: string;
+	    alreadyInPlaylist: boolean;
+	    estimatedQuota: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MatchedExportItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exportId = source["exportId"];
+	        this.sourcePath = source["sourcePath"];
+	        this.exportedPath = source["exportedPath"];
+	        this.targetTitle = source["targetTitle"];
+	        this.description = source["description"];
+	        this.privacy = source["privacy"];
+	        this.gameTag = source["gameTag"];
+	        this.playlistId = source["playlistId"];
+	        this.playlistTitle = source["playlistTitle"];
+	        this.episode = source["episode"];
+	        this.contentType = source["contentType"];
+	        this.tags = source["tags"];
+	        this.status = source["status"];
+	        this.youtubeId = source["youtubeId"];
+	        this.errorMsg = source["errorMsg"];
+	        this.exportedAt = source["exportedAt"];
+	        this.appliedAt = source["appliedAt"];
+	        this.youtubeTitle = source["youtubeTitle"];
+	        this.youtubePrivacy = source["youtubePrivacy"];
+	        this.thumbnailUrl = source["thumbnailUrl"];
+	        this.alreadyInPlaylist = source["alreadyInPlaylist"];
+	        this.estimatedQuota = source["estimatedQuota"];
+	    }
+	}
 	
 	export class PlaylistCatalogDraft {
 	    playlistId: string;
@@ -934,6 +1123,40 @@ export namespace backend {
 	
 	
 	
+	export class TitleNormalizationDraft {
+	    videoId: string;
+	    playlistId: string;
+	    gameTag: string;
+	    profileType: string;
+	    event: string;
+	    gameMode: string;
+	    dateOverride: string;
+	    episode: number;
+	    customVars: Record<string, string>;
+	    proposedTitle: string;
+	    status: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TitleNormalizationDraft(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videoId = source["videoId"];
+	        this.playlistId = source["playlistId"];
+	        this.gameTag = source["gameTag"];
+	        this.profileType = source["profileType"];
+	        this.event = source["event"];
+	        this.gameMode = source["gameMode"];
+	        this.dateOverride = source["dateOverride"];
+	        this.episode = source["episode"];
+	        this.customVars = source["customVars"];
+	        this.proposedTitle = source["proposedTitle"];
+	        this.status = source["status"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	
 	export class UploadSession {
 	    videoPath: string;

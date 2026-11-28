@@ -288,6 +288,15 @@ func (cpr *chunkProgressReader) Read(p []byte) (int, error) {
 func (a *App) UploadToYouTube(path, title, description, privacy, playlistID, gameTag string, episode int, thumbnailPath string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.uploadsMu.Lock()
+	if a.uploads == nil {
+		a.uploads = make(map[string]context.CancelFunc)
+	}
+	if _, active := a.uploads[path]; active {
+		a.uploadsMu.Unlock()
+		cancel()
+		appLog("[Queue] Upload already in flight for %s; ignoring duplicate request", filepath.Base(path))
+		return nil
+	}
 	a.uploads[path] = cancel
 	a.uploadsMu.Unlock()
 

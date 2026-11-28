@@ -53,6 +53,7 @@ export interface TagThumbnailConfig {
   episode_position: EpisodeNumberPosition;
   episode_format: EpisodeFormat;
   font_color?: string;
+  font_family?: string;
   image_framing?: ImageFraming;
   episode_layout?: ElementLayout;
   logo?: LogoLayer;
@@ -67,10 +68,16 @@ export interface SteamGameArtwork {
   logoUrl?: string;
 }
 
+export interface GameArtworkConfig {
+  readonly poster_url?: string;
+  readonly hero_url?: string;
+}
+
 export interface TagPlaylistConfig {
   vod_playlist_id: string;
   clip_playlist_id: string;
   thumbnail_config?: TagThumbnailConfig;
+  artwork?: GameArtworkConfig;
 }
 
 export interface GameProfile {
@@ -96,6 +103,7 @@ export interface Config {
   steam_api_key?: string;
   steam_id?: string;
   export_folder?: string;
+  default_video_description?: string;
 }
 
 export interface ExportItem {
@@ -103,7 +111,10 @@ export interface ExportItem {
   targetTitle: string;
   description: string;
   game: string;
+  playlistId: string;
   playlistTitle: string;
+  episode: number;
+  contentType: string;
   privacy: string;
   tags: string[];
 }
@@ -112,7 +123,28 @@ export interface ExportResult {
   successCount: number;
   failedCount: number;
   exportedPaths: string[];
+  exportIds?: string[];
   errors: string[];
+}
+
+export interface ExportedVideoRecord {
+  readonly exportId: string;
+  readonly sourcePath: string;
+  readonly exportedPath: string;
+  readonly targetTitle: string;
+  readonly description: string;
+  readonly privacy: string;
+  readonly gameTag: string;
+  readonly playlistId: string;
+  readonly playlistTitle: string;
+  readonly episode: number;
+  readonly contentType: string;
+  readonly tags: string;
+  readonly status: string;
+  readonly youtubeId: string;
+  readonly errorMsg: string;
+  readonly exportedAt: number;
+  readonly appliedAt: number;
 }
 
 export interface YTVideo {
@@ -153,6 +185,21 @@ export interface CatalogVideoDraft {
   readonly chronologyIssue?: boolean;
 }
 
+export interface TitleNormalizationDraft {
+  readonly videoId: string;
+  readonly playlistId: string;
+  readonly gameTag: string;
+  readonly profileType: string;
+  readonly event: string;
+  readonly gameMode: string;
+  readonly dateOverride: string;
+  readonly episode: number;
+  readonly customVars: Record<string, string>;
+  readonly proposedTitle: string;
+  readonly status: "draft" | "ready" | "synced" | string;
+  readonly updatedAt: number;
+}
+
 export type BatchItemStatus =
   | "pending"
   | "rendering"
@@ -170,6 +217,40 @@ export interface BatchItem {
   readonly thumbnailEpisode?: number;
   readonly status: BatchItemStatus;
   readonly error?: string;
+}
+
+export interface BatchDescriptionInputItem {
+  readonly videoId: string;
+  readonly title: string;
+  readonly currentDescription: string;
+}
+
+export interface BatchDescriptionItem extends BatchDescriptionInputItem {
+  readonly status: BatchItemStatus;
+  readonly error?: string;
+}
+
+export interface BatchProgress {
+  readonly current: number;
+  readonly total: number;
+  readonly successCount: number;
+  readonly failCount: number;
+}
+
+export interface ThumbnailBatchJob {
+  readonly items: readonly BatchItem[];
+  readonly running: boolean;
+  readonly runId: number;
+  readonly cancelRequested: boolean;
+}
+
+export interface DescriptionBatchJob {
+  readonly items: readonly BatchDescriptionItem[];
+  readonly running: boolean;
+  readonly runId: number;
+  readonly cancelRequested: boolean;
+  readonly progress: BatchProgress;
+  readonly targetDescription?: string;
 }
 
 export interface YTPlaylist {
@@ -198,6 +279,22 @@ export interface VideoGroupYT {
 export interface FolderConfig {
   recursive: boolean;
   max_duration_secs: number;
+  auto_backup?: boolean;
+}
+
+export interface BackupStatus {
+  readonly backupFolder: string;
+  readonly totalBackedUp: number;
+  readonly totalBytes: number;
+  readonly lastBackupAt: number;
+  readonly enabledFolders: string[];
+}
+
+export interface BackupRunResult {
+  readonly copiedCount: number;
+  readonly skippedCount: number;
+  readonly failedCount: number;
+  readonly errors: string[];
 }
 
 export type ViewMode =
@@ -207,6 +304,48 @@ export type SortMode = "date" | "name" | "size" | "duration" | "episode";
 export type LibraryGroupMode = "date" | "game" | "status" | "folder" | "none";
 export type ChannelGroupMode = "date" | "playlist" | "game" | "privacy" | "status" | "none";
 export type CardDensity = "compact" | "default" | "large";
+
+export interface MatchedExportItem {
+  readonly exportId: string;
+  readonly sourcePath: string;
+  readonly exportedPath: string;
+  readonly targetTitle: string;
+  readonly description: string;
+  readonly privacy: string;
+  readonly gameTag: string;
+  readonly playlistId: string;
+  readonly playlistTitle: string;
+  readonly episode: number;
+  readonly contentType: string;
+  readonly tags: string;
+  readonly status: string;
+  readonly youtubeId: string;
+  readonly errorMsg: string;
+  readonly exportedAt: number;
+  readonly appliedAt: number;
+  readonly youtubeTitle: string;
+  readonly youtubePrivacy: string;
+  readonly thumbnailUrl: string;
+  readonly alreadyInPlaylist: boolean;
+  readonly estimatedQuota: number;
+}
+
+export interface ApplyMatchedExportsResult {
+  readonly applied: readonly string[];
+  readonly failed: Readonly<Record<string, string>>;
+  readonly skipped: readonly string[];
+  readonly cleanedUpPaths: readonly string[];
+  readonly stoppedOnQuota: boolean;
+}
+
+export interface ExportSyncProgressEvent {
+  readonly current: number;
+  readonly total: number;
+  readonly exportId: string;
+  readonly videoId: string;
+  readonly title: string;
+  readonly percentage: number;
+}
 
 export const CARD_DENSITY_CLASSES: Record<CardDensity, string> = {
   compact: "grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-4",

@@ -159,6 +159,14 @@ func (a *App) SyncChannelData() error {
 		appLog("[SyncChannelData] Error purging deleted playlists: %v", err)
 	}
 
+	if _, err := a.MatchExportedVideos(); err != nil {
+		appLog("[SyncChannelData] Error matching exported videos: %v", err)
+	}
+
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SyncChannelData] Error backfilling game tags from playlists: %v", err)
+	}
+
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)
 	return nil
 }
@@ -715,6 +723,14 @@ func (a *App) SyncRecentVideos(maxVideos int) error {
 		if purgeErr := a.purgeDeletedPlaylists(seenPlaylists); purgeErr != nil {
 			appLog("[SyncRecentVideos] Error purging deleted playlists during light sync: %v", purgeErr)
 		}
+	}
+
+	if _, err := a.MatchExportedVideos(); err != nil {
+		appLog("[SyncRecentVideos] Error matching exported videos during light sync: %v", err)
+	}
+
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SyncRecentVideos] Error backfilling game tags from playlists during light sync: %v", err)
 	}
 
 	runtime.EventsEmit(a.ctx, "youtube:sync-done", true)

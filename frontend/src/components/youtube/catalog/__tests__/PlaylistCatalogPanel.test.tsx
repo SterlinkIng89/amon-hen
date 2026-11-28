@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PlaylistCatalogPanel } from "../PlaylistCatalogPanel";
+import { useAppStore } from "../../../../store/useAppStore";
 import * as AppBindings from "../../../../../wailsjs/go/backend/App";
 
 vi.mock("../../../../../wailsjs/go/backend/App", () => ({
@@ -16,6 +17,7 @@ vi.mock("../../../../../wailsjs/go/backend/App", () => ({
   UpdateYouTubeThumbnailForEpisode: vi.fn(),
   GetCustomThumbnail: vi.fn(),
   GetAllGameTags: vi.fn(),
+  LoadConfig: vi.fn(),
 }));
 
 vi.mock("../../../../utils/thumbnailRender", () => ({
@@ -34,10 +36,12 @@ vi.mock("../../../../hooks/useThumbnailAssets", () => ({
 describe("PlaylistCatalogPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAppStore.getState().clearBatchJobs();
     vi.mocked(AppBindings.GetSteamAppID).mockResolvedValue("" as any);
     vi.mocked(AppBindings.GetTagPlaylistConfig).mockResolvedValue({} as any);
     vi.mocked(AppBindings.GetSteamGameAssets).mockResolvedValue(null as any);
     vi.mocked(AppBindings.GetAllGameTags).mockResolvedValue(["control", "alan_wake", "cyberpunk"]);
+    vi.mocked(AppBindings.LoadConfig).mockResolvedValue({} as any);
   });
 
   it("renders playlists list and empty selection state initially", async () => {
@@ -559,5 +563,75 @@ describe("PlaylistCatalogPanel", () => {
 
     expect(await screen.findByText("YouTube Description Batch")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Enter description template to apply/i)).toBeInTheDocument();
+  });
+
+  it("preserves batch thumbnail progress and completion state across playlist switching", async () => {
+    const pendingUpdates: Array<(val: string) => void> = [];
+    vi.mocked(AppBindings.SaveCustomThumbnail).mockResolvedValue("/cache/thumb.jpg");
+    vi.mocked(AppBindings.GetCustomThumbnail).mockResolvedValue("/cache/thumb.jpg");
+    vi.mocked(AppBindings.UpdateYouTubeThumbnailForEpisode).mockImplementation(() => {
+      return new Promise<string>((resolve) => {
+        pendingUpdates.push(resolve);
+      });
+    });
+
+    vi.mocked(AppBindings.ListCatalogPlaylists).mockResolvedValue([
+      { playlistId: "pl-1", title: "Dead Space 1", videoCount: 1, linked: true, tag: "dead_space" },
+      { playlistId: "pl-2", title: "Deadlock", videoCount: 1, linked: true, tag: "deadlock" },
+    ] as any);
+
+    vi.mocked(AppBindings.GetPlaylistCatalogDraft).mockImplementation(async (id: string) => {
+      if (id === "pl-1") {
+        return {
+          playlistId: "pl-1",
+          title: "Dead Space 1",
+          videoCount: 1,
+          kind: "vod",
+          tag: "dead_space",
+          linked: true,
+          videos: [
+            { videoId: "ds-1", title: "Dead Space - Ep 1", episode: 1, thumbnailUpdatedAt: 0 },
+          ],
+        } as any;
+      }
+      return {
+        playlistId: "pl-2",
+        title: "Deadlock",
+        videoCount: 1,
+        kind: "vod",
+        tag: "deadlock",
+        linked: true,
+        videos: [
+          { videoId: "dl-1", title: "Deadlock - Ep 1", episode: 1, thumbnailUpdatedAt: 0 },
+        ],
+      } as any;
+    });
+
+    render(<PlaylistCatalogPanel />);
+
+    fireEvent.click(await screen.findByText("Dead Space 1"));
+    const updateUnsyncedBtn = await screen.findByTitle(/Update thumbnails for/i);
+    fireEvent.click(updateUnsyncedBtn);
+
+    expect(await screen.findByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(pendingUpdates).toHaveLength(1);
+    });
+
+    // Switch to Playlist 2 while Playlist 1 is still uploading
+    fireEvent.click(screen.getByText("Deadlock"));
+    expect(await screen.findByText("Deadlock - Ep 1")).toBeInTheDocument();
+
+    // Playlist 1 row should show active background batch badge
+    expect(screen.getByText(/Updating 1\/1/i)).toBeInTheDocument();
+
+    // Complete Playlist 1's upload while viewing Playlist 2
+    pendingUpdates[0]("https://yt.com/done.jpg");
+    expect(await screen.findByText(/Updated \(1\)/i)).toBeInTheDocument();
+
+    // Switch back to Playlist 1 and verify completion state is preserved
+    fireEvent.click(screen.getByText("Dead Space 1"));
+    expect(await screen.findByText(/1 \/ 1 processed/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 succeeded, 0 failed/i)).toBeInTheDocument();
   });
 });

@@ -30,6 +30,7 @@ interface VideoGridProps {
   onUploadTarget: (video: VideoFile) => void;
   readonly onQuickQueue?: (video: VideoFile) => void;
   readonly onOpenInExplorer?: (video: VideoFile) => void;
+  readonly exportedPendingPaths?: Set<string>;
 }
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -271,6 +272,7 @@ export default function VideoGrid({
   onUploadTarget,
   onQuickQueue,
   onOpenInExplorer,
+  exportedPendingPaths,
 }: VideoGridProps) {
   const {
     queue,
@@ -395,6 +397,7 @@ export default function VideoGrid({
                           uploadProgress={uploadingProgressMap.get(video.path)}
                           gameProfiles={gameProfiles}
                           isQueued={queuedPathsSet.has(video.path)}
+                          isExportedPending={exportedPendingPaths?.has(video.path)}
                         />
                       );
                     })}
@@ -432,6 +435,7 @@ export default function VideoGrid({
                   uploadProgress={uploadingProgressMap.get(video.path)}
                   gameProfiles={gameProfiles}
                   isQueued={queuedPathsSet.has(video.path)}
+                  isExportedPending={exportedPendingPaths?.has(video.path)}
                 />
               );
             })}

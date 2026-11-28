@@ -983,5 +983,65 @@ describe("VideoPill Title Mismatch Indicator", () => {
   });
 });
 
+describe("VideoPill Exported Pending Badge", () => {
+  const unlinkedVideo: VideoFile = {
+    name: "clip_pending.mp4",
+    path: "/videos/clip_pending.mp4",
+    size: 1048576,
+    modTime: 1785800000000,
+    folder: "/videos",
+    game: "TestGame",
+  };
+
+  it("renders flat Exported (Pending YT) badge when isExportedPending is true and video has no youtubeId", () => {
+    render(
+      <VideoPill
+        video={unlinkedVideo}
+        viewMode="grid"
+        isExportedPending={true}
+      />,
+    );
+
+    const badge = screen.getByText("Exported (Pending YT)");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).not.toContain("uppercase");
+    expect(badge.querySelector(".rounded-full")).toBeNull();
+  });
+
+  it("does not render Exported (Pending YT) badge once youtubeId is linked", () => {
+    render(
+      <VideoPill
+        video={{ ...unlinkedVideo, youtubeId: "yt-999" }}
+        viewMode="grid"
+        isExportedPending={true}
+      />,
+    );
+
+    expect(screen.queryByText("Exported (Pending YT)")).not.toBeInTheDocument();
+  });
+
+  it("does not render Exported (Pending YT) badge when isExportedPending is false", () => {
+    render(
+      <VideoPill
+        video={unlinkedVideo}
+        viewMode="grid"
+        isExportedPending={false}
+      />,
+    );
+
+    expect(screen.queryByText("Exported (Pending YT)")).not.toBeInTheDocument();
+  });
+
+  it("returns false from areVideoPillPropsEqual when isExportedPending changes", () => {
+    expect(
+      areVideoPillPropsEqual(
+        { video: unlinkedVideo, isExportedPending: false },
+        { video: unlinkedVideo, isExportedPending: true },
+      ),
+    ).toBe(false);
+  });
+});
+
+
 
 

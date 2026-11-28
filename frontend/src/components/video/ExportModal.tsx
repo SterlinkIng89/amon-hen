@@ -7,8 +7,12 @@ import {
   OpenFolderInExplorer,
 } from "../../../wailsjs/go/backend/App";
 import { VideoFile, GameProfile, ExportItem, ExportResult } from "../../types";
-import { resolveDisplayTitle } from "../../utils/videoUtils";
+import {
+  resolveDisplayTitle,
+  sanitizeExportFilename,
+} from "../../utils/videoUtils";
 import { useAppStore } from "../../store/useAppStore";
+import { EXPORTS_UPDATED_EVENT } from "../../hooks/useVideoLibrary";
 
 export interface ExportModalProps {
   readonly open: boolean;
@@ -31,6 +35,7 @@ export default function ExportModal({
   const [loadingFolder, setLoadingFolder] = useState<boolean>(true);
   const [saveAsDefault, setSaveAsDefault] = useState<boolean>(false);
   const [writeMetadata, setWriteMetadata] = useState<boolean>(true);
+  const [useTrackingId, setUseTrackingId] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -88,21 +93,39 @@ export default function ExportModal({
         await SetDefaultExportFolder(destinationFolder);
       }
 
+      const { defaultVideoDescription, defaultVideoPrivacy } =
+        useAppStore.getState();
+
       const items: ExportItem[] = selectedVideos.map((v) => {
         const title = resolveDisplayTitle(v, profiles, titleSeparator);
+        const playlistId =
+          v.playlistId && v.playlistId !== "none" ? v.playlistId : "";
         return {
           sourcePath: v.path,
           targetTitle: title,
-          description: v.description || "",
+          description: v.description?.trim()
+            ? v.description
+            : defaultVideoDescription || "",
           game: v.game || "",
-          playlistTitle: v.playlistTitle || "",
-          privacy: v.privacy || useAppStore.getState().defaultVideoPrivacy,
+          playlistId,
+          playlistTitle: playlistId ? v.playlistTitle || "" : "",
+          episode: v.episode || 0,
+          contentType: v.contentType || "",
+          privacy: v.privacy || defaultVideoPrivacy,
           tags: v.game ? [v.game] : [],
         };
       });
 
-      const res = await ExportVideos(items, destinationFolder, writeMetadata);
+      const res = await ExportVideos(
+        items,
+        destinationFolder,
+        writeMetadata,
+        useTrackingId,
+      );
       setExportResult(res);
+      if (res.successCount > 0) {
+        window.dispatchEvent(new CustomEvent(EXPORTS_UPDATED_EVENT));
+      }
       onExportComplete?.(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
@@ -235,6 +258,19 @@ export default function ExportModal({
                   ))}
                 </div>
               </div>
+
+              {useTrackingId && exportResult.successCount > 0 && (
+                <div className="p-3 bg-card/60 border border-border-subtle rounded-md text-xs text-text-secondary space-y-1">
+                  <p className="font-semibold text-text-primary m-0">
+                    Next step: YouTube Studio sync
+                  </p>
+                  <p className="text-text-muted m-0 leading-relaxed">
+                    Drag and drop the exported files into YouTube Studio, then
+                    click Sync in the Channel view to automatically detect and
+                    apply the real titles and playlists.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -280,7 +316,17 @@ export default function ExportModal({
               </div>
 
               {/* Options */}
-              <div className="pt-1 border-t border-border-subtle">
+              <div className="pt-1 border-t border-border-subtle space-y-2">
+                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useTrackingId}
+                    onChange={(e) => setUseTrackingId(e.target.checked)}
+                    disabled={isExporting}
+                    className="rounded border-border-subtle accent-accent cursor-pointer"
+                  />
+                  <span>Track for YouTube Studio sync (ID filenames)</span>
+                </label>
                 <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -300,9 +346,9 @@ export default function ExportModal({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-text-secondary">
-                    Renamed Files Preview
+                    {useTrackingId ? "Export Files Preview" : "Renamed Files Preview"}
                   </span>
-                  <span className="text-[11px] text-text-muted">
+                  <span className="text-[11px] text-text-muted tabular-nums">
                     {selectedVideos.length} items
                   </span>
                 </div>
@@ -316,6 +362,12 @@ export default function ExportModal({
                     const ext = v.name.includes(".")
                       ? v.name.slice(v.name.lastIndexOf("."))
                       : ".mp4";
+                    const gameSuffix = v.game?.trim()
+                      ? ` \u2013 ${sanitizeExportFilename(v.game.trim())}`
+                      : "";
+                    const exportFilename = useTrackingId
+                      ? `AH\u2013XXXXXXXX${gameSuffix}${ext}`
+                      : `${sanitizeExportFilename(resolvedTitle)}${ext}`;
                     return (
                       <div
                         key={v.path}
@@ -325,12 +377,19 @@ export default function ExportModal({
                           <span className="text-accent shrink-0">→</span>
                           <span
                             className="truncate font-mono text-[11px]"
-                            title={`${resolvedTitle}${ext}`}
+                            title={exportFilename}
                           >
-                            {resolvedTitle}
-                            {ext}
+                            {exportFilename}
                           </span>
                         </div>
+                        {useTrackingId && (
+                          <div
+                            className="text-[11px] text-text-secondary truncate ml-4"
+                            title={resolvedTitle}
+                          >
+                            YouTube title: {resolvedTitle}
+                          </div>
+                        )}
                         <div
                           className="text-[10px] text-text-muted truncate ml-4"
                           title={v.name}

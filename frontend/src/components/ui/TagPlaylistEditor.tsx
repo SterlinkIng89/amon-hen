@@ -6,15 +6,22 @@ import {
   SetTagPlaylistConfig,
   SetTagThumbnailConfig,
   LoadConfig,
+  BackfillGameTagsFromPlaylists,
 } from "../../../wailsjs/go/backend/App";
 import { backend } from "../../../wailsjs/go/models";
-import { YTPlaylist, PlaylistPrivacy, TagThumbnailConfig } from "../../types";
+import {
+  YTPlaylist,
+  PlaylistPrivacy,
+  TagThumbnailConfig,
+  GameArtworkConfig,
+} from "../../types";
 import { useAppStore } from "../../store/useAppStore";
 import { parseTagPlaylistConfig } from "../../utils/tagConfigParser";
 import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
 import { useSteamAppBinding } from "../../hooks/useSteamAppBinding";
 import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import TagThumbnailConfigSection from "./TagThumbnailConfigSection";
+import { TagGameArtworkSection } from "./TagGameArtworkSection";
 import { SteamMatchBadge } from "./SteamMatchBadge";
 import { SteamGameSelectorModal } from "../youtube/catalog/SteamGameSelectorModal";
 
@@ -52,6 +59,10 @@ export default function TagPlaylistEditor({
   const [thumbConfig, setThumbConfig] = useState<
     TagThumbnailConfig | undefined
   >(undefined);
+  const [artworkConfig, setArtworkConfig] = useState<
+    GameArtworkConfig | undefined
+  >(undefined);
+  const [isBackfilling, setIsBackfilling] = useState(false);
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -86,11 +97,12 @@ export default function TagPlaylistEditor({
     isLoading: isSteamBindingLoading,
     setBound: setSteamAppBound,
   } = useSteamAppBinding(tag);
-  const { baseImage, logoImage, gameTitle } = useThumbnailAssets(
+  const thumbnailAssets = useThumbnailAssets(
     tag,
     thumbConfig,
     isSteamBindingLoading ? undefined : steamAppId,
   );
+  const { baseImage, logoImage, gameTitle } = thumbnailAssets;
 
   useEffect(() => {
     setNewVodTitle(tag);
@@ -115,6 +127,7 @@ export default function TagPlaylistEditor({
         setClipPlaylistId(parsed.clip_playlist_id);
         setSelectedClipId(parsed.clip_playlist_id);
         setThumbConfig(parsed.thumbnail_config);
+        setArtworkConfig(parsed.artwork);
       })
       .catch(console.error);
 
@@ -369,6 +382,29 @@ export default function TagPlaylistEditor({
     onCancel?.();
   };
 
+  const handleBackfillTags = async () => {
+    if (isBackfilling || typeof BackfillGameTagsFromPlaylists !== "function") return;
+    setIsBackfilling(true);
+    setCoverMessage(null);
+    try {
+      const updated = await BackfillGameTagsFromPlaylists();
+      setCoverMessage({
+        type: "success",
+        text:
+          updated > 0
+            ? `Backfilled game tags on ${updated} video${updated === 1 ? "" : "s"} from linked playlists.`
+            : "All videos already have matching game tags.",
+      });
+    } catch (err: unknown) {
+      setCoverMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   const handleConfirm = async () => {
     setIsCreating(true);
     setError("");
@@ -401,12 +437,22 @@ export default function TagPlaylistEditor({
           </h2>
         </div>
 
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border-subtle bg-elevated hover:bg-card hover:border-border-medium transition-colors text-xs font-medium text-text-secondary hover:text-text-primary cursor-pointer shrink-0"
-          onClick={handleSkip}
-          disabled={isCreating}
-          title="Mark tag as having no playlist"
-        >
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border-subtle bg-elevated hover:bg-card hover:border-border-medium transition-colors text-xs font-medium text-text-secondary hover:text-text-primary cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+            onClick={handleBackfillTags}
+            disabled={isCreating || isBackfilling}
+            title="Infer missing game tags on videos from linked playlists"
+          >
+            <span>{isBackfilling ? "Backfilling..." : "Backfill Tags"}</span>
+          </button>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border-subtle bg-elevated hover:bg-card hover:border-border-medium transition-colors text-xs font-medium text-text-secondary hover:text-text-primary cursor-pointer shrink-0"
+            onClick={handleSkip}
+            disabled={isCreating}
+            title="Mark tag as having no playlist"
+          >
           <svg
             width="13"
             height="13"
@@ -422,7 +468,8 @@ export default function TagPlaylistEditor({
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
           </svg>
           <span>No playlist for "{tag}" — don't ask again</span>
-        </button>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -867,6 +914,15 @@ export default function TagPlaylistEditor({
           onOpenSelector={() => setShowSteamSelector(true)}
         />
 
+        <TagGameArtworkSection
+          tag={tag}
+          artwork={artworkConfig}
+          onArtworkChange={(next) => {
+            setArtworkConfig(next);
+            onSaved();
+          }}
+        />
+
         <TagThumbnailConfigSection
           tag={tag}
           value={thumbConfig}
@@ -874,6 +930,7 @@ export default function TagPlaylistEditor({
           vodPlaylistId={vodPlaylistId}
           clipPlaylistId={clipPlaylistId}
           steamAppId={isSteamBindingLoading ? undefined : steamAppId}
+          thumbnailAssets={thumbnailAssets}
           onPlaylistCoverUpdated={(plId, newThumbUrl) => {
             setPlaylists((prev) =>
               prev.map((p) => (p.id === plId ? { ...p, thumbnailUrl: newThumbUrl } : p))

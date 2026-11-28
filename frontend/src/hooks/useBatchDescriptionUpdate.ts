@@ -1,24 +1,19 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { BatchItemStatus } from "../types/index";
+import { useRef, useCallback, useEffect, useMemo } from "react";
+import {
+  BatchItemStatus,
+  BatchDescriptionInputItem,
+  BatchDescriptionItem,
+  BatchProgress,
+  DescriptionBatchJob,
+} from "../types/index";
 import { UpdateYouTubeVideoMetadata } from "../../wailsjs/go/backend/App";
+import { useAppStore } from "../store/useAppStore";
 
-export interface BatchDescriptionInputItem {
-  readonly videoId: string;
-  readonly title: string;
-  readonly currentDescription: string;
-}
-
-export interface BatchDescriptionItem extends BatchDescriptionInputItem {
-  readonly status: BatchItemStatus;
-  readonly error?: string;
-}
-
-export interface BatchProgress {
-  readonly current: number;
-  readonly total: number;
-  readonly successCount: number;
-  readonly failCount: number;
-}
+export type {
+  BatchDescriptionInputItem,
+  BatchDescriptionItem,
+  BatchProgress,
+};
 
 export interface UseBatchDescriptionUpdateArgs {
   readonly playlistId?: string;
@@ -36,6 +31,7 @@ export interface UseBatchDescriptionUpdateResult {
   readonly unsyncedCount: number;
   readonly estimatedQuota: number;
   readonly progress: BatchProgress;
+  readonly storedTargetDescription?: string;
   readonly start: () => Promise<void>;
   readonly startSelected: (videoIds: readonly string[]) => Promise<void>;
   readonly startUnsynced: (maxCount?: number) => Promise<void>;
@@ -43,11 +39,185 @@ export interface UseBatchDescriptionUpdateResult {
   readonly cancel: () => void;
 }
 
+const EMPTY_PROGRESS: BatchProgress = {
+  current: 0,
+  total: 0,
+  successCount: 0,
+  failCount: 0,
+};
+
+interface DescriptionBatchCallbacks {
+  readonly onVideoUpdated?: (videoId: string, newDescription: string) => void;
+  readonly onCompleted?: () => void;
+}
+
+const callbackRegistry = new Map<string, DescriptionBatchCallbacks>();
+let ephemeralCounter = 0;
+
 function toPendingItem(item: BatchDescriptionInputItem): BatchDescriptionItem {
   return {
     ...item,
     status: "pending",
   };
+}
+
+function mergeDescriptionItems(
+  prev: readonly BatchDescriptionItem[],
+  inputItems: readonly BatchDescriptionInputItem[]
+): { readonly next: BatchDescriptionItem[]; readonly changed: boolean } {
+  const prevMap = new Map(prev.map((p) => [p.videoId, p]));
+  let hasChanges = prev.length !== inputItems.length;
+
+  const next = inputItems.map((item) => {
+    const existing = prevMap.get(item.videoId);
+    if (
+      !existing ||
+      existing.title !== item.title ||
+      existing.currentDescription !== item.currentDescription
+    ) {
+      hasChanges = true;
+    }
+    return {
+      ...item,
+      status: existing ? existing.status : "pending",
+      error: existing?.error,
+    };
+  });
+
+  return { next, changed: hasChanges };
+}
+
+function updateStoredDescriptionItemStatus(
+  batchKey: string,
+  videoId: string,
+  status: BatchItemStatus,
+  error?: string
+): void {
+  useAppStore.getState().setDescriptionBatch(batchKey, (prev) => {
+    const base: DescriptionBatchJob = prev ?? {
+      items: [],
+      running: true,
+      runId: 0,
+      cancelRequested: false,
+      progress: EMPTY_PROGRESS,
+    };
+    return {
+      ...base,
+      items: base.items.map((item) =>
+        item.videoId === videoId ? { ...item, status, error } : item
+      ),
+    };
+  });
+}
+
+function updateStoredDescriptionProgress(
+  batchKey: string,
+  progress: BatchProgress
+): void {
+  useAppStore.getState().setDescriptionBatch(batchKey, (prev) => ({
+    items: prev?.items ?? [],
+    running: prev?.running ?? false,
+    runId: prev?.runId ?? 0,
+    cancelRequested: prev?.cancelRequested ?? false,
+    targetDescription: prev?.targetDescription,
+    progress,
+  }));
+}
+
+async function runDescriptionBatchQueue(args: {
+  readonly batchKey: string;
+  readonly targetVideoIds: readonly string[];
+  readonly targetDescription: string;
+  readonly fallbackItems: readonly BatchDescriptionItem[];
+}): Promise<void> {
+  const { batchKey, targetVideoIds, targetDescription, fallbackItems } = args;
+  const normalizedTarget = targetDescription.trim();
+  const existingJob = useAppStore.getState().descriptionBatches[batchKey];
+
+  if (existingJob?.running || targetVideoIds.length === 0 || !normalizedTarget) {
+    return;
+  }
+
+  const baseItems =
+    existingJob?.items && existingJob.items.length > 0
+      ? existingJob.items
+      : fallbackItems;
+  const currentRunId = (existingJob?.runId ?? 0) + 1;
+
+  let successCount = 0;
+  let failCount = 0;
+
+  useAppStore.getState().setDescriptionBatch(batchKey, {
+    items: baseItems,
+    running: true,
+    runId: currentRunId,
+    cancelRequested: false,
+    progress: {
+      current: 0,
+      total: targetVideoIds.length,
+      successCount: 0,
+      failCount: 0,
+    },
+    targetDescription,
+  });
+
+  let quotaExceeded = false;
+
+  for (let i = 0; i < targetVideoIds.length; i++) {
+    const videoId = targetVideoIds[i];
+    const latestJob = useAppStore.getState().descriptionBatches[batchKey];
+
+    if (!latestJob || latestJob.runId !== currentRunId) {
+      return;
+    }
+
+    if (latestJob.cancelRequested || quotaExceeded) {
+      updateStoredDescriptionItemStatus(batchKey, videoId, "skipped");
+      continue;
+    }
+
+    updateStoredDescriptionItemStatus(batchKey, videoId, "uploading");
+
+    try {
+      await UpdateYouTubeVideoMetadata(videoId, "", targetDescription, "");
+
+      if (useAppStore.getState().descriptionBatches[batchKey]?.runId !== currentRunId) {
+        return;
+      }
+
+      successCount++;
+      updateStoredDescriptionItemStatus(batchKey, videoId, "done");
+      callbackRegistry.get(batchKey)?.onVideoUpdated?.(videoId, targetDescription);
+    } catch (err: unknown) {
+      if (useAppStore.getState().descriptionBatches[batchKey]?.runId !== currentRunId) {
+        return;
+      }
+
+      failCount++;
+      const msg = err instanceof Error ? err.message : String(err);
+      updateStoredDescriptionItemStatus(batchKey, videoId, "failed", msg);
+
+      if (msg.toLowerCase().includes("quota")) {
+        quotaExceeded = true;
+      }
+    }
+
+    updateStoredDescriptionProgress(batchKey, {
+      current: i + 1,
+      total: targetVideoIds.length,
+      successCount,
+      failCount,
+    });
+  }
+
+  const finalJob = useAppStore.getState().descriptionBatches[batchKey];
+  if (finalJob && finalJob.runId === currentRunId) {
+    useAppStore.getState().setDescriptionBatch(batchKey, {
+      ...finalJob,
+      running: false,
+    });
+    callbackRegistry.get(batchKey)?.onCompleted?.();
+  }
 }
 
 export function useBatchDescriptionUpdate({
@@ -57,73 +227,54 @@ export function useBatchDescriptionUpdate({
   onVideoUpdated,
   onCompleted,
 }: UseBatchDescriptionUpdateArgs): UseBatchDescriptionUpdateResult {
-  const [batchItems, setBatchItems] = useState<BatchDescriptionItem[]>(() =>
-    inputItems.map(toPendingItem)
-  );
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<BatchProgress>({
-    current: 0,
-    total: 0,
-    successCount: 0,
-    failCount: 0,
-  });
+  const ephemeralKeyRef = useRef<string>("");
+  if (!ephemeralKeyRef.current) {
+    ephemeralKeyRef.current = `ephemeral-desc-${++ephemeralCounter}`;
+  }
 
-  const cancelRequestedRef = useRef(false);
-  const runIdRef = useRef(0);
-  const batchItemsRef = useRef(batchItems);
-  useEffect(() => {
-    batchItemsRef.current = batchItems;
-  }, [batchItems]);
+  const normalizedPlaylistId = playlistId?.trim() ?? "";
+  const batchKey = normalizedPlaylistId.length > 0 ? normalizedPlaylistId : ephemeralKeyRef.current;
 
-  const prevPlaylistIdRef = useRef(playlistId);
+  const { descriptionBatches } = useAppStore();
+  const job = descriptionBatches[batchKey];
+  const running = job?.running ?? false;
+  const progress = job?.progress ?? EMPTY_PROGRESS;
 
-  useEffect(() => {
-    if (prevPlaylistIdRef.current !== playlistId) {
-      prevPlaylistIdRef.current = playlistId;
-      runIdRef.current++;
-      cancelRequestedRef.current = true;
-      setRunning(false);
-      setBatchItems(inputItems.map(toPendingItem));
-      setProgress({ current: 0, total: 0, successCount: 0, failCount: 0 });
+  const batchItems = useMemo<readonly BatchDescriptionItem[]>(() => {
+    if (job?.items && job.items.length > 0) {
+      return job.items;
     }
-  }, [playlistId, inputItems]);
+    return inputItems.map(toPendingItem);
+  }, [job?.items, inputItems]);
 
   useEffect(() => {
+    const entry: DescriptionBatchCallbacks = { onVideoUpdated, onCompleted };
+    callbackRegistry.set(batchKey, entry);
     return () => {
-      runIdRef.current++;
-      cancelRequestedRef.current = true;
+      if (callbackRegistry.get(batchKey) === entry) {
+        callbackRegistry.delete(batchKey);
+      }
     };
-  }, []);
+  }, [batchKey, onVideoUpdated, onCompleted]);
 
   useEffect(() => {
-    if (!running) {
-      setBatchItems((prev) => {
-        const prevMap = new Map(prev.map((p) => [p.videoId, p]));
-        let hasChanges = false;
-        if (prev.length !== inputItems.length) {
-          hasChanges = true;
-        }
+    if (inputItems.length === 0) return;
+    const currentJob = useAppStore.getState().descriptionBatches[batchKey];
+    if (currentJob?.running) return;
 
-        const next = inputItems.map((item) => {
-          const existing = prevMap.get(item.videoId);
-          if (
-            !existing ||
-            existing.title !== item.title ||
-            existing.currentDescription !== item.currentDescription
-          ) {
-            hasChanges = true;
-          }
-          return {
-            ...item,
-            status: existing ? existing.status : "pending",
-            error: existing?.error,
-          };
-        });
-
-        return hasChanges ? next : prev;
+    const prevItems = currentJob?.items ?? [];
+    const { next, changed } = mergeDescriptionItems(prevItems, inputItems);
+    if (!currentJob || changed) {
+      useAppStore.getState().setDescriptionBatch(batchKey, {
+        items: next,
+        running: false,
+        runId: currentJob?.runId ?? 0,
+        cancelRequested: false,
+        progress: currentJob?.progress ?? EMPTY_PROGRESS,
+        targetDescription: currentJob?.targetDescription,
       });
     }
-  }, [inputItems, running]);
+  }, [batchKey, inputItems, running]);
 
   const safeTarget = typeof targetDescription === "string" ? targetDescription : "";
   const normalizedTarget = safeTarget.trim();
@@ -146,95 +297,17 @@ export function useBatchDescriptionUpdate({
 
   const estimatedQuota = unsyncedCount * 50;
 
-  const updateItemStatus = useCallback(
-    (videoId: string, status: BatchItemStatus, error?: string) => {
-      setBatchItems((prev) =>
-        prev.map((item) =>
-          item.videoId === videoId ? { ...item, status, error } : item
-        )
-      );
-    },
-    []
-  );
-
   const processQueue = useCallback(
     async (targetVideoIds: readonly string[]) => {
       if (running || targetVideoIds.length === 0 || !normalizedTarget) return;
-
-      const currentRunId = ++runIdRef.current;
-      setRunning(true);
-      cancelRequestedRef.current = false;
-
-      let successCount = 0;
-      let failCount = 0;
-      setProgress({
-        current: 0,
-        total: targetVideoIds.length,
-        successCount: 0,
-        failCount: 0,
+      await runDescriptionBatchQueue({
+        batchKey,
+        targetVideoIds,
+        targetDescription,
+        fallbackItems: batchItems,
       });
-
-      let quotaExceeded = false;
-
-      for (let i = 0; i < targetVideoIds.length; i++) {
-        const videoId = targetVideoIds[i];
-
-        if (runIdRef.current !== currentRunId) {
-          return;
-        }
-
-        if (cancelRequestedRef.current || quotaExceeded) {
-          updateItemStatus(videoId, "skipped");
-          continue;
-        }
-
-        updateItemStatus(videoId, "uploading");
-
-        try {
-          await UpdateYouTubeVideoMetadata(videoId, "", targetDescription, "");
-
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          successCount++;
-          updateItemStatus(videoId, "done");
-          onVideoUpdated?.(videoId, targetDescription);
-        } catch (err: unknown) {
-          if (runIdRef.current !== currentRunId) {
-            return;
-          }
-
-          failCount++;
-          const msg = err instanceof Error ? err.message : String(err);
-          updateItemStatus(videoId, "failed", msg);
-
-          if (msg.toLowerCase().includes("quota")) {
-            quotaExceeded = true;
-          }
-        }
-
-        setProgress({
-          current: i + 1,
-          total: targetVideoIds.length,
-          successCount,
-          failCount,
-        });
-      }
-
-      if (runIdRef.current === currentRunId) {
-        setRunning(false);
-        onCompleted?.();
-      }
     },
-    [
-      running,
-      normalizedTarget,
-      targetDescription,
-      updateItemStatus,
-      onVideoUpdated,
-      onCompleted,
-    ]
+    [batchKey, running, normalizedTarget, targetDescription, batchItems]
   );
 
   const start = useCallback(async () => {
@@ -278,10 +351,21 @@ export function useBatchDescriptionUpdate({
   }, [batchItems, processQueue]);
 
   const cancel = useCallback(() => {
-    cancelRequestedRef.current = true;
-  }, []);
+    useAppStore.getState().setDescriptionBatch(batchKey, (prev) => {
+      if (!prev) {
+        return {
+          items: [],
+          running: false,
+          runId: 0,
+          cancelRequested: true,
+          progress: EMPTY_PROGRESS,
+        };
+      }
+      return { ...prev, cancelRequested: true };
+    });
+  }, [batchKey]);
 
-  const isDone = progress.total > 0 && progress.current >= progress.total;
+  const isDone = !running && progress.total > 0 && progress.current >= progress.total;
 
   return {
     items: batchItems,
@@ -291,6 +375,7 @@ export function useBatchDescriptionUpdate({
     unsyncedCount,
     estimatedQuota,
     progress,
+    storedTargetDescription: job?.targetDescription,
     start,
     startSelected,
     startUnsynced,

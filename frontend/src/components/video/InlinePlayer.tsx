@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { VideoFile, YTPlaylist, TagPlaylistConfig } from "../../types";
+import { VideoFile, YTPlaylist, TagPlaylistConfig, GameProfile } from "../../types";
 import { parseTagPlaylistConfigs } from "../../utils/tagConfigParser";
 import {
   formatSize,
@@ -39,7 +39,11 @@ import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
 import { ContentTypeToggle } from "./ContentTypeToggle";
-import { useAppStore } from "../../store/useAppStore";
+import {
+  useAppStore,
+  hasActiveOrCompletedQueueEntry,
+  isQueueBlockedStatus,
+} from "../../store/useAppStore";
 import { PlaylistPrivacy } from "../../types";
 import {
   resolvePlayerKeyAction,
@@ -61,6 +65,7 @@ interface InlinePlayerProps {
   onTagSaved?: () => void;
   onDelete?: () => void;
   readonly onFixTitleMismatch?: () => void;
+  readonly gameProfiles?: Record<string, GameProfile>;
 }
 
 export default function InlinePlayer({
@@ -73,6 +78,7 @@ export default function InlinePlayer({
   onTagSaved,
   onDelete,
   onFixTitleMismatch,
+  gameProfiles: initialGameProfiles,
 }: InlinePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = `http://127.0.0.1:${streamPort}/stream?path=${encodeURIComponent(video.path)}`;
@@ -325,19 +331,28 @@ export default function InlinePlayer({
   };
 
   // Info panel state
-  const [ytTitle, setYtTitle] = useState(
-    video.youtubeTitle ||
-      generateYouTubeTitle(
-        video.name,
-        video.game,
-        video.episode,
-        undefined,
-        video.event,
-        video.gameMode,
-        video.customVars,
-        video.modTime,
-      ),
-  );
+  const [ytTitle, setYtTitle] = useState(() => {
+    const initialProfile = initialGameProfiles?.[video.game || ""];
+    const initialContentType = resolveVideoContentType(
+      video.durationSecs,
+      video.contentType,
+    );
+    const initialGeneratedTitle = generateYouTubeTitle(
+      video.name,
+      video.game,
+      video.episode,
+      initialProfile,
+      video.event,
+      video.gameMode,
+      video.customVars,
+      video.modTime,
+      undefined,
+      initialContentType,
+    );
+    return initialProfile?.type === "multiplayer"
+      ? initialGeneratedTitle
+      : video.youtubeTitle || initialGeneratedTitle;
+  });
   const [tagInput, setTagInput] = useState(video.game || "");
   const [episodeInput, setEpisodeInput] = useState<number | "">(
     video.episode || "",
@@ -347,7 +362,19 @@ export default function InlinePlayer({
   const [customVarsInput, setCustomVarsInput] = useState<
     Record<string, string>
   >(video.customVars || {});
-  const { defaultVideoDescription } = useAppStore();
+  const { defaultVideoDescription, queue } = useAppStore();
+  const existingQueueStatus = queue.find(
+    (item) => item.videoPath === video.path,
+  )?.status;
+  const isQueueLocked = existingQueueStatus
+    ? isQueueBlockedStatus(existingQueueStatus)
+    : false;
+  const addToQueueLabel =
+    existingQueueStatus === "uploading" || existingQueueStatus === "processing"
+      ? "Uploading..."
+      : existingQueueStatus === "pending"
+        ? "In Queue"
+        : "Add to Queue";
   const [description, setDescription] = useState(
     video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
   );
@@ -370,7 +397,9 @@ export default function InlinePlayer({
   const [isCreatingPlaylistLoading, setIsCreatingPlaylistLoading] =
     useState(false);
   const [playlistCreateError, setPlaylistCreateError] = useState("");
-  const [gameProfiles, setGameProfiles] = useState<Record<string, any>>({});
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>(
+    initialGameProfiles || {},
+  );
   const [tagPlaylists, setTagPlaylists] = useState<Record<string, string>>({});
   const [tagPlaylistConfigs, setTagPlaylistConfigs] = useState<
     Record<string, TagPlaylistConfig>
@@ -397,7 +426,9 @@ export default function InlinePlayer({
   useEffect(() => {
     LoadConfig()
       .then((cfg) => {
-        setGameProfiles(cfg.game_profiles || {});
+        if (cfg.game_profiles) {
+          setGameProfiles(cfg.game_profiles);
+        }
         setTagPlaylists(cfg.tag_playlists || {});
         setTagPlaylistConfigs(
           parseTagPlaylistConfigs(cfg.tag_playlist_configs, cfg.tag_playlists),
@@ -1013,6 +1044,9 @@ export default function InlinePlayer({
   };
 
   const handleUploadNow = async () => {
+    if (hasActiveOrCompletedQueueEntry(useAppStore.getState().queue, video.path)) {
+      return;
+    }
     if (tagInput) addRecentTag(tagInput);
     if (eventInput) addRecentValue("event", eventInput);
     if (customVarsInput) {
@@ -1068,6 +1102,9 @@ export default function InlinePlayer({
   };
 
   const handleAddToQueue = async () => {
+    if (hasActiveOrCompletedQueueEntry(useAppStore.getState().queue, video.path)) {
+      return;
+    }
     if (tagInput) addRecentTag(tagInput);
     if (eventInput) addRecentValue("event", eventInput);
     if (customVarsInput) {
@@ -2310,10 +2347,11 @@ export default function InlinePlayer({
                   </button>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors min-w-[120px]"
+                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleAddToQueue}
+                      disabled={isQueueLocked}
                     >
-                      Add to Queue
+                      {addToQueueLabel}
                     </button>
                     {video.youtubeId && (
                       <a
@@ -2334,9 +2372,9 @@ export default function InlinePlayer({
                       </a>
                     )}
                     <button
-                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors min-w-[120px]"
+                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleUploadNow}
-                      disabled={uploading || !ytTitle.trim()}
+                      disabled={uploading || isQueueLocked || !ytTitle.trim()}
                     >
                       {video.youtubeId ? "Re-upload" : "Upload Now"}
                     </button>
@@ -2402,10 +2440,11 @@ export default function InlinePlayer({
                       : "Save Info"}
                 </button>
                 <button
-                  className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors"
+                  className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleAddToQueue}
+                  disabled={isQueueLocked}
                 >
-                  Add to Queue
+                  {addToQueueLabel}
                 </button>
                 {video.youtubeId && (
                   <a
@@ -2426,9 +2465,9 @@ export default function InlinePlayer({
                   </a>
                 )}
                 <button
-                  className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors"
+                  className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleUploadNow}
-                  disabled={uploading || !ytTitle.trim()}
+                  disabled={uploading || isQueueLocked || !ytTitle.trim()}
                 >
                   {video.youtubeId ? "Re-upload" : "Upload Now"}
                 </button>

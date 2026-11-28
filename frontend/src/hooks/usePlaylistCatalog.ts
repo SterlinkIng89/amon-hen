@@ -22,6 +22,7 @@ export function usePlaylistCatalog() {
   const [draftError, setDraftError] = useState<string | null>(null);
 
   const [editedTag, setEditedTag] = useState<string>("");
+  const [editedKind, setEditedKind] = useState<"vod" | "clip">("vod");
   const [editedEpisodes, setEditedEpisodes] = useState<Record<string, number>>({});
 
   const [isApplying, setIsApplying] = useState(false);
@@ -54,6 +55,7 @@ export function usePlaylistCatalog() {
     setIsLoadingDraft(true);
     setDraft(null);
     setEditedTag("");
+    setEditedKind("vod");
     setEditedEpisodes({});
     setDraftError(null);
     setApplyError(null);
@@ -66,6 +68,7 @@ export function usePlaylistCatalog() {
       }
       setDraft(result);
       setEditedTag(result.tag || "");
+      setEditedKind(result.kind === "clip" ? "clip" : "vod");
 
       const episodeMap: Record<string, number> = {};
       if (result.videos) {
@@ -237,8 +240,11 @@ export function usePlaylistCatalog() {
     });
   }, [draft?.videos]);
 
+  const isClipPlaylist = editedKind === "clip";
+
   // Check conflicts in editedEpisodes
   const hasConflicts = useMemo(() => {
+    if (isClipPlaylist) return false;
     const seen = new Set<number>();
     for (const ep of Object.values(editedEpisodes)) {
       if (ep <= 0) return true;
@@ -246,17 +252,19 @@ export function usePlaylistCatalog() {
       seen.add(ep);
     }
     return false;
-  }, [editedEpisodes]);
+  }, [editedEpisodes, isClipPlaylist]);
 
   const mismatchCount = useMemo(() => {
     if (!draft?.videos?.length) return 0;
     let count = 0;
     for (const vid of draft.videos) {
-      const isEpMismatch = Boolean(
-        vid.titleEpisode &&
-          vid.titleEpisode > 0 &&
-          (editedEpisodes[vid.videoId] ?? 0) !== vid.titleEpisode
-      );
+      const isEpMismatch =
+        !isClipPlaylist &&
+        Boolean(
+          vid.titleEpisode &&
+            vid.titleEpisode > 0 &&
+            (editedEpisodes[vid.videoId] ?? 0) !== vid.titleEpisode
+        );
       const isTitleMismatch = Boolean(
         vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
       );
@@ -265,10 +273,10 @@ export function usePlaylistCatalog() {
       }
     }
     return count;
-  }, [draft?.videos, editedEpisodes]);
+  }, [draft?.videos, editedEpisodes, isClipPlaylist]);
 
   const chronologyIssueIds = useMemo<ReadonlySet<string>>(() => {
-    if (!draft?.videos || draft.videos.length < 2) {
+    if (isClipPlaylist || !draft?.videos || draft.videos.length < 2) {
       return new Set<string>();
     }
 
@@ -328,7 +336,7 @@ export function usePlaylistCatalog() {
     }
 
     return issues;
-  }, [draft?.videos, editedEpisodes]);
+  }, [draft?.videos, editedEpisodes, isClipPlaylist]);
 
   const hasChronologyErrors = useMemo(() => {
     return chronologyIssueIds.size > 0;
@@ -362,7 +370,7 @@ export function usePlaylistCatalog() {
         const req = backend.CatalogApplyRequest.createFrom({
           playlistId: selectedPlaylistId,
           tag: editedTag.trim(),
-          kind: draft?.kind || "vod",
+          kind: editedKind,
           updateLocal,
           assignments: Object.entries(editedEpisodes).map(([videoId, episode]) =>
             backend.CatalogAssignment.createFrom({ videoId, episode })
@@ -382,7 +390,7 @@ export function usePlaylistCatalog() {
         setIsApplying(false);
       }
     },
-    [selectedPlaylistId, canApply, editedTag, editedEpisodes, draft?.kind, loadPlaylists, reloadDraft]
+    [selectedPlaylistId, canApply, editedTag, editedKind, editedEpisodes, loadPlaylists, reloadDraft]
   );
 
   const [isUpdatingTitles, setIsUpdatingTitles] = useState(false);
@@ -464,6 +472,9 @@ export function usePlaylistCatalog() {
     updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
+    editedKind,
+    setEditedKind,
+    isClipPlaylist,
     editedEpisodes,
     setEpisode,
     reorderDuplicate,

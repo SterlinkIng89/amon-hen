@@ -11,9 +11,15 @@ export function AddVideoToPlaylist(arg1:string,arg2:string):Promise<void>;
 
 export function ApplyCatalogTitleUpdates(arg1:Array<backend.CatalogAssignment>):Promise<backend.CatalogTitleUpdateResult>;
 
+export function ApplyMatchedExports(arg1:Array<string>,arg2:boolean,arg3:boolean):Promise<backend.ApplyMatchedExportsResult>;
+
 export function ApplyPlaylistCatalog(arg1:backend.CatalogApplyRequest):Promise<void>;
 
 export function ApplySingleVideoTitleUpdate(arg1:string,arg2:string):Promise<void>;
+
+export function BackfillGameTagsFromPlaylists():Promise<number>;
+
+export function BackupSingleFile(arg1:string,arg2:string):Promise<string>;
 
 export function CacheHandler():Promise<http.Handler>;
 
@@ -25,11 +31,15 @@ export function CreateVideoClip(arg1:string,arg2:number,arg3:number,arg4:string)
 
 export function DeleteCustomThumbnail(arg1:string):Promise<void>;
 
+export function DeleteExportRecord(arg1:string):Promise<void>;
+
 export function DeleteFiles(arg1:Array<string>):Promise<void>;
 
 export function DeleteGameProfile(arg1:string):Promise<void>;
 
 export function DeletePlaylist(arg1:string):Promise<void>;
+
+export function DeleteTitleNormalizationDraft(arg1:string):Promise<void>;
 
 export function DeleteYouTubeVideo(arg1:string,arg2:boolean):Promise<void>;
 
@@ -39,13 +49,19 @@ export function DiscardUploadSession(arg1:string):Promise<void>;
 
 export function DisconnectSteam():Promise<void>;
 
-export function ExportVideos(arg1:Array<backend.ExportItem>,arg2:string,arg3:boolean):Promise<backend.ExportResult>;
+export function DismissExportRecord(arg1:string):Promise<void>;
+
+export function ExportVideos(arg1:Array<backend.ExportItem>,arg2:string,arg3:boolean,arg4:boolean):Promise<backend.ExportResult>;
 
 export function GetAPILogs(arg1:number):Promise<Array<backend.APILog>>;
 
 export function GetAllGameTags():Promise<Array<string>>;
 
 export function GetAutoLaunch():Promise<boolean>;
+
+export function GetBackupFolder():Promise<string>;
+
+export function GetBackupStatus():Promise<backend.BackupStatus>;
 
 export function GetCacheDir():Promise<string>;
 
@@ -63,7 +79,11 @@ export function GetDefaultExportFolder():Promise<string>;
 
 export function GetEnrichedSteamGames(arg1:boolean):Promise<Array<backend.EnrichedSteamGameItem>>;
 
+export function GetExportedVideos(arg1:string):Promise<Array<backend.ExportedVideoRecord>>;
+
 export function GetFolderSettings(arg1:string):Promise<backend.FolderConfig>;
+
+export function GetMatchedExports():Promise<Array<backend.MatchedExportItem>>;
 
 export function GetOrCreatePlaylist(arg1:string,arg2:string,arg3:string):Promise<string>;
 
@@ -105,9 +125,15 @@ export function GetStreamPort():Promise<number>;
 
 export function GetSyncStatus():Promise<Record<string, any>>;
 
+export function GetTagGameArtwork(arg1:string):Promise<backend.GameArtworkConfig>;
+
 export function GetTagPlaylistConfig(arg1:string):Promise<backend.TagPlaylistConfig>;
 
 export function GetThumbnail(arg1:string):Promise<string>;
+
+export function GetTitleNormalizationDraft(arg1:string):Promise<backend.TitleNormalizationDraft>;
+
+export function GetTitleNormalizationDrafts(arg1:string):Promise<Array<backend.TitleNormalizationDraft>>;
 
 export function GetUploadSessions():Promise<Array<backend.UploadSession>>;
 
@@ -143,6 +169,10 @@ export function LogFrontendEvent(arg1:string):Promise<void>;
 
 export function LoginSteam():Promise<string>;
 
+export function MarkTitleNormalizationDraftSynced(arg1:string,arg2:string):Promise<void>;
+
+export function MatchExportedVideos():Promise<number>;
+
 export function OpenFolderDialog():Promise<string>;
 
 export function OpenFolderInExplorer(arg1:string):Promise<void>;
@@ -163,7 +193,11 @@ export function RemoveVideosFromPlaylist(arg1:string,arg2:Array<string>):Promise
 
 export function ReorderSteamBacklog(arg1:Array<number>):Promise<void>;
 
+export function ResolveBackupPath(arg1:string):Promise<string|boolean>;
+
 export function ResumeUpload(arg1:string):Promise<void>;
+
+export function RunFolderBackup(arg1:string):Promise<backend.BackupRunResult>;
 
 export function SaveCustomThumbnail(arg1:string,arg2:string):Promise<string>;
 
@@ -177,11 +211,17 @@ export function SaveRecentFieldValues(arg1:Record<string, Array<string>>):Promis
 
 export function SaveSteamAPIKey(arg1:string):Promise<void>;
 
+export function SaveTitleNormalizationDraft(arg1:backend.TitleNormalizationDraft):Promise<void>;
+
+export function SaveTitleNormalizationDraftsBatch(arg1:Array<backend.TitleNormalizationDraft>):Promise<void>;
+
 export function SaveVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string,arg9:string,arg10:Record<string, string>):Promise<void>;
 
 export function SaveYouTubeCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SearchSteamGames(arg1:string):Promise<Array<backend.SteamSearchResult>>;
+
+export function SelectBackupFolder():Promise<string>;
 
 export function SelectCustomThumbnailImage():Promise<string>;
 
@@ -189,9 +229,15 @@ export function SelectExportFolder():Promise<string>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
+export function SetBackupFolder(arg1:string):Promise<void>;
+
 export function SetDefaultExportFolder(arg1:string):Promise<void>;
 
+export function SetDefaultVideoDescription(arg1:string):Promise<void>;
+
 export function SetSteamAppID(arg1:string,arg2:string):Promise<void>;
+
+export function SetTagGameArtwork(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetTagPlaylist(arg1:string,arg2:string):Promise<void>;
 
@@ -231,6 +277,8 @@ export function SyncSteamData():Promise<void>;
 
 export function UnlinkLocalVideo(arg1:string):Promise<void>;
 
+export function UpdateExportTargetTitle(arg1:string,arg2:string):Promise<void>;
+
 export function UpdatePlaylistMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdatePlaylistVisibility(arg1:string,arg2:string):Promise<void>;
@@ -246,6 +294,8 @@ export function UpdateYouTubeThumbnailForEpisode(arg1:string,arg2:string,arg3:nu
 export function UpdateYouTubeVideoGameMeta(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function UpdateYouTubeVideoMetadata(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UploadTagGameArtworkFile(arg1:string,arg2:string):Promise<string>;
 
 export function UploadToYouTube(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:number,arg8:string):Promise<void>;
 

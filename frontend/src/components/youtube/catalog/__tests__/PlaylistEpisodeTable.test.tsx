@@ -660,5 +660,55 @@ describe("PlaylistEpisodeTable", () => {
     expect(screen.queryByText("Game — 8/04/26")).not.toBeInTheDocument();
     expect(screen.getByText("Game — 2/11/26")).toBeInTheDocument();
   });
+
+  it("hides episode columns and invalid/duplicate states when isClipPlaylist is true", () => {
+    const clipVideos: backend.CatalogVideoDraft[] = [
+      {
+        videoId: "clip-1",
+        title: "Pentakill Highlight",
+        thumbnailUrl: "https://example.com/c1.jpg",
+        existingEpisode: 0,
+        episode: 0,
+        titleEpisode: 2,
+        source: "order",
+        conflict: false,
+        thumbnailUpdatedAt: 0,
+      } as backend.CatalogVideoDraft,
+      {
+        videoId: "clip-2",
+        title: "Baron Steal",
+        thumbnailUrl: "https://example.com/c2.jpg",
+        existingEpisode: 0,
+        episode: 0,
+        conflict: false,
+        thumbnailUpdatedAt: 1700000000,
+      } as backend.CatalogVideoDraft,
+    ];
+
+    const onUpdateSingleVideo = vi.fn();
+    render(
+      <PlaylistEpisodeTable
+        videos={clipVideos}
+        episodes={{ "clip-1": 0, "clip-2": 0 }}
+        onEpisodeChange={vi.fn()}
+        onSyncAllFromTitle={vi.fn()}
+        onUpdateSingleVideo={onUpdateSingleVideo}
+        isClipPlaylist={true}
+      />
+    );
+
+    expect(screen.queryByText("Invalid")).not.toBeInTheDocument();
+    expect(screen.queryByText("Duplicate")).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sync all from title/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Source")).not.toBeInTheDocument();
+    expect(screen.queryByText("Episode")).not.toBeInTheDocument();
+    expect(screen.queryByText("Order")).not.toBeInTheDocument();
+
+    const uploadBtn = screen.getByRole("button", { name: /Upload thumbnail for Pentakill Highlight/i });
+    expect(uploadBtn).not.toBeDisabled();
+    fireEvent.click(uploadBtn);
+    expect(onUpdateSingleVideo).toHaveBeenCalledWith("clip-1");
+  });
 });
 

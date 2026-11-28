@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var defaultSepRegex = regexp.MustCompile(`\s+-\s+|\s*[—–|]\s*`)
+var defaultSepRegex = regexp.MustCompile(`\s+-\s+|\s*[—–|\x{2223}\x{ff5c}]\s*`)
 var standaloneClosingMarkerRegex = regexp.MustCompile(`(?i)^(?:end|ending|final|finale|fin|last|conclusion|epilogue|epílogo|parte\s+final)$`)
 var inlineClosingMarkerRegex = regexp.MustCompile(`(?i)(?:[\s(\[–—|:-]+)(?:end|ending|final|finale|fin|last|conclusion|epilogue|epílogo|parte\s+final)(?:[\s)\]!.]*)$`)
 
@@ -34,8 +34,8 @@ func matchExplicitEpisode(s string) (int, bool) {
 
 func splitTitleSegments(title, sep string) []string {
 	cleanSep := strings.TrimSpace(sep)
-	if cleanSep != "" && cleanSep != "-" && cleanSep != "—" && cleanSep != "–" && cleanSep != "|" {
-		pattern := `\s+-\s+|\s*[—–|]\s*|\s*` + regexp.QuoteMeta(cleanSep) + `\s*`
+	if cleanSep != "" && cleanSep != "-" && cleanSep != "—" && cleanSep != "–" && cleanSep != "|" && cleanSep != "\u2223" {
+		pattern := `\s+-\s+|\s*[—–|\x{2223}\x{ff5c}]\s*|\s*` + regexp.QuoteMeta(cleanSep) + `\s*`
 		if re, err := regexp.Compile(pattern); err == nil {
 			return re.Split(title, -1)
 		}
@@ -101,16 +101,26 @@ func parseEpisodeFromTitle(title, sep string) (episode int, ok bool) {
 	return 0, false
 }
 
-var titleComparisonSepRegex = regexp.MustCompile(`\s*[\x{2014}\x{2013}\-|]\s*`)
+var titleComparisonSepRegex = regexp.MustCompile(`\s*[\x{2014}\x{2013}\-|\x{2223}\x{ff5c}]\s*`)
 
-// normalizeTitleForComparison normalizes separators (em dash, en dash, hyphen, pipe)
-// and trims whitespace so titles differing only by separator style are considered equal.
+var titleHomoglyphReplacer = strings.NewReplacer(
+	"\u2215", "/",
+	"\u2044", "/",
+	"\uff0f", "/",
+	"\u2236", ":",
+	"\uff1a", ":",
+)
+
+// normalizeTitleForComparison normalizes separators (em dash, en dash, hyphen, pipe, divides),
+// exported Unicode homoglyphs (division slash, ratio), and trims whitespace so titles differing
+// only by separator style or export-safe characters are considered equal.
 func normalizeTitleForComparison(title string) string {
 	trimmed := strings.TrimSpace(title)
 	if trimmed == "" {
 		return ""
 	}
-	normalized := titleComparisonSepRegex.ReplaceAllString(trimmed, " - ")
+	normalized := titleHomoglyphReplacer.Replace(trimmed)
+	normalized = titleComparisonSepRegex.ReplaceAllString(normalized, " - ")
 	return strings.TrimSpace(normalized)
 }
 

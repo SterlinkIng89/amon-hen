@@ -29,6 +29,7 @@ export interface PlaylistEpisodeTableProps {
   readonly onSyncVideoFromTitle?: (videoId: string) => void;
   readonly onSyncAllFromTitle?: () => void;
   readonly chronologyIssueIds?: ReadonlySet<string>;
+  readonly isClipPlaylist?: boolean;
   readonly onResolveDuplicate?: (episode: number) => void;
   readonly onFixTitleMismatch?: (video: backend.CatalogVideoDraft) => void;
 }
@@ -107,6 +108,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
   onSyncVideoFromTitle,
   onSyncAllFromTitle,
   chronologyIssueIds,
+  isClipPlaylist = false,
   onResolveDuplicate,
   onFixTitleMismatch,
 }) => {
@@ -138,7 +140,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
     for (const vid of videos) {
       const titleEp = vid.titleEpisode ?? 0;
       const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-      const isEpMismatch = titleEp > 0 && assigned !== titleEp;
+      const isEpMismatch = !isClipPlaylist && titleEp > 0 && assigned !== titleEp;
       const isTitleMismatch = Boolean(
         vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
       );
@@ -147,7 +149,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       }
     }
     return count;
-  }, [videos, episodes]);
+  }, [videos, episodes, isClipPlaylist]);
 
   const { syncedCount, unsyncedCount } = useMemo(() => {
     let synced = 0;
@@ -166,7 +168,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       return videos.filter((vid) => {
         const titleEp = vid.titleEpisode ?? 0;
         const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-        const isEpMismatch = titleEp > 0 && assigned !== titleEp;
+        const isEpMismatch = !isClipPlaylist && titleEp > 0 && assigned !== titleEp;
         const isTitleMismatch = Boolean(
           vid.localFile && vid.localTitle && !titlesMatch(vid.title, vid.localTitle)
         );
@@ -178,7 +180,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       const isSynced = isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId));
       return filter === "synced" ? isSynced : !isSynced;
     });
-  }, [videos, filter, batchItemMap, episodes]);
+  }, [videos, filter, batchItemMap, episodes, isClipPlaylist]);
 
   const sortedVideos = useMemo(() => {
     if (!sortState) return filteredVideos;
@@ -211,10 +213,10 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       if (column === "status") {
         const getStatusPriority = (vid: backend.CatalogVideoDraft): number => {
           const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-          const isDuplicate = assigned > 0 && (episodeCounts[assigned] || 0) > 1;
-          const isInvalid = assigned <= 0;
+          const isDuplicate = !isClipPlaylist && assigned > 0 && (episodeCounts[assigned] || 0) > 1;
+          const isInvalid = !isClipPlaylist && assigned <= 0;
           if (isDuplicate || isInvalid) return 1;
-          if (chronologyIssueIds?.has(vid.videoId)) return 2;
+          if (!isClipPlaylist && chronologyIssueIds?.has(vid.videoId)) return 2;
           const isSynced = isVideoThumbnailSynced(vid, assigned, batchItemMap.get(vid.videoId));
           if (!isSynced) return 3;
           return 4;
@@ -225,7 +227,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
       }
       return 0;
     });
-  }, [filteredVideos, sortState, episodes, episodeCounts, chronologyIssueIds, batchItemMap]);
+  }, [filteredVideos, sortState, episodes, episodeCounts, chronologyIssueIds, batchItemMap, isClipPlaylist]);
 
   const handleToggleSort = (column: SortColumn) => {
     setSortState((prev) => {
@@ -392,7 +394,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
         </div>
 
         {/* Episode Actions */}
-        {onSyncAllFromTitle && (
+        {onSyncAllFromTitle && !isClipPlaylist && (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -409,7 +411,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
 
       {/* Table Container */}
       <div className="overflow-x-auto max-h-[480px] 2xl:max-h-[640px] overflow-y-auto custom-scrollbar">
-        <table className="w-full text-left text-xs min-w-[1080px] table-fixed">
+        <table className={`w-full text-left text-xs ${isClipPlaylist ? "min-w-[640px]" : "min-w-[1080px]"} table-fixed`}>
           <thead className="sticky top-0 bg-elevated/95 backdrop-blur-xs text-text-secondary border-b border-border-subtle z-10">
             <tr>
               {onSelectionChange && (
@@ -433,30 +435,34 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                 className="px-4 min-w-[240px] text-left"
                 onSort={handleToggleSort}
               />
-              <SortableHeader
-                column="source"
-                label="Source"
-                activeColumn={sortState?.column}
-                direction={sortState?.direction}
-                className="w-28 min-w-28 text-center"
-                onSort={handleToggleSort}
-              />
-              <SortableHeader
-                column="episode"
-                label="Episode"
-                activeColumn={sortState?.column}
-                direction={sortState?.direction}
-                className="w-64 min-w-64 text-center"
-                onSort={handleToggleSort}
-              />
-              <SortableHeader
-                column="order"
-                label="Order"
-                activeColumn={sortState?.column}
-                direction={sortState?.direction}
-                className="w-36 min-w-36 text-center"
-                onSort={handleToggleSort}
-              />
+              {!isClipPlaylist && (
+                <>
+                  <SortableHeader
+                    column="source"
+                    label="Source"
+                    activeColumn={sortState?.column}
+                    direction={sortState?.direction}
+                    className="w-28 min-w-28 text-center"
+                    onSort={handleToggleSort}
+                  />
+                  <SortableHeader
+                    column="episode"
+                    label="Episode"
+                    activeColumn={sortState?.column}
+                    direction={sortState?.direction}
+                    className="w-64 min-w-64 text-center"
+                    onSort={handleToggleSort}
+                  />
+                  <SortableHeader
+                    column="order"
+                    label="Order"
+                    activeColumn={sortState?.column}
+                    direction={sortState?.direction}
+                    className="w-36 min-w-36 text-center"
+                    onSort={handleToggleSort}
+                  />
+                </>
+              )}
               <SortableHeader
                 column="status"
                 label="Status"
@@ -472,7 +478,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
             {sortedVideos.length === 0 ? (
               <tr>
                 <td
-                  colSpan={onSelectionChange ? 8 : 7}
+                  colSpan={onSelectionChange ? (isClipPlaylist ? 5 : 8) : (isClipPlaylist ? 4 : 7)}
                   className="py-10 text-center text-xs text-text-muted"
                 >
                   No videos match the selected filter.
@@ -481,11 +487,11 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
             ) : (
               sortedVideos.map((vid) => {
                 const assigned = episodes[vid.videoId] ?? (vid.episode > 0 ? vid.episode : 0);
-                const isDuplicate = assigned > 0 && (episodeCounts[assigned] || 0) > 1;
-                const isInvalid = assigned <= 0;
+                const isDuplicate = !isClipPlaylist && assigned > 0 && (episodeCounts[assigned] || 0) > 1;
+                const isInvalid = !isClipPlaylist && assigned <= 0;
                 const isSelected = selectedVideoIds?.has(vid.videoId) ?? false;
                 const isPreviewActive = previewVideoId === vid.videoId;
-                const isChronologyIssue = Boolean(
+                const isChronologyIssue = !isClipPlaylist && Boolean(
                   chronologyIssueIds ? chronologyIssueIds.has(vid.videoId) : vid.chronologyIssue
                 );
                 const bItem = batchItemMap.get(vid.videoId);
@@ -500,6 +506,7 @@ export const PlaylistEpisodeTable: FC<PlaylistEpisodeTableProps> = ({
                     isSelected={isSelected}
                     isPreviewActive={isPreviewActive}
                     isChronologyIssue={isChronologyIssue}
+                    isClipPlaylist={isClipPlaylist}
                     isBatchRunning={isBatchRunning}
                     isAssetsReady={isAssetsReady}
                     batchItem={bItem}

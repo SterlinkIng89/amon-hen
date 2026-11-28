@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   YTVideo,
   YTPlaylist,
   VideoGroupYT,
   CARD_DENSITY_CLASSES,
   ChannelGroupMode,
+  MatchedExportItem,
 } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import {
@@ -19,6 +20,7 @@ import {
   GetOrCreatePlaylist,
   UpdateYouTubeVideoMetadata,
   RemoveVideosFromPlaylist,
+  GetMatchedExports,
 } from "../../wailsjs/go/backend/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { groupByDayYT, groupVideosYT } from "../utils/videoUtils";
@@ -40,6 +42,7 @@ import DeleteVideoModal from "../components/youtube/DeleteVideoModal";
 import EditYouTubeVideoModal from "../components/youtube/EditYouTubeVideoModal";
 import EditPlaylistModal from "../components/youtube/EditPlaylistModal";
 import ChannelBulkEditModal from "../components/youtube/ChannelBulkEditModal";
+import ExportSyncModal from "../components/youtube/ExportSyncModal";
 import { PlaylistCatalogPanel } from "../components/youtube/catalog/PlaylistCatalogPanel";
 import ChannelGroupHeader from "../components/youtube/ChannelGroupHeader";
 
@@ -101,10 +104,16 @@ export default function ChannelPage() {
   const [bulkUpdatingPlaylists, setBulkUpdatingPlaylists] = useState(false);
   const [bulkUpdatingVideos, setBulkUpdatingVideos] = useState(false);
   const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
+  const [matchedExports, setMatchedExports] = useState<MatchedExportItem[]>([]);
+  const [exportSyncModalOpen, setExportSyncModalOpen] = useState(false);
   const [purgingDuplicates, setPurgingDuplicates] = useState(false);
   const lastSelectedId = useRef<string | null>(null);
   const lastSelectedPlaylistId = useRef<string | null>(null);
   const [viewType, setViewType] = useState<"grid" | "player">("grid");
+  const [playerNormalizerOpen, setPlayerNormalizerOpen] = useState(false);
+  const [playerPlaylistId, setPlayerPlaylistId] = useState<string | undefined>(undefined);
+  const [catalogRefreshTrigger, setCatalogRefreshTrigger] = useState(0);
+  const prevViewTypeRef = useRef<"grid" | "player">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [autoplay, setAutoplay] = useState(true);
@@ -119,6 +128,20 @@ export default function ChannelPage() {
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // ── Matched exports refresh ───────────────────────────────────────────────
+  const refreshMatchedExports = useCallback(async () => {
+    try {
+      const items = await GetMatchedExports();
+      setMatchedExports(Array.isArray(items) ? items : []);
+    } catch {
+      // Non-blocking: keep existing state if query fails
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshMatchedExports();
+  }, [refreshMatchedExports]);
 
   // ── Advanced filters ───────────────────────────────────────────────────────
   const filters = useAdvancedFilters();
@@ -145,6 +168,18 @@ export default function ChannelPage() {
   useEffect(() => {
     localStorage.setItem("ch:groupMode", channelGroupMode);
   }, [channelGroupMode]);
+
+  // Refresh catalog normalizer drafts and clear temporary playlist selection when returning from player
+  useEffect(() => {
+    const prev = prevViewTypeRef.current;
+    prevViewTypeRef.current = viewType;
+    if (prev === "player" && viewType === "grid" && activeTab === "catalog") {
+      setSelectedPlaylist(null);
+      setPlayerNormalizerOpen(false);
+      setPlayerPlaylistId(undefined);
+      setCatalogRefreshTrigger((count) => count + 1);
+    }
+  }, [viewType, activeTab]);
 
   // Reset state when tab changes
   useEffect(() => {
@@ -296,20 +331,26 @@ export default function ChannelPage() {
       setSyncStatus("Sync complete!");
       setTimeout(() => setSyncStatus(""), 3000);
       loadData(true);
+      void refreshMatchedExports();
       setAnalyticsRefreshKey((k) => k + 1);
     });
     const unsub3 = EventsOn("youtube:done", () => {
       setIsSyncing(false);
       setActiveSyncType(null);
       loadData(true);
+      void refreshMatchedExports();
       setAnalyticsRefreshKey((k) => k + 1);
+    });
+    const unsub4 = EventsOn("export-sync:matched", () => {
+      void refreshMatchedExports();
     });
     return () => {
       unsub1();
       unsub2();
       unsub3();
+      unsub4();
     };
-  }, [loadData]);
+  }, [loadData, refreshMatchedExports]);
 
   // Auto-sync on first visit
   useEffect(() => {
@@ -402,6 +443,26 @@ export default function ChannelPage() {
       )
     : displayedVideos;
 
+  const handleOpenVideoInPlayerFromCatalog = (
+    playlistId: string,
+    video: YTVideo,
+    _gameTag: string,
+  ) => {
+    const targetPlaylist: YTPlaylist = playlists.find((p) => p.id === playlistId) ?? {
+      id: playlistId,
+      title: "",
+      description: "",
+      thumbnailUrl: "",
+      videoCount: 0,
+      publishedAt: "",
+    };
+    setSelectedPlaylist(targetPlaylist);
+    setSelectedVideo(video);
+    setPlayerNormalizerOpen(true);
+    setPlayerPlaylistId(playlistId);
+    setViewType("player");
+  };
+
   const handleNext = () => {
     if (!selectedVideo) return;
     const idx = playerVideos.findIndex((v) => v.id === selectedVideo.id);
@@ -461,6 +522,8 @@ export default function ChannelPage() {
 
     lastSelectedId.current = video.id;
     setSelectedVideo(video);
+    setPlayerNormalizerOpen(false);
+    setPlayerPlaylistId(selectedPlaylist?.id);
     setViewType("player");
   };
 
@@ -1344,6 +1407,44 @@ export default function ChannelPage() {
         </div>
       </div>
 
+      {/* ── Matched exports review banner ────────────────────────────────────────── */}
+      {matchedExports.length > 0 && (
+        <div className="border-b border-border-subtle bg-accent/10 px-5 py-2.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-accent shrink-0"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p className="text-xs font-medium text-text-primary truncate">
+              <span className="tabular-nums font-semibold">
+                {matchedExports.length}
+              </span>{" "}
+              uploaded {matchedExports.length === 1 ? "clip" : "clips"} matched
+              from your exports — ready to rename &amp; apply metadata
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExportSyncModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent/90 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Review &amp; Apply
+          </button>
+        </div>
+      )}
+
       {/* ── Analytics panel ─────────────────────────────────────────────────────── */}
       {showAnalytics && (
         <div className="border-b border-border-subtle bg-base overflow-y-auto max-h-[420px] custom-scrollbar shrink-0 animate-slideDown">
@@ -1580,6 +1681,8 @@ export default function ChannelPage() {
                 onNext={handleNext}
                 onPrev={handlePrev}
                 onRequestDelete={(v) => setDeleteTargets([v])}
+                initialNormalizerOpen={playerNormalizerOpen}
+                playlistId={playerPlaylistId ?? selectedPlaylist?.id}
                 onEnded={() => {
                   if (autoplay) handleNext();
                 }}
@@ -1587,11 +1690,22 @@ export default function ChannelPage() {
             </ErrorBoundary>
           </main>
         </div>
-      ) : activeTab === "catalog" ? (
-        <div className="flex-1 flex overflow-hidden">
-          <PlaylistCatalogPanel />
+      ) : null}
+      {activeTab === "catalog" && (
+        <div
+          className={
+            viewType === "player" && selectedVideo
+              ? "hidden"
+              : "flex-1 flex overflow-hidden"
+          }
+        >
+          <PlaylistCatalogPanel
+            onOpenVideoInPlayer={handleOpenVideoInPlayerFromCatalog}
+            refreshTrigger={catalogRefreshTrigger}
+          />
         </div>
-      ) : (
+      )}
+      {!(viewType === "player" && selectedVideo) && activeTab !== "catalog" && (
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-full">
@@ -1913,6 +2027,18 @@ export default function ChannelPage() {
             setSelectedVideoIds(new Set());
             lastSelectedId.current = null;
             await loadData(true);
+          }}
+        />
+      )}
+
+      {/* Export Sync Review & Batch Apply Modal */}
+      {exportSyncModalOpen && (
+        <ExportSyncModal
+          open={exportSyncModalOpen}
+          onClose={() => setExportSyncModalOpen(false)}
+          onChanged={() => {
+            void refreshMatchedExports();
+            void loadData(true);
           }}
         />
       )}

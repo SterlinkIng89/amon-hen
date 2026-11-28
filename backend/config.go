@@ -43,16 +43,23 @@ type TagThumbnailConfig struct {
 	EpisodePosition string         `json:"episode_position"` // "bottom-right" | "bottom-left" | "top-right" | "top-left"
 	EpisodeFormat   string         `json:"episode_format"`   // "hash" (#1) | "ep" (EP 1) | "number" (1) | "pad2" (01)
 	FontColor       string         `json:"font_color,omitempty"`
+	FontFamily      string         `json:"font_family,omitempty"`
 	ImageFraming    *ImageFraming  `json:"image_framing,omitempty"`
 	EpisodeLayout   *ElementLayout `json:"episode_layout,omitempty"`
 	Logo            *LogoLayer     `json:"logo,omitempty"`
 	Title           *TitleLayer    `json:"title,omitempty"`
 }
 
+type GameArtworkConfig struct {
+	PosterURL string `json:"poster_url,omitempty"`
+	HeroURL   string `json:"hero_url,omitempty"`
+}
+
 type TagPlaylistConfig struct {
 	VodPlaylistID   string             `json:"vod_playlist_id"`
 	ClipPlaylistID  string             `json:"clip_playlist_id"`
 	ThumbnailConfig TagThumbnailConfig `json:"thumbnail_config,omitempty"`
+	Artwork         *GameArtworkConfig `json:"artwork,omitempty"`
 }
 
 type VideoMeta struct {
@@ -75,6 +82,7 @@ type VideoMeta struct {
 type FolderConfig struct {
 	Recursive       bool `json:"recursive"`
 	MaxDurationSecs int  `json:"max_duration_secs"`
+	AutoBackup      bool `json:"auto_backup,omitempty"`
 }
 
 type GameProfile struct {
@@ -103,7 +111,9 @@ type Config struct {
 	TitleSeparator string `json:"title_separator,omitempty"`
 	SteamAPIKey         string                  `json:"steam_api_key,omitempty"`
 	SteamID             string                  `json:"steam_id,omitempty"`
-	ExportFolder        string                  `json:"export_folder,omitempty"`
+	ExportFolder            string `json:"export_folder,omitempty"`
+	BackupFolder            string `json:"backup_folder,omitempty"`
+	DefaultVideoDescription string `json:"default_video_description,omitempty"`
 }
 
 // initConfig loads config.json from %AppData%/AmonHen/
@@ -441,7 +451,13 @@ func (a *App) SetTagPlaylistConfig(tag string, vodPlaylistID string, clipPlaylis
 	a.config.TagPlaylists[canonicalKey] = vodPlaylistID
 	a.configMu.Unlock()
 
-	return a.saveConfig()
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	if _, err := a.BackfillGameTagsFromPlaylists(); err != nil {
+		appLog("[SetTagPlaylistConfig] Error backfilling game tags from playlists: %v", err)
+	}
+	return nil
 }
 
 // SetTagThumbnailConfig updates the automated thumbnail template configuration for a given tag.
@@ -522,11 +538,20 @@ func (a *App) resolveContentType(meta VideoMeta, path string) string {
 
 // resolveTagPlaylist returns the playlist ID mapped to the given game tag and content type ("vod" or "clip").
 func (a *App) resolveTagPlaylist(tag string, contentType string) string {
+	return resolveTagPlaylistFromMaps(a.config.TagPlaylistConfigs, a.config.TagPlaylists, tag, contentType)
+}
+
+func resolveTagPlaylistFromMaps(
+	tagPlaylistConfigs map[string]TagPlaylistConfig,
+	tagPlaylists map[string]string,
+	tag string,
+	contentType string,
+) string {
 	if tag == "" {
 		return ""
 	}
-	if a.config.TagPlaylistConfigs != nil {
-		if cfg, ok := a.config.TagPlaylistConfigs[tag]; ok {
+	if tagPlaylistConfigs != nil {
+		if cfg, ok := tagPlaylistConfigs[tag]; ok {
 			if contentType == "clip" {
 				return cfg.ClipPlaylistID
 			}
@@ -535,8 +560,8 @@ func (a *App) resolveTagPlaylist(tag string, contentType string) string {
 			}
 		}
 	}
-	if contentType != "clip" && a.config.TagPlaylists != nil {
-		return a.config.TagPlaylists[tag]
+	if contentType != "clip" && tagPlaylists != nil {
+		return tagPlaylists[tag]
 	}
 	return ""
 }
@@ -769,6 +794,14 @@ func (a *App) SaveRecentFieldValues(values map[string][]string) error {
 func (a *App) SetTitleSeparator(sep string) error {
 	a.configMu.Lock()
 	a.config.TitleSeparator = sep
+	a.configMu.Unlock()
+	return a.saveConfig()
+}
+
+// SetDefaultVideoDescription updates the default YouTube description template in config.
+func (a *App) SetDefaultVideoDescription(desc string) error {
+	a.configMu.Lock()
+	a.config.DefaultVideoDescription = desc
 	a.configMu.Unlock()
 	return a.saveConfig()
 }

@@ -28,7 +28,17 @@ describe("tagConfigParser", () => {
       episode_position: "top-left",
       episode_format: "ep",
       font_color: "#ff0000",
+      font_family: undefined,
     });
+  });
+
+  it("preserves explicit font_family when configured", () => {
+    const raw = {
+      source_type: "steam",
+      font_family: "Nunito",
+    };
+    const parsed = parseTagThumbnailConfig(raw);
+    expect(parsed?.font_family).toBe("Nunito");
   });
 
   it("defaults episode_position to bottom-left when omitted", () => {

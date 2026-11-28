@@ -6,7 +6,13 @@ import {
 } from "../../../hooks/useBatchThumbnailUpdate";
 import { useThumbnailAssets } from "../../../hooks/useThumbnailAssets";
 import { PlaylistCatalogRow } from "./PlaylistCatalogRow";
+import { useAppStore } from "../../../store/useAppStore";
+import {
+  getPlaylistBatchStatus,
+  summarizeThumbnailBatchItems,
+} from "../../../utils/batchStatus";
 import { PlaylistEpisodeTable } from "./PlaylistEpisodeTable";
+import { PlaylistNormalizerTable } from "./PlaylistNormalizerTable";
 import { DuplicateEpisodeDialog } from "./DuplicateEpisodeDialog";
 import { YouTubeTitleUpdateModal } from "./YouTubeTitleUpdateModal";
 import { BatchThumbnailProgress } from "./BatchThumbnailProgress";
@@ -16,11 +22,12 @@ import {
   GetAllGameTags,
   GetSteamAppID,
   GetTagPlaylistConfig,
+  LoadConfig,
   SaveCustomThumbnail,
   SetTagThumbnailConfig,
 } from "../../../../wailsjs/go/backend/App";
 import { backend } from "../../../../wailsjs/go/models";
-import { BatchItem, TagThumbnailConfig } from "../../../types";
+import { BatchItem, GameProfile, TagThumbnailConfig, YTVideo } from "../../../types";
 import { parseTagThumbnailConfig } from "../../../utils/tagConfigParser";
 import { renderTagThumbnailDataUrl } from "../../../utils/thumbnailRender";
 import TagThumbnailConfigSection from "../../ui/TagThumbnailConfigSection";
@@ -28,7 +35,19 @@ import ThumbnailCanvasEditor from "../../ui/ThumbnailCanvasEditor";
 import { ThumbnailRects, ThumbnailElementId } from "../../../utils/thumbnailGenerator";
 import { getTagBadgeStyle } from "../../../utils/tagColors";
 
-export const PlaylistCatalogPanel: FC = () => {
+export interface PlaylistCatalogPanelProps {
+  readonly onOpenVideoInPlayer?: (
+    playlistId: string,
+    video: YTVideo,
+    gameTag: string,
+  ) => void;
+  readonly refreshTrigger?: number;
+}
+
+export const PlaylistCatalogPanel: FC<PlaylistCatalogPanelProps> = ({
+  onOpenVideoInPlayer,
+  refreshTrigger = 0,
+}) => {
   const {
     playlists,
     isLoadingPlaylists,
@@ -45,6 +64,9 @@ export const PlaylistCatalogPanel: FC = () => {
     updatePlaylistTemplatePreview,
     editedTag,
     setEditedTag,
+    editedKind,
+    setEditedKind,
+    isClipPlaylist,
     editedEpisodes,
     setEpisode,
     reorderDuplicate,
@@ -75,6 +97,9 @@ export const PlaylistCatalogPanel: FC = () => {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
   const [resolvingEpisode, setResolvingEpisode] = useState<number | null>(null);
+  const [catalogMode, setCatalogMode] = useState<"episodes" | "normalize">("episodes");
+  const [gameProfiles, setGameProfiles] = useState<Record<string, GameProfile>>({});
+  const [recentFieldValues, setRecentFieldValues] = useState<Record<string, string[]>>({});
 
   const duplicateEpisodes = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -164,7 +189,7 @@ export const PlaylistCatalogPanel: FC = () => {
     setSingleTitleTarget(null);
   }, [selectedPlaylistId]);
 
-  // Fetch known game tags for autocomplete
+  // Fetch known game tags and normalizer config
   useEffect(() => {
     let active = true;
     void GetAllGameTags()
@@ -176,6 +201,17 @@ export const PlaylistCatalogPanel: FC = () => {
       .catch(() => {
         if (active) setKnownTags([]);
       });
+    void LoadConfig()
+      .then((cfg) => {
+        if (!active || !cfg) return;
+        if (cfg.game_profiles) {
+          setGameProfiles(cfg.game_profiles);
+        }
+        if (cfg.recent_field_values) {
+          setRecentFieldValues(cfg.recent_field_values);
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -350,6 +386,20 @@ export const PlaylistCatalogPanel: FC = () => {
     });
   }, [draft?.videos, editedEpisodes]);
 
+  const { thumbnailBatches, descriptionBatches } = useAppStore();
+  const isMountedRef = useRef(true);
+  const selectedPlaylistIdRef = useRef(selectedPlaylistId);
+  selectedPlaylistIdRef.current = selectedPlaylistId;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const activeBatchPlaylistId = selectedPlaylistId ?? "";
+
   const {
     items: currentBatchItems,
     running: isBatchProcessing,
@@ -362,16 +412,22 @@ export const PlaylistCatalogPanel: FC = () => {
     retryFailed,
     estimatedQuota,
   } = useBatchThumbnailUpdate({
-    playlistId: selectedPlaylistId ?? "",
+    playlistId: activeBatchPlaylistId,
     tag: editedTag.trim(),
     config: thumbConfig,
     items: batchItems,
     onVideoUpdated: (videoId, newThumbUrl, episode) => {
-      updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
+      if (isMountedRef.current && selectedPlaylistIdRef.current === activeBatchPlaylistId) {
+        updateVideoThumbnail(videoId, newThumbUrl, undefined, episode);
+      }
     },
     onCompleted: () => {
-      void loadPlaylists();
-      void reloadDraft();
+      if (isMountedRef.current) {
+        void loadPlaylists();
+        if (selectedPlaylistIdRef.current === activeBatchPlaylistId) {
+          void reloadDraft();
+        }
+      }
     },
   });
 
@@ -383,27 +439,14 @@ export const PlaylistCatalogPanel: FC = () => {
     );
   }, [isBatchProcessing, currentBatchItems]);
 
-  const batchProgress = useMemo(() => {
-    let current = 0;
-    let successCount = 0;
-    let failCount = 0;
-    let total = 0;
-
-    for (const item of currentBatchItems) {
-      if (!item) continue;
-      total++;
-      if (item.status !== "pending") {
-        current++;
-        if (item.status === "done") successCount++;
-        else if (item.status === "failed") failCount++;
-      }
-    }
-    return { current, total, successCount, failCount };
-  }, [currentBatchItems]);
+  const batchProgress = useMemo(
+    () => summarizeThumbnailBatchItems(currentBatchItems),
+    [currentBatchItems]
+  );
 
   // Resolve VOD and Clip playlist IDs for 1:1 playlist cover generator
-  const isCurrentVod = draft?.kind === "vod";
-  const isCurrentClip = draft?.kind === "clip";
+  const isCurrentVod = editedKind === "vod";
+  const isCurrentClip = editedKind === "clip";
   const tagVodPlaylist = playlists.find(
     (p) => p.tag === editedTag.trim() && p.kind === "vod"
   );
@@ -499,10 +542,8 @@ export const PlaylistCatalogPanel: FC = () => {
                 key={pId}
                 playlist={pl}
                 isSelected={selectedPlaylistId === pId}
+                batchStatus={getPlaylistBatchStatus(thumbnailBatches[pId], descriptionBatches[pId])}
                 onSelect={() => {
-                  if (isBatchProcessing) {
-                    cancelBatch();
-                  }
                   void selectPlaylist(pId);
                 }}
               />
@@ -544,14 +585,40 @@ export const PlaylistCatalogPanel: FC = () => {
         {selectedPlaylistId && !isLoadingDraft && draft && (
           <div className="p-6 w-full space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between border-b border-border-subtle pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4">
               <div>
                 <h3 className="text-base font-bold text-text-primary">{draft.title}</h3>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {draft.videoCount} {draft.videoCount === 1 ? "video" : "videos"} in playlist
                 </p>
               </div>
-              <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-elevated/60 p-0.5">
+                  <button
+                    type="button"
+                    aria-pressed={catalogMode === "episodes"}
+                    onClick={() => setCatalogMode("episodes")}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      catalogMode === "episodes"
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Episodes &amp; Thumbnails
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={catalogMode === "normalize"}
+                    onClick={() => setCatalogMode("normalize")}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      catalogMode === "normalize"
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Normalize Titles
+                  </button>
+                </div>
                 {draft.linked ? (
                   <span
                     className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
@@ -567,13 +634,54 @@ export const PlaylistCatalogPanel: FC = () => {
               </div>
             </div>
 
-            {/* Responsive Two-Column Studio Layout (Adapts from mobile to ultrawide) */}
+            {catalogMode === "normalize" ? (
+              <PlaylistNormalizerTable
+                playlistId={selectedPlaylistId}
+                defaultGameTag={editedTag}
+                gameProfiles={gameProfiles}
+                recentFieldValues={recentFieldValues}
+                refreshTrigger={refreshTrigger}
+                onWatchVideo={(video, gameTag) => {
+                  onOpenVideoInPlayer?.(selectedPlaylistId, video, gameTag);
+                }}
+              />
+            ) : (
             <div className="grid grid-cols-1 xl:grid-cols-12 2xl:grid-cols-12 gap-6 items-start">
               {/* Left Column: Metadata & Episode Mapping */}
               <div className="xl:col-span-7 2xl:col-span-7 3xl:col-span-8 space-y-4">
                 {/* Game Tag Mapping */}
                 <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-3">
-                  <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold text-text-primary">Game Tag Mapping</h4>
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-elevated/60 p-0.5" role="group" aria-label="Playlist Type">
+                      <button
+                        type="button"
+                        aria-pressed={editedKind === "vod"}
+                        onClick={() => setEditedKind("vod")}
+                        disabled={isBatchProcessing}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          editedKind === "vod"
+                            ? "bg-surface text-text-primary shadow-xs"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        VODs (Numbered)
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={editedKind === "clip"}
+                        onClick={() => setEditedKind("clip")}
+                        disabled={isBatchProcessing}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          editedKind === "clip"
+                            ? "bg-surface text-text-primary shadow-xs"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Clips (No numbering)
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <div className="w-full sm:w-72">
                       <input
@@ -638,13 +746,17 @@ export const PlaylistCatalogPanel: FC = () => {
                 {/* Episode Mapping Table */}
                 <div className="space-y-3">
                   <div>
-                    <h4 className="text-xs font-semibold text-text-primary">Episode Mapping</h4>
+                    <h4 className="text-xs font-semibold text-text-primary">
+                      {isClipPlaylist ? "Playlist Videos" : "Episode Mapping"}
+                    </h4>
                     <p className="text-[11px] text-text-secondary mt-0.5">
-                      Verify episode numbering, select rows for thumbnail updates, or preview in the template studio.
+                      {isClipPlaylist
+                        ? "Select rows for thumbnail updates or preview in the template studio."
+                        : "Verify episode numbering, select rows for thumbnail updates, or preview in the template studio."}
                     </p>
                   </div>
 
-                  {hasConflicts && (
+                  {!isClipPlaylist && hasConflicts && (
                     <div className="p-3 text-xs bg-fire-dim text-red-400 border border-border-fire rounded-xl flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -669,7 +781,7 @@ export const PlaylistCatalogPanel: FC = () => {
                     </div>
                   )}
 
-                  {!hasConflicts && chronologyIssueIds.size > 0 && (
+                  {!isClipPlaylist && !hasConflicts && chronologyIssueIds.size > 0 && (
                     <div className="p-3 text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
@@ -707,6 +819,7 @@ export const PlaylistCatalogPanel: FC = () => {
                     onSyncVideoFromTitle={syncVideoFromTitle}
                     onSyncAllFromTitle={syncAllFromTitle}
                     chronologyIssueIds={chronologyIssueIds}
+                    isClipPlaylist={isClipPlaylist}
                     onResolveDuplicate={setResolvingEpisode}
                     onFixTitleMismatch={handleFixTitleMismatch}
                   />
@@ -735,7 +848,9 @@ export const PlaylistCatalogPanel: FC = () => {
                       onChange={(e) => setUpdateLocal(e.target.checked)}
                       className="rounded border-border-subtle text-accent focus:ring-accent bg-elevated"
                     />
-                    Sync game tag and episode numbers to matched local library videos
+                    {isClipPlaylist
+                      ? "Sync game tag to matched local library videos"
+                      : "Sync game tag and episode numbers to matched local library videos"}
                   </label>
 
                   <div className="flex items-center gap-3">
@@ -972,6 +1087,7 @@ export const PlaylistCatalogPanel: FC = () => {
                 />
               </div>
             </div>
+            )}
           </div>
         )}
       </div>

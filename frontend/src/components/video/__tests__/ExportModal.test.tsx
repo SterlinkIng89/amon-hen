@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ExportModal from "../ExportModal";
 import * as appBackend from "../../../../wailsjs/go/backend/App";
+import { useAppStore } from "../../../store/useAppStore";
 import { VideoFile } from "../../../types";
 
 vi.mock("../../../../wailsjs/go/backend/App", () => ({
@@ -26,7 +27,10 @@ const mockVideos: VideoFile[] = [
     modTime: 1787754600000,
     folder: "/source",
     game: "Valorant",
+    playlistId: "PL-val-1",
+    playlistTitle: "Valorant Ranked",
     episode: 1,
+    contentType: "episode",
   },
   {
     name: "clip2.mp4",
@@ -35,21 +39,23 @@ const mockVideos: VideoFile[] = [
     modTime: 1787754600000,
     folder: "/source",
     game: "Valorant",
-    youtubeTitle: "Custom Manual Title",
+    youtubeTitle: "Custom: Manual / Title - 1",
   },
 ];
 
 describe("ExportModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAppStore.setState({ defaultVideoDescription: "" });
   });
 
-  it("loads default destination folder and renders title preview list", async () => {
+  it("loads default destination folder and renders tracking ID preview by default", async () => {
     render(
       <ExportModal
         open={true}
         selectedVideos={mockVideos}
         profiles={{}}
+        titleSeparator=" - "
         onClose={vi.fn()}
       />,
     );
@@ -65,7 +71,61 @@ describe("ExportModal", () => {
       expect(input.value).toBe("/default/videos/amonhen");
     });
 
-    expect(screen.getByText("Custom Manual Title.mp4")).toBeInTheDocument();
+    const trackingCheckbox = screen.getByLabelText(
+      "Track for YouTube Studio sync (ID filenames)",
+    ) as HTMLInputElement;
+    expect(trackingCheckbox.checked).toBe(true);
+
+    expect(
+      screen.getAllByText("AH\u2013XXXXXXXX \u2013 Valorant.mp4"),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("YouTube title: Custom: Manual / Title - 1"),
+    ).toBeInTheDocument();
+  });
+
+  it("reverts preview and ExportVideos flag when tracking mode is toggled off", async () => {
+    render(
+      <ExportModal
+        open={true}
+        selectedVideos={mockVideos}
+        profiles={{}}
+        titleSeparator=" - "
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(appBackend.GetDefaultExportFolder).toHaveBeenCalled();
+    });
+
+    const trackingCheckbox = screen.getByLabelText(
+      "Track for YouTube Studio sync (ID filenames)",
+    );
+    fireEvent.click(trackingCheckbox);
+
+    expect(
+      screen.getByText("Custom∶ Manual ∕ Title – 1.mp4"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("YouTube title: Custom: Manual / Title - 1"),
+    ).not.toBeInTheDocument();
+
+    const exportBtn = screen.getByRole("button", { name: "Export 2 Videos" });
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(appBackend.ExportVideos).toHaveBeenCalledWith(
+        expect.any(Array),
+        "/default/videos/amonhen",
+        true,
+        false,
+      );
+      expect(screen.getByText("Export Finished")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Next step: YouTube Studio sync"),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("allows selecting a custom destination directory", async () => {
@@ -127,16 +187,32 @@ describe("ExportModal", () => {
         expect.arrayContaining([
           expect.objectContaining({
             sourcePath: "/source/clip1.mp4",
+            playlistId: "PL-val-1",
+            playlistTitle: "Valorant Ranked",
+            episode: 1,
+            contentType: "episode",
           }),
           expect.objectContaining({
             sourcePath: "/source/clip2.mp4",
-            targetTitle: "Custom Manual Title",
+            targetTitle: "Custom: Manual / Title - 1",
+            playlistId: "",
+            episode: 0,
+            contentType: "",
           }),
         ]),
         "/default/videos/amonhen",
         true,
+        true,
       );
       expect(screen.getByText("Export Finished")).toBeInTheDocument();
+      expect(
+        screen.getByText("Next step: YouTube Studio sync"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Drag and drop the exported files into YouTube Studio/i,
+        ),
+      ).toBeInTheDocument();
       expect(onExportComplete).toHaveBeenCalled();
     });
 
@@ -146,5 +222,73 @@ describe("ExportModal", () => {
     expect(appBackend.OpenFolderInExplorer).toHaveBeenCalledWith(
       "/default/videos/amonhen",
     );
+  });
+
+  it("falls back to defaultVideoDescription when video description is empty and sanitizes 'none' playlist", async () => {
+    useAppStore.setState({
+      defaultVideoDescription: "Global default channel description",
+    });
+
+    const videosWithFallbacks: VideoFile[] = [
+      {
+        name: "clip-empty-desc.mp4",
+        path: "/source/clip-empty-desc.mp4",
+        size: 1024,
+        modTime: 1787754600000,
+        folder: "/source",
+        game: "Valorant",
+        description: "   ",
+        playlistId: "none",
+        playlistTitle: "No Playlist",
+      },
+      {
+        name: "clip-custom-desc.mp4",
+        path: "/source/clip-custom-desc.mp4",
+        size: 2048,
+        modTime: 1787754600000,
+        folder: "/source",
+        game: "Valorant",
+        description: "Custom clip description",
+        playlistId: "PL-val-1",
+        playlistTitle: "Valorant Ranked",
+      },
+    ];
+
+    render(
+      <ExportModal
+        open={true}
+        selectedVideos={videosWithFallbacks}
+        profiles={{}}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(appBackend.GetDefaultExportFolder).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Export 2 Videos" }));
+
+    await waitFor(() => {
+      expect(appBackend.ExportVideos).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            sourcePath: "/source/clip-empty-desc.mp4",
+            description: "Global default channel description",
+            playlistId: "",
+            playlistTitle: "",
+          }),
+          expect.objectContaining({
+            sourcePath: "/source/clip-custom-desc.mp4",
+            description: "Custom clip description",
+            playlistId: "PL-val-1",
+            playlistTitle: "Valorant Ranked",
+          }),
+        ],
+        "/default/videos/amonhen",
+        true,
+        true,
+      );
+    });
   });
 });

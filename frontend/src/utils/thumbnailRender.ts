@@ -3,6 +3,7 @@ import {
   renderThumbnailToCanvas,
   renderPlaylistCoverToCanvas,
 } from "./thumbnailGenerator";
+import { getCachedThumbnailFont } from "./thumbnailFont";
 
 export interface RenderTagThumbnailParams {
   readonly baseImage: HTMLImageElement | null;
@@ -40,6 +41,7 @@ export function renderTagThumbnailDataUrl({
     episodeFormat: config.episode_format || "pad2",
     position: config.episode_position || "bottom-left",
     fontColor: config.font_color || "#ffffff",
+    fontFamily: config.font_family || getCachedThumbnailFont(),
     framing: config.image_framing,
     episodeLayout: config.episode_layout,
     logo: config.logo?.enabled

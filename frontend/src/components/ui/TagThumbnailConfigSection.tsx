@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   TagThumbnailConfig,
   EpisodeNumberPosition,
@@ -6,12 +6,17 @@ import {
 } from "../../types";
 import { SelectCustomThumbnailImage } from "../../../wailsjs/go/backend/App";
 import { parseTagThumbnailConfig } from "../../utils/tagConfigParser";
-import { useThumbnailAssets } from "../../hooks/useThumbnailAssets";
+import { useThumbnailAssets, ThumbnailAssetsResult } from "../../hooks/useThumbnailAssets";
 import { generateAndUploadPlaylistCover } from "../../utils/playlistCover";
 import ThumbnailCanvasEditor from "./ThumbnailCanvasEditor";
 import ThumbnailFramingControls from "./ThumbnailFramingControls";
 import ThumbnailElementControls from "./ThumbnailElementControls";
 import { ThumbnailRects, ThumbnailElementId } from "../../utils/thumbnailGenerator";
+import {
+  THUMBNAIL_FONTS,
+  getCachedThumbnailFont,
+  setCachedThumbnailFont,
+} from "../../utils/thumbnailFont";
 
 export interface TagThumbnailConfigSectionProps {
   readonly tag: string;
@@ -25,6 +30,7 @@ export interface TagThumbnailConfigSectionProps {
   readonly selectedElement?: ThumbnailElementId | null;
   readonly onSelectElement?: (element: ThumbnailElementId | null) => void;
   readonly steamAppId?: string | null;
+  readonly thumbnailAssets?: ThumbnailAssetsResult;
 }
 
 const DEFAULT_CONFIG: TagThumbnailConfig = {
@@ -34,6 +40,7 @@ const DEFAULT_CONFIG: TagThumbnailConfig = {
   episode_position: "bottom-left",
   episode_format: "pad2",
   font_color: "#ffffff",
+  font_family: getCachedThumbnailFont(),
 };
 
 const FONT_COLORS = [
@@ -58,6 +65,7 @@ export default function TagThumbnailConfigSection({
   selectedElement: propsSelectedElement,
   onSelectElement,
   steamAppId,
+  thumbnailAssets: providedAssets,
 }: TagThumbnailConfigSectionProps) {
   const [localRects, setLocalRects] = useState<ThumbnailRects>({});
   const [internalSelectedElement, setInternalSelectedElement] = useState<ThumbnailElementId | null>(null);
@@ -66,16 +74,38 @@ export default function TagThumbnailConfigSection({
     setInternalSelectedElement(element);
     onSelectElement?.(element);
   };
-  const parsed = parseTagThumbnailConfig(value);
-  const config: TagThumbnailConfig = {
-    ...DEFAULT_CONFIG,
-    ...parsed,
-    enabled: value?.enabled !== undefined ? value.enabled : Boolean(parsed?.enabled),
-    font_color: value?.font_color || parsed?.font_color || DEFAULT_CONFIG.font_color,
-  };
+  const config = useMemo<TagThumbnailConfig>(() => {
+    const parsed = parseTagThumbnailConfig(value);
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      enabled: value?.enabled !== undefined ? value.enabled : Boolean(parsed?.enabled),
+      font_color: value?.font_color || parsed?.font_color || DEFAULT_CONFIG.font_color,
+      font_family: value?.font_family || parsed?.font_family || getCachedThumbnailFont(),
+    };
+  }, [value]);
 
+  const hookAssets = useThumbnailAssets(tag, config, steamAppId, {
+    skip: Boolean(providedAssets),
+  });
   const { steamAssets, loadingAssets, baseImage, logoImage, gameTitle } =
-    useThumbnailAssets(tag, config, steamAppId);
+    providedAssets ?? hookAssets;
+
+  const update = useCallback(
+    (patch: Partial<TagThumbnailConfig>) => {
+      onChange({
+        ...DEFAULT_CONFIG,
+        ...config,
+        ...patch,
+      });
+    },
+    [config, onChange]
+  );
+
+  const handleFontChange = (newFont: string) => {
+    setCachedThumbnailFont(newFont);
+    update({ font_family: newFont });
+  };
 
   const [uploadingPlaylist, setUploadingPlaylist] = useState<"vod" | "clip" | null>(null);
   const [coverStatus, setCoverStatus] = useState<{
@@ -109,14 +139,6 @@ export default function TagThumbnailConfigSection({
     } finally {
       setUploadingPlaylist(null);
     }
-  };
-
-  const update = (patch: Partial<TagThumbnailConfig>) => {
-    onChange({
-      ...DEFAULT_CONFIG,
-      ...config,
-      ...patch,
-    });
   };
 
   const handleBrowseCustomImage = async () => {
@@ -330,8 +352,29 @@ export default function TagThumbnailConfigSection({
               </div>
             </div>
 
-            {/* Episode Format Selector & Number Color in 2 columns */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            {/* Episode Font, Format & Number Color in 3 columns */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="episode-font-select"
+                  className="text-xs font-medium text-text-secondary"
+                >
+                  Episode Font
+                </label>
+                <select
+                  id="episode-font-select"
+                  className="h-8 w-full bg-surface border border-border-subtle rounded px-2 text-xs text-text-primary outline-none focus:border-accent cursor-pointer"
+                  value={config.font_family || getCachedThumbnailFont()}
+                  onChange={(e) => handleFontChange(e.target.value)}
+                >
+                  {THUMBNAIL_FONTS.map((font) => (
+                    <option key={font.id} value={font.id}>
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="episode-format-select"

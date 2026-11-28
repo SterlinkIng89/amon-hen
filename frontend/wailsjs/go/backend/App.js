@@ -14,12 +14,24 @@ export function ApplyCatalogTitleUpdates(arg1) {
   return window['go']['backend']['App']['ApplyCatalogTitleUpdates'](arg1);
 }
 
+export function ApplyMatchedExports(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['ApplyMatchedExports'](arg1, arg2, arg3);
+}
+
 export function ApplyPlaylistCatalog(arg1) {
   return window['go']['backend']['App']['ApplyPlaylistCatalog'](arg1);
 }
 
 export function ApplySingleVideoTitleUpdate(arg1, arg2) {
   return window['go']['backend']['App']['ApplySingleVideoTitleUpdate'](arg1, arg2);
+}
+
+export function BackfillGameTagsFromPlaylists() {
+  return window['go']['backend']['App']['BackfillGameTagsFromPlaylists']();
+}
+
+export function BackupSingleFile(arg1, arg2) {
+  return window['go']['backend']['App']['BackupSingleFile'](arg1, arg2);
 }
 
 export function CacheHandler() {
@@ -42,6 +54,10 @@ export function DeleteCustomThumbnail(arg1) {
   return window['go']['backend']['App']['DeleteCustomThumbnail'](arg1);
 }
 
+export function DeleteExportRecord(arg1) {
+  return window['go']['backend']['App']['DeleteExportRecord'](arg1);
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['backend']['App']['DeleteFiles'](arg1);
 }
@@ -52,6 +68,10 @@ export function DeleteGameProfile(arg1) {
 
 export function DeletePlaylist(arg1) {
   return window['go']['backend']['App']['DeletePlaylist'](arg1);
+}
+
+export function DeleteTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['DeleteTitleNormalizationDraft'](arg1);
 }
 
 export function DeleteYouTubeVideo(arg1, arg2) {
@@ -70,8 +90,12 @@ export function DisconnectSteam() {
   return window['go']['backend']['App']['DisconnectSteam']();
 }
 
-export function ExportVideos(arg1, arg2, arg3) {
-  return window['go']['backend']['App']['ExportVideos'](arg1, arg2, arg3);
+export function DismissExportRecord(arg1) {
+  return window['go']['backend']['App']['DismissExportRecord'](arg1);
+}
+
+export function ExportVideos(arg1, arg2, arg3, arg4) {
+  return window['go']['backend']['App']['ExportVideos'](arg1, arg2, arg3, arg4);
 }
 
 export function GetAPILogs(arg1) {
@@ -84,6 +108,14 @@ export function GetAllGameTags() {
 
 export function GetAutoLaunch() {
   return window['go']['backend']['App']['GetAutoLaunch']();
+}
+
+export function GetBackupFolder() {
+  return window['go']['backend']['App']['GetBackupFolder']();
+}
+
+export function GetBackupStatus() {
+  return window['go']['backend']['App']['GetBackupStatus']();
 }
 
 export function GetCacheDir() {
@@ -118,8 +150,16 @@ export function GetEnrichedSteamGames(arg1) {
   return window['go']['backend']['App']['GetEnrichedSteamGames'](arg1);
 }
 
+export function GetExportedVideos(arg1) {
+  return window['go']['backend']['App']['GetExportedVideos'](arg1);
+}
+
 export function GetFolderSettings(arg1) {
   return window['go']['backend']['App']['GetFolderSettings'](arg1);
+}
+
+export function GetMatchedExports() {
+  return window['go']['backend']['App']['GetMatchedExports']();
 }
 
 export function GetOrCreatePlaylist(arg1, arg2, arg3) {
@@ -202,12 +242,24 @@ export function GetSyncStatus() {
   return window['go']['backend']['App']['GetSyncStatus']();
 }
 
+export function GetTagGameArtwork(arg1) {
+  return window['go']['backend']['App']['GetTagGameArtwork'](arg1);
+}
+
 export function GetTagPlaylistConfig(arg1) {
   return window['go']['backend']['App']['GetTagPlaylistConfig'](arg1);
 }
 
 export function GetThumbnail(arg1) {
   return window['go']['backend']['App']['GetThumbnail'](arg1);
+}
+
+export function GetTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['GetTitleNormalizationDraft'](arg1);
+}
+
+export function GetTitleNormalizationDrafts(arg1) {
+  return window['go']['backend']['App']['GetTitleNormalizationDrafts'](arg1);
 }
 
 export function GetUploadSessions() {
@@ -278,6 +330,14 @@ export function LoginSteam() {
   return window['go']['backend']['App']['LoginSteam']();
 }
 
+export function MarkTitleNormalizationDraftSynced(arg1, arg2) {
+  return window['go']['backend']['App']['MarkTitleNormalizationDraftSynced'](arg1, arg2);
+}
+
+export function MatchExportedVideos() {
+  return window['go']['backend']['App']['MatchExportedVideos']();
+}
+
 export function OpenFolderDialog() {
   return window['go']['backend']['App']['OpenFolderDialog']();
 }
@@ -318,8 +378,16 @@ export function ReorderSteamBacklog(arg1) {
   return window['go']['backend']['App']['ReorderSteamBacklog'](arg1);
 }
 
+export function ResolveBackupPath(arg1) {
+  return window['go']['backend']['App']['ResolveBackupPath'](arg1);
+}
+
 export function ResumeUpload(arg1) {
   return window['go']['backend']['App']['ResumeUpload'](arg1);
+}
+
+export function RunFolderBackup(arg1) {
+  return window['go']['backend']['App']['RunFolderBackup'](arg1);
 }
 
 export function SaveCustomThumbnail(arg1, arg2) {
@@ -346,6 +414,14 @@ export function SaveSteamAPIKey(arg1) {
   return window['go']['backend']['App']['SaveSteamAPIKey'](arg1);
 }
 
+export function SaveTitleNormalizationDraft(arg1) {
+  return window['go']['backend']['App']['SaveTitleNormalizationDraft'](arg1);
+}
+
+export function SaveTitleNormalizationDraftsBatch(arg1) {
+  return window['go']['backend']['App']['SaveTitleNormalizationDraftsBatch'](arg1);
+}
+
 export function SaveVideoMetadata(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
   return window['go']['backend']['App']['SaveVideoMetadata'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
@@ -356,6 +432,10 @@ export function SaveYouTubeCredentials(arg1, arg2) {
 
 export function SearchSteamGames(arg1) {
   return window['go']['backend']['App']['SearchSteamGames'](arg1);
+}
+
+export function SelectBackupFolder() {
+  return window['go']['backend']['App']['SelectBackupFolder']();
 }
 
 export function SelectCustomThumbnailImage() {
@@ -370,12 +450,24 @@ export function SetAutoLaunch(arg1) {
   return window['go']['backend']['App']['SetAutoLaunch'](arg1);
 }
 
+export function SetBackupFolder(arg1) {
+  return window['go']['backend']['App']['SetBackupFolder'](arg1);
+}
+
 export function SetDefaultExportFolder(arg1) {
   return window['go']['backend']['App']['SetDefaultExportFolder'](arg1);
 }
 
+export function SetDefaultVideoDescription(arg1) {
+  return window['go']['backend']['App']['SetDefaultVideoDescription'](arg1);
+}
+
 export function SetSteamAppID(arg1, arg2) {
   return window['go']['backend']['App']['SetSteamAppID'](arg1, arg2);
+}
+
+export function SetTagGameArtwork(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['SetTagGameArtwork'](arg1, arg2, arg3);
 }
 
 export function SetTagPlaylist(arg1, arg2) {
@@ -454,6 +546,10 @@ export function UnlinkLocalVideo(arg1) {
   return window['go']['backend']['App']['UnlinkLocalVideo'](arg1);
 }
 
+export function UpdateExportTargetTitle(arg1, arg2) {
+  return window['go']['backend']['App']['UpdateExportTargetTitle'](arg1, arg2);
+}
+
 export function UpdatePlaylistMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdatePlaylistMetadata'](arg1, arg2, arg3, arg4);
 }
@@ -484,6 +580,10 @@ export function UpdateYouTubeVideoGameMeta(arg1, arg2, arg3) {
 
 export function UpdateYouTubeVideoMetadata(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['UpdateYouTubeVideoMetadata'](arg1, arg2, arg3, arg4);
+}
+
+export function UploadTagGameArtworkFile(arg1, arg2) {
+  return window['go']['backend']['App']['UploadTagGameArtworkFile'](arg1, arg2);
 }
 
 export function UploadToYouTube(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
