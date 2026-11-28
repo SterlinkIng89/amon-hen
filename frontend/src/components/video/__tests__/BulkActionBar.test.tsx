@@ -320,4 +320,191 @@ describe("BulkActionBar ContentType routing", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("preserves typed Game Tag input when re-rendered with a new selectedVideos array reference for the same paths", async () => {
+    const untaggedVideos: VideoFile[] = [
+      { ...mockVideos[0], game: "" },
+      { ...mockVideos[1], game: "" },
+    ];
+
+    const { rerender } = render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={untaggedVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag") as HTMLInputElement;
+    fireEvent.change(tagInput, { target: { value: "Elden Ring" } });
+    expect(tagInput.value).toBe("Elden Ring");
+
+    rerender(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={untaggedVideos.map((v) => ({ ...v }))}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByPlaceholderText("Game Tag") as HTMLInputElement).value).toBe(
+      "Elden Ring",
+    );
+  });
+
+  it("preserves edited Game Tag input for profile-tagged videos when selectedVideos reference changes", async () => {
+    const gameProfiles: Record<string, GameProfile> = {
+      Valorant: {
+        type: "multiplayer",
+        titleTemplate: "{game} - {date}",
+      },
+    };
+
+    const { rerender } = render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+        gameProfiles={gameProfiles}
+      />,
+    );
+
+    const tagInput = screen.getByPlaceholderText("Game Tag") as HTMLInputElement;
+    expect(tagInput.value).toBe("Valorant");
+
+    fireEvent.change(tagInput, { target: { value: "Valorant Custom" } });
+    expect(tagInput.value).toBe("Valorant Custom");
+
+    rerender(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos.map((v) => ({ ...v }))}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+        gameProfiles={gameProfiles}
+      />,
+    );
+
+    expect((screen.getByPlaceholderText("Game Tag") as HTMLInputElement).value).toBe(
+      "Valorant Custom",
+    );
+  });
+
+  it("preserves contentTypeOverride when re-rendered with a new selectedVideos array reference for the same paths", async () => {
+    vi.mocked(appBackend.SetVideosContentType).mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    const { rerender } = render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    const select = screen.getByLabelText("Content type override") as HTMLSelectElement;
+    expect(select.value).toBe("vod");
+
+    fireEvent.change(select, { target: { value: "clip" } });
+    expect(select.value).toBe("clip");
+
+    rerender(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos.map((v) => ({ ...v }))}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+      />,
+    );
+
+    expect(
+      (screen.getByLabelText("Content type override") as HTMLSelectElement).value,
+    ).toBe("clip");
+  });
+
+  it("resets and auto-detects game tag, profile, and contentType when selectedPaths change", async () => {
+    const gameProfiles: Record<string, GameProfile> = {
+      Valorant: {
+        type: "multiplayer",
+        titleTemplate: "{game} - {date}",
+      },
+      Control: {
+        type: "singleplayer",
+        titleTemplate: "{game} - {episode}",
+      },
+    };
+
+    const controlClip: VideoFile = {
+      name: "control1.mp4",
+      path: "/path/control1.mp4",
+      size: 2048,
+      modTime: 123458,
+      folder: "/path",
+      game: "Control",
+      contentType: "clip",
+    };
+
+    const { rerender } = render(
+      <BulkActionBar
+        selectedPaths={["/path/video1.mp4", "/path/video2.mp4"]}
+        selectedVideos={mockVideos}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+        gameProfiles={gameProfiles}
+      />,
+    );
+
+    expect((screen.getByPlaceholderText("Game Tag") as HTMLInputElement).value).toBe(
+      "Valorant",
+    );
+    expect(
+      (screen.getByLabelText("Content type override") as HTMLSelectElement).value,
+    ).toBe("vod");
+
+    rerender(
+      <BulkActionBar
+        selectedPaths={["/path/control1.mp4"]}
+        selectedVideos={[controlClip]}
+        onClearSelection={vi.fn()}
+        onRescanOnly={vi.fn()}
+        onTagsSaved={vi.fn()}
+        onFilesDeleted={vi.fn()}
+        onAddToQueue={vi.fn()}
+        gameProfiles={gameProfiles}
+      />,
+    );
+
+    expect((screen.getByPlaceholderText("Game Tag") as HTMLInputElement).value).toBe(
+      "Control",
+    );
+    expect(
+      (screen.getByLabelText("Content type override") as HTMLSelectElement).value,
+    ).toBe("clip");
+  });
 });

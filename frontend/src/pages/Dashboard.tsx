@@ -671,6 +671,14 @@ export default function Dashboard() {
     (view === "grid" || view === "player") &&
     selectedPaths.length > (view === "player" ? 1 : 0);
 
+  const selectedVideos = useMemo(
+    () =>
+      selectedPaths
+        .map((p) => sortedVideos.find((v) => v.path === p))
+        .filter((v): v is VideoFile => v !== undefined),
+    [selectedPaths, sortedVideos],
+  );
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {/* Hidden logic component — drives upload events */}
@@ -736,9 +744,7 @@ export default function Dashboard() {
       {isSelecting && (
         <BulkActionBar
           selectedPaths={selectedPaths}
-          selectedVideos={selectedPaths
-            .map((p) => sortedVideos.find((v) => v.path === p))
-            .filter((v): v is VideoFile => v !== undefined)}
+          selectedVideos={selectedVideos}
           onClearSelection={() => {
             setSelectedPaths([]);
             lastSelectedPath.current = null;

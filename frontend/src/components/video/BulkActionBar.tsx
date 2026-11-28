@@ -97,6 +97,8 @@ export default function BulkActionBar({
 
   const profiles = gameProfiles ?? fallbackProfiles;
   const titleSeparator = initialTitleSeparator ?? fallbackTitleSeparator;
+  const selectionKey = selectedPaths.join("\0");
+  const lastSyncedSelectionKeyRef = useRef<string | null>(null);
 
   // Check if selected videos have YouTube IDs and share a single game tag
   const ytVideosWithTag = selectedVideos.filter((v) => Boolean(v.youtubeId && v.game));
@@ -106,19 +108,47 @@ export default function BulkActionBar({
   const canBatchThumbnails = ytVideosWithTag.length > 0 && uniqueTags.length === 1;
   const commonTag = canBatchThumbnails ? (uniqueTags[0] as string) : "";
 
+  // Sync content type override and profile/tag fields only when the selection changes
   useEffect(() => {
-    if (selectedVideos.length > 0) {
-      const firstType = selectedVideos[0]?.contentType || "";
-      const allSame = selectedVideos.every(
-        (v) => (v.contentType || "") === firstType,
-      );
-      if (allSame && (firstType === "vod" || firstType === "clip")) {
-        setContentTypeOverride(firstType);
-      } else {
-        setContentTypeOverride("auto");
-      }
+    if (selectedPaths.length === 0) {
+      lastSyncedSelectionKeyRef.current = null;
+      return;
     }
-  }, [selectedVideos]);
+    if (
+      selectedVideos.length === 0 ||
+      lastSyncedSelectionKeyRef.current === selectionKey
+    ) {
+      return;
+    }
+    lastSyncedSelectionKeyRef.current = selectionKey;
+
+    const firstType = selectedVideos[0]?.contentType || "";
+    const allSameType = selectedVideos.every(
+      (v) => (v.contentType || "") === firstType,
+    );
+    setContentTypeOverride(
+      allSameType && (firstType === "vod" || firstType === "clip")
+        ? firstType
+        : "auto",
+    );
+
+    const firstGame = selectedVideos[0]?.game || "";
+    const allSameGame =
+      firstGame && selectedVideos.every((v) => v.game === firstGame);
+    if (allSameGame && profiles[firstGame]) {
+      setSelectedProfileTag(firstGame);
+      setGame(firstGame);
+      setEvent(selectedVideos[0]?.event || "");
+      setGameMode(selectedVideos[0]?.gameMode || "");
+      setCustomVars(selectedVideos[0]?.customVars || {});
+    } else if (!allSameGame) {
+      setSelectedProfileTag("");
+      setGame("");
+      setEvent("");
+      setGameMode("");
+      setCustomVars({});
+    }
+  }, [selectionKey, selectedPaths.length, selectedVideos, profiles]);
 
   const handleContentTypeChange = async (val: string) => {
     setContentTypeOverride(val);
@@ -166,31 +196,6 @@ export default function BulkActionBar({
       setTimeout(() => newPlaylistInputRef.current?.focus(), 50);
     }
   }, [creatingNew]);
-
-  // Auto-detect profile from selected videos' game tag
-  useEffect(() => {
-    if (selectedVideos.length > 0) {
-      const firstGame = selectedVideos[0]?.game || "";
-      // If all selected videos share the same game tag and it matches a profile, pre-select it
-      const allSameGame =
-        firstGame && selectedVideos.every((v) => v.game === firstGame);
-      if (allSameGame && profiles[firstGame]) {
-        setSelectedProfileTag(firstGame);
-        setGame(firstGame);
-        // Also pre-fill event/gameMode/customVars from the first video if available
-        setEvent(selectedVideos[0]?.event || "");
-        setGameMode(selectedVideos[0]?.gameMode || "");
-        setCustomVars(selectedVideos[0]?.customVars || {});
-      } else if (!allSameGame) {
-        setSelectedProfileTag("");
-        setGame("");
-        setEvent("");
-        setGameMode("");
-        setCustomVars({});
-        setGameMode("");
-      }
-    }
-  }, [selectedVideos, profiles]);
 
   if (selectedPaths.length === 0) return null;
 
