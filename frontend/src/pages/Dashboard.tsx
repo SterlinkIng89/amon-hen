@@ -91,10 +91,10 @@ export default function Dashboard() {
   const {
     queue,
     setQueue,
+    addToQueue,
     queueRunning,
     setQueueRunning,
     queueAddedAt,
-    bumpQueueAdded,
     queueDoneAt,
     bumpQueueDone,
     ytAuthed,
@@ -518,15 +518,16 @@ export default function Dashboard() {
   };
 
   // ── Upload helpers ───────────────────────────────────────────────────────────
-  const handleAddToQueue = (item: QueueItem) => {
-    // No auto-open — just add and bump the badge
+  const handleAddToQueue = (item: QueueItem): boolean => {
+    const added = addToQueue(
+      [item],
+      item.status === "uploading" ? "prepend" : "append",
+    );
+    if (added.length === 0) return false;
     if (item.status === "uploading") {
-      setQueue((q) => [item, ...q]);
       setQueueRunning(true);
-    } else {
-      setQueue((q) => [...q, item]);
     }
-    bumpQueueAdded();
+    return true;
   };
 
   const handleUploadNow = async (video: VideoFile, opts: UploadOptions) => {
@@ -543,7 +544,7 @@ export default function Dashboard() {
       video.customVars || {},
     ).catch(console.error);
 
-    handleAddToQueue({
+    const added = handleAddToQueue({
       id: crypto.randomUUID(),
       videoPath: video.path,
       videoName: video.name,
@@ -557,6 +558,7 @@ export default function Dashboard() {
       gameTag: video.game,
       episode: video.episode,
     });
+    if (!added) return;
 
     UploadToYouTube(
       video.path,
@@ -589,8 +591,7 @@ export default function Dashboard() {
       video.customVars || {},
     ).catch(console.error);
 
-    setQueue((q) => [
-      ...q,
+    addToQueue([
       {
         id: crypto.randomUUID(),
         videoPath: video.path,
@@ -606,7 +607,6 @@ export default function Dashboard() {
         episode: video.episode,
       },
     ]);
-    bumpQueueAdded();
     handleRescan();
   };
 
@@ -762,8 +762,7 @@ export default function Dashboard() {
             handleRescan();
           }}
           onAddToQueue={(items) => {
-            setQueue((q) => [...q, ...items]);
-            bumpQueueAdded();
+            addToQueue(items);
           }}
           gameProfiles={gameProfiles}
           titleSeparator={titleSeparator}

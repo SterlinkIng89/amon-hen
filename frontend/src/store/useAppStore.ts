@@ -127,6 +127,61 @@ function subscribe(listener: Listener) {
 
 // ─── Stable Module-level Action Setters ─────────────────────────────────────────
 
+const BLOCKED_QUEUE_STATUSES: ReadonlySet<QueueItem["status"]> = new Set([
+  "pending",
+  "uploading",
+  "processing",
+  "done",
+]);
+
+export function isQueueBlockedStatus(status: QueueItem["status"]): boolean {
+  return BLOCKED_QUEUE_STATUSES.has(status);
+}
+
+export function hasActiveOrCompletedQueueEntry(
+  queue: readonly QueueItem[],
+  videoPath: string,
+): boolean {
+  const existing = queue.find((item) => item.videoPath === videoPath);
+  return existing ? isQueueBlockedStatus(existing.status) : false;
+}
+
+export function mergeQueueItems(
+  existing: readonly QueueItem[],
+  incoming: readonly QueueItem[],
+  position: "append" | "prepend" = "append",
+): { nextQueue: QueueItem[]; addedPaths: string[] } {
+  const seenIncoming = new Set<string>();
+  const nextQueue = [...existing];
+  const addedPaths: string[] = [];
+
+  for (const item of incoming) {
+    if (seenIncoming.has(item.videoPath)) continue;
+    seenIncoming.add(item.videoPath);
+
+    const existingIdx = nextQueue.findIndex(
+      (q) => q.videoPath === item.videoPath,
+    );
+    if (existingIdx !== -1) {
+      if (isQueueBlockedStatus(nextQueue[existingIdx].status)) {
+        continue;
+      }
+      nextQueue[existingIdx] = item;
+      addedPaths.push(item.videoPath);
+      continue;
+    }
+
+    if (position === "prepend") {
+      nextQueue.unshift(item);
+    } else {
+      nextQueue.push(item);
+    }
+    addedPaths.push(item.videoPath);
+  }
+
+  return { nextQueue, addedPaths };
+}
+
 const setQueue = (
   queueOrUpdater: QueueItem[] | ((prev: QueueItem[]) => QueueItem[]),
 ) => {
@@ -138,11 +193,22 @@ const setQueue = (
   }));
 };
 
-const addToQueue = (items: QueueItem[]) =>
-  setState((prev) => ({
-    queue: [...prev.queue, ...items],
+const addToQueue = (
+  items: QueueItem[],
+  position: "append" | "prepend" = "append",
+): string[] => {
+  const { nextQueue, addedPaths } = mergeQueueItems(
+    state.queue,
+    items,
+    position,
+  );
+  if (addedPaths.length === 0) return [];
+  setState({
+    queue: nextQueue,
     queueAddedAt: Date.now(),
-  }));
+  });
+  return addedPaths;
+};
 
 const bumpQueueAdded = () => setState({ queueAddedAt: Date.now() });
 const bumpQueueDone = () => setState({ queueDoneAt: Date.now() });

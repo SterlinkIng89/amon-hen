@@ -39,7 +39,11 @@ import TagInput from "../ui/TagInput";
 import TagPlaylistModal from "../ui/TagPlaylistModal";
 import FieldInput from "../ui/FieldInput";
 import { ContentTypeToggle } from "./ContentTypeToggle";
-import { useAppStore } from "../../store/useAppStore";
+import {
+  useAppStore,
+  hasActiveOrCompletedQueueEntry,
+  isQueueBlockedStatus,
+} from "../../store/useAppStore";
 import { PlaylistPrivacy } from "../../types";
 import {
   resolvePlayerKeyAction,
@@ -358,7 +362,19 @@ export default function InlinePlayer({
   const [customVarsInput, setCustomVarsInput] = useState<
     Record<string, string>
   >(video.customVars || {});
-  const { defaultVideoDescription } = useAppStore();
+  const { defaultVideoDescription, queue } = useAppStore();
+  const existingQueueStatus = queue.find(
+    (item) => item.videoPath === video.path,
+  )?.status;
+  const isQueueLocked = existingQueueStatus
+    ? isQueueBlockedStatus(existingQueueStatus)
+    : false;
+  const addToQueueLabel =
+    existingQueueStatus === "uploading" || existingQueueStatus === "processing"
+      ? "Uploading..."
+      : existingQueueStatus === "pending"
+        ? "In Queue"
+        : "Add to Queue";
   const [description, setDescription] = useState(
     video.description || (video.youtubeId ? "" : defaultVideoDescription) || "",
   );
@@ -1028,6 +1044,9 @@ export default function InlinePlayer({
   };
 
   const handleUploadNow = async () => {
+    if (hasActiveOrCompletedQueueEntry(useAppStore.getState().queue, video.path)) {
+      return;
+    }
     if (tagInput) addRecentTag(tagInput);
     if (eventInput) addRecentValue("event", eventInput);
     if (customVarsInput) {
@@ -1083,6 +1102,9 @@ export default function InlinePlayer({
   };
 
   const handleAddToQueue = async () => {
+    if (hasActiveOrCompletedQueueEntry(useAppStore.getState().queue, video.path)) {
+      return;
+    }
     if (tagInput) addRecentTag(tagInput);
     if (eventInput) addRecentValue("event", eventInput);
     if (customVarsInput) {
@@ -2325,10 +2347,11 @@ export default function InlinePlayer({
                   </button>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors min-w-[120px]"
+                      className="flex-1 py-3 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleAddToQueue}
+                      disabled={isQueueLocked}
                     >
-                      Add to Queue
+                      {addToQueueLabel}
                     </button>
                     {video.youtubeId && (
                       <a
@@ -2349,9 +2372,9 @@ export default function InlinePlayer({
                       </a>
                     )}
                     <button
-                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors min-w-[120px]"
+                      className="flex-1 py-3 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleUploadNow}
-                      disabled={uploading || !ytTitle.trim()}
+                      disabled={uploading || isQueueLocked || !ytTitle.trim()}
                     >
                       {video.youtubeId ? "Re-upload" : "Upload Now"}
                     </button>
@@ -2417,10 +2440,11 @@ export default function InlinePlayer({
                       : "Save Info"}
                 </button>
                 <button
-                  className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors"
+                  className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#3f3f3f] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleAddToQueue}
+                  disabled={isQueueLocked}
                 >
-                  Add to Queue
+                  {addToQueueLabel}
                 </button>
                 {video.youtubeId && (
                   <a
@@ -2441,9 +2465,9 @@ export default function InlinePlayer({
                   </a>
                 )}
                 <button
-                  className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors"
+                  className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleUploadNow}
-                  disabled={uploading || !ytTitle.trim()}
+                  disabled={uploading || isQueueLocked || !ytTitle.trim()}
                 >
                   {video.youtubeId ? "Re-upload" : "Upload Now"}
                 </button>

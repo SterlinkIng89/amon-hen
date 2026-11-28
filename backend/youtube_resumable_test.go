@@ -186,3 +186,40 @@ func TestResumableUpload_SendChunks(t *testing.T) {
 		t.Errorf("expected 500 progressed bytes, got %d", progressedBytes)
 	}
 }
+
+func TestUploadToYouTube_RejectsDuplicateInFlightPath(t *testing.T) {
+	var cancelCalled int32
+	existingCancel := func() {
+		atomic.AddInt32(&cancelCalled, 1)
+	}
+
+	app := &App{
+		uploads: map[string]context.CancelFunc{
+			"/videos/in-flight.mp4": existingCancel,
+		},
+	}
+
+	err := app.UploadToYouTube(
+		"/videos/in-flight.mp4",
+		"Duplicate Title",
+		"Desc",
+		"unlisted",
+		"",
+		"",
+		0,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("expected nil error for duplicate in-flight path, got %v", err)
+	}
+
+	if atomic.LoadInt32(&cancelCalled) != 0 {
+		t.Errorf("expected existing cancel function not to be called")
+	}
+
+	app.uploadsMu.Lock()
+	defer app.uploadsMu.Unlock()
+	if _, ok := app.uploads["/videos/in-flight.mp4"]; !ok {
+		t.Errorf("expected existing in-flight upload entry to remain registered")
+	}
+}
